@@ -15,31 +15,24 @@ class DbHelper(val context: Context) :
             private const val MESS_NAME = "messages"
             private const val MESS_ID = "id"
             private const val MESS_TIME = "time"
-            private const val SOURCE = "source"
-            private const val SOURCE_NAME = "name"
+            private const val MESS_LINK = "link"
+            private const val MESS_SOURCE = "source"
             private const val MESS = "message"
-            private const val FACTS = "facts"
-
-            private const val FACTS_NAME = "facts"
-            private const val FACTS_ID = "id"
-            private const val MESS_LINK = "mess_id"
-            private const val FACTS_TEXT = "text"
 
             private const val TITLES_NAME = "titles"
             private const val TITLES_ID = "id"
             private const val TITLES_TIME = "time"
+            private const val TITLE = "title"
             private const val TITLES_TEXT = "text"
-            private const val TITLES_MESSAGES = "messages"
-            private const val TITLES_FACTS = "facts"
+            private const val TITLES_SOURCES = "sources"
+            private const val TITLES_LINKS = "messages"
         }
 
     override fun onCreate(db: SQLiteDatabase?) {
-        db!!.execSQL("CREATE TABLE $MESS_NAME ($MESS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
-                " $MESS_TIME TEXT, $SOURCE TEXT, $SOURCE_NAME TEXT, $MESS TEXT, $FACTS TEXT)")
-        db.execSQL("CREATE TABLE $FACTS_NAME ($FACTS_ID INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "$MESS_LINK INTEGER, $FACTS_TEXT TEXT)")
-        db.execSQL("CREATE TABLE $TITLES_NAME ($TITLES_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
-                " $TITLES_TIME TEXT, $TITLES_TEXT TEXT, $TITLES_MESSAGES TEXT, $TITLES_FACTS TEXT)")
+        db!!.execSQL("CREATE TABLE IF NOT EXISTS $MESS_NAME ($MESS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
+                " $MESS_TIME INTEGER, $MESS_LINK TEXT, $MESS TEXT)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS $TITLES_NAME ($TITLES_ID INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "$TITLES_TIME INTEGER, $TITLE TEXT, $TITLES_TEXT TEXT, $TITLES_SOURCES TEXT, $TITLES_LINKS TEXT)")
     }
 
     override fun onUpgrade(
@@ -48,7 +41,6 @@ class DbHelper(val context: Context) :
         p2: Int
     ) {
         db!!.execSQL("DROP TABLE IF EXISTS $MESS_NAME")
-        db.execSQL("DROP TABLE IF EXISTS $FACTS_NAME")
         db.execSQL("DROP TABLE IF EXISTS $TITLES_NAME")
         onCreate(db)
     }
@@ -57,7 +49,7 @@ class DbHelper(val context: Context) :
         return when (ids.isEmpty()) {
             true -> ""
             else -> {
-                ids.joinToString(separator = ", ")
+                ids.joinToString(separator = "\n")
             }
         }
     }
@@ -65,142 +57,209 @@ class DbHelper(val context: Context) :
     fun dbUnpack(str: String): List<Long> {
         val res = mutableListOf<Long>()
         if (str.split(", ").lastIndex != 0) {
-            for (i in str.split(", ")) res.add(i.toLong())
+            for (i in str.split("\n")) res.add(i.toLong())
         }
 
         return res
     }
 
-    private fun linkFacts(messID: Long, factID: Long): Boolean {
-        val db = this.writableDatabase
-        val cursor = db.rawQuery("SELECT $FACTS FROM $MESS_NAME WHERE $MESS_ID = ?", arrayOf(messID.toString()))
-        val result: List<Long>? = try { dbUnpack(cursor.getString(cursor.getColumnIndexOrThrow(FACTS))) }
-        catch (e: Exception) { null }
-        finally { cursor.close() }
+//    fun findMessage(source: String, sourceName: String, message: String): Long? {
+//        val db = this.readableDatabase
+//        val cursor = db.rawQuery("SELECT $MESS_ID FROM $MESS_NAME WHERE $MESS_LINK = ? AND" +
+//                " $SOURCE_NAME = ? AND $MESS = ?", arrayOf(source, sourceName, message))
+//        val result: Long? = try {
+//            cursor.getLong(cursor.getColumnIndexOrThrow(MESS_ID))
+//        } catch (e: Exception) {
+//            null
+//        } finally {
+//            cursor.close()
+//            db.close()
+//        }
+//
+//        return result
+//    }
 
-        val values = ContentValues()
-        when (result) {
-            null -> values.apply {
-                put(FACTS, dbPack(factID))
-            }
-            else -> {
-                values.apply {
-                    put(FACTS, dbPack(*result.toLongArray(), factID))
-                }
-            }
-        }
-        val rows: Boolean = db.update(MESS_NAME, values, "$MESS_ID = ?", arrayOf(messID.toString())) > 0
-
-//        values.clear()
-//        values.apply { put(MESS_LINK, messID) }
-//        db.update(FACTS_NAME, values, "$FACTS_ID = ?", arrayOf(factID.toString()))
-
-        cursor.close()
-        db.close()
-        return rows
-    }
-
-    fun addFacts(messID: Long, factText: String): Boolean {
-        val db = this.writableDatabase
-        val cursor = db.rawQuery("SELECT * FROM $MESS_NAME WHERE $MESS_ID = ?", arrayOf(messID.toString()))
-        var flag = true
-        if (cursor.moveToFirst()) {
-            val values = ContentValues().apply {
-                put(MESS_LINK, messID)
-                put(FACTS_TEXT, factText)
-            }
-            val factID = db.insert(FACTS_NAME, null, values)
-            flag = when (factID) {
-                -1L -> false
-                else -> linkFacts(messID, factID)
-            }
-        }
-        else flag = false
-
-        cursor.close()
-        db.close()
-        return flag
-    }
-
-    fun findMessage(source: String, sourceName: String, message: String): Long? {
+    fun findMessage(sourceName: String, mess: String): Message? {
         val db = this.readableDatabase
-        val cursor = db.rawQuery("SELECT $MESS_ID FROM $MESS_NAME WHERE $SOURCE = ? AND" +
-                " $SOURCE_NAME = ? AND $MESS = ?", arrayOf(source, sourceName, message))
-        val result: Long? = try {
-            cursor.getLong(cursor.getColumnIndexOrThrow(MESS_ID))
-        } catch (e: Exception) {
-            null
-        } finally {
-            cursor.close()
-            db.close()
+        val query = "SELECT * FROM $MESS_NAME WHERE $MESS_SOURCE = ? AND $MESS = ?"
+        val args = arrayOf(sourceName, mess)
+
+        return db.rawQuery(query, args).use {
+            cursor ->
+            if (cursor.moveToFirst()) {
+                val messageId = cursor.getLong(cursor.getColumnIndexOrThrow(MESS_ID))
+                val messageTime = cursor.getLong(cursor.getColumnIndexOrThrow(MESS_TIME))
+                val messageLink = cursor.getString(cursor.getColumnIndexOrThrow(MESS_LINK))
+                val messageSource = cursor.getString(cursor.getColumnIndexOrThrow(MESS_SOURCE))
+                val messageText = cursor.getString(cursor.getColumnIndexOrThrow(MESS))
+
+                Message(messageId, messageTime, messageLink, messageSource, messageText)
+            }
+            else { null }
+        }
+    }
+
+    fun getMessage(id: Long): Message? {
+        val db = this.readableDatabase
+        val query = "SELECT * FROM $MESS_NAME WHERE $MESS_ID = ?"
+        val args = arrayOf(id.toString())
+
+        return db.rawQuery(query, args).use {
+            cursor ->
+            if (cursor.moveToFirst()) {
+                val messageId = cursor.getLong(cursor.getColumnIndexOrThrow(MESS_ID))
+                val messageTime = cursor.getLong(cursor.getColumnIndexOrThrow(MESS_TIME))
+                val messageLink = cursor.getString(cursor.getColumnIndexOrThrow(MESS_LINK))
+                val messageSource = cursor.getString(cursor.getColumnIndexOrThrow(MESS_SOURCE))
+                val messageText = cursor.getString(cursor.getColumnIndexOrThrow(MESS))
+
+                Message(messageId, messageTime, messageLink, messageSource, messageText)
+            } else {
+                null
+            }
+        }
+    }
+
+    fun getMessages(timeSeconds: Long? = null): List<Message> {
+        val db = this.readableDatabase
+        val list = mutableListOf<Message>()
+        var query = "SELECT * FROM $MESS_NAME"
+        var args: Array<String>?
+        if (timeSeconds != null) {
+            query = "$query WHERE $MESS_TIME > ?"
+            args = arrayOf(timeSeconds.toString())
+        }
+        else {args = null}
+
+        db.rawQuery(query, args).use {
+            cursor ->
+            if (cursor.moveToFirst()) {
+                do {
+                    val id = cursor.getLong(cursor.getColumnIndexOrThrow(MESS_ID))
+                    val time = cursor.getLong(cursor.getColumnIndexOrThrow(MESS_TIME))
+                    val link = cursor.getString(cursor.getColumnIndexOrThrow(MESS_LINK))
+                    val source = cursor.getString(cursor.getColumnIndexOrThrow(MESS_SOURCE))
+                    val mess = cursor.getString(cursor.getColumnIndexOrThrow(MESS))
+
+                    list.add(Message(id, time, link, source, mess))
+                } while (cursor.moveToNext())
+            }
         }
 
-        return result
+        return list
+    }
+
+    fun getTitles(timeSeconds: Long? = null, earlier: Boolean = false): List<Title> {
+        val db = this.readableDatabase
+        val list = mutableListOf<Title>()
+        var query = "SELECT * FROM $TITLES_NAME"
+        var args: Array<String>?
+        if (timeSeconds != null) {
+            query = when (earlier) {
+                true -> "$query WHERE $TITLES_TIME < ?"
+                else -> "$query WHERE $TITLES_TIME > ?"
+            }
+            args = arrayOf(timeSeconds.toString())
+        }
+        else { args = null }
+
+        db.rawQuery(query, args).use {
+                cursor ->
+            if (cursor.moveToFirst()) {
+                do {
+                    val id = cursor.getLong(cursor.getColumnIndexOrThrow(TITLES_ID))
+                    val time = cursor.getLong(cursor.getColumnIndexOrThrow(TITLES_TIME))
+                    val title = cursor.getString(cursor.getColumnIndexOrThrow(TITLE))
+                    val text = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_TEXT))
+                    val sources = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_SOURCES))
+                    val links = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_LINKS))
+
+                    list.add(Title(id, time, title, text, sources, links))
+                } while (cursor.moveToNext())
+            }
+        }
+
+        return list
     }
 
     fun findMessageByID(id: Long): Boolean {
         val db = this.readableDatabase
-        val cursor = db.rawQuery("SELECT $MESS FROM $MESS_NAME WHERE $MESS_ID = ?", arrayOf(id.toString()))
-        val result: Boolean = try {
-            cursor.moveToFirst()
-        } catch (e: Exception) {
-            false
-        } finally {
-            cursor.close()
-            db.close()
-        }
+        val cursor = db.rawQuery("SELECT $MESS_ID FROM $MESS_NAME WHERE $MESS_ID = ?", arrayOf(id.toString()))
 
-        return result
+        return cursor.use {
+            it.moveToFirst()
+        }
     }
 
-    fun findFactByID(id: Long): String? {
+    fun findTitleByID(id: Long): Boolean {
         val db = this.readableDatabase
-        val cursor = db.rawQuery("SELECT $FACTS_TEXT FROM $FACTS_NAME WHERE $FACTS_ID = ?", arrayOf(id.toString()))
-        val result: String? = try {
-            cursor.getString(cursor.getColumnIndexOrThrow(FACTS_TEXT))
-        } catch (e: Exception) {
-            null
-        } finally {
-            cursor.close()
-            db.close()
-        }
+        val cursor = db.rawQuery("SELECT $TITLES_ID FROM $TITLES_NAME WHERE $TITLES_ID = ?", arrayOf(id.toString()))
 
-        return result
+        return cursor.use {
+            it.moveToFirst()
+        }
     }
 
-    fun addMessage(messageTime: String, source: String, sourceName: String, messageText: String, facts: String): Long {
+    fun addMessage(messageTime: Long, link: String, source: String, messageText: String): Long {
         val db = this.writableDatabase
         val values = ContentValues().apply {
             put(MESS_TIME, messageTime)
-            put(SOURCE, source)
-            put(SOURCE_NAME, sourceName)
+            put(MESS_LINK, link)
+            put(MESS_SOURCE, source)
             put(MESS, messageText)
-            put(FACTS, facts)
         }
 
-        val messID = findMessage(source, sourceName, messageText)
-        val result =  when (messID) {
+        val mess = findMessage(source, messageText)
+        val result = when (mess) {
             null -> db.insert(MESS_NAME, null, values)
-            else -> messID
+            else -> mess.id
         }
-        db.close()
 
         return result
+    }
+
+    fun addTitle(titleTime: Long, title: String, text: String, sources: String, links: String): Long {
+        val db = this.writableDatabase
+        val values = ContentValues().apply {
+            put(TITLES_TIME , titleTime)
+            put(TITLE, title)
+            put(TITLES_TEXT, text)
+            put(TITLES_SOURCES, sources)
+            put(TITLES_LINKS, links)
+        }
+
+        return db.insert(TITLES_NAME, null, values)
     }
 
     fun delMessage(id: Long): Boolean {
         val db = this.writableDatabase
         val flag = db.delete(MESS_NAME, "$MESS_ID = ?", arrayOf(id.toString())) > 0
-        db.close()
 
         return flag
     }
 
-    fun delFact(id: Long): Boolean {
+    fun delTitle(id: Long): Boolean {
         val db = this.writableDatabase
-        val flag = db.delete(FACTS_NAME, "$FACTS_ID = ?", arrayOf(id.toString())) > 0
-        db.close()
+        val flag = db.delete(TITLES_NAME, "$TITLES_ID = ?", arrayOf(id.toString())) > 0
 
         return flag
+    }
+
+    fun messageTimeKill(timeSeconds: Long): Int {
+        val db = this.writableDatabase
+        val killTime = System.currentTimeMillis() - timeSeconds * 1000
+
+        return db.delete(MESS_NAME,
+            "$MESS_TIME < ?",
+            arrayOf(killTime.toString()))
+    }
+
+    fun titlesTimeKill(timeSeconds: Long): Int {
+        val db = this.writableDatabase
+        val killTime = System.currentTimeMillis() - timeSeconds * 1000
+
+        return db.delete(TITLES_NAME,
+            "$TITLES_TIME < ?",
+            arrayOf(killTime.toString()))
     }
 }
