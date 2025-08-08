@@ -29,10 +29,12 @@ class DbHelper(val context: Context) :
         }
 
     override fun onCreate(db: SQLiteDatabase?) {
-        db!!.execSQL("CREATE TABLE IF NOT EXISTS $MESS_NAME ($MESS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
-                " $MESS_TIME INTEGER, $MESS_LINK TEXT, $MESS TEXT)")
-        db.execSQL("CREATE TABLE IF NOT EXISTS $TITLES_NAME ($TITLES_ID INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "$TITLES_TIME INTEGER, $TITLE TEXT, $TITLES_TEXT TEXT, $TITLES_SOURCES TEXT, $TITLES_LINKS TEXT)")
+        db.let {
+            db!!.execSQL("CREATE TABLE IF NOT EXISTS $MESS_NAME ($MESS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    " $MESS_TIME INTEGER, $MESS_LINK TEXT, $MESS TEXT)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS $TITLES_NAME ($TITLES_ID INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "$TITLES_TIME INTEGER, $TITLE TEXT, $TITLES_TEXT TEXT, $TITLES_SOURCES TEXT, $TITLES_LINKS TEXT)")
+        }
     }
 
     override fun onUpgrade(
@@ -62,22 +64,6 @@ class DbHelper(val context: Context) :
 
         return res
     }
-
-//    fun findMessage(source: String, sourceName: String, message: String): Long? {
-//        val db = this.readableDatabase
-//        val cursor = db.rawQuery("SELECT $MESS_ID FROM $MESS_NAME WHERE $MESS_LINK = ? AND" +
-//                " $SOURCE_NAME = ? AND $MESS = ?", arrayOf(source, sourceName, message))
-//        val result: Long? = try {
-//            cursor.getLong(cursor.getColumnIndexOrThrow(MESS_ID))
-//        } catch (e: Exception) {
-//            null
-//        } finally {
-//            cursor.close()
-//            db.close()
-//        }
-//
-//        return result
-//    }
 
     fun findMessage(sourceName: String, mess: String): Message? {
         val db = this.readableDatabase
@@ -127,7 +113,7 @@ class DbHelper(val context: Context) :
         var args: Array<String>?
         if (timeSeconds != null) {
             query = "$query WHERE $MESS_TIME > ?"
-            args = arrayOf(timeSeconds.toString())
+            args = arrayOf((System.currentTimeMillis() - timeSeconds * 1000).toString())
         }
         else {args = null}
 
@@ -159,7 +145,7 @@ class DbHelper(val context: Context) :
                 true -> "$query WHERE $TITLES_TIME < ?"
                 else -> "$query WHERE $TITLES_TIME > ?"
             }
-            args = arrayOf(timeSeconds.toString())
+            args = arrayOf((System.currentTimeMillis() - timeSeconds * 1000).toString())
         }
         else { args = null }
 
