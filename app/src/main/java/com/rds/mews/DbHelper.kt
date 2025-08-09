@@ -26,6 +26,11 @@ class DbHelper(val context: Context) :
             private const val TITLES_TEXT = "text"
             private const val TITLES_SOURCES = "sources"
             private const val TITLES_LINKS = "messages"
+
+            private const val RSS_NAME = "rss"
+            private const val RSS_ID = "id"
+            private const val RSS_SOURCE = "source"
+            private const val RSS_LINK = "link"
         }
 
     override fun onCreate(db: SQLiteDatabase?) {
@@ -34,6 +39,8 @@ class DbHelper(val context: Context) :
                     " $MESS_TIME INTEGER, $MESS_LINK TEXT, $MESS TEXT)")
             db.execSQL("CREATE TABLE IF NOT EXISTS $TITLES_NAME ($TITLES_ID INTEGER PRIMARY KEY AUTOINCREMENT, " +
                     "$TITLES_TIME INTEGER, $TITLE TEXT, $TITLES_TEXT TEXT, $TITLES_SOURCES TEXT, $TITLES_LINKS TEXT)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS $RSS_NAME ($RSS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    " $RSS_SOURCE TEXT, $RSS_LINK TEXT)")
         }
     }
 
@@ -82,6 +89,22 @@ class DbHelper(val context: Context) :
                 Message(messageId, messageTime, messageLink, messageSource, messageText)
             }
             else { null }
+        }
+    }
+
+    fun findRSS(sourceName: String, sourceLink: String): RSS? {
+        val db = this.readableDatabase
+        val query = "SELECT * FROM $RSS_NAME WHERE $RSS_SOURCE = ? OR $RSS_LINK = ?"
+        val args = arrayOf(sourceName, sourceLink)
+
+        return db.rawQuery(query, args).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val rssId = cursor.getLong(cursor.getColumnIndexOrThrow(RSS_ID))
+                val rssSource = cursor.getString(cursor.getColumnIndexOrThrow(RSS_SOURCE))
+                val rssLink = cursor.getString(cursor.getColumnIndexOrThrow(RSS_LINK))
+
+                RSS(rssId, rssSource, rssLink)
+            } else { null }
         }
     }
 
@@ -168,6 +191,27 @@ class DbHelper(val context: Context) :
         return list
     }
 
+    fun getRSS(): List<RSS> {
+        val db = this.readableDatabase
+        val list = mutableListOf<RSS>()
+        val query = "SELECT * FROM $RSS_NAME"
+
+        db.rawQuery(query, null).use {
+            cursor ->
+            if (cursor.moveToFirst()) {
+                do {
+                    val id = cursor.getLong(cursor.getColumnIndexOrThrow(RSS_ID))
+                    val source = cursor.getString(cursor.getColumnIndexOrThrow(RSS_SOURCE))
+                    val link = cursor.getString(cursor.getColumnIndexOrThrow(RSS_LINK))
+
+                    list.add(RSS(id, source, link))
+                } while (cursor.moveToNext())
+            }
+        }
+
+        return list
+    }
+
     fun findMessageByID(id: Long): Boolean {
         val db = this.readableDatabase
         val cursor = db.rawQuery("SELECT $MESS_ID FROM $MESS_NAME WHERE $MESS_ID = ?", arrayOf(id.toString()))
@@ -217,6 +261,23 @@ class DbHelper(val context: Context) :
         return db.insert(TITLES_NAME, null, values)
     }
 
+    fun addRSS(source: String, name: String, link: String): Long {
+        val db = this.writableDatabase
+        val values = ContentValues().apply {
+            put(RSS_NAME, name)
+            put(RSS_SOURCE, source)
+            put(RSS_LINK, link)
+        }
+
+        val rssItem = findRSS(source, link)
+        val result = when(rssItem) {
+            null -> db.insert(RSS_NAME, null, values)
+            else -> rssItem.id
+        }
+
+        return result
+    }
+
     fun delMessage(id: Long): Boolean {
         val db = this.writableDatabase
         val flag = db.delete(MESS_NAME, "$MESS_ID = ?", arrayOf(id.toString())) > 0
@@ -227,6 +288,13 @@ class DbHelper(val context: Context) :
     fun delTitle(id: Long): Boolean {
         val db = this.writableDatabase
         val flag = db.delete(TITLES_NAME, "$TITLES_ID = ?", arrayOf(id.toString())) > 0
+
+        return flag
+    }
+
+    fun delRSS(id: Long): Boolean {
+        val db = this.writableDatabase
+        val flag = db.delete(RSS_NAME, "$RSS_ID = ?", arrayOf(id.toString())) > 0
 
         return flag
     }
