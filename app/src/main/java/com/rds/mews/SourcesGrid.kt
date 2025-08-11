@@ -15,25 +15,30 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun SourcesGrid(itemsList: List<String>) {
+fun SourcesGrid(itemsList: List<String>, modifier: Modifier) {
     val buttons = remember {
         listOf(
             Pair("Кнопка") { println("Button 1") },
             Pair("Кнопка 2") { println("Button 2") },
             Pair("Кнопка 3") { println("Button 3") },
             Pair("Кнопка 4") { println("Button 4") },
-            Pair("Кнопка 5") {println("Button 5")}
+            Pair("Кнопка 5") { println("Button 5") },
+            Pair("Кнопка 6") { println("Button 6") },
+            Pair("Кнопка 7") { println("Button 7") },
+            Pair("Кнопка 8") { println("Button 8") },
+            Pair("Кнопка 9") { println("Button 9") }
         )
     }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth(),
         contentPadding = WindowInsets.statusBars.asPaddingValues(),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        items(itemsList) { item ->
+        items(items = itemsList, key = { item -> item }) { item ->
             CustomCardWithMenu(
                 text = item,
                 buttons
@@ -45,6 +50,7 @@ fun SourcesGrid(itemsList: List<String>) {
 @Preview
 @Composable
 fun AppScreen() {
-    val myData = listOf("Элемент 1", "Элемент 2", "Элемент 3", "Элемент 4", "Элемент 5", "Элемент 6")
-    SourcesGrid(itemsList = myData)
+    val myData = listOf("Элемент 1", "Элемент 2", "Элемент 3", "Элемент 4", "Элемент 5", "Элемент 6", "Элемент 7", "Элемент 8", "Элемент 9", "Элемент 10", "Элемент 11", "Элемент 12",
+        "Элемент 13", "Элемент 14", "Элемент 15", "Элемент 16", "Элемент 17", "Элемент 18","Элемент 19", "Элемент 20", "Элемент 21", "Элемент 22", "Элемент 23", "Элемент 24","Элемент 25", "Элемент 26", "Элемент 27", "Элемент 28", "Элемент 29", "Элемент 30","Элемент 31", "Элемент 32", "Элемент 33", "Элемент 34", "Элемент 35", "Элемент 36","Элемент 37", "Элемент 38", "Элемент 39", "Элемент 40", "Элемент 41", "Элемент 42",)
+    SourcesGrid(itemsList = myData, modifier = Modifier)
 }
