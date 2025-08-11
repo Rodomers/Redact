@@ -43,14 +43,21 @@ fun MainScreen() {
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = "Выбран экран: ${selectedTab.title}")
+        when (selectedTab) {
+            TabScreen.Sources -> SourcesGrid(
+                listOf("Элемент 1", "Элемент 2", "Элемент 3", "Элемент 4", "Элемент 5", "Элемент 6")
+            )
+            else -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(text = "Выбран экран: ${selectedTab.title}")
+                }
+            }
         }
     }
 }
