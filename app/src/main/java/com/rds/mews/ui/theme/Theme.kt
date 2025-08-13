@@ -4,55 +4,92 @@ import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
+    primary = Color.LightGray,
+    secondary = Color.Gray,
+    background = Color.White,
+    surface = Color.White,
+    onPrimary = Color.Black,
     onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    onBackground = Color.Black,
+    onSurface = Color.Black
+)
+
+private val DarkColorScheme = darkColorScheme(
+    primary = LighterGray, // Светлый серый для выделения
+    secondary = Color.DarkGray, // Средний серый для второстепенных элементов
+    background = DarkGray, // Тёмный фон
+    surface = DarkGray, // Тёмная поверхность
+    onPrimary = Color.White, // Белый текст на `primary` фоне
+    onSecondary = Color.White, // Белый текст на `secondary` фоне
+    onBackground = Color.White, // Белый текст на `background` фоне
+    onSurface = Color.White // Белый текст на `surface` фоне
+)
+
+// Добавленный объект Typography, который отсутствовал
+val typography = Typography(
+    bodyLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.5.sp
+    )
+    /* При необходимости здесь можно переопределить и другие стили текста,
+       такие как titleLarge, bodyMedium и т.д. */
 )
 
 @Composable
 fun MewsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
+    // Динамические цвета доступны на Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
+//        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+//            val context = LocalContext.current
+//            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+//        }
 
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
 
+    // Добавлен SideEffect для управления цветом и иконками системной строки состояния
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            // Устанавливаем цвет строки состояния в соответствии с фоном темы
+            window.statusBarColor = Color.Transparent.toArgb()
+
+            // Указываем, что контент будет рисоваться под системными панелями
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+
+            // Устанавливаем цвет иконок в строке состояния
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.isAppearanceLightStatusBars = !darkTheme
+        }
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = typography, // Теперь ссылка на Typography корректна
         content = content
     )
 }

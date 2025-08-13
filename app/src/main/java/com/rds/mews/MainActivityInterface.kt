@@ -1,16 +1,15 @@
 package com.rds.mews
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,10 +17,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.Preview
 
 sealed class TabScreen(val title: String, val icon: ImageVector) {
     data object Sources: TabScreen(title = "Источники", Icons.Default.Favorite)
@@ -201,7 +198,7 @@ fun MainScreen() {
                 selectedTab = selectedTab,
                 onTabSelected = { newTab ->
                     selectedTab = newTab
-                }
+                },
             )
         }
     ) { paddingValues ->
@@ -226,7 +223,7 @@ fun MainScreen() {
 fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit) {
     val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)
 
-    NavigationBar {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
         tabs.forEach { tab ->
             NavigationBarItem(
                 selected = selectedTab == tab,
@@ -236,14 +233,13 @@ fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit) {
                 },
                 label = {
                     Text(text = tab.title)
-                }
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    indicatorColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun MainScreenPreview() {
-    MainScreen()
 }

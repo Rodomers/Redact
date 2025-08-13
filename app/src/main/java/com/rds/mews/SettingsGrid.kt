@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,28 +60,26 @@ fun SettingsGrid(modifier: Modifier) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        CustomSettingsItem(text = "Тёмная тема") {
-            Switch(
-            checked = darkTheme, onCheckedChange = { darkTheme = it }
-            )
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            CustomSettingsItem(text = "Адаптивные цвета") {
-                Switch(
-                    checked = adaptiveColors, onCheckedChange = { adaptiveColors = it }
-                )
-            }
-        }
+//        CustomSettingsItem(text = "Тёмная тема") {
+//            Switch(checked = darkTheme, onCheckedChange = { darkTheme = it })
+//        }
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+//            CustomSettingsItem(text = "Адаптивные цвета") {
+//                Switch(
+//                    checked = adaptiveColors, onCheckedChange = { adaptiveColors = it }
+//                )
+//            }
+//        }
         CustomSettingsItem(text = "Количество заголовков") {
             Box() {
                 Button(
                     modifier = Modifier
-                        .wrapContentSize(),
+                        .wrapContentSize()
+                        .width(150.dp),
                     onClick = { titlesDropdownVisible.targetState = !titlesDropdownVisible.currentState },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        contentColor = Color.Black
+                        containerColor = MaterialTheme.colorScheme.background
                     )
                 ) {
                     Text(text = titlesNum)
@@ -100,12 +99,12 @@ fun SettingsGrid(modifier: Modifier) {
             Box() {
                 Button(
                     modifier = Modifier
-                        .wrapContentSize(),
+                        .wrapContentSize()
+                        .width(150.dp),
                     onClick = { limitationDropdownVisible.targetState = !limitationDropdownVisible.currentState },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        contentColor = Color.Black
+                        containerColor = MaterialTheme.colorScheme.background
                     )
                 ) {
                     Text(text = limitation)

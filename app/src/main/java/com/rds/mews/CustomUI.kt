@@ -29,7 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.shrinkVertically
@@ -53,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.launch
 
 @Composable
@@ -62,9 +62,9 @@ fun CustomDropdown(
     animDuration: Int = 200
 ) {Surface(
         modifier = Modifier.width(150.dp),
-        shape = RoundedCornerShape(12.dp),
+        shape = Shapes.small,
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 6.dp
+        shadowElevation = 4.dp
     ) {
         AnimatedVisibility(
             visibleState = transitionState,
@@ -85,7 +85,7 @@ fun CustomDropdown(
                     CustomDropdownMenuItem(button.first, button.second, onDismiss = onDismiss)
                     if (index < buttons.size - 1) {
                         HorizontalDivider(
-                            color = Color.Gray,
+                            color = MaterialTheme.colorScheme.secondary,
                             thickness = 1.dp,
                             modifier = Modifier.padding(horizontal = 8.dp)
                         )
@@ -115,7 +115,7 @@ private fun CustomDropdownMenuItem(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge
         )
     }
 }
@@ -133,7 +133,7 @@ fun CustomCardWithMenu(
             .fillMaxWidth()
             .height(50.dp),
         shape = RoundedCornerShape(12.dp),
-        color = Color.LightGray,
+        color = MaterialTheme.colorScheme.primary,
         shadowElevation = 0.dp
     ) {
         Row(
@@ -152,7 +152,7 @@ fun CustomCardWithMenu(
             IconButton(
                 onClick = {toggleDropdown()},
                 modifier = Modifier
-                    .background(color = Color.Gray)
+                    .background(MaterialTheme.colorScheme.secondary)
                     .fillMaxHeight()
             ) {
                 Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Меню")
@@ -184,7 +184,7 @@ fun TitlesCard(title: Title) {
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = RoundedCornerShape(25.dp),
-        color = Color.LightGray
+        color = MaterialTheme.colorScheme.primary
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp).animateContentSize()
@@ -198,8 +198,7 @@ fun TitlesCard(title: Title) {
                 Text(
                     text = "14:88",
                     textAlign = TextAlign.Left,
-                    modifier = Modifier.padding(8.dp).width(40.dp),
-                    color = Color.Black
+                    modifier = Modifier.padding(8.dp).width(40.dp)
                 )
                 Text(
                     text = title.title,
@@ -218,7 +217,7 @@ fun TitlesCard(title: Title) {
 
                 HorizontalDivider(
                     thickness = 1.dp,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.padding(vertical = 10.dp))
 
                 HorizontalPager(
@@ -230,6 +229,7 @@ fun TitlesCard(title: Title) {
                     when (page) {
                         0 -> {
                             Text(text = title.text,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.onSizeChanged { newSize ->
                                     pagerContentHeight = newSize.height
                                 })
@@ -253,7 +253,7 @@ fun TitlesCard(title: Title) {
 
                 HorizontalDivider(
                     thickness = 1.dp,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.padding(vertical = 10.dp))
 
                 Row(
@@ -301,7 +301,7 @@ fun CustomSettingsItem(text: String, item: @Composable () -> Unit) {
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = RoundedCornerShape(25.dp),
-        color = Color.LightGray
+        color = MaterialTheme.colorScheme.primary
     ) {
         Row(
             modifier = Modifier.padding(8.dp),
