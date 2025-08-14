@@ -288,6 +288,7 @@ class DbHelper(val context: Context) :
         return result
     }
 
+
     @Synchronized
     fun delMessage(id: Long): Boolean {
         val db = this.writableDatabase

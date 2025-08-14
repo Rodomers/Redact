@@ -4,11 +4,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -20,13 +22,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rds.mews.ui.theme.MewsTheme
+
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -245,7 +256,45 @@ fun MainScreen() {
         }
     }
 }
+/*
+// --------------------ЧАСТЬ ДЛЯ ДЕБАГА--------------------------------
+@Composable
+fun TestBtn() {
+    val scope = rememberCoroutineScope()
+    var db = DbHelper(LocalContext.current.applicationContext)
+    db.getRSS().forEach { RSS ->  db.delRSS(RSS.id)}
+    db.addRSS("ТАСС", "https://tass.ru/rss/v2.xml")
+    db.addRSS("РИА", "https://ria.ru/export/rss2/index.xml")
+    var fetcher = RssFetcher(db)
+    var llm = OpenRouterClient()
+    var summarizer = NewsSummarizer(db, llm)
+    println(db.getRSS())
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 20.dp, vertical = 100.dp)
+            .fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Button(
+            onClick = {
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        if(fetcher.fetchAndStoreAll().errors.size == 0) {
 
+                            summarizer.summarizeTopics()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                      },
+        ) {
+            Text(text = "Кнопка", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+//------------------------------------------------------------------------
+*/
 @Composable
 fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit) {
     val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)
@@ -262,7 +311,7 @@ fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit) {
                     Text(text = tab.title)
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.background,
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     indicatorColor = MaterialTheme.colorScheme.onBackground
                 )
