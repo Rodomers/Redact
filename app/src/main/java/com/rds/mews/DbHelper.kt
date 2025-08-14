@@ -94,7 +94,7 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
-    fun findRSS(sourceName: String, sourceLink: String): RSS? {
+    fun findRSS(sourceName: String, sourceLink: String = ""): RSS? {
         val db = this.readableDatabase
         val query = "SELECT * FROM $RSS_NAME WHERE $RSS_SOURCE = ? OR $RSS_LINK = ?"
         val args = arrayOf(sourceName, sourceLink)
@@ -272,10 +272,9 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
-    fun addRSS(source: String, name: String, link: String): Long {
+    fun addRSS(source: String, link: String): Long {
         val db = this.writableDatabase
         val values = ContentValues().apply {
-            put(RSS_NAME, name)
             put(RSS_SOURCE, source)
             put(RSS_LINK, link)
         }

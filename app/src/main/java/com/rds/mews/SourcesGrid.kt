@@ -19,15 +19,8 @@ import androidx.compose.ui.unit.dp
 fun SourcesGrid(itemsList: List<String>, modifier: Modifier) {
     val buttons = remember {
         listOf(
-            Pair("Кнопка") { println("Button 1") },
-            Pair("Кнопка 2") { println("Button 2") },
-            Pair("Кнопка 3") { println("Button 3") },
-            Pair("Кнопка 4") { println("Button 4") },
-            Pair("Кнопка 5") { println("Button 5") },
-            Pair("Кнопка 6") { println("Button 6") },
-            Pair("Кнопка 7") { println("Button 7") },
-            Pair("Кнопка 8") { println("Button 8") },
-            Pair("Кнопка 9") { println("Button 9") }
+            Pair("Изменить") {println("Изменить")},
+            Pair("Удалить") {println("Удалить")}
         )
     }
 
@@ -45,6 +38,10 @@ fun SourcesGrid(itemsList: List<String>, modifier: Modifier) {
                 text = item,
                 buttons
             )
+        }
+
+        item {
+            SourcesAddCard({ println("[eq") })
         }
     }
 }

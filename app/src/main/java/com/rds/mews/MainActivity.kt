@@ -3,6 +3,7 @@ package com.rds.mews
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -261,7 +262,7 @@ fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit) {
                     Text(text = tab.title)
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedIconColor = MaterialTheme.colorScheme.background,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     indicatorColor = MaterialTheme.colorScheme.onBackground
                 )

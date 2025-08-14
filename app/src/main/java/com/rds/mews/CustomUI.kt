@@ -37,11 +37,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,7 +51,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import com.rds.mews.ui.theme.Shapes
@@ -131,7 +132,7 @@ fun CustomCardWithMenu(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(50.dp),
+            .wrapContentHeight(),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.primary,
         shadowElevation = 0.dp
@@ -171,6 +172,42 @@ fun CustomCardWithMenu(
 }
 
 @Composable
+fun SourcesAddCard(
+    action: () -> Unit
+) { Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primary,
+        shadowElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Добавить",
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp),
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(
+                onClick = action,
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.secondary)
+                    .fillMaxHeight()
+            ) {
+                Icon(imageVector = Icons.Default.Add, contentDescription = "Добавить источник")
+            }
+        }
+    }
+}
+
+@Composable
 fun TitlesCard(title: Title) {
     var expanded by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = 0, initialPageOffsetFraction = 0f, pageCount = {2})
@@ -198,7 +235,9 @@ fun TitlesCard(title: Title) {
                 Text(
                     text = "14:88",
                     textAlign = TextAlign.Left,
-                    modifier = Modifier.padding(8.dp).width(40.dp)
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .wrapContentWidth()
                 )
                 Text(
                     text = title.title,
@@ -218,7 +257,7 @@ fun TitlesCard(title: Title) {
                 HorizontalDivider(
                     thickness = 1.dp,
                     color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.padding(vertical = 10.dp))
+                    modifier = Modifier.padding(bottom = 8.dp))
 
                 HorizontalPager(
                     state = pagerState,
@@ -254,20 +293,19 @@ fun TitlesCard(title: Title) {
                 HorizontalDivider(
                     thickness = 1.dp,
                     color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.padding(vertical = 10.dp))
+                    modifier = Modifier.padding(top = 10.dp))
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(30.dp),
+                        .wrapContentHeight(),
                 ) {
                     Text(
                         text = "Текст",
                         textAlign = TextAlign.Center,
                         modifier = Modifier
-                            .height(20.dp)
-                            .wrapContentWidth()
-                            .padding(horizontal = 4.dp)
+                            .wrapContentSize()
+                            .padding(top = 8.dp, bottom = 6.dp)
                             .clickable(interactionSource, indication = null) {
                                 coroutineScope.launch { pagerState.animateScrollToPage(0) }
                             }
@@ -278,9 +316,8 @@ fun TitlesCard(title: Title) {
                         text = "Источник",
                         textAlign = TextAlign.Center,
                         modifier = Modifier
-                            .height(20.dp)
-                            .wrapContentWidth()
-                            .padding(horizontal = 4.dp)
+                            .wrapContentHeight()
+                            .padding(start = 6.dp, top = 8.dp, bottom = 6.dp)
                             .clickable(interactionSource, indication = null) {
                                 coroutineScope.launch { pagerState.animateScrollToPage(1) }
                             }
@@ -320,18 +357,4 @@ fun CustomSettingsItem(text: String, item: @Composable () -> Unit) {
             item()
         }
     }
-}
-
-@Preview
-@Composable
-fun TitleTest() {
-    val title = Title(
-        id = 5,
-        time = 1755152804,
-        title = "\"Зелёный оазис\": Новый дизайн-проект обещает преобразить центр города",
-        text = "Архитектурная компания \"ГринВью\" представила инновационный дизайн-проект \"Зелёный оазис\", который призван превратить заброшенный сквер в самом центре города в современное и экологически чистое общественное пространство. Проект включает в себя установку вертикальных садов, использование энергоэффективного освещения и создание зон для отдыха с доступом к бесплатному Wi-Fi. Ожидается, что реализация проекта начнётся уже в следующем году. Представители городской администрации выразили полную поддержку инициативе, отметив её важность для повышения качества жизни горожан и улучшения экологической обстановки. \"Это не просто парк, а полноценная экосистема, которая будет служить примером для будущих городских проектов\", — заявил главный архитектор города.",
-        sources = "\"ГринВью\", Городская администрация, Пресс-служба мэрии, \"Вестник города\"",
-        links = "https://greenview.arch/project_oasis\nhttps://mayor.city/press/green_oasis\nhttps://gorod.vestnik/news/zeleniy_oazis"
-    )
-    TitlesCard(title)
 }
