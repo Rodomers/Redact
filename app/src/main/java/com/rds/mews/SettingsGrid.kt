@@ -1,6 +1,5 @@
 package com.rds.mews
 
-import android.os.Build
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,7 +14,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,33 +22,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 
 
 @Composable
-fun SettingsGrid(modifier: Modifier) {
-    var darkTheme by remember { mutableStateOf(false) }
-    var adaptiveColors by remember {mutableStateOf(false)}
+fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
+//    var darkTheme by remember { mutableStateOf(false) }
+//    var adaptiveColors by remember {mutableStateOf(false)}
     val titlesDropdownVisible = remember { MutableTransitionState(false) }
-    var titlesNum by remember { mutableStateOf("10 заголовков") }
     val titlesDropdownItems = listOf(
-        "10 заголовков" to { titlesNum = "10 заголовков" },
-        "25 заголовков" to { titlesNum = "20 заголовков" },
-        "50 заголовков" to { titlesNum = "50 заголовков" },
-        "75 заголовков" to { titlesNum = "75 заголовков" },
-        "100 заголовков" to { titlesNum = "100 заголовков" }
+        "10 заголовков" to { settingsModel.titlesNum.intValue = 10 },
+        "25 заголовков" to { settingsModel.titlesNum.intValue = 25 },
+        "50 заголовков" to { settingsModel.titlesNum.intValue = 50 },
+        "75 заголовков" to { settingsModel.titlesNum.intValue = 75 },
+        "100 заголовков" to { settingsModel.titlesNum.intValue = 100 }
     )
     val limitationDropdownVisible = remember { MutableTransitionState(false) }
-    var limitation by remember { mutableStateOf("24 часа") }
     val limitationDropdownItems = listOf(
-        "24 часа" to { limitation = "24 часа" },
-        "48 часов" to { limitation = "48 часов" },
-        "72 часа" to { limitation = "72 часа" },
-        "96 часов" to { limitation = "96 часов" },
-        "120 часов" to { limitation = "120 часов" }
+        "24 часа" to { settingsModel.titlesPeriod.intValue = 24 },
+        "48 часов" to { settingsModel.titlesPeriod.intValue = 48 },
+        "72 часа" to { settingsModel.titlesPeriod.intValue = 72 },
+        "96 часов" to { settingsModel.titlesPeriod.intValue = 96 },
+        "120 часов" to { settingsModel.titlesPeriod.intValue = 120 }
     )
 
     Column(
@@ -82,7 +77,7 @@ fun SettingsGrid(modifier: Modifier) {
                         containerColor = MaterialTheme.colorScheme.background
                     )
                 ) {
-                    Text(text = titlesNum)
+                    Text(text = "${settingsModel.titlesNum.intValue} заголовков")
                 }
 
                 if (titlesDropdownVisible.currentState || titlesDropdownVisible.targetState) {
@@ -107,7 +102,7 @@ fun SettingsGrid(modifier: Modifier) {
                         containerColor = MaterialTheme.colorScheme.background
                     )
                 ) {
-                    Text(text = limitation)
+                    Text(text = "${settingsModel.titlesPeriod.intValue} часа")
                 }
 
                 if (limitationDropdownVisible.currentState || limitationDropdownVisible.targetState) {
@@ -121,10 +116,4 @@ fun SettingsGrid(modifier: Modifier) {
             }
         }
     }
-}
-
-@Preview
-@Composable
-fun TestSettings() {
-    SettingsGrid(modifier = Modifier)
 }

@@ -72,6 +72,7 @@ class DbHelper(val context: Context) :
         return res
     }
 
+    @Synchronized
     fun findMessage(sourceName: String, mess: String): Message? {
         val db = this.readableDatabase
         val query = "SELECT * FROM $MESS_NAME WHERE $MESS_SOURCE = ? AND $MESS = ?"
@@ -92,6 +93,7 @@ class DbHelper(val context: Context) :
         }
     }
 
+    @Synchronized
     fun findRSS(sourceName: String, sourceLink: String): RSS? {
         val db = this.readableDatabase
         val query = "SELECT * FROM $RSS_NAME WHERE $RSS_SOURCE = ? OR $RSS_LINK = ?"
@@ -108,6 +110,7 @@ class DbHelper(val context: Context) :
         }
     }
 
+    @Synchronized
     fun getMessage(id: Long): Message? {
         val db = this.readableDatabase
         val query = "SELECT * FROM $MESS_NAME WHERE $MESS_ID = ?"
@@ -129,6 +132,7 @@ class DbHelper(val context: Context) :
         }
     }
 
+    @Synchronized
     fun getMessages(timeSeconds: Long? = null): List<Message> {
         val db = this.readableDatabase
         val list = mutableListOf<Message>()
@@ -158,6 +162,7 @@ class DbHelper(val context: Context) :
         return list
     }
 
+    @Synchronized
     fun getTitles(timeSeconds: Long? = null, earlier: Boolean = false): List<Title> {
         val db = this.readableDatabase
         val list = mutableListOf<Title>()
@@ -191,6 +196,7 @@ class DbHelper(val context: Context) :
         return list
     }
 
+    @Synchronized
     fun getRSS(): List<RSS> {
         val db = this.readableDatabase
         val list = mutableListOf<RSS>()
@@ -212,6 +218,7 @@ class DbHelper(val context: Context) :
         return list
     }
 
+    @Synchronized
     fun findMessageByID(id: Long): Boolean {
         val db = this.readableDatabase
         val cursor = db.rawQuery("SELECT $MESS_ID FROM $MESS_NAME WHERE $MESS_ID = ?", arrayOf(id.toString()))
@@ -221,6 +228,7 @@ class DbHelper(val context: Context) :
         }
     }
 
+    @Synchronized
     fun findTitleByID(id: Long): Boolean {
         val db = this.readableDatabase
         val cursor = db.rawQuery("SELECT $TITLES_ID FROM $TITLES_NAME WHERE $TITLES_ID = ?", arrayOf(id.toString()))
@@ -230,6 +238,7 @@ class DbHelper(val context: Context) :
         }
     }
 
+    @Synchronized
     fun addMessage(messageTime: Long, link: String, source: String, messageText: String): Long {
         val db = this.writableDatabase
         val values = ContentValues().apply {
@@ -248,6 +257,7 @@ class DbHelper(val context: Context) :
         return result
     }
 
+    @Synchronized
     fun addTitle(titleTime: Long, title: String, text: String, sources: String, links: String): Long {
         val db = this.writableDatabase
         val values = ContentValues().apply {
@@ -261,6 +271,7 @@ class DbHelper(val context: Context) :
         return db.insert(TITLES_NAME, null, values)
     }
 
+    @Synchronized
     fun addRSS(source: String, name: String, link: String): Long {
         val db = this.writableDatabase
         val values = ContentValues().apply {
@@ -278,6 +289,7 @@ class DbHelper(val context: Context) :
         return result
     }
 
+    @Synchronized
     fun delMessage(id: Long): Boolean {
         val db = this.writableDatabase
         val flag = db.delete(MESS_NAME, "$MESS_ID = ?", arrayOf(id.toString())) > 0
@@ -285,6 +297,7 @@ class DbHelper(val context: Context) :
         return flag
     }
 
+    @Synchronized
     fun delTitle(id: Long): Boolean {
         val db = this.writableDatabase
         val flag = db.delete(TITLES_NAME, "$TITLES_ID = ?", arrayOf(id.toString())) > 0
@@ -292,6 +305,7 @@ class DbHelper(val context: Context) :
         return flag
     }
 
+    @Synchronized
     fun delRSS(id: Long): Boolean {
         val db = this.writableDatabase
         val flag = db.delete(RSS_NAME, "$RSS_ID = ?", arrayOf(id.toString())) > 0
@@ -299,6 +313,7 @@ class DbHelper(val context: Context) :
         return flag
     }
 
+    @Synchronized
     fun messageTimeKill(timeSeconds: Long): Int {
         val db = this.writableDatabase
         val killTime = System.currentTimeMillis() - timeSeconds * 1000
@@ -308,6 +323,7 @@ class DbHelper(val context: Context) :
             arrayOf(killTime.toString()))
     }
 
+    @Synchronized
     fun titlesTimeKill(timeSeconds: Long): Int {
         val db = this.writableDatabase
         val killTime = System.currentTimeMillis() - timeSeconds * 1000
