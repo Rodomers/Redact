@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MewsTheme {
                 MainScreen()
+                // TestBtn()
             }
         }
     }
@@ -256,19 +257,20 @@ fun MainScreen() {
         }
     }
 }
-/*
+
 // --------------------ЧАСТЬ ДЛЯ ДЕБАГА--------------------------------
 @Composable
 fun TestBtn() {
     val scope = rememberCoroutineScope()
     var db = DbHelper(LocalContext.current.applicationContext)
     db.getRSS().forEach { RSS ->  db.delRSS(RSS.id)}
+    db.getMessages().forEach { mess ->  db.delMessage(mess.id)}
+    db.getTitles().forEach { title ->  db.delTitle(title.id)}
     db.addRSS("ТАСС", "https://tass.ru/rss/v2.xml")
     db.addRSS("РИА", "https://ria.ru/export/rss2/index.xml")
     var fetcher = RssFetcher(db)
     var llm = OpenRouterClient()
     var summarizer = NewsSummarizer(db, llm)
-    println(db.getRSS())
     Box(
         modifier = Modifier
             .padding(horizontal = 20.dp, vertical = 100.dp)
@@ -279,9 +281,13 @@ fun TestBtn() {
             onClick = {
                 scope.launch(Dispatchers.IO) {
                     try {
-                        if(fetcher.fetchAndStoreAll().errors.size == 0) {
-
+                        println("start")
+                        if(fetcher.fetchAndStoreAll().errors.isEmpty()) {
+                            println("second")
                             summarizer.summarizeTopics()
+                           db.getTitles().forEach { title ->
+                               println("${title.time}\t${title.title}\t${title.text}\t${title.sources}\t${title.links}")
+                           }
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -294,7 +300,7 @@ fun TestBtn() {
     }
 }
 //------------------------------------------------------------------------
-*/
+
 @Composable
 fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit) {
     val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)

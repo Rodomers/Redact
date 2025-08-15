@@ -1,9 +1,5 @@
 package com.rds.mews
 
-import java.io.BufferedInputStream
-import java.io.ByteArrayOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -11,50 +7,43 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-
-// --- Нужные минимальные интерфейсы / структуры (используйте ваши Dataclasses.RSS при наличии) ---
-/**
- * Ожидаемый небольшой датакласс RSS (в вашем проекте уже есть Dataclasses.kt с классом RSS).
- * Если у вас другой пакет/имя, удалите/замените этот класс и используйте существующий.
- */
-
-// Интерфейс, который должен реализовать адаптер к вашему DBHelper.
-// Предпочтительно реализовать простые методы: получить все RSS, проверить наличие сообщения по ссылке,
-// и добавить новое сообщение (time в millis).
-
 // --- Парсер RSS-потоков ---`
 class RssFetcher(
-    private val db: DbHelper,
-    private val httpTimeoutMs: Int = 15000
+    private val db: DbHelper, // Передавать DbHelper из основной программы
 ) {
 
     // Основной запуск — парсит все RSS-каналы и сохраняет новые сообщения
-    suspend fun fetchAndStoreAll(): FetchResult {
+    suspend fun fetchAndStoreAll(maxTime: Int = 168): FetchResult {
         val rssList = try {
-            db.getRSS()
+            db.getRSS() // получаем RSS из БД
         } catch (e: Exception) {
-            println("Ошибка при получении списка RSS из БД: ${e.message}")
+            println("Ошибка при получении списка RSS из БД: ${e.message}") // Обработка ошибки про неполучении RSS
             return FetchResult(0, 0, 0, listOf(e.message ?: "unknown"))
         }
 
-        var feedsProcessed = 0
-        var itemsAdded = 0
-        var itemsSkipped = 0
-        val errors = mutableListOf<String>()
+        var feedsProcessed = 0 // Кол-во проверенных новостей
+        var itemsAdded = 0 // Кол-во добавленных новостей в БД
+        var itemsSkipped = 0 // Кол-во пропущенных новостей (старые, ошибки, т.д.)
+        val errors = mutableListOf<String>() // Список ошибок
 
         for (rss in rssList) {
             try {
-                val doc: Document = Jsoup.connect(rss.link).get()
-                val items = parseRssItems(doc)
+                val doc: Document = Jsoup.connect(rss.link).get() // Получение XML из RSS
+                val items = parseRssItems(doc) // Парс полученного XML
                 for (item in items) {
                     val link = item.link ?: continue // если нет ссылки — пропускаем
-                    val desc = item.description ?: continue
+                    val desc = item.description ?: continue // Нет описания новости - пропускаем
                     if (db.findMessage(rss.source, desc) != null) {
-                        itemsSkipped++
+                        itemsSkipped++ // Есть новость в БД - пропускаем
                         continue
                     }
-                    val time = item.pubDateMillis ?: System.currentTimeMillis()
-                    val text = buildMessageText(item)
+                    val time = item.pubDateMillis ?: System.currentTimeMillis() // Пытаемся получить время новости, иначе системное
+                    val text = buildMessageText(item) // Текст новости
+                    if (time - System.currentTimeMillis() > maxTime * 60 * 60 * 100){
+                        itemsSkipped++ // Проверка на актуальность
+                        continue
+                    }
+                    // Добавление в БД
                     db.addMessage(messageTime = time, link = link, source = rss.source, messageText = text)
                     itemsAdded++
                 }
@@ -62,46 +51,13 @@ class RssFetcher(
 
             } catch (e: Exception) {
                 val msg = "Ошибка при обработке RSS (id=${rss.id}, link=${rss.link}): ${e.message}"
-                println(msg)
+                println(msg) // Ошибка лол
                 errors.add(msg)
             }
         }
 
         return FetchResult(feedsProcessed, itemsAdded, itemsSkipped, errors)
     }
-
-    // --- HTTP загрузка (байты) ---
-    @Throws(Exception::class)
-    suspend private fun fetchUrlBytes(urlStr: String): ByteArray {
-        val url = URL(urlStr)
-        val conn = (url.openConnection() as HttpURLConnection).apply {
-            connectTimeout = httpTimeoutMs
-            readTimeout = httpTimeoutMs
-            instanceFollowRedirects = true
-            requestMethod ="GET"
-            setRequestProperty("User-Agent", "Mozilla/5.0")
-            setRequestProperty("Accept-Encoding", "gzip, deflate")
-        }
-        try {
-            val code = conn.responseCode
-            if (code !in 200..299) {
-                throw Exception("HTTP $code for $urlStr")
-            }
-            val input = BufferedInputStream(conn.inputStream)
-            val buffer = ByteArrayOutputStream()
-            val data = ByteArray(8192)
-            var n: Int
-            while (input.read(data).also { n = it } != -1) {
-                buffer.write(data, 0, n)
-            }
-            input.close()
-            return buffer.toByteArray() }
-        finally {
-            conn.disconnect()
-        }
-    }
-
-
 
     // --- Структура внутреннего Item'а ---
     private data class RssItem(
@@ -111,7 +67,7 @@ class RssFetcher(
         val pubDateMillis: Long? = null
     )
 
-
+    // Парсинг предмета из XML по полям
     private fun parseRssItems(doc: Document): List<RssItem> {
         val nodeList = doc.select("item")
         val result = mutableListOf<RssItem>()
@@ -129,7 +85,7 @@ class RssFetcher(
 
 
     private fun elementText(parent: Element, tagName: String): String? {
-        // пытаемся прямой поиск
+        // пытаемся прямой поиск по тэгу
         val nList = parent.select(tagName)
         if (nList.isNotEmpty()) {
             val node = nList[nList.lastIndex]// nList.item(0)
@@ -193,11 +149,20 @@ class RssFetcher(
         // если не получилось - вернуть null
         return null
     }
-
+    // тип для возвращения релузьтата парсиинга
     data class FetchResult(
         val feedsProcessed: Int,
         val itemsAdded: Int,
         val itemsSkipped: Int,
         val errors: List<String>
     )
+}
+// Функция для проверки валидности RSS: True - валидный, False - невалидный
+suspend fun validRSS(strLink: String): Boolean{
+    try {
+        val doc: Document = Jsoup.connect(strLink).get()
+        return true
+    } catch (e: Exception){
+        return false
+    }
 }
