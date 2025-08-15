@@ -58,15 +58,15 @@ class DbHelper(val context: Context) :
         return when (ids.isEmpty()) {
             true -> ""
             else -> {
-                ids.joinToString(separator = "\n")
+                ids.joinToString(separator = ", ")
             }
         }
     }
 
-    fun dbUnpack(str: String): List<String> {
-        val res = mutableListOf<String>()
+    fun dbUnpack(str: String): List<Long> {
+        val res = mutableListOf<Long>()
         if (str.split(", ").lastIndex != 0) {
-            for (i in str.split("\n")) res.add(i)
+            for (i in str.split(", ")) res.add(i.toLong())
         }
 
         return res
@@ -197,10 +197,11 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
-    fun getRSS(): List<RSS> {
+    fun getRSS(id: Long? = null): List<RSS> {
         val db = this.readableDatabase
         val list = mutableListOf<RSS>()
-        val query = "SELECT * FROM $RSS_NAME"
+        var query = "SELECT * FROM $RSS_NAME"
+        if (id != null) query = "$query WHERE id = $id"
 
         db.rawQuery(query, null).use {
             cursor ->
@@ -331,5 +332,34 @@ class DbHelper(val context: Context) :
         return db.delete(TITLES_NAME,
             "$TITLES_TIME < ?",
             arrayOf(killTime.toString()))
+    }
+
+    fun getTitleLinks(id: Long): Pair<String, String>? {
+        val db = this.readableDatabase
+        when (findTitleByID(id)) {
+            true -> {
+                val cursor = db.rawQuery("SELECT $TITLES_LINKS, $TITLES_SOURCES FROM $TITLES_NAME WHERE $TITLES_ID = ?", arrayOf(id.toString()))
+                return cursor.use {
+                    cursor.moveToFirst()
+                    val links = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_LINKS))
+                    val sources = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_SOURCES))
+
+                    var linksStr = ""
+                    dbUnpack(links).forEach {
+                        linksStr = "$linksStr\n${getMessage(it)?.link ?: "Ссылка не найдена"}"
+                    }
+                    var sourcesStr = ""
+                    dbUnpack(sources).forEach {
+                        val rss = getRSS(it)
+                        if (rss.isNotEmpty()) {sourcesStr = "$sourcesStr, ${rss[0].source}"}
+                    }
+                    if (sourcesStr == "") sourcesStr = "Источники не найдены"
+
+                    Pair(sources, links)
+                }
+
+            }
+            false -> return null
+        }
     }
 }
