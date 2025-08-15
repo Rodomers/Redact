@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun TitlesGrid(itemsList: List<Title>, modifier: Modifier) {
+fun TitlesGrid(itemsList: List<Title>, modifier: Modifier, db: DbHelper) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(1),
         modifier = modifier

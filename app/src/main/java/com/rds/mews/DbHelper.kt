@@ -307,9 +307,14 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
-    fun delRSS(id: Long): Boolean {
+    fun delRSS(source: String? = null, id: Long? = null): Boolean {
         val db = this.writableDatabase
-        val flag = db.delete(RSS_NAME, "$RSS_ID = ?", arrayOf(id.toString())) > 0
+        var flag = false
+        flag = if (source == null && id == null) false
+        else {
+            if (source != null) db.delete(RSS_NAME, "$RSS_SOURCE = ?", arrayOf(source)) > 0
+            else db.delete(RSS_NAME, "$RSS_ID = ?", arrayOf(id.toString())) > 0
+        }
 
         return flag
     }

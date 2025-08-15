@@ -10,19 +10,28 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import kotlinx.coroutines.launch
 
 @Composable
-fun SourcesGrid(itemsList: List<String>, modifier: Modifier) {
-    val buttons = remember {
-        listOf(
-            Pair("Изменить") {println("Изменить")},
-            Pair("Удалить") {println("Удалить")}
-        )
-    }
+fun SourcesGrid(
+    itemsList: List<String>, modifier: Modifier, db: DbHelper,
+    onSourcesChanged: () -> Unit
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+    var delSourceName by remember { mutableStateOf("") }
+    var changeDialog by remember { mutableStateOf("") }
+    val addDialogTrue = { showAddDialog = true }
+
+    val scope = rememberCoroutineScope()
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -36,20 +45,79 @@ fun SourcesGrid(itemsList: List<String>, modifier: Modifier) {
         items(items = itemsList, key = { item -> item }) { item ->
             CustomCardWithMenu(
                 text = item,
-                buttons
+                listOf(
+                    Pair("Изменить") { changeDialog = item },
+                    Pair("Удалить") { delSourceName = item }
+                )
             )
         }
 
         item {
-            SourcesAddCard({ println("[eq") })
+            SourcesAddCard(addDialogTrue)
+        }
+
+        if (showAddDialog) {
+            item {
+                Popup(
+                    onDismissRequest = { showAddDialog = false },
+                    alignment = Alignment.TopEnd
+                ) {
+                    CustomChangeDialog(
+                        cancelAction = { showAddDialog = false },
+                        onConfirm = {pair ->
+                            scope.launch {
+                                addSource(pair.first, pair.second, db)
+                                onSourcesChanged()
+                            }
+                            showAddDialog = false
+                        },
+                        add = true
+                    )
+                }
+            }
+        }
+        if (delSourceName != "") {
+            item {
+                Popup(
+                    onDismissRequest = { delSourceName = "" },
+                    alignment = Alignment.TopEnd
+                ) {
+                    CustomConfirmDialog(
+                        title = "Удаление источника",
+                        text = "Вы уверены, что хотите удалить источник?",
+                        cancelAction = { delSourceName = "" },
+                        btnText = "Удалить",
+                        onConfirm = {flag ->
+                            scope.launch {
+                                delSource(delSourceName, db)
+                                onSourcesChanged()
+                                delSourceName = ""
+                            }
+                        }
+                    )
+                }
+            }
+        }
+        if (changeDialog != "") {
+            item {
+                Popup(
+                    onDismissRequest = { delSourceName = "" },
+                    alignment = Alignment.TopEnd
+                ) {
+                    CustomChangeDialog(
+                        cancelAction = { changeDialog = "" },
+                        onConfirm = {pair ->
+                            scope.launch {
+                                changeSource(pair.first, pair.second, db)
+                                onSourcesChanged()
+                                changeDialog = ""
+                            }
+                        },
+                        add = false,
+                        source = changeDialog
+                    )
+                }
+            }
         }
     }
-}
-
-@Preview
-@Composable
-fun AppScreen() {
-    val myData = listOf("Элемент 1", "Элемент 2", "Элемент 3", "Элемент 4", "Элемент 5", "Элемент 6", "Элемент 7", "Элемент 8", "Элемент 9", "Элемент 10", "Элемент 11", "Элемент 12",
-        "Элемент 13", "Элемент 14", "Элемент 15", "Элемент 16", "Элемент 17", "Элемент 18","Элемент 19", "Элемент 20", "Элемент 21", "Элемент 22", "Элемент 23", "Элемент 24","Элемент 25", "Элемент 26", "Элемент 27", "Элемент 28", "Элемент 29", "Элемент 30","Элемент 31", "Элемент 32", "Элемент 33", "Элемент 34", "Элемент 35", "Элемент 36","Элемент 37", "Элемент 38", "Элемент 39", "Элемент 40", "Элемент 41", "Элемент 42",)
-    SourcesGrid(itemsList = myData, modifier = Modifier)
 }

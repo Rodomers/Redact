@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -44,14 +45,22 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Popup
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.launch
@@ -224,16 +233,21 @@ fun TitlesCard(title: Title) {
         color = MaterialTheme.colorScheme.primary
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp).animateContentSize()
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .animateContentSize()
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .wrapContentHeight()
-                    .clickable(interactionSource = interactionSource, indication = null) {expanded = !expanded},
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) { expanded = !expanded },
             ) {
                 Text(
-                    text = "14:88",
+                    text = getFormattedTimeUnix(title.time),
                     textAlign = TextAlign.Left,
                     modifier = Modifier
                         .padding(8.dp)
@@ -281,7 +295,9 @@ fun TitlesCard(title: Title) {
                                 verticalArrangement = Arrangement.Top
                             ) {
                                 Text(
-                                    text = title.sources, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                    text = title.sources, modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(text = title.links, modifier = Modifier.fillMaxWidth())
@@ -357,4 +373,201 @@ fun CustomSettingsItem(text: String, item: @Composable () -> Unit) {
             item()
         }
     }
+}
+
+@Composable
+fun CustomFullscreenLoading(isVisible: Boolean, animDuration: Int = 300) {
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn(animationSpec = tween(durationMillis = animDuration)),
+        exit = fadeOut(animationSpec = tween(durationMillis = animDuration))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = {},
+                    indication = null
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                shape = Shapes.large,
+                modifier = Modifier
+                    .wrapContentWidth()
+                    .wrapContentHeight(),
+                shadowElevation = 8.dp,
+                color = MaterialTheme.colorScheme.background
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(strokeWidth = 3.dp, color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 16.dp))
+                    Text("Обновление...", fontWeight = FontWeight.Bold, fontSize = 20.sp,
+                        modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CustomChangeDialog(
+    cancelAction: () -> Unit,
+    onConfirm: (Pair<String, String>) -> Unit,
+    add: Boolean = false,
+    source: String = "Название источника"
+) {
+    val title = if (add) "Добавление источника" else "Изменение источника"
+
+    Dialog(onDismissRequest = cancelAction) {
+
+        var rssText by remember { mutableStateOf("") }
+        var sourceText by remember { mutableStateOf(if (!add) source else "") }
+        var validRss by remember { mutableStateOf(!add) } // true, если редактируем
+
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier
+                .wrapContentWidth()
+                .wrapContentHeight(),
+            shadowElevation = 8.dp,
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)
+                )
+
+                if (add) {
+                    OutlinedTextField(
+                        value = rssText,
+                        onValueChange = { rssText = it },
+                        shape = MaterialTheme.shapes.large,
+                        label = { Text("Ссылка на RSS/Telegram") },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.onBackground,
+                            cursorColor = MaterialTheme.colorScheme.onBackground,
+                            focusedLabelColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onBackground,
+                        )
+                    )
+                }
+
+                OutlinedTextField(
+                    value = sourceText,
+                    onValueChange = { sourceText = it },
+                    shape = MaterialTheme.shapes.large,
+                    label = { Text("Название источника") },
+                    placeholder = { Text(source) },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.onBackground,
+                        cursorColor = MaterialTheme.colorScheme.onBackground,
+                        focusedLabelColor = MaterialTheme.colorScheme.onBackground,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onBackground,
+                    )
+                )
+
+                if (add) {
+                    Text(
+                        text = if (validRss) "Валидная ссылка" else "Проверить ссылку",
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .clickable { validRss = true }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 8.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = cancelAction) {
+                        Text("Отмена", color = MaterialTheme.colorScheme.onBackground)
+                    }
+
+                    if ((validRss && rssText != "" && sourceText != "" && add)) {
+                        TextButton(
+                            onClick = {
+                                val finalSourceName = sourceText.ifEmpty { source }
+                                onConfirm(Pair(finalSourceName, rssText))
+                            }
+                        ) {
+                            Text("Добавить", color = MaterialTheme.colorScheme.onBackground)
+                        }
+                    }
+
+                    if (!add && sourceText != "") {
+                        TextButton(
+                            onClick = {
+                                val finalSourceName = sourceText.ifEmpty { source }
+                                onConfirm(Pair(source, finalSourceName))
+                            }
+                        ) {
+                            Text("Изменить", color = MaterialTheme.colorScheme.onBackground)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CustomConfirmDialog(
+    title: String,
+    text: String,
+    btnText: String,
+    cancelAction: () -> Unit,
+    onConfirm: (Boolean) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = cancelAction,
+
+        title = {
+            Text(text = title, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        },
+
+        text = {
+            Text(text = text)
+        },
+
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(true)
+                }
+            ) {
+                Text(btnText, color = MaterialTheme.colorScheme.onBackground)
+            }
+        },
+
+        dismissButton = {
+            TextButton(onClick = cancelAction) {
+                Text("Отмена", color = MaterialTheme.colorScheme.onBackground)
+            }
+        }
+    )
+}
+
+@Preview
+@Composable
+fun PreviewDialog() {
+    CustomChangeDialog({}, {}, add = true)
 }

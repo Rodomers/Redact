@@ -19,11 +19,14 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -66,6 +69,13 @@ fun MainScreen() {
     val settingsManager = SettingsManager(LocalContext.current.applicationContext)
     val factory = SettingsViewModelFactory(settingsManager)
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
+    val db = DbHelper(LocalContext.current.applicationContext)
+
+    val sourcesList: SnapshotStateList<String> = remember { mutableStateListOf() }
+    val updateSources: () -> Unit = {
+        sourcesList.clear()
+        sourcesList.addAll(db.getRSS().map {it.source})
+    }
 
     val newsFeed = listOf(
         Title(
@@ -241,14 +251,22 @@ fun MainScreen() {
         }
     ) { paddingValues ->
         when (selectedTab) {
-            TabScreen.Sources -> SourcesGrid(
-                listOf("Элемент 1", "Элемент 2", "Элемент 3", "Элемент 4", "Элемент 5", "Элемент 6", "Элемент 7", "Элемент 8", "Элемент 9", "Элемент 10", "Элемент 11", "Элемент 12",
-                    "Элемент 13", "Элемент 14", "Элемент 15", "Элемент 16", "Элемент 17", "Элемент 18","Элемент 19", "Элемент 20", "Элемент 21", "Элемент 22", "Элемент 23", "Элемент 24","Элемент 25", "Элемент 26", "Элемент 27", "Элемент 28", "Элемент 29", "Элемент 30","Элемент 31", "Элемент 32", "Элемент 33", "Элемент 34", "Элемент 35", "Элемент 36","Элемент 37", "Элемент 38", "Элемент 39", "Элемент 40", "Элемент 41", "Элемент 42",),
-                modifier = Modifier.padding(paddingValues)
-            )
+            TabScreen.Sources -> {
+                LaunchedEffect(key1 = Unit) {
+                    updateSources()
+                }
+
+                SourcesGrid(
+                    sourcesList,
+                    modifier = Modifier.padding(paddingValues),
+                    db = db,
+                    onSourcesChanged = updateSources
+                    )
+            }
             TabScreen.Titles -> TitlesGrid(
                 newsFeed,
-                modifier = Modifier.padding(paddingValues)
+                modifier = Modifier.padding(paddingValues),
+                db = db
             )
             else -> SettingsGrid(
                 modifier = Modifier.padding(paddingValues),
@@ -259,46 +277,46 @@ fun MainScreen() {
 }
 
 // --------------------ЧАСТЬ ДЛЯ ДЕБАГА--------------------------------
-@Composable
-fun TestBtn() {
-    val scope = rememberCoroutineScope()
-    var db = DbHelper(LocalContext.current.applicationContext)
-    db.getRSS().forEach { RSS ->  db.delRSS(RSS.id)}
-    db.getMessages().forEach { mess ->  db.delMessage(mess.id)}
-    db.getTitles().forEach { title ->  db.delTitle(title.id)}
-    db.addRSS("ТАСС", "https://tass.ru/rss/v2.xml")
-    db.addRSS("РИА", "https://ria.ru/export/rss2/index.xml")
-    var fetcher = RssFetcher(db)
-    var llm = OpenRouterClient()
-    var summarizer = NewsSummarizer(db, llm)
-    Box(
-        modifier = Modifier
-            .padding(horizontal = 20.dp, vertical = 100.dp)
-            .fillMaxWidth(),
-        contentAlignment = Alignment.Center
-    ) {
-        Button(
-            onClick = {
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        println("start")
-                        if(fetcher.fetchAndStoreAll().errors.isEmpty()) {
-                            println("second")
-                            summarizer.summarizeTopics()
-                           db.getTitles().forEach { title ->
-                               println("${title.time}\t${title.title}\t${title.text}\t${title.sources}\t${title.links}")
-                           }
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-                      },
-        ) {
-            Text(text = "Кнопка", fontWeight = FontWeight.Bold)
-        }
-    }
-}
+//@Composable
+//fun TestBtn() {
+//    val scope = rememberCoroutineScope()
+//    var db = DbHelper(LocalContext.current.applicationContext)
+//    db.getRSS().forEach { RSS ->  db.delRSS(RSS.id)}
+//    db.getMessages().forEach { mess ->  db.delMessage(mess.id)}
+//    db.getTitles().forEach { title ->  db.delTitle(title.id)}
+//    db.addRSS("ТАСС", "https://tass.ru/rss/v2.xml")
+//    db.addRSS("РИА", "https://ria.ru/export/rss2/index.xml")
+//    var fetcher = RssFetcher(db)
+//    var llm = OpenRouterClient()
+//    var summarizer = NewsSummarizer(db, llm)
+//    Box(
+//        modifier = Modifier
+//            .padding(horizontal = 20.dp, vertical = 100.dp)
+//            .fillMaxWidth(),
+//        contentAlignment = Alignment.Center
+//    ) {
+//        Button(
+//            onClick = {
+//                scope.launch(Dispatchers.IO) {
+//                    try {
+//                        println("start")
+//                        if(fetcher.fetchAndStoreAll().errors.isEmpty()) {
+//                            println("second")
+//                            summarizer.summarizeTopics()
+//                           db.getTitles().forEach { title ->
+//                               println("${title.time}\t${title.title}\t${title.text}\t${title.sources}\t${title.links}")
+//                           }
+//                        }
+//                    } catch (e: Exception) {
+//                        e.printStackTrace()
+//                    }
+//                }
+//                      },
+//        ) {
+//            Text(text = "Кнопка", fontWeight = FontWeight.Bold)
+//        }
+//    }
+//}
 //------------------------------------------------------------------------
 
 @Composable
