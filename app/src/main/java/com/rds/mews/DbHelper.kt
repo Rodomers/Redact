@@ -63,10 +63,10 @@ class DbHelper(val context: Context) :
         }
     }
 
-    fun dbUnpack(str: String): List<Long> {
-        val res = mutableListOf<Long>()
+    fun dbUnpack(str: String): List<String> {
+        val res = mutableListOf<String>()
         if (str.split(", ").lastIndex != 0) {
-            for (i in str.split("\n")) res.add(i.toLong())
+            for (i in str.split("\n")) res.add(i)
         }
 
         return res
