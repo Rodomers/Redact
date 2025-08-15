@@ -315,6 +315,21 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
+    fun changeRssSource(oldSource: String, newSource: String): Boolean {
+        val db = this.writableDatabase
+        val values = ContentValues().apply {
+            put(RSS_SOURCE, newSource)
+        }
+
+        return when (findRSS(oldSource)) {
+            null -> false
+            else -> {
+                db.update(RSS_NAME, values, "$RSS_SOURCE = ?", arrayOf(oldSource)) > 0
+            }
+        }
+    }
+
+    @Synchronized
     fun messageTimeKill(timeSeconds: Long): Int {
         val db = this.writableDatabase
         val killTime = System.currentTimeMillis() - timeSeconds * 1000
@@ -334,6 +349,7 @@ class DbHelper(val context: Context) :
             arrayOf(killTime.toString()))
     }
 
+    @Synchronized
     fun getTitleLinks(id: Long): Pair<String, String>? {
         val db = this.readableDatabase
         when (findTitleByID(id)) {
