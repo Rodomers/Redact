@@ -55,12 +55,12 @@ class OpenRouterClient(
 }
 
 // ====== Логика суммаризации ======
-class NewsSummarizer(private val db: DbHelper, private val llm: OpenRouterClient) {
+class NewsSummarizer(private val db: DbHelper, private val llm: OpenRouterClient, private val maxTopics: Int = 20) {
 
     /**
      * Этап 1: выделяем темы из новостей и сохраняем в titles
      */
-    suspend fun extractTopics(max: Int = 20): List<String> {
+    suspend fun extractTopics(max: Int = maxTopics): List<String> {
         val messages = db.getMessages()
         var topics: List<String> = mutableListOf()
         if (messages.isEmpty()) {
