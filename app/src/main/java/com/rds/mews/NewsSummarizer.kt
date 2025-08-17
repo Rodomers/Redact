@@ -15,7 +15,7 @@ class OpenRouterClient(
     // Апи ключ пока захардкожен, потом спокойно можно подвязать другой ключ
     // "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"
     // "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"
-    private val apiKey: String = "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",
+    private val apiKey: String = "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",
     // модель на опенроутер, можно тоже потом выбор пользователю давать
     private val OPENROUTER_MODEL: String = "openai/gpt-oss-20b:free",
     // ссылка на опенроутер
@@ -80,6 +80,9 @@ class NewsSummarizer(
             Проанализируй новости и выдели от 1 до $max основных тем.
             Ответ верни в виде списка, каждая тема с новой строки.
             
+            Отвечай на русском языке, для каждой темы пиши только её название без
+            нумерации и дополнительных символов.
+            
             Новости:
             $combinedNews
         """.trimIndent()
@@ -142,21 +145,23 @@ class NewsSummarizer(
             val idsStr = obj.getString("id")
             // id в список лонгов
             val ids = mutableListOf<Long>()
-            idsStr.forEach { id -> ids += id.toLong() }
+            ids.addAll(idsStr.map {id -> id.code.toLong()})
+//            val ids = messages.map {mess -> mess.id}
 
             // время для темы выбирается по первой новости по этой теме или по системному времени, если ошибка
             var time: Long = System.currentTimeMillis()
-            ids.forEach{ id -> time = min(db.getMessage(id)?.time ?: 0, time)}
+            ids.forEach{ id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time)}
 
             // линки и сурсы в особый формат по id
             var links: String = ""
             var sources: String = ""
-            var pair: Pair<String, String>?
 
             ids.forEach { id ->
-                pair = db.getTitleLinks(id)
-                links += pair?.first + "\n"
-                sources += pair?.second + "\n"
+                val mess = db.getMessage(id)
+                if (mess != null) {
+                    links = db.dbPack(links, mess.link)
+                    sources = db.dbPack(sources, mess.source)
+                }
             }
 
             // Сохраняем в БД
@@ -164,7 +169,7 @@ class NewsSummarizer(
                 sources = sources, links = links)
 
             // задержка перед следующим запросом
-            delay(delaySeconds * 1000)
+            delay(delaySeconds * 10)
         }
     }
 }

@@ -163,6 +163,7 @@ suspend fun validRSS(strLink: String): Boolean{
         val doc: Document = Jsoup.connect(strLink).get()
         return true
     } catch (e: Exception){
+        println(e)
         return false
     }
 }

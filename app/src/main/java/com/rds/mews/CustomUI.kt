@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.MutableTransitionState
@@ -34,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -56,6 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -63,7 +64,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Popup
 import com.rds.mews.ui.theme.Shapes
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun CustomDropdown(
@@ -391,12 +395,13 @@ fun CustomFullscreenLoading(isVisible: Boolean, animDuration: Int = 300) {
                     onClick = {},
                     indication = null
                 ),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.TopCenter,
         ) {
             Surface(
                 shape = Shapes.large,
                 modifier = Modifier
-                    .wrapContentWidth()
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+                    .fillMaxWidth()
                     .wrapContentHeight(),
                 shadowElevation = 8.dp,
                 color = MaterialTheme.colorScheme.background
@@ -407,11 +412,52 @@ fun CustomFullscreenLoading(isVisible: Boolean, animDuration: Int = 300) {
                 ) {
                     CircularProgressIndicator(strokeWidth = 3.dp, color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(top = 16.dp))
-                    Text("Обновление...", fontWeight = FontWeight.Bold, fontSize = 20.sp,
+                    Text("Обновление...", fontWeight = FontWeight.Bold, fontSize = 16.sp,
                         modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp))
                 }
             }
         }
+    }
+}
+
+//@Composable
+//fun CustomPullToRefreshIndicator(modifier: Modifier = Modifier) {
+//    Surface(
+//        modifier = modifier
+//            .fillMaxWidth()
+//            .padding(horizontal = 20.dp, vertical = 10.dp),
+//        shape = Shapes.large,
+//        shadowElevation = 8.dp,
+//        color = MaterialTheme.colorScheme.background
+//    ) {
+//        Column(
+//            horizontalAlignment = Alignment.CenterHorizontally,
+//            verticalArrangement = Arrangement.Center
+//        ) {
+//            CircularProgressIndicator(
+//                strokeWidth = 3.dp,
+//                color = MaterialTheme.colorScheme.primary,
+//                modifier = Modifier.padding(top = 16.dp)
+//            )
+//            Text(
+//                text = "Обновление...",
+//                fontWeight = FontWeight.Bold,
+//                fontSize = 16.sp,
+//                modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)
+//            )
+//        }
+//    }
+//}
+
+@Composable
+fun CustomPullToRefreshIndicator(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator()
     }
 }
 
@@ -420,15 +466,17 @@ fun CustomChangeDialog(
     cancelAction: () -> Unit,
     onConfirm: (Pair<String, String>) -> Unit,
     add: Boolean = false,
-    source: String = "Название источника"
+    source: String = "Название источника",
+    scope: CoroutineScope? = null
 ) {
     val title = if (add) "Добавление источника" else "Изменение источника"
+    val context = LocalContext.current
 
     Dialog(onDismissRequest = cancelAction) {
 
         var rssText by remember { mutableStateOf("") }
         var sourceText by remember { mutableStateOf(if (!add) source else "") }
-        var validRss by remember { mutableStateOf(!add) } // true, если редактируем
+        var validRss by remember { mutableStateOf(!add) }
 
         Surface(
             shape = MaterialTheme.shapes.large,
@@ -436,7 +484,7 @@ fun CustomChangeDialog(
                 .wrapContentWidth()
                 .wrapContentHeight(),
             shadowElevation = 8.dp,
-            color = MaterialTheme.colorScheme.background
+            color = MaterialTheme.colorScheme.primary
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -452,16 +500,17 @@ fun CustomChangeDialog(
                 if (add) {
                     OutlinedTextField(
                         value = rssText,
-                        onValueChange = { rssText = it },
+                        onValueChange = { rssText = it
+                                        validRss = false},
                         shape = MaterialTheme.shapes.large,
                         label = { Text("Ссылка на RSS/Telegram") },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.onBackground,
-                            cursorColor = MaterialTheme.colorScheme.onBackground,
-                            focusedLabelColor = MaterialTheme.colorScheme.onBackground,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.onBackground,
-                            unfocusedLabelColor = MaterialTheme.colorScheme.onBackground,
+                            focusedBorderColor = MaterialTheme.colorScheme.onPrimary,
+                            cursorColor = MaterialTheme.colorScheme.onPrimary,
+                            focusedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onPrimary,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onPrimary,
                         )
                     )
                 }
@@ -474,21 +523,32 @@ fun CustomChangeDialog(
                     placeholder = { Text(source) },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.onBackground,
-                        cursorColor = MaterialTheme.colorScheme.onBackground,
-                        focusedLabelColor = MaterialTheme.colorScheme.onBackground,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onBackground,
+                        focusedBorderColor = MaterialTheme.colorScheme.onPrimary,
+                        cursorColor = MaterialTheme.colorScheme.onPrimary,
+                        focusedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onPrimary,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onPrimary,
                     )
                 )
 
-                if (add) {
+                if (add && scope != null) {
                     Text(
                         text = if (validRss) "Валидная ссылка" else "Проверить ссылку",
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier
                             .padding(16.dp)
-                            .clickable { validRss = true }
+                            .clickable {
+                                scope.launch {
+                                    var res = false
+                                    withContext(Dispatchers.IO) {
+                                        res = validRSS(linkTransform(rssText.trim()))
+                                    }
+                                    withContext(Dispatchers.Main) {
+                                        if (!res) Toast.makeText(context, "Ссылка не валидна!", Toast.LENGTH_LONG).show()
+                                    }
+                                    validRss = res
+                                }
+                            }
                     )
                 }
 
@@ -499,17 +559,17 @@ fun CustomChangeDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = cancelAction) {
-                        Text("Отмена", color = MaterialTheme.colorScheme.onBackground)
+                        Text("Отмена", color = MaterialTheme.colorScheme.onPrimary)
                     }
 
                     if ((validRss && rssText != "" && sourceText != "" && add)) {
                         TextButton(
                             onClick = {
                                 val finalSourceName = sourceText.ifEmpty { source }
-                                onConfirm(Pair(finalSourceName, rssText))
+                                onConfirm(Pair(finalSourceName, linkTransform(rssText.trim())))
                             }
                         ) {
-                            Text("Добавить", color = MaterialTheme.colorScheme.onBackground)
+                            Text("Добавить", color = MaterialTheme.colorScheme.onPrimary)
                         }
                     }
 
@@ -520,7 +580,7 @@ fun CustomChangeDialog(
                                 onConfirm(Pair(source, finalSourceName))
                             }
                         ) {
-                            Text("Изменить", color = MaterialTheme.colorScheme.onBackground)
+                            Text("Изменить", color = MaterialTheme.colorScheme.onPrimary)
                         }
                     }
                 }
@@ -539,6 +599,8 @@ fun CustomConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = cancelAction,
+        containerColor = MaterialTheme.colorScheme.primary,
+        shape = Shapes.large,
 
         title = {
             Text(text = title, fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -569,5 +631,5 @@ fun CustomConfirmDialog(
 @Preview
 @Composable
 fun PreviewDialog() {
-    CustomChangeDialog({}, {}, add = true)
+    CustomFullscreenLoading(true)
 }

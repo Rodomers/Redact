@@ -71,7 +71,8 @@ fun SourcesGrid(
                             }
                             showAddDialog = false
                         },
-                        add = true
+                        add = true,
+                        scope = scope
                     )
                 }
             }

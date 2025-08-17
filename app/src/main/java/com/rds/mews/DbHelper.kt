@@ -54,19 +54,19 @@ class DbHelper(val context: Context) :
         onCreate(db)
     }
 
-    fun dbPack(vararg ids: Long): String {
+    fun dbPack(vararg ids: String): String {
         return when (ids.isEmpty()) {
             true -> ""
             else -> {
-                ids.joinToString(separator = ", ")
+                ids.joinToString(separator = ", ").trim()
             }
         }
     }
 
-    fun dbUnpack(str: String): List<Long> {
-        val res = mutableListOf<Long>()
+    fun dbUnpack(str: String): List<String> {
+        val res = mutableListOf<String>()
         if (str.split(", ").lastIndex != 0) {
-            for (i in str.split(", ")) res.add(i.toLong())
+            for (i in str.split(", ")) res.add(i.trim())
         }
 
         return res
@@ -173,7 +173,8 @@ class DbHelper(val context: Context) :
                 true -> "$query WHERE $TITLES_TIME < ?"
                 else -> "$query WHERE $TITLES_TIME > ?"
             }
-            args = arrayOf((System.currentTimeMillis() - timeSeconds * 1000).toString())
+            args = arrayOf((System.currentTimeMillis() - timeSeconds * 1000L).toString())
+            println(args[0])
         }
         else { args = null }
 
@@ -269,6 +270,7 @@ class DbHelper(val context: Context) :
             put(TITLES_LINKS, links)
         }
 
+        println("$title\n$text")
         return db.insert(TITLES_NAME, null, values)
     }
 
@@ -367,11 +369,11 @@ class DbHelper(val context: Context) :
 
                     var linksStr = ""
                     dbUnpack(links).forEach {
-                        linksStr = "$linksStr\n${getMessage(it)?.link ?: "Ссылка не найдена"}"
+                        linksStr = "$linksStr\n${getMessage(it.toLong())?.link ?: "Ссылка не найдена"}"
                     }
                     var sourcesStr = ""
                     dbUnpack(sources).forEach {
-                        val rss = getRSS(it)
+                        val rss = getRSS(it.toLong())
                         if (rss.isNotEmpty()) {sourcesStr = "$sourcesStr, ${rss[0].source}"}
                     }
                     if (sourcesStr == "") sourcesStr = "Источники не найдены"
