@@ -49,7 +49,8 @@ suspend fun updateTitles(
     if (!returnExisting) {
         try {
             if (fetcher.fetchAndStoreAll().errors.isEmpty()) {
-                db.titlesTimeKill(settingsViewModel.titlesPeriod.intValue.toLong() * 3600)
+                db.titlesTimeKill(0)
+                db.messageTimeKill(settingsViewModel.titlesPeriod.intValue.toLong() * 3600)
                 summarizer.summarizeTopics(
                     maxTopics = settingsViewModel.titlesNum.intValue,
                     messageSeconds = settingsViewModel.titlesPeriod.intValue.toLong() * 3600
@@ -62,5 +63,21 @@ suspend fun updateTitles(
 
     val list = db.getTitles((settingsViewModel.titlesPeriod.intValue * 3600).toLong())
 
-    return list
+    return list.map {
+        Title(
+            id = it.id,
+            time = it.time,
+            title = it.title,
+            text = it.text,
+            sources = strTransform(it.sources, ", "),
+            links = strTransform(it.links, "\n")
+        )
+    }
+}
+
+fun strTransform(original: String, separator: String): String {
+    val arr = original.split(", ")
+    val res = arr.map {it -> it.trim()}.distinct()
+
+    return res.joinToString(separator)
 }

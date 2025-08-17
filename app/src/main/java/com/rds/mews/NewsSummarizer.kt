@@ -8,6 +8,7 @@ import okhttp3.RequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.min
+import kotlin.collections.mutableListOf
 
 
 // ====== Класс для работы с OpenRouter API ======
@@ -15,6 +16,7 @@ class OpenRouterClient(
     // Апи ключ пока захардкожен, потом спокойно можно подвязать другой ключ
     // "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"
     // "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"
+    // "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"
     private val apiKey: String = "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",
     // модель на опенроутер, можно тоже потом выбор пользователю давать
     private val OPENROUTER_MODEL: String = "openai/gpt-oss-20b:free",
@@ -80,7 +82,7 @@ class NewsSummarizer(
             Проанализируй новости и выдели от 1 до $max основных тем.
             Ответ верни в виде списка, каждая тема с новой строки.
             
-            Отвечай на русском языке, для каждой темы пиши только её название без
+            Названия тем пиши СТРОГО НА РУССКОМ ЯЗЫКЕ, для каждой темы пиши только её название без
             нумерации и дополнительных символов.
             
             Новости:
@@ -124,7 +126,8 @@ class NewsSummarizer(
                 2. Не добавляй пояснения или текст вне JSON.
                 3. Ответ должен начинаться с { и заканчиваться }.
                 4. Отвечай на РУССКОМ языке.
-                5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ ТАК ИЛИ ИНАЧЕ БЫТЬ ЗАПОЛНЕНЫ
+                5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ
+                6.Используй только те id, которые получил в запросе
                                 
                 Новости:
                 $newsText
@@ -142,31 +145,32 @@ class NewsSummarizer(
             // Парсинг ответа по полям
             val obj = JSONObject(cleanResponse)
             val summary = obj.getString("summary")
-            val idsStr = obj.getString("id")
+            val idsStr = obj.getString("id").trimStart('[').trimEnd(']')
             // id в список лонгов
             val ids = mutableListOf<Long>()
-            ids.addAll(idsStr.map {id -> id.code.toLong()})
+            ids.addAll(idsStr.split(",").map {it.toLong()})
 //            val ids = messages.map {mess -> mess.id}
+            println(idsStr)
 
             // время для темы выбирается по первой новости по этой теме или по системному времени, если ошибка
             var time: Long = System.currentTimeMillis()
             ids.forEach{ id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time)}
 
             // линки и сурсы в особый формат по id
-            var links: String = ""
-            var sources: String = ""
+            val links = mutableListOf<String>()
+            val sources = mutableListOf<String>()
 
             ids.forEach { id ->
                 val mess = db.getMessage(id)
                 if (mess != null) {
-                    links = db.dbPack(links, mess.link)
-                    sources = db.dbPack(sources, mess.source)
+                    links.add(mess.link)
+                    sources.add(mess.source)
                 }
             }
 
             // Сохраняем в БД
             db.addTitle(titleTime = time, title = title, text = summary,
-                sources = sources, links = links)
+                sources = db.dbPack(*sources.toTypedArray()), links = db.dbPack(*links.toTypedArray()))
 
             // задержка перед следующим запросом
             delay(delaySeconds * 10)
