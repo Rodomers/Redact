@@ -3,11 +3,14 @@ package com.rds.mews
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box // для дебага
+import androidx.compose.foundation.layout.fillMaxWidth // для дебага
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material3.Button // для дебага
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -24,9 +27,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.ui.Alignment // для дебага
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight // для дебага
+import androidx.compose.ui.unit.dp // для дебага
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rds.mews.ui.theme.MewsTheme
@@ -45,7 +51,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MewsTheme {
                 MainScreen()
-                // TestBtn()
+                //TestBtn()
             }
         }
     }
@@ -74,7 +80,7 @@ fun MainScreen() {
 
     val titlesList: SnapshotStateList<Title> = remember { mutableStateListOf() }
     val fetcher = RssFetcher(db)
-    val llm = OpenRouterClient()
+    val llm = LLMClient()
     val summarizer = NewsSummarizer(db, llm)
     val scope = rememberCoroutineScope()
     var isTitlesRefreshing by remember { mutableStateOf(false) }
@@ -140,15 +146,6 @@ fun MainScreen() {
 //@Composable
 //fun TestBtn() {
 //    val scope = rememberCoroutineScope()
-//    var db = DbHelper(LocalContext.current.applicationContext)
-//    db.getRSS().forEach { RSS ->  db.delRSS(RSS.id)}
-//    db.getMessages().forEach { mess ->  db.delMessage(mess.id)}
-//    db.getTitles().forEach { title ->  db.delTitle(title.id)}
-//    db.addRSS("ТАСС", "https://tass.ru/rss/v2.xml")
-//    db.addRSS("РИА", "https://ria.ru/export/rss2/index.xml")
-//    var fetcher = RssFetcher(db)
-//    var llm = OpenRouterClient()
-//    var summarizer = NewsSummarizer(db, llm)
 //    Box(
 //        modifier = Modifier
 //            .padding(horizontal = 20.dp, vertical = 100.dp)
@@ -159,14 +156,8 @@ fun MainScreen() {
 //            onClick = {
 //                scope.launch(Dispatchers.IO) {
 //                    try {
-//                        println("start")
-//                        if(fetcher.fetchAndStoreAll().errors.isEmpty()) {
-//                            println("second")
-//                            summarizer.summarizeTopics()
-//                           db.getTitles().forEach { title ->
-//                               println("${title.time}\t${title.title}\t${title.text}\t${title.sources}\t${title.links}")
-//                           }
-//                        }
+//                        println(RSSName("https://rsshub.app/telegram/channel/evgenmt"))
+//
 //                    } catch (e: Exception) {
 //                        e.printStackTrace()
 //                    }

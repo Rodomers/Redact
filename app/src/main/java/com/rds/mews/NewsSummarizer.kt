@@ -9,59 +9,123 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.min
 import kotlin.collections.mutableListOf
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 
 // ====== Класс для работы с OpenRouter API ======
-class OpenRouterClient(
+@Serializable
+class LLMClient(
     // Апи ключ пока захардкожен, потом спокойно можно подвязать другой ключ
     // "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"
     // "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"
     // "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"
-    private val apiKey: String = "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",
-    // модель на опенроутер, можно тоже потом выбор пользователю давать
-    private val OPENROUTER_MODEL: String = "openai/gpt-oss-20b:free",
-    // ссылка на опенроутер
-    private val OPENROUTER_URL: String = "https://openrouter.ai/api/v1/chat/completions"
-
+    // ---------------------------------------------------------------------
+    // сейчас стоит ключ для cloud ru
+    // api key d2a02527c52b1e4c1da6b640308b2170
+    // key ID M2I1MTEyMGQtYmRmYS00MDE4LThhNTItMzhjMTE3ZWVhZmQ4.3979e60d1ecbaa29e535571a7199a4f5
+    // secret key e586ffd44e5801b67a89adcbf4c1cfd9
+    // ------------------------------------------------------------------------
+    // gemini api keys
+    // AIzaSyBwT2sBtNulYoVFDpxq4uHPx-S-LCq7aAw
+    // AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk
+    private val apiKey: String = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk",
+    private val MODEL: String = "gemini-2.5-flash-lite",
+    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
 ) {
-    //инициализация клиента
-    private val client = OkHttpClient()
-    //Отправляем запрос нейросети, получаем в ответ json
-    fun sendPrompt(prompt: String): String? {
-        val requestBody = JSONObject()
-            .put("model", OPENROUTER_MODEL)
-            .put("messages", JSONArray().put(JSONObject()
-                .put("role", "user")
-                .put("content", prompt)
-            ))
 
-        val request = Request.Builder()
-            .url(OPENROUTER_URL)
-            .addHeader("Authorization", "Bearer $apiKey")
-            .addHeader("Content-Type", "application/json")
-            .post(RequestBody.create("application/json".toMediaTypeOrNull(), requestBody.toString()))
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                println("Ошибка API: ${response.code} — ${response.message}")
-                return null
+    // Отправляем запрос к Gemini, получаем текст ответа
+    suspend fun sendPrompt(prompt: String): String? {
+        val client = HttpClient(CIO) {
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                })
             }
-            val json = JSONObject(response.body?.string() ?: "")
-            return json
-                .getJSONArray("choices")
-                .getJSONObject(0)
-                .getJSONObject("message")
-                .getString("content")
-                .trim()
+            install(HttpTimeout) {
+                requestTimeoutMillis = 60000 // 60 секунд
+                connectTimeoutMillis = 15000
+                socketTimeoutMillis = 60000
+            }
         }
+
+        // Создаём тело запроса
+        val requestBody = GeminiRequest(
+            contents = listOf(
+                ContentInput(
+                    parts = listOf(PartInput(prompt))
+                )
+            )
+        )
+
+        // Отправка POST запроса
+        val responseString: String = client.post(URL) {
+            header("x-goog-api-key", apiKey)
+            contentType(ContentType.Application.Json)
+            setBody(requestBody)
+        }.body()
+
+        client.close()
+
+        // Парсим JSON и достаем текст
+        val json = Json { ignoreUnknownKeys = true }
+        val geminiResponse = json.decodeFromString<GeminiResponse>(responseString)
+        return geminiResponse.candidates
+            .flatMap { it.content.parts }
+            .joinToString("\n") { it.text }
     }
+
+    // --- Сериализуемые классы для запроса ---
+    @Serializable
+    data class GeminiRequest(
+        val contents: List<ContentInput>
+    )
+
+    @Serializable
+    data class ContentInput(
+        val parts: List<PartInput>
+    )
+
+    @Serializable
+    data class PartInput(
+        val text: String
+    )
+
+    // --- Сериализуемые классы для ответа ---
+    @Serializable
+    data class GeminiResponse(
+        val candidates: List<Candidate>
+    )
+
+    @Serializable
+    data class Candidate(
+        val content: Content
+    )
+
+    @Serializable
+    data class Content(
+        val parts: List<Part>
+    )
+
+    @Serializable
+    data class Part(
+        val text: String
+    )
 }
 
 // ====== Логика суммаризации ======
 class NewsSummarizer(
     private val db: DbHelper, // Хелпер для БД
-    private val llm: OpenRouterClient, // клиенты для опенроутера
+    private val llm: LLMClient, // клиенты для опенроутера
 ) {
 
     /**
@@ -70,28 +134,79 @@ class NewsSummarizer(
      * можно указать сколько тем извлечь
      * можно указать на актуальность новостей в секундах, по стандарту - неделя
      */
-    suspend private fun extractTopics(max: Int = 20, messageSeconds: Long = 14515200): List<String> {
+    suspend private fun extractTopics(max: Int = 20, messageSeconds: Long = 14515200): List<Topics> {
         val messages = db.getMessages(messageSeconds)
-        var topics: List<String> = mutableListOf()
+        var topics: List<Topics> = mutableListOf()
         if (messages.isEmpty()) {
             println("Нет новостей для анализа") // ошибка, если нет новостей для суммаризации
             return topics
         }
-        val combinedNews = messages.joinToString("\n") { "• ${it.mess}" }
+        val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
         val prompt = """
             Проанализируй новости и выдели от 1 до $max основных тем.
-            Ответ верни в виде списка, каждая тема с новой строки.
+            Ответ верни в виде JSON формата:
+            [
+              {
+                "title": "<Первая новость>",
+                "id": [<id1>, <id2>, <id3>, ...]
+              },
+              {
+                "title": "<Вторая новость>",
+                "id": [<id1>, <id2>, <id3>, ...]
+              },
+              {
+                "title": "<Третья новость>",
+                "id": [<id1>, <id2>, <id3>, ...]
+              },
+              ....
+            ]
+            где title - название темы,
+            id - список id, относящихся к теме.
+                        
             
-            Названия тем пиши СТРОГО НА РУССКОМ ЯЗЫКЕ, для каждой темы пиши только её название без
-            нумерации и дополнительных символов.
+            Требования:
+                1. Не добавляй никакие ``` или ""${'"'}.
+                2. Не добавляй пояснения или текст вне JSON.
+                3. Ответ должен начинаться с [ и заканчиваться ].
+                4. Отвечай на РУССКОМ языке.
+                5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ Хотя бы одним значением.
+                6. Используй только те id, которые получил в запросе
             
             Новости:
             $combinedNews
         """.trimIndent()
 
-        val topicsText = llm.sendPrompt(prompt) ?: return topics
-        topics = topicsText.lines().map { it.trim().removePrefix("•").trim() }.filter { it.isNotBlank() }
+        val response = llm.sendPrompt(prompt) ?: return topics
+
+        val cleanResponse = response.trim().replace("```json", "")
+            .replace("```", "")
+            .replace("\"\"\"", "")
+            .trim()
+        println("------------------THEMES--------------------------------")
+        println(cleanResponse)
+
+        val jsonArray = JSONArray(cleanResponse)
+
+        for (i in 0 until jsonArray.length()) {
+            val obj: JSONObject = jsonArray.getJSONObject(i)
+
+            val title = obj.getString("title")
+            val idsArray = obj.getJSONArray("id")
+
+            val ids = mutableListOf<Long>()
+            for (j in 0 until idsArray.length()) {
+                ids.add(idsArray.getInt(j).toLong())
+            }
+            println(title)
+            println(ids)
+
+            topics += Topics(title, ids)
+        }
+
+
         delay(30000)
+
+        println("-----------------------------------------------------------")
         return topics
     }
 
@@ -108,18 +223,25 @@ class NewsSummarizer(
 
         titles.forEach { title ->
             // Составление списка новостей для нейронки
-            val newsText = messages.joinToString("\n") { "— ${it.mess} (id - ${it.id})" }
+            var suitableMessages: List<Message> = mutableListOf()
+            title.ids?.forEach { id ->
+                messages.forEach { message ->
+                    if (message.id == id){
+                        suitableMessages += message
+                    }
+
+                }
+            }
+            val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
             val prompt = """
-                Составь краткое резюме по теме: "${title}".
+                Составь краткое резюме по теме: "${title.title}".
                 Укажи основные факты и перечисли id сообщений, относящихся к теме. 
                 Возвращай всё в СТРОГОМ JSON формате: {
                 "title": "<заголовок темы>", 
                 "summary": "<резюме по теме>", 
-                "id": ["<id`s>"]
                 }, 
                 где title - название темы,
-                summary - резюме по теме, 
-                id - id новостей, относящихчся к теме.
+                summary - резюме по теме.
                 
                 Требования:
                 1. Не добавляй никакие ``` или ""${'"'}.
@@ -141,16 +263,13 @@ class NewsSummarizer(
                 .replace("\"\"\"", "")
                 .trim()
 
+            println("-----------------------LLM-----------------------------------")
+            println(cleanResponse)
 
             // Парсинг ответа по полям
             val obj = JSONObject(cleanResponse)
             val summary = obj.getString("summary")
-            val idsStr = obj.getString("id").trimStart('[').trimEnd(']')
-            // id в список лонгов
-            val ids = mutableListOf<Long>()
-            ids.addAll(idsStr.split(",").map {it.toLong()})
-//            val ids = messages.map {mess -> mess.id}
-            println(idsStr)
+            val ids = title.ids ?: return@forEach
 
             // время для темы выбирается по первой новости по этой теме или по системному времени, если ошибка
             var time: Long = System.currentTimeMillis()
@@ -168,12 +287,19 @@ class NewsSummarizer(
                 }
             }
 
+            println("${title.title}\t$summary$sources$links$time")
+
             // Сохраняем в БД
-            db.addTitle(titleTime = time, title = title, text = summary,
+            db.addTitle(titleTime = time, title = title.title, text = summary,
                 sources = db.dbPack(*sources.toTypedArray()), links = db.dbPack(*links.toTypedArray()))
 
             // задержка перед следующим запросом
             delay(delaySeconds * 10)
         }
     }
+
+    data class Topics (
+        val title: String,
+        val ids: List<Long>?
+    )
 }
