@@ -80,7 +80,7 @@ fun MainScreen() {
 
     val titlesList: SnapshotStateList<Title> = remember { mutableStateListOf() }
     val fetcher = RssFetcher(db)
-    val llm = LLMClient()
+    val llm = LLMClient(MODEL = settingsViewModel.currentLlm.value, apiKey = settingsViewModel.userApi.value)
     val summarizer = NewsSummarizer(db, llm)
     val scope = rememberCoroutineScope()
     var isTitlesRefreshing by remember { mutableStateOf(false) }

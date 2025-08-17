@@ -46,7 +46,7 @@ fun TitlesGrid(itemsList: List<Title>,
             if (itemsList.isEmpty()) {
                 item {
                     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "Потяните сверху, чтобы запустить загрузку\n(очень сука долгую)",
+                        Text(text = "Потяните вниз, чтобы запустить загрузку\n(очень долгую)",
                             fontSize = 18.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(40.dp), textAlign = TextAlign.Center)
                     }

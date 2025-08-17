@@ -27,6 +27,14 @@ class SettingsManager(context: Context) {
         return sharedPreferences.getInt(key, defaultValue)
     }
 
+    fun saveString(key: String, value: String) {
+        sharedPreferences.edit { putString(key, value) }
+    }
+
+    fun getString(key: String, defaultValue: String): String {
+        return sharedPreferences.getString(key, defaultValue) ?: "null"
+    }
+
     fun registerListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
         sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
     }
@@ -42,17 +50,23 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         const val IS_MONET_KEY = "is_monet"
         const val TITLES_NUM_KEY = "titles_num"
         const val TITLES_PERIOD_KEY = "titles_period"
+        const val USER_API_KEY = "user_api"
+        const val CURRENT_LLM_MODEl = "current_model"
     }
 
     var isDarkMode = mutableStateOf(settingsManager.getBoolean(IS_DARK_MODE_KEY, false))
     var titlesNum = mutableIntStateOf(settingsManager.getInt(TITLES_NUM_KEY, 10))
     var titlesPeriod = mutableIntStateOf(settingsManager.getInt(TITLES_PERIOD_KEY, 24))
+    var userApi = mutableStateOf(settingsManager.getString(USER_API_KEY, "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk"))
+    var currentLlm = mutableStateOf(settingsManager.getString(CURRENT_LLM_MODEl, ""))
 
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener {_, key ->
         when (key) {
             IS_DARK_MODE_KEY -> isDarkMode.value = settingsManager.getBoolean(IS_DARK_MODE_KEY, false)
             TITLES_NUM_KEY -> titlesNum.intValue = settingsManager.getInt(TITLES_NUM_KEY, 10)
             TITLES_PERIOD_KEY -> titlesPeriod.intValue = settingsManager.getInt(TITLES_PERIOD_KEY, 24)
+            USER_API_KEY -> userApi.value = settingsManager.getString(USER_API_KEY, "")
+            CURRENT_LLM_MODEl -> currentLlm.value = settingsManager.getString(CURRENT_LLM_MODEl, "")
         }
     }
 

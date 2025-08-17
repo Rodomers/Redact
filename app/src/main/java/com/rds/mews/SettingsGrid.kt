@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,9 +17,15 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 
@@ -51,6 +58,9 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        val clipboardManager = LocalClipboardManager.current
+        var text by remember { mutableStateOf("") }
+        var apiText by remember { mutableStateOf(settingsModel.userApi.value) }
 //        CustomSettingsItem(text = "Тёмная тема") {
 //            Switch(checked = darkTheme, onCheckedChange = { darkTheme = it })
 //        }
@@ -108,6 +118,42 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                     ) {
                         CustomDropdown(transitionState = limitationDropdownVisible, buttons = limitationDropdownItems)
                     }
+                }
+            }
+        }
+        CustomSettingsItem(text = "Свой ключ Gemini API") {
+            Box {
+                Button(
+                    modifier = Modifier
+                        .wrapContentSize()
+                        .widthIn(max = 250.dp),
+                    onClick = {
+                        when (apiText) {
+                            "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk" -> {
+                                val clipboardText: AnnotatedString? = clipboardManager.getText()
+
+                                clipboardText?.let {
+                                    text += it.text
+                                }
+
+                                settingsModel.userApi.value = text
+                                apiText = text
+                                println(settingsModel.userApi.value)
+                                text = ""
+                            }
+                            else -> {
+                                settingsModel.userApi.value = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk"
+                                apiText = settingsModel.userApi.value
+                            }
+                        }
+                        println(settingsModel.userApi.value)
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                ) {
+                    Text(text = if (apiText != "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") "Сброс" else "Вставить из буфера обмена")
                 }
             }
         }

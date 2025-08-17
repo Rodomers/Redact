@@ -73,6 +73,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json.v163)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.material3)
+    implementation(libs.firebase.crashlytics.buildtools)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

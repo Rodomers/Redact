@@ -1,10 +1,7 @@
 package com.rds.mews
 
+import com.google.firebase.crashlytics.buildtools.reloc.org.apache.http.client.HttpClient
 import kotlinx.coroutines.delay
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.min
@@ -37,8 +34,8 @@ class LLMClient(
     // gemini api keys
     // AIzaSyBwT2sBtNulYoVFDpxq4uHPx-S-LCq7aAw
     // AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk
-    private val apiKey: String = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk",
-    private val MODEL: String = "gemini-2.5-flash-lite",
+    val apiKey: String = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk",
+    val MODEL: String = "gemini-2.5-flash-lite",
     private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
 ) {
 
@@ -239,6 +236,7 @@ class NewsSummarizer(
                 Возвращай всё в СТРОГОМ JSON формате: {
                 "title": "<заголовок темы>", 
                 "summary": "<резюме по теме>", 
+                "id": ["<id`s>"]
                 }, 
                 где title - название темы,
                 summary - резюме по теме.
