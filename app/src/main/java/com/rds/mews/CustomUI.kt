@@ -61,10 +61,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Popup
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.CoroutineScope
@@ -480,6 +482,8 @@ fun CustomChangeDialog(
     val context = LocalContext.current
 
     Dialog(onDismissRequest = cancelAction) {
+        val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
+        dialogWindowProvider?.window?.setDimAmount(0f)
 
         var rssText by remember { mutableStateOf("") }
         var sourceText by remember { mutableStateOf(if (!add) source else "") }
