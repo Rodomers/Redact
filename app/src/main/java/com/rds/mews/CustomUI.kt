@@ -265,14 +265,14 @@ fun TitlesCard(title: Title) {
                         .padding(8.dp)
                         .wrapContentWidth()
                 )
-                SelectionContainer { Text(
+                Text(
                     text = title.title,
                     textAlign = TextAlign.Left,
                     modifier = Modifier
                         .padding(8.dp)
                         .wrapContentHeight(),
                     fontWeight = FontWeight.Bold
-                ) }
+                )
             }
 
             if (expanded) {
@@ -306,12 +306,13 @@ fun TitlesCard(title: Title) {
                                     .fillMaxSize(),
                                 verticalArrangement = Arrangement.Top
                             ) {
-                                SelectionContainer { Text(
+                                Text(
                                     text = title.sources, modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 8.dp),
                                     fontWeight = FontWeight.Bold
                                 )
+                                SelectionContainer {
                                     Text(text = title.links, modifier = Modifier.fillMaxWidth())
                                 }
                             }
@@ -483,7 +484,7 @@ fun CustomChangeDialog(
 
     Dialog(onDismissRequest = cancelAction) {
         val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
-        dialogWindowProvider?.window?.setDimAmount(0f)
+        dialogWindowProvider?.window?.setDimAmount(0.6f)
 
         var rssText by remember { mutableStateOf("") }
         var sourceText by remember { mutableStateOf(if (!add) source else "") }
@@ -495,7 +496,7 @@ fun CustomChangeDialog(
                 .wrapContentWidth()
                 .wrapContentHeight(),
             shadowElevation = 8.dp,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -608,9 +609,12 @@ fun CustomConfirmDialog(
     cancelAction: () -> Unit,
     onConfirm: (Boolean) -> Unit
 ) {
+    val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
+    dialogWindowProvider?.window?.setDimAmount(0.6f)
+
     AlertDialog(
         onDismissRequest = cancelAction,
-        containerColor = MaterialTheme.colorScheme.primary,
+        containerColor = MaterialTheme.colorScheme.surface,
         shape = Shapes.large,
 
         title = {

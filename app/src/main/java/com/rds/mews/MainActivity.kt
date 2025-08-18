@@ -89,10 +89,8 @@ fun MainScreen() {
         scope.launch {
             isTitlesRefreshing = true
             val updatedList = withContext(Dispatchers.IO) {
-                // Вызываем нашу новую чистую функцию
                 updateTitles(db, fetcher, summarizer, settingsViewModel, returnExisting = returnExisting)
             }
-            // Полностью заменяем состояние. Это 100% вызовет рекомпозицию.
             titlesList.clear()
             titlesList.addAll(updatedList)
             isTitlesRefreshing = false
@@ -128,10 +126,10 @@ fun MainScreen() {
                 }
 
                 TitlesGrid(
-                    itemsList = titlesList, // Передаем наш state list
+                    itemsList = titlesList,
                     modifier = Modifier.padding(paddingValues),
                     isRefreshing = isTitlesRefreshing,
-                    onRefresh = ::refreshTitles // Передаем функцию для вызова по событию
+                    onRefresh = ::refreshTitles
                 )
             }
             else -> SettingsGrid(
