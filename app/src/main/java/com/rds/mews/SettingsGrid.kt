@@ -34,21 +34,31 @@ import androidx.compose.ui.window.Popup
 fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
 //    var darkTheme by remember { mutableStateOf(false) }
 //    var adaptiveColors by remember {mutableStateOf(false)}
+
+    val clipboardManager = LocalClipboardManager.current
+    var text by remember { mutableStateOf("") }
+    var apiText by remember { mutableStateOf(settingsModel.userApi.value) }
+
     val titlesDropdownVisible = remember { MutableTransitionState(false) }
-    val titlesDropdownItems = listOf(
-        "10 заголовков" to { settingsModel.titlesNum.intValue = 10 },
-        "25 заголовков" to { settingsModel.titlesNum.intValue = 25 },
-        "50 заголовков" to { settingsModel.titlesNum.intValue = 50 },
-        "75 заголовков" to { settingsModel.titlesNum.intValue = 75 },
-        "100 заголовков" to { settingsModel.titlesNum.intValue = 100 }
+    val titlesDropdownItems = mutableListOf(
+        "10 заголовков" to { settingsModel.setTitlesNum(10) },
+        "25 заголовков" to { settingsModel.setTitlesNum(25) },
     )
+    if (apiText != "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") {
+        titlesDropdownItems.addAll(listOf(
+            "50 заголовков" to { settingsModel.setTitlesNum(50) },
+            "75 заголовков" to { settingsModel.setTitlesNum(75) },
+            "100 заголовков" to { settingsModel.setTitlesNum(100) })
+        )
+    }
+    else if (settingsModel.titlesNum.intValue > 25) settingsModel.setTitlesNum(25)
     val limitationDropdownVisible = remember { MutableTransitionState(false) }
     val limitationDropdownItems = listOf(
-        "24 часа" to { settingsModel.titlesPeriod.intValue = 24 },
-        "48 часов" to { settingsModel.titlesPeriod.intValue = 48 },
-        "72 часа" to { settingsModel.titlesPeriod.intValue = 72 },
-        "96 часов" to { settingsModel.titlesPeriod.intValue = 96 },
-        "120 часов" to { settingsModel.titlesPeriod.intValue = 120 }
+        "24 часа" to { settingsModel.setTitlesPeriod(24) },
+        "48 часов" to { settingsModel.setTitlesPeriod(48) },
+        "72 часа" to { settingsModel.setTitlesPeriod(72) },
+        "96 часов" to { settingsModel.setTitlesPeriod(96) },
+        "120 часов" to { settingsModel.setTitlesPeriod(120) }
     )
 
     Column(
@@ -58,9 +68,6 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        val clipboardManager = LocalClipboardManager.current
-        var text by remember { mutableStateOf("") }
-        var apiText by remember { mutableStateOf(settingsModel.userApi.value) }
 //        CustomSettingsItem(text = "Тёмная тема") {
 //            Switch(checked = darkTheme, onCheckedChange = { darkTheme = it })
 //        }
@@ -107,8 +114,9 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.background
                     )
-                ) {
-                    Text(text = "${settingsModel.titlesPeriod.intValue} часа")
+                ) {Text(text = "${settingsModel.titlesPeriod.intValue} час${
+                        if (settingsModel.titlesPeriod.intValue % 10 >= 5 || settingsModel.titlesPeriod.intValue % 10 == 0) "ов" else if (settingsModel.titlesPeriod.intValue % 10 != 1) "а" else ""
+                    }")
                 }
 
                 if (limitationDropdownVisible.currentState || limitationDropdownVisible.targetState) {
@@ -136,17 +144,15 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                                     text += it.text
                                 }
 
-                                settingsModel.userApi.value = text
+                                settingsModel.setUserApi(text)
                                 apiText = text
-                                println(settingsModel.userApi.value)
                                 text = ""
                             }
                             else -> {
-                                settingsModel.userApi.value = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk"
+                                settingsModel.setUserApi("AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk")
                                 apiText = settingsModel.userApi.value
                             }
                         }
-                        println(settingsModel.userApi.value)
                     },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(

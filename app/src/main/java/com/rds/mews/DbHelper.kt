@@ -174,9 +174,9 @@ class DbHelper(val context: Context) :
                 else -> "$query WHERE $TITLES_TIME > ?"
             }
             args = arrayOf((System.currentTimeMillis() - timeSeconds * 1000L).toString())
-            println(args[0])
         }
         else { args = null }
+        query = "$query ORDER BY $TITLES_TIME ASC"
 
         db.rawQuery(query, args).use {
                 cursor ->

@@ -5,6 +5,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+
+// "dd.MM'\n'HH:mm"
 fun getFormattedTimeUnix(unixTime: Long): String {
     val instant = Instant.ofEpochMilli(unixTime)
     val zoneId = ZoneId.systemDefault()

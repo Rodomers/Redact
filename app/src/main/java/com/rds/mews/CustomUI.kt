@@ -35,14 +35,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
@@ -152,7 +155,9 @@ fun CustomCardWithMenu(
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .height(IntrinsicSize.Min),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -166,8 +171,8 @@ fun CustomCardWithMenu(
             IconButton(
                 onClick = {toggleDropdown()},
                 modifier = Modifier
-                    .background(MaterialTheme.colorScheme.secondary)
                     .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.secondary)
             ) {
                 Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Меню")
             }
@@ -197,7 +202,8 @@ fun SourcesAddCard(
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .wrapContentHeight(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -257,14 +263,14 @@ fun TitlesCard(title: Title) {
                         .padding(8.dp)
                         .wrapContentWidth()
                 )
-                Text(
+                SelectionContainer { Text(
                     text = title.title,
                     textAlign = TextAlign.Left,
                     modifier = Modifier
                         .padding(8.dp)
                         .wrapContentHeight(),
                     fontWeight = FontWeight.Bold
-                )
+                ) }
             }
 
             if (expanded) {
@@ -298,13 +304,14 @@ fun TitlesCard(title: Title) {
                                     .fillMaxSize(),
                                 verticalArrangement = Arrangement.Top
                             ) {
-                                Text(
+                                SelectionContainer { Text(
                                     text = title.sources, modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 8.dp),
                                     fontWeight = FontWeight.Bold
                                 )
-                                Text(text = title.links, modifier = Modifier.fillMaxWidth())
+                                    Text(text = title.links, modifier = Modifier.fillMaxWidth())
+                                }
                             }
                         }
                     }

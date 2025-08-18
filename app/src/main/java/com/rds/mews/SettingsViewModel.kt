@@ -52,6 +52,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         const val TITLES_PERIOD_KEY = "titles_period"
         const val USER_API_KEY = "user_api"
         const val CURRENT_LLM_MODEl = "current_model"
+        const val SHOW_DATES = "show_dates"
     }
 
     var isDarkMode = mutableStateOf(settingsManager.getBoolean(IS_DARK_MODE_KEY, false))
@@ -59,6 +60,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     var titlesPeriod = mutableIntStateOf(settingsManager.getInt(TITLES_PERIOD_KEY, 24))
     var userApi = mutableStateOf(settingsManager.getString(USER_API_KEY, "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk"))
     var currentLlm = mutableStateOf(settingsManager.getString(CURRENT_LLM_MODEl, ""))
+    var showDates = mutableStateOf(settingsManager.getBoolean(SHOW_DATES, false))
 
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener {_, key ->
         when (key) {
@@ -67,6 +69,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
             TITLES_PERIOD_KEY -> titlesPeriod.intValue = settingsManager.getInt(TITLES_PERIOD_KEY, 24)
             USER_API_KEY -> userApi.value = settingsManager.getString(USER_API_KEY, "")
             CURRENT_LLM_MODEl -> currentLlm.value = settingsManager.getString(CURRENT_LLM_MODEl, "")
+            SHOW_DATES -> showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
         }
     }
 
@@ -87,6 +90,21 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     fun setTitlesPeriod(newValue: Int) {
         settingsManager.saveInt(TITLES_PERIOD_KEY, newValue)
         titlesPeriod.intValue = newValue
+    }
+
+    fun setUserApi(newValue: String) {
+        settingsManager.saveString(USER_API_KEY, newValue)
+        userApi.value = newValue
+    }
+
+    fun setCurrentLlm(newValue: String) {
+        settingsManager.saveString(CURRENT_LLM_MODEl, newValue)
+        currentLlm.value = newValue
+    }
+
+    fun setShowDates(newValue: Boolean) {
+        settingsManager.saveBoolean(SHOW_DATES, newValue)
+        showDates.value = newValue
     }
 
     override fun onCleared() {
