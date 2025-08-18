@@ -36,10 +36,10 @@ suspend fun changeSource(sourceOld: String, sourceNew: String, db: DbHelper): Bo
 fun linkTransform(link: String): String {
     var res = link
     if (link.contains("t.me") || link.contains("telegram.me")) {
-        res = "https://rsshub.app/telegram/channel/${link.substring(link.lastIndexOf('/') + 1)}"
+        res = "https://tg.i-c-a.su/rss/${link.substring(link.lastIndexOf('/') + 1)}"
     }
     if (link.contains('@')) {
-        res = "https://rsshub.app/telegram/channel/${link.substring(link.lastIndexOf('@') + 1)}"
+        res = "https://tg.i-c-a.su/rss/${link.substring(link.lastIndexOf('@') + 1)}"
     }
     println(res)
     return res
