@@ -41,6 +41,8 @@ class DbHelper(val context: Context) :
                     "$TITLES_TIME INTEGER, $TITLE TEXT, $TITLES_TEXT TEXT, $TITLES_SOURCES TEXT, $TITLES_LINKS TEXT)")
             db.execSQL("CREATE TABLE IF NOT EXISTS $RSS_NAME ($RSS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
                     " $RSS_SOURCE TEXT, $RSS_LINK TEXT)")
+
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_mess_source ON $MESS_NAME($MESS_SOURCE)")
         }
     }
 
@@ -356,32 +358,50 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
-    fun getTitleLinks(id: Long): Pair<String, String>? {
+    fun getMessagesForSource(sourceName: String): List<String> {
         val db = this.readableDatabase
-        when (findTitleByID(id)) {
-            true -> {
-                val cursor = db.rawQuery("SELECT $TITLES_LINKS, $TITLES_SOURCES FROM $TITLES_NAME WHERE $TITLES_ID = ?", arrayOf(id.toString()))
-                return cursor.use {
-                    cursor.moveToFirst()
-                    val links = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_LINKS))
-                    val sources = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_SOURCES))
+        val descriptions = mutableListOf<String>()
+        val query = "SELECT $MESS FROM $MESS_NAME WHERE $MESS_SOURCE = ?"
+        val args = arrayOf(sourceName)
 
-                    var linksStr = ""
-                    dbUnpack(links).forEach {
-                        linksStr = "$linksStr\n${getMessage(it.toLong())?.link ?: "Ссылка не найдена"}"
-                    }
-                    var sourcesStr = ""
-                    dbUnpack(sources).forEach {
-                        val rss = getRSS(it.toLong())
-                        if (rss.isNotEmpty()) {sourcesStr = "$sourcesStr, ${rss[0].source}"}
-                    }
-                    if (sourcesStr == "") sourcesStr = "Источники не найдены"
-
-                    Pair(sources, links)
-                }
-
+        db.rawQuery(query, args).use { cursor ->
+            if (cursor.moveToFirst()) {
+                do {
+                    val description = cursor.getString(cursor.getColumnIndexOrThrow(MESS))
+                    descriptions.add(description)
+                } while (cursor.moveToNext())
             }
-            false -> return null
         }
+        return descriptions
     }
+
+//    @Synchronized
+//    fun getTitleLinks(id: Long): Pair<String, String>? {
+//        val db = this.readableDatabase
+//        when (findTitleByID(id)) {
+//            true -> {
+//                val cursor = db.rawQuery("SELECT $TITLES_LINKS, $TITLES_SOURCES FROM $TITLES_NAME WHERE $TITLES_ID = ?", arrayOf(id.toString()))
+//                return cursor.use {
+//                    cursor.moveToFirst()
+//                    val links = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_LINKS))
+//                    val sources = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_SOURCES))
+//
+//                    var linksStr = ""
+//                    dbUnpack(links).forEach {
+//                        linksStr = "$linksStr\n${getMessage(it.toLong())?.link ?: "Ссылка не найдена"}"
+//                    }
+//                    var sourcesStr = ""
+//                    dbUnpack(sources).forEach {
+//                        val rss = getRSS(it.toLong())
+//                        if (rss.isNotEmpty()) {sourcesStr = "$sourcesStr, ${rss[0].source}"}
+//                    }
+//                    if (sourcesStr == "") sourcesStr = "Источники не найдены"
+//
+//                    Pair(sources, links)
+//                }
+//
+//            }
+//            false -> return null
+//        }
+//    }
 }
