@@ -49,7 +49,7 @@ class LLMClient(
                 })
             }
             install(HttpTimeout) {
-                requestTimeoutMillis = 60000 // 60 секунд
+                requestTimeoutMillis = 180000 // 60 секунд
                 connectTimeoutMillis = 15000
                 socketTimeoutMillis = 60000
             }
@@ -76,9 +76,17 @@ class LLMClient(
         // Парсим JSON и достаем текст
         val json = Json { ignoreUnknownKeys = true }
         val geminiResponse = json.decodeFromString<GeminiResponse>(responseString)
-        return geminiResponse.candidates
-            .flatMap { it.content.parts }
-            .joinToString("\n") { it.text }
+        println(geminiResponse)
+        geminiResponse.candidates?.let {
+            if (!it.isEmpty()) {
+                return geminiResponse.candidates
+                    .flatMap { it.content.parts }
+                    .joinToString("\n") { it.text }
+            } else {
+                return null
+            }
+        }
+        return null
     }
 
     // --- Сериализуемые классы для запроса ---
@@ -100,7 +108,7 @@ class LLMClient(
     // --- Сериализуемые классы для ответа ---
     @Serializable
     data class GeminiResponse(
-        val candidates: List<Candidate>
+        val candidates: List<Candidate>?
     )
 
     @Serializable
@@ -140,7 +148,7 @@ class NewsSummarizer(
         }
         val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
         val prompt = """
-            Проанализируй новости и выдели от 1 до $max основных тем.
+            Проанализируй новости и выдели от 1 до $max основных тем. Старайся максимально обообщать свои темы.
             Ответ верни в виде JSON формата:
             [
               {
@@ -201,7 +209,7 @@ class NewsSummarizer(
         }
 
 
-        delay(30000)
+        // delay(30000)
 
         println("-----------------------------------------------------------")
         return topics
@@ -236,7 +244,6 @@ class NewsSummarizer(
                 Возвращай всё в СТРОГОМ JSON формате: {
                 "title": "<заголовок темы>", 
                 "summary": "<резюме по теме>", 
-                "id": ["<id`s>"]
                 }, 
                 где title - название темы,
                 summary - резюме по теме.
@@ -247,13 +254,14 @@ class NewsSummarizer(
                 3. Ответ должен начинаться с { и заканчиваться }.
                 4. Отвечай на РУССКОМ языке.
                 5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ
-                6.Используй только те id, которые получил в запросе
+                6. Используй только те id, которые получил в запросе
                                 
                 Новости:
                 $newsText
             """.trimIndent()
 
             val response = llm.sendPrompt(prompt) ?: return@forEach
+            println(response)
 
             // Приведение ответа к адекватному виду
             val cleanResponse = response.trim().replace("```json", "")
@@ -263,7 +271,6 @@ class NewsSummarizer(
 
             println("-----------------------LLM-----------------------------------")
             println(cleanResponse)
-
             // Парсинг ответа по полям
             val obj = JSONObject(cleanResponse)
             val summary = obj.getString("summary")
@@ -271,7 +278,7 @@ class NewsSummarizer(
 
             // время для темы выбирается по первой новости по этой теме или по системному времени, если ошибка
             var time: Long = System.currentTimeMillis()
-            ids.forEach{ id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time)}
+            ids.forEach { id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time) }
 
             // линки и сурсы в особый формат по id
             val links = mutableListOf<String>()
@@ -288,11 +295,16 @@ class NewsSummarizer(
             println("${title.title}\t$summary$sources$links$time")
 
             // Сохраняем в БД
-            db.addTitle(titleTime = time, title = title.title, text = summary,
-                sources = db.dbPack(*sources.toTypedArray()), links = db.dbPack(*links.toTypedArray()))
+            db.addTitle(
+                titleTime = time,
+                title = title.title,
+                text = summary,
+                sources = db.dbPack(*sources.toTypedArray()),
+                links = db.dbPack(*links.toTypedArray())
+            )
 
             // задержка перед следующим запросом
-            delay(delaySeconds * 10)
+            delay(delaySeconds * 100)
         }
     }
 
