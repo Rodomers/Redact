@@ -148,7 +148,7 @@ class NewsSummarizer(
         }
         val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
         val prompt = """
-            Проанализируй новости и выдели от 1 до $max основных тем. Старайся максимально обообщать свои темы.
+            Проанализируй новости и выдели от 1 до $max основных тем.
             Ответ верни в виде JSON формата:
             [
               {

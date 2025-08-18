@@ -31,7 +31,7 @@ class RssFetcher(
 
         println(rssList)
 
-        for (rss in rssList) {
+        for ((index, rss) in rssList.withIndex()) {
             try {
                 val doc: Document = Jsoup.connect(rss.link).get() // Получение XML из RSS
                 val items = parseRssItems(doc) // Парс полученного XML
@@ -59,6 +59,12 @@ class RssFetcher(
                 val msg = "Ошибка при обработке RSS (id=${rss.id}, link=${rss.link}): ${e.message}"
                 println(msg) // Ошибка лол
                 errors.add(msg)
+            }
+            finally {
+                if (rss.link.contains("rsshub") && index != rssList.lastIndex && rssList.drop(index + 1).any { it.link.contains("rsshub") }) {
+                    println("Entered delay")
+                    delay(40000L)
+                }
             }
         }
 

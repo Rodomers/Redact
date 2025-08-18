@@ -607,7 +607,8 @@ fun CustomConfirmDialog(
     text: String,
     btnText: String,
     cancelAction: () -> Unit,
-    onConfirm: (Boolean) -> Unit
+    onConfirm: (Boolean) -> Unit,
+    oneButton: Boolean = true
 ) {
     val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
     dialogWindowProvider?.window?.setDimAmount(0.6f)
