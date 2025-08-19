@@ -1,7 +1,5 @@
 package com.rds.mews
 
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -9,6 +7,8 @@ import java.util.Locale
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import com.rds.mews.TelegramRssClient
+import org.jsoup.parser.Parser
 
 // --- Парсер RSS-потоков ---`
 class RssFetcher(
@@ -33,7 +33,13 @@ class RssFetcher(
 
         for ((index, rss) in rssList.withIndex()) {
             try {
-                val doc: Document = Jsoup.connect(rss.link).get() // Получение XML из RSS
+                var doc: Document = Jsoup.parse("", "", Parser.xmlParser())
+                val tgClient = TelegramRssClient()
+                if (rss.link.contains("t.me")) {
+                    doc = tgClient.buildRss(rss.link)
+                } else {
+                    doc = Jsoup.connect(rss.link).get() // Получение XML из RSS
+                }
                 val items = parseRssItems(doc) // Парс полученного XML
                 for (item in items) {
                     println(item)
@@ -172,7 +178,13 @@ class RssFetcher(
 // Функция для проверки валидности RSS: True - валидный, False - невалидный
 suspend fun validRSS(strLink: String): Boolean{
     try {
-        val doc: Document = Jsoup.connect(strLink).get()
+        val tgClient = TelegramRssClient()
+        var doc: Document
+        if (strLink.contains("t.me")) {
+            doc = tgClient.buildRss(strLink)
+        } else {
+            doc = Jsoup.connect(strLink).get() // Получение XML из RSS
+        }
         return true
     } catch (e: Exception){
         println(e)
@@ -182,7 +194,13 @@ suspend fun validRSS(strLink: String): Boolean{
 
 suspend fun RSSName(strLink: String): String? {
     try {
-        val doc: Document = Jsoup.connect(strLink).get()
+        val tgClient = TelegramRssClient()
+        var doc: Document
+        if (strLink.contains("t.me")) {
+            doc = tgClient.buildRss(strLink)
+        } else {
+            doc = Jsoup.connect(strLink).get() // Получение XML из RSS
+        }
         return doc.select("title")[0].text()
     } catch (e: Exception){
         println(e)
