@@ -41,6 +41,7 @@ fun linkTransform(link: String): String {
     if (link.contains('@')) {
         res = "https://t.me/s/${link.substring(link.lastIndexOf('@') + 1)}"
     }
+
     println(res)
     return res
 }
@@ -51,7 +52,10 @@ suspend fun updateTitles(
     if (!returnExisting) {
         try {
             if (fetcher.fetchAndStoreAll().errors.isEmpty()) {
-                db.titlesTimeKill(0)
+                val titles = db.getTitles()
+                if (!(titles.any {it.text.contains("<промежуточный текст>") || it.time == 0.toLong() || it.sources.contains("<промежуточный текст>")})) {
+                    db.titlesTimeKill(0)
+                }
                 db.messageTimeKill(settingsViewModel.titlesPeriod.intValue.toLong() * 3600)
                 summarizer.summarizeTopics(
                     maxTopics = settingsViewModel.titlesNum.intValue,

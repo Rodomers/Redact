@@ -111,10 +111,13 @@ class TelegramRssClient {
 
     fun buildRss(channelUrl: String): Document {
         val items = fetchChannelMessages(channelUrl)
+        val doc = Jsoup.parse(downloadHtml(channelUrl))
+        val ogTitle = doc.selectFirst("title")
+        val title = ogTitle ?: doc.title()
         val sb = StringBuilder()
         sb.append("""<?xml version="1.0" encoding="UTF-8"?>""")
         sb.append("\n<rss version=\"2.0\">\n<channel>\n")
-        sb.append("<title>Telegram RSS</title>\n")
+        sb.append("$title\n")
         sb.append("<link>$channelUrl</link>\n")
         sb.append("<description>RSS feed for $channelUrl</description>\n")
 
@@ -131,5 +134,6 @@ class TelegramRssClient {
 
         return Jsoup.parse(sb.toString(), "", Parser.xmlParser())
     }
+
 
 }

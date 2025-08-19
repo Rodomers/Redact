@@ -509,11 +509,20 @@ fun CustomChangeDialog(
                     modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)
                 )
 
-                if (add) {
+                if (add && scope != null) {
                     OutlinedTextField(
                         value = rssText,
-                        onValueChange = { rssText = it
-                                        validRss = false},
+                        onValueChange = {
+                            rssText = it
+                            validRss = false
+                            scope.launch(Dispatchers.IO) {
+                                val res = RSSName(linkTransform(rssText))
+                                if (res != null) {
+                                    sourceText = res
+                                    validRss = true
+                                }
+                            }
+                        },
                         shape = MaterialTheme.shapes.large,
                         label = { Text("Ссылка на RSS/Telegram") },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -545,22 +554,10 @@ fun CustomChangeDialog(
 
                 if (add && scope != null) {
                     Text(
-                        text = if (validRss) "Валидная ссылка" else "Проверить ссылку",
+                        text = if (validRss) "Валидная ссылка" else "Введите корректную ссылку",
                         color = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier
                             .padding(16.dp)
-                            .clickable {
-                                scope.launch {
-                                    var res = false
-                                    withContext(Dispatchers.IO) {
-                                        res = validRSS(linkTransform(rssText.trim()))
-                                    }
-                                    withContext(Dispatchers.Main) {
-                                        if (!res) Toast.makeText(context, "Ссылка не валидна!", Toast.LENGTH_LONG).show()
-                                    }
-                                    validRss = res
-                                }
-                            }
                     )
                 }
 
@@ -607,8 +604,7 @@ fun CustomConfirmDialog(
     text: String,
     btnText: String,
     cancelAction: () -> Unit,
-    onConfirm: (Boolean) -> Unit,
-    oneButton: Boolean = true
+    onConfirm: (Boolean) -> Unit
 ) {
     val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
     dialogWindowProvider?.window?.setDimAmount(0.6f)
