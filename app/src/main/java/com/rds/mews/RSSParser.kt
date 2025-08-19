@@ -29,7 +29,6 @@ class RssFetcher(
         var itemsSkipped = 0 // Кол-во пропущенных новостей (старые, ошибки, т.д.)
         val errors = mutableListOf<String>() // Список ошибок
 
-        println(rssList)
 
         for ((index, rss) in rssList.withIndex()) {
             try {
@@ -42,7 +41,6 @@ class RssFetcher(
                 }
                 val items = parseRssItems(doc) // Парс полученного XML
                 for (item in items) {
-                    println(item)
                     val link = item.link ?: continue // если нет ссылки — пропускаем
                     val desc = item.description ?: continue // Нет описания новости - пропускаем
                     if (db.findMessage(rss.source, desc) != null) {

@@ -29,12 +29,10 @@ class TelegramRssClient {
         )
 
         val blocks = messageBlockRegex.findAll(html)
-        println(blocks.last().value)
         val messages = mutableListOf<RssItem>()
 
         for (block in blocks) {
             val blockHtml = block.value
-            println(blockHtml)
 
             // link (из data-post) + запасной вариант из ссылки даты
             val dataPost = Regex("""data-post="([^"]+)"""")
@@ -78,7 +76,6 @@ class TelegramRssClient {
             val text = stripHtml(textRaw).trim()
 
             val title = text.substring(0, text.length / 3) + "..."
-            println(datetime)
             // val date = formatDate(datetime)
             if (text.isNotEmpty()) {
                 messages.add(RssItem(title, messageUrl, datetime, text))

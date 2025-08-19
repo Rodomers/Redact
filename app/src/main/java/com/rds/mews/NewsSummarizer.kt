@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import androidx.compose.ui.platform.isDebugInspectorInfoEnabled
 import com.google.firebase.crashlytics.buildtools.reloc.org.apache.http.client.HttpClient
 import kotlinx.coroutines.delay
 import org.json.JSONArray
@@ -76,7 +77,6 @@ class LLMClient(
         // Парсим JSON и достаем текст
         val json = Json { ignoreUnknownKeys = true }
         val geminiResponse = json.decodeFromString<GeminiResponse>(responseString)
-        println(geminiResponse)
         geminiResponse.candidates?.let {
             if (!it.isEmpty()) {
                 return geminiResponse.candidates
@@ -139,12 +139,11 @@ class NewsSummarizer(
      * можно указать сколько тем извлечь
      * можно указать на актуальность новостей в секундах, по стандарту - неделя
      */
-    suspend private fun extractTopics(max: Int = 20, messageSeconds: Long = 14515200): List<Topics> {
+    suspend private fun extractTopics(max: Int = 20, messageSeconds: Long = 14515200){
+        try {
         val messages = db.getMessages(messageSeconds)
-        var topics: List<Topics> = mutableListOf()
         if (messages.isEmpty()) {
             println("Нет новостей для анализа") // ошибка, если нет новостей для суммаризации
-            return topics
         }
         val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
         val prompt = """
@@ -181,14 +180,12 @@ class NewsSummarizer(
             $combinedNews
         """.trimIndent()
 
-        val response = llm.sendPrompt(prompt) ?: return topics
+        val response = llm.sendPrompt(prompt) ?: ""
 
         val cleanResponse = response.trim().replace("```json", "")
             .replace("```", "")
             .replace("\"\"\"", "")
             .trim()
-        println("------------------THEMES--------------------------------")
-        println(cleanResponse)
 
         val jsonArray = JSONArray(cleanResponse)
 
@@ -198,21 +195,25 @@ class NewsSummarizer(
             val title = obj.getString("title")
             val idsArray = obj.getJSONArray("id")
 
-            val ids = mutableListOf<Long>()
+            val idsLong = mutableListOf<Long>()
+            val idsStr = mutableListOf<String>()
             for (j in 0 until idsArray.length()) {
-                ids.add(idsArray.getInt(j).toLong())
+                idsLong.add(idsArray.getInt(j).toLong())
+                idsStr.add(idsArray.getInt(j).toString())
+
             }
-            println(title)
-            println(ids)
 
-            topics += Topics(title, ids)
+            db.addTitle(
+                titleTime = 0,
+                title = title,
+                text = "<промежуточный текст>",
+                sources = "<промежуточный текст>",
+                links = db.dbPack(*idsStr.toTypedArray())
+            )
         }
-
-
-        // delay(30000)
-
-        println("-----------------------------------------------------------")
-        return topics
+        } catch (e:Exception){
+            e.printStackTrace()
+        }
     }
 
     /**
@@ -223,10 +224,37 @@ class NewsSummarizer(
      * можно указать время между запросами, по стандарту - 10 секунд
      */
     suspend fun summarizeTopics(maxTopics: Int = 20, messageSeconds: Long = 14515200, delaySeconds: Long = 10) {
-        val titles = extractTopics(maxTopics, messageSeconds)
+
+
         val messages = db.getMessages(messageSeconds)
+        var rawtitles = db.getTitles()
+        var titles = mutableListOf<Topics>()
+        var flagForUnfinishedTopics: Boolean = false
+
+        // ЭТО ПЛОХО, но я  не знаю как переделать
+        rawtitles.forEach { title ->
+            if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
+                titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
+                db.delTitle(title.id)
+                flagForUnfinishedTopics = true
+            }
+        }
+        println(titles)
+        if(!flagForUnfinishedTopics){
+            extractTopics(maxTopics, messageSeconds)
+            rawtitles = db.getTitles()
+            titles = mutableListOf<Topics>()
+            rawtitles.forEach { title ->
+                if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
+                    titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
+                    db.delTitle(title.id)
+                }
+            }
+        }
+
 
         titles.forEach { title ->
+            println(title)
             // Составление списка новостей для нейронки
             var suitableMessages: List<Message> = mutableListOf()
             title.ids?.forEach { id ->
@@ -261,7 +289,6 @@ class NewsSummarizer(
             """.trimIndent()
 
             val response = llm.sendPrompt(prompt) ?: return@forEach
-            println(response)
 
             // Приведение ответа к адекватному виду
             val cleanResponse = response.trim().replace("```json", "")
@@ -269,8 +296,6 @@ class NewsSummarizer(
                 .replace("\"\"\"", "")
                 .trim()
 
-            println("-----------------------LLM-----------------------------------")
-            println(cleanResponse)
             // Парсинг ответа по полям
             val obj = JSONObject(cleanResponse)
             val summary = obj.getString("summary")
