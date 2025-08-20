@@ -62,6 +62,9 @@ class LLMClient(
                 ContentInput(
                     parts = listOf(PartInput(prompt))
                 )
+            ),
+            generationConfig = GenerationConfig(
+                temperature = 0.5
             )
         )
 
@@ -92,7 +95,13 @@ class LLMClient(
     // --- Сериализуемые классы для запроса ---
     @Serializable
     data class GeminiRequest(
-        val contents: List<ContentInput>
+        val contents: List<ContentInput>,
+        val generationConfig: GenerationConfig? = null
+    )
+
+    @Serializable
+    data class GenerationConfig(
+        val temperature: Double
     )
 
     @Serializable
