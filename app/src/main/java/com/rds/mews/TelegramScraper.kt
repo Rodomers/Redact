@@ -7,6 +7,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
+import kotlin.text.trim
 
 
 class TelegramRssClient {
@@ -114,11 +115,12 @@ class TelegramRssClient {
         val items = fetchChannelMessages(channelUrl)
         val doc = Jsoup.parse(downloadHtml(channelUrl))
         val ogTitle = doc.selectFirst("title")
-        val title = ogTitle ?: doc.title()
+        val text = ogTitle!!.text()
+
         val sb = StringBuilder()
         sb.append("""<?xml version="1.0" encoding="UTF-8"?>""")
         sb.append("\n<rss version=\"2.0\">\n<channel>\n")
-        sb.append("$title\n")
+        sb.append("<title>${text.replace(" – Telegram", "")}</title>\n")
         sb.append("<link>$channelUrl</link>\n")
         sb.append("<description>RSS feed for $channelUrl</description>\n")
 
@@ -135,6 +137,5 @@ class TelegramRssClient {
 
         return Jsoup.parse(sb.toString(), "", Parser.xmlParser())
     }
-
 
 }

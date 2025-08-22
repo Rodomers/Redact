@@ -62,6 +62,9 @@ class LLMClient(
                 ContentInput(
                     parts = listOf(PartInput(prompt))
                 )
+            ),
+            generationConfig = GenerationConfig(
+                temperature = 0.5
             )
         )
 
@@ -92,7 +95,13 @@ class LLMClient(
     // --- Сериализуемые классы для запроса ---
     @Serializable
     data class GeminiRequest(
-        val contents: List<ContentInput>
+        val contents: List<ContentInput>,
+        val generationConfig: GenerationConfig? = null
+    )
+
+    @Serializable
+    data class GenerationConfig(
+        val temperature: Double
     )
 
     @Serializable
@@ -174,6 +183,7 @@ class NewsSummarizer(
                 3. Ответ должен начинаться с [ и заканчиваться ].
                 4. Отвечай на РУССКОМ языке.
                 5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ Хотя бы одним значением.
+                6. НЕ ДУБЛИРУЙ НОВОСТИ. Одна новость относится к ТОЛЬКО ОДНОЙ ТЕМЕ.
             
             Новости:
             $combinedNews
@@ -268,8 +278,8 @@ class NewsSummarizer(
             }
             val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
             val prompt = """
-                Составь краткое резюме по теме: "${title.title}".
-                Укажи основные факты и перечисли id сообщений, относящихся к теме. 
+                Составь резюме по теме: "${title.title}".
+                Укажи основные факты, реезюмируй сухо и по делу, без общих слов или воды. 
                 Возвращай всё в СТРОГОМ JSON формате: {
                 "title": "<заголовок темы>", 
                 "summary": "<резюме по теме>", 
