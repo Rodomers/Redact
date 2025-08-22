@@ -67,7 +67,7 @@ class DbHelper(val context: Context) :
 
     fun dbUnpack(str: String): List<String> {
         val res = mutableListOf<String>()
-        if (str.split(", ").lastIndex != 0) {
+        if (str.split(", ").isNotEmpty()) {
             for (i in str.split(", ")) res.add(i.trim())
         }
 

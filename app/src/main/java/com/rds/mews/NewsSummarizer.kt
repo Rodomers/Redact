@@ -245,6 +245,8 @@ class NewsSummarizer(
             titles = mutableListOf<Topics>()
             rawtitles.forEach { title ->
                 if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
+                    print("ids: ")
+                    println(title.links)
                     titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
                     db.delTitle(title.id)
                 }

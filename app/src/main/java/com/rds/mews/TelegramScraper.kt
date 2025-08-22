@@ -79,6 +79,7 @@ class TelegramRssClient {
             // val date = formatDate(datetime)
             if (text.isNotEmpty()) {
                 messages.add(RssItem(title, messageUrl, datetime, text))
+//                println("[$title\n$messageUrl\n$datetime\n$text]")
             }
         }
 
