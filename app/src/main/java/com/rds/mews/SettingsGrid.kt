@@ -41,13 +41,13 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
     val titlesDropdownVisible = remember { MutableTransitionState(false) }
     val titlesDropdownItems = mutableListOf(
         "10 заголовков" to { settingsModel.setTitlesNum(10) },
-        "25 заголовков" to { settingsModel.setTitlesNum(25) },
+        "20 заголовков" to { settingsModel.setTitlesNum(20) },
     )
     if (apiText != "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") {
         titlesDropdownItems.addAll(listOf(
-            "50 заголовков" to { settingsModel.setTitlesNum(50) },
-            "75 заголовков" to { settingsModel.setTitlesNum(75) },
-            "100 заголовков" to { settingsModel.setTitlesNum(100) })
+            "30 заголовков" to { settingsModel.setTitlesNum(30) },
+            "40 заголовков" to { settingsModel.setTitlesNum(40) },
+            "50 заголовков" to { settingsModel.setTitlesNum(50) })
         )
     }
     else if (settingsModel.titlesNum.intValue > 25) settingsModel.setTitlesNum(25)
@@ -77,7 +77,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
 //                )
 //            }
 //        }
-        CustomSettingsItem(text = "Количество заголовков") {
+        CustomSettingsItem(text = "Максимум заголовков") {
             Box {
                 Button(
                     modifier = Modifier
