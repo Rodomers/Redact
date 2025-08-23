@@ -71,6 +71,7 @@ fun MainScreen() {
     val factory = SettingsViewModelFactory(settingsManager)
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
     val db = DbHelper(LocalContext.current.applicationContext)
+//    db.titlesTimeKill(0)
 
     val sourcesList: SnapshotStateList<String> = remember { mutableStateListOf() }
     val updateSources: () -> Unit = {

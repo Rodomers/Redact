@@ -303,11 +303,13 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
-    fun delTitle(id: Long): Boolean {
+    fun delTitle(id: Long? = null, name: String? = null): Boolean {
         val db = this.writableDatabase
-        val flag = db.delete(TITLES_NAME, "$TITLES_ID = ?", arrayOf(id.toString())) > 0
-
-        return flag
+        val qPart = if (id != null) "$TITLES_ID = ?" else "$TITLE = ?"
+        return when (id) {
+            null -> if (name != null) db.delete(TITLES_NAME, qPart, arrayOf(name)) > 0 else false
+            else -> db.delete(TITLES_NAME, qPart, arrayOf(id.toString())) > 0
+        }
     }
 
     @Synchronized

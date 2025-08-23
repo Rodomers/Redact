@@ -49,6 +49,7 @@ fun linkTransform(link: String): String {
 suspend fun updateTitles(
     db: DbHelper, fetcher: RssFetcher, summarizer: NewsSummarizer, settingsViewModel: SettingsViewModel, returnExisting: Boolean = false
 ): List<Title> {
+//    db.messageTimeKill(settingsViewModel.titlesPeriod.intValue.toLong() * 0)
     if (!returnExisting) {
         try {
             if (fetcher.fetchAndStoreAll().errors.isEmpty()) {

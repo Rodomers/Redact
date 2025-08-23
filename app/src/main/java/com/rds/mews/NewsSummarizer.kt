@@ -184,6 +184,10 @@ class NewsSummarizer(
                 4. Отвечай на РУССКОМ языке.
                 5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ Хотя бы одним значением.
                 6. НЕ ДУБЛИРУЙ НОВОСТИ. Одна новость относится к ТОЛЬКО ОДНОЙ ТЕМЕ.
+                7. Уделяй равное внимание всем источникам информации.
+                8. СТРОГО ЗАПРЕЩЕНО превышать максимальное количество событий ($max). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого.
+                9. Заголовок не должен быть слишком общим ("Политика", "Общественная жизнь" и т.д. не подходят, т.к. не отражают суть событий).
+                10. Заголовки не должны быть однообразными.
             
             Новости:
             $combinedNews
@@ -244,7 +248,7 @@ class NewsSummarizer(
         rawtitles.forEach { title ->
             if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
                 titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
-                db.delTitle(title.id)
+//                db.delTitle(title.id)
                 flagForUnfinishedTopics = true
             }
         }
@@ -255,10 +259,8 @@ class NewsSummarizer(
             titles = mutableListOf<Topics>()
             rawtitles.forEach { title ->
                 if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
-                    print("ids: ")
-                    println(title.links)
                     titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
-                    db.delTitle(title.id)
+//                    db.delTitle(title.id)
                 }
             }
         }
@@ -279,7 +281,7 @@ class NewsSummarizer(
             val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
             val prompt = """
                 Составь резюме по теме: "${title.title}".
-                Укажи основные факты, реезюмируй сухо и по делу, без общих слов или воды. 
+                Достаточно подробно расскажи о событии, но без общих слов или воды.
                 Возвращай всё в СТРОГОМ JSON формате: {
                 "title": "<заголовок темы>", 
                 "summary": "<резюме по теме>", 
@@ -293,7 +295,8 @@ class NewsSummarizer(
                 3. Ответ должен начинаться с { и заканчиваться }.
                 4. Отвечай на РУССКОМ языке.
                 5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ
-                6. В случае, если разные источники дают противоположные точки зрения - выписывай обе
+                6. В случае, если разные источники дают противоположные точки зрения - выписывай обе.
+                7. Различные события внутри одной темы разделяй с помощью \n.
                                 
                 Новости:
                 $newsText
@@ -330,6 +333,7 @@ class NewsSummarizer(
 
             println("${title.title}\t$summary$sources$links$time")
 
+            db.delTitle(name = title.title)
             // Сохраняем в БД
             db.addTitle(
                 titleTime = time,
