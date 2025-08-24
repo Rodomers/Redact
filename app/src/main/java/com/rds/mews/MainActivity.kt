@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setContent {
-            MewsTheme {
+            MewsTheme(settingsTheme = "system") {
                 MainScreen()
                 //TestBtn()
             }
@@ -65,78 +65,83 @@ sealed class TabScreen(val title: String, val icon: ImageVector) {
 
 @Composable
 fun MainScreen() {
-    var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }
 
     val settingsManager = SettingsManager(LocalContext.current.applicationContext)
     val factory = SettingsViewModelFactory(settingsManager)
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
-    val db = DbHelper(LocalContext.current.applicationContext)
+
+    MewsTheme(settingsTheme = settingsViewModel.isDarkMode.value) {
+        var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }
+
+
+        val db = DbHelper(LocalContext.current.applicationContext)
 //    db.titlesTimeKill(0)
 
-    val sourcesList: SnapshotStateList<String> = remember { mutableStateListOf() }
-    val updateSources: () -> Unit = {
-        sourcesList.clear()
-        sourcesList.addAll(db.getRSS().map {it.source})
-    }
-
-    val titlesList: SnapshotStateList<Title> = remember { mutableStateListOf() }
-    val fetcher = RssFetcher(db)
-    val llm = LLMClient(MODEL = settingsViewModel.currentLlm.value, apiKey = settingsViewModel.userApi.value)
-    val summarizer = NewsSummarizer(db, llm)
-    val scope = rememberCoroutineScope()
-    var isTitlesRefreshing by remember { mutableStateOf(false) }
-
-    fun refreshTitles(returnExisting: Boolean = false) {
-        scope.launch {
-            isTitlesRefreshing = true
-            val updatedList = withContext(Dispatchers.IO) {
-                updateTitles(db, fetcher, summarizer, settingsViewModel, returnExisting = returnExisting)
-            }
-            titlesList.clear()
-            titlesList.addAll(updatedList)
-            isTitlesRefreshing = false
+        val sourcesList: SnapshotStateList<String> = remember { mutableStateListOf() }
+        val updateSources: () -> Unit = {
+            sourcesList.clear()
+            sourcesList.addAll(db.getRSS().map {it.source})
         }
-    }
 
-    Scaffold(
-        bottomBar = {
-            MyBottomBar(
-                selectedTab = selectedTab,
-                onTabSelected = { newTab ->
-                    selectedTab = newTab
-                },
-            )
-        }
-    ) { paddingValues ->
-        when (selectedTab) {
-            TabScreen.Sources -> {
-                LaunchedEffect(key1 = Unit) {
-                    updateSources()
+        val titlesList: SnapshotStateList<Title> = remember { mutableStateListOf() }
+        val fetcher = RssFetcher(db)
+        val llm = LLMClient(MODEL = settingsViewModel.currentLlm.value, apiKey = settingsViewModel.userApi.value)
+        val summarizer = NewsSummarizer(db, llm)
+        val scope = rememberCoroutineScope()
+        var isTitlesRefreshing by remember { mutableStateOf(false) }
+
+        fun refreshTitles(returnExisting: Boolean = false) {
+            scope.launch {
+                isTitlesRefreshing = true
+                val updatedList = withContext(Dispatchers.IO) {
+                    updateTitles(db, fetcher, summarizer, settingsViewModel, returnExisting = returnExisting)
                 }
-
-                SourcesGrid(
-                    sourcesList,
-                    modifier = Modifier.padding(paddingValues),
-                    db = db,
-                    onSourcesChanged = updateSources
-                    )
+                titlesList.clear()
+                titlesList.addAll(updatedList)
+                isTitlesRefreshing = false
             }
-            TabScreen.Titles -> {
-                LaunchedEffect(key1 = Unit) {
-                    refreshTitles(returnExisting = true)
-                }
+        }
 
-                TitlesGrid(
-                    itemsList = titlesList,
-                    modifier = Modifier.padding(paddingValues),
-                    isRefreshing = isTitlesRefreshing,
-                    onRefresh = ::refreshTitles
+        Scaffold(
+            bottomBar = {
+                MyBottomBar(
+                    selectedTab = selectedTab,
+                    onTabSelected = { newTab ->
+                        selectedTab = newTab
+                    },
                 )
             }
-            else -> SettingsGrid(
-                modifier = Modifier.padding(paddingValues),
-                settingsModel = settingsViewModel
-            )
+        ) { paddingValues ->
+            when (selectedTab) {
+                TabScreen.Sources -> {
+                    LaunchedEffect(key1 = Unit) {
+                        updateSources()
+                    }
+
+                    SourcesGrid(
+                        sourcesList,
+                        modifier = Modifier.padding(paddingValues),
+                        db = db,
+                        onSourcesChanged = updateSources
+                    )
+                }
+                TabScreen.Titles -> {
+                    LaunchedEffect(key1 = Unit) {
+                        refreshTitles(returnExisting = true)
+                    }
+
+                    TitlesGrid(
+                        itemsList = titlesList,
+                        modifier = Modifier.padding(paddingValues),
+                        isRefreshing = isTitlesRefreshing,
+                        onRefresh = ::refreshTitles
+                    )
+                }
+                else -> SettingsGrid(
+                    modifier = Modifier.padding(paddingValues),
+                    settingsModel = settingsViewModel
+                )
+            }
         }
     }
 }

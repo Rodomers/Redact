@@ -51,25 +51,28 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         const val TITLES_NUM_KEY = "titles_num"
         const val TITLES_PERIOD_KEY = "titles_period"
         const val USER_API_KEY = "user_api"
-        const val CURRENT_LLM_MODEl = "current_model"
+        const val CURRENT_LLM_MODEL = "current_model"
         const val SHOW_DATES = "show_dates"
+        const val USER_BOT_API = "user_bot_api"
     }
 
-    var isDarkMode = mutableStateOf(settingsManager.getBoolean(IS_DARK_MODE_KEY, false))
+    var isDarkMode = mutableStateOf(settingsManager.getString(IS_DARK_MODE_KEY, "system"))
     var titlesNum = mutableIntStateOf(settingsManager.getInt(TITLES_NUM_KEY, 10))
     var titlesPeriod = mutableIntStateOf(settingsManager.getInt(TITLES_PERIOD_KEY, 24))
     var userApi = mutableStateOf(settingsManager.getString(USER_API_KEY, "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk"))
-    var currentLlm = mutableStateOf(settingsManager.getString(CURRENT_LLM_MODEl, ""))
+    var currentLlm = mutableStateOf(settingsManager.getString(CURRENT_LLM_MODEL, ""))
     var showDates = mutableStateOf(settingsManager.getBoolean(SHOW_DATES, false))
+    var userBotApi = mutableStateOf(settingsManager.getString(USER_BOT_API, ""))
 
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener {_, key ->
         when (key) {
-            IS_DARK_MODE_KEY -> isDarkMode.value = settingsManager.getBoolean(IS_DARK_MODE_KEY, false)
+            IS_DARK_MODE_KEY -> isDarkMode.value = settingsManager.getString(IS_DARK_MODE_KEY, "system")
             TITLES_NUM_KEY -> titlesNum.intValue = settingsManager.getInt(TITLES_NUM_KEY, 10)
             TITLES_PERIOD_KEY -> titlesPeriod.intValue = settingsManager.getInt(TITLES_PERIOD_KEY, 24)
             USER_API_KEY -> userApi.value = settingsManager.getString(USER_API_KEY, "")
-            CURRENT_LLM_MODEl -> currentLlm.value = settingsManager.getString(CURRENT_LLM_MODEl, "")
+            CURRENT_LLM_MODEL -> currentLlm.value = settingsManager.getString(CURRENT_LLM_MODEL, "")
             SHOW_DATES -> showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
+            USER_BOT_API -> userBotApi.value = settingsManager.getString(USER_BOT_API, "")
         }
     }
 
@@ -77,8 +80,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         settingsManager.registerListener(listener)
     }
 
-    fun toggleDarkMode(newValue: Boolean) {
-        settingsManager.saveBoolean(IS_DARK_MODE_KEY, newValue)
+    fun setDarkMode(newValue: String) {
+        settingsManager.saveString(IS_DARK_MODE_KEY, newValue)
         isDarkMode.value = newValue
     }
 
@@ -92,13 +95,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         titlesPeriod.intValue = newValue
     }
 
-    fun setUserApi(newValue: String) {
+    fun setUserGeminiApi(newValue: String) {
         settingsManager.saveString(USER_API_KEY, newValue)
         userApi.value = newValue
     }
 
+    fun setUserBotApi(newValue: String = "") {
+        settingsManager.saveString(USER_BOT_API, newValue)
+        userBotApi.value = newValue
+    }
+
     fun setCurrentLlm(newValue: String) {
-        settingsManager.saveString(CURRENT_LLM_MODEl, newValue)
+        settingsManager.saveString(CURRENT_LLM_MODEL, newValue)
         currentLlm.value = newValue
     }
 

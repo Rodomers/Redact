@@ -1,7 +1,6 @@
 package com.rds.mews.ui.theme
 
 import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
@@ -55,19 +54,20 @@ val typography = Typography(
 
 @Composable
 fun MewsTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    systemDarkTheme: Boolean = isSystemInDarkTheme(),
+    settingsTheme: String,
     // Динамические цвета доступны на Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
+    val colorScheme = when(settingsTheme) {
 //        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
 //            val context = LocalContext.current
 //            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
 //        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        "dark" -> DarkColorScheme
+        "light" -> LightColorScheme
+        else -> if (systemDarkTheme) DarkColorScheme else LightColorScheme
     }
 
     // Добавлен SideEffect для управления цветом и иконками системной строки состояния
@@ -83,7 +83,7 @@ fun MewsTheme(
 
             // Устанавливаем цвет иконок в строке состояния
             val insetsController = WindowCompat.getInsetsController(window, view)
-            insetsController.isAppearanceLightStatusBars = !darkTheme
+            insetsController.isAppearanceLightStatusBars = !systemDarkTheme
         }
     }
 
