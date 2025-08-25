@@ -60,7 +60,8 @@ suspend fun updateTitles(
                 db.messageTimeKill(settingsViewModel.titlesPeriod.intValue.toLong() * 3600)
                 summarizer.summarizeTopics(
                     maxTopics = settingsViewModel.titlesNum.intValue,
-                    messageSeconds = settingsViewModel.titlesPeriod.intValue.toLong() * 3600
+                    messageSeconds = settingsViewModel.titlesPeriod.intValue.toLong() * 3600,
+                    readyFunc = { test() }
                 )
             }
         } catch (e: Exception) {
@@ -80,6 +81,10 @@ suspend fun updateTitles(
             links = strTransform(it.links, "\n")
         )
     }
+}
+
+fun test(){
+    println("ready")
 }
 
 fun strTransform(original: String, separator: String): String {

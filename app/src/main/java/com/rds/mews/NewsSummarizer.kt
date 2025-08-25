@@ -236,7 +236,7 @@ class NewsSummarizer(
      * можно указать время новостей в секундах, по стандарту - неделя
      * можно указать время между запросами, по стандарту - 10 секунд
      */
-    suspend fun summarizeTopics(maxTopics: Int = 20, messageSeconds: Long = 14515200, delaySeconds: Long = 10) {
+    suspend fun summarizeTopics(maxTopics: Int = 20, messageSeconds: Long = 14515200, delaySeconds: Long = 10, readyFunc: () -> Unit) {
 
 
         val messages = db.getMessages(messageSeconds)
@@ -346,6 +346,7 @@ class NewsSummarizer(
             // задержка перед следующим запросом
             delay(delaySeconds * 100)
         }
+        readyFunc()
     }
 
     data class Topics (

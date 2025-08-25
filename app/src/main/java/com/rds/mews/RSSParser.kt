@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import android.system.Os.link
 import kotlinx.coroutines.delay
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -33,11 +34,17 @@ class RssFetcher(
         for ((index, rss) in rssList.withIndex()) {
             try {
                 var doc: Document = Jsoup.parse("", "", Parser.xmlParser())
-                val tgClient = TelegramRssClient()
                 if (rss.link.contains("t.me")) {
-                    doc = tgClient.buildRss(rss.link)
+
+                    val linker = rss.link.substring(rss.link.lastIndexOf('/') + 1)
+                    doc = Jsoup.connect("https://rsshub.app/telegram/channel/${linker}").get()
+                    println("tg fetch start")
+                    delay(45000)
+                    println("tg fetch end")
                 } else {
+                    println("not tg fetch start")
                     doc = Jsoup.connect(rss.link).get() // Получение XML из RSS
+                    println("not tg fetch end")
                 }
                 val items = parseRssItems(doc) // Парс полученного XML
                 for (item in items) {
@@ -173,29 +180,11 @@ class RssFetcher(
         val errors: List<String>
     )
 }
-// Функция для проверки валидности RSS: True - валидный, False - невалидный
-suspend fun validRSS(strLink: String): Boolean{
-    try {
-        val tgClient = TelegramRssClient()
-        var doc: Document
-        if (strLink.contains("t.me")) {
-            doc = tgClient.buildRss(strLink)
-        } else {
-            doc = Jsoup.connect(strLink).get() // Получение XML из RSS
-        }
-        return true
-    } catch (e: Exception){
-        println(e)
-        return false
-    }
-}
-
 suspend fun RSSName(strLink: String): String? {
     try {
-        val tgClient = TelegramRssClient()
         var doc: Document
         if (strLink.contains("t.me")) {
-            doc = tgClient.buildRss(strLink)
+            doc = buildRssForTitle(strLink)
         } else {
             doc = Jsoup.connect(strLink).get() // Получение XML из RSS
         }

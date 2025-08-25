@@ -113,14 +113,12 @@ class TelegramRssClient {
 
     fun buildRss(channelUrl: String): Document {
         val items = fetchChannelMessages(channelUrl)
-        val doc = Jsoup.parse(downloadHtml(channelUrl))
-        val ogTitle = doc.selectFirst("title")
-        val text = ogTitle!!.text()
+        val text = Jsoup.parse(downloadHtml(channelUrl)).selectFirst("title")!!.text().replace(" – Telegram", "").replace(" – Telegram", "")
 
         val sb = StringBuilder()
         sb.append("""<?xml version="1.0" encoding="UTF-8"?>""")
         sb.append("\n<rss version=\"2.0\">\n<channel>\n")
-        sb.append("<title>${text.replace(" – Telegram", "")}</title>\n")
+        sb.append("<title>${text}</title>\n")
         sb.append("<link>$channelUrl</link>\n")
         sb.append("<description>RSS feed for $channelUrl</description>\n")
 
@@ -138,4 +136,30 @@ class TelegramRssClient {
         return Jsoup.parse(sb.toString(), "", Parser.xmlParser())
     }
 
+}
+
+
+private fun downloadHtml(url: String): String {
+    val connection = URL(url).openConnection() as HttpURLConnection
+    connection.requestMethod = "GET"
+    connection.connectTimeout = 10000
+    connection.readTimeout = 10000
+
+    return connection.inputStream.bufferedReader().use { it.readText() }
+}
+
+
+fun buildRssForTitle(channelUrl: String): Document {
+    val text = Jsoup.parse(downloadHtml(channelUrl)).selectFirst("title")!!.text().replace(" – Telegram", "").replace(" – Telegram", "")
+
+    val sb = StringBuilder()
+    sb.append("""<?xml version="1.0" encoding="UTF-8"?>""")
+    sb.append("\n<rss version=\"2.0\">\n<channel>\n")
+    sb.append("<title>${text}</title>\n")
+    sb.append("<link>$channelUrl</link>\n")
+    sb.append("<description>RSS feed for $channelUrl</description>\n")
+
+    sb.append("</channel>\n</rss>")
+
+    return Jsoup.parse(sb.toString(), "", Parser.xmlParser())
 }
