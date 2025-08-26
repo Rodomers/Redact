@@ -155,8 +155,13 @@ class NewsSummarizer(
             println("Нет новостей для анализа") // ошибка, если нет новостей для суммаризации
         }
         val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
+        val bannedNews = "Лошади" //db.getBannedTopics() и обработка
         val prompt = """
             Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ от 1 до $max основных событий (СТРОГО ДО $max).
+            
+            ТЕБЕ ЗАПРЕЩЕНО ПИСАТЬ НА СЛЕДУЮЩИЕ ТЕМЫ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
+            $bannedNews
+            
             Ответ верни в виде JSON формата:
             [
               {
@@ -279,13 +284,21 @@ class NewsSummarizer(
                 }
             }
             val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
+            val bannedNews = "Лошади" //db.getBannedTopics() и обработка
             val prompt = """
                 Составь резюме по теме: "${title.title}".
                 Достаточно подробно расскажи о событии, но без общих слов или воды.
-                Возвращай всё в СТРОГОМ JSON формате: {
+                
+                ТЕБЕ ЗАПРЕЩЕНО КАСАТЬСЯ СЛЕДУЮЩИХ ТЕМ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
+                $bannedNews
+                
+                Возвращай всё в СТРОГОМ JSON формате: 
+                
+                {
                 "title": "<заголовок темы>", 
                 "summary": "<резюме по теме>", 
                 }, 
+                
                 где title - название темы,
                 summary - резюме по теме.
                 
