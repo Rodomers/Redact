@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="tabscreen_sources">Источники</string>
+    <string name="tabscreen_titles">Заголовки</string>
+    <string name="tabscreen_settings">Настройки</string>
+
+    <string name="source_change">Изменить</string>
+    <string name="source_delete">Удалить</string>
+    <string name="delsource_title">Удаление источника</string>
+    <string name="delsource_text">Вы уверены, что хотите удалить источник?</string>
+    <string name="delsource_btntext">Удалить</string>
+
+    <string name="titles_update_text">Потяните вниз, чтобы обновить\n(Очень долгую)</string>
+
+    <string name="settings_system_theme">Системная</string>
+    <string name="settings_light_theme">Светлая</string>
+    <string name="settings_dark_theme">Тёмная</string>
+    <string name="settings_show_dates">Отображение дат</string>
+    <string name="settings_color_scheme">Тема оформления</string>
+    <string name="settings_maximum_headers">Максимум заголовков</string>
+    <string name="settings_news_period">Срок давности новостей</string>
+    <string name="settings_news_update_frequency">Частота фонового обновления новостей</string>
+    <string name="settings_gemini_api_key">Ключ Gemini API</string>
+    <string name="settings_reset">Сброс</string>
+    <string name="settings_paste">Вставить</string>
+
+    <plurals name="titles" tools:ignore="MissingQuantity">
+        <item quantity="one">%d заголовок</item>
+        <item quantity="few">%d заголовка</item>
+        <item quantity="many">%d заголовков</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%d час</item>
+        <item quantity="few">%d часа</item>
+        <item quantity="many">%d часов</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%d минута</item>
+        <item quantity="few">%d минуты</item>
+        <item quantity="many">%d минут</item>
+    </plurals>
+
+    <string name="custom_card_with_menu_icon_desc">Меню</string>
+    <string name="sources_add_text">Добавить</string>
+    <string name="sources_add_icon_desc">Добавить источник</string>
+    <string name="titles_card_text">Текст</string>
+    <string name="titles_card_source">Источник</string>
+    <string name="change_dialog_source">Название источника</string>
+    <string name="change_dialog_add_source">Добавление источника</string>
+    <string name="change_dialog_change_source">Изменение источника</string>
+    <string name="change_dialog_link">Ссылка на RSS/Telegram</string>
+    <string name="valid_link">Валидная ссылка</string>
+    <string name="enter_correct_link">Введите корректную ссылку</string>
+    <string name="cancel">Отмена</string>
+    <string name="add">Добавить</string>
+    <string name="change">Изменить</string>
+
+
+</resources>

@@ -62,6 +62,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
@@ -176,7 +177,7 @@ fun CustomCardWithMenu(
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.secondary)
             ) {
-                Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Меню")
+                Icon(imageVector = Icons.Default.MoreVert, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
             }
 
             if (transitionState.currentState || transitionState.targetState) {
@@ -209,7 +210,7 @@ fun SourcesAddCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Добавить",
+                text = stringResource(R.string.sources_add_text),
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 10.dp),
@@ -222,7 +223,7 @@ fun SourcesAddCard(
                     .background(MaterialTheme.colorScheme.secondary)
                     .fillMaxHeight()
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Добавить источник")
+                Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(R.string.sources_add_icon_desc))
             }
         }
     }
@@ -331,7 +332,7 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                         .wrapContentHeight(),
                 ) {
                     Text(
-                        text = "Текст",
+                        text = stringResource(R.string.titles_card_text),
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .wrapContentSize()
@@ -343,7 +344,7 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                         fontWeight = if (pagerState.targetPage == 0) FontWeight.Bold else FontWeight.Normal
                     )
                     Text(
-                        text = "Источник",
+                        text = stringResource(R.string.titles_card_source),
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .wrapContentHeight()
@@ -476,10 +477,10 @@ fun CustomChangeDialog(
     cancelAction: () -> Unit,
     onConfirm: (Pair<String, String>) -> Unit,
     add: Boolean = false,
-    source: String = "Название источника",
+    source: String = stringResource(R.string.change_dialog_source),
     scope: CoroutineScope? = null
 ) {
-    val title = if (add) "Добавление источника" else "Изменение источника"
+    val title = if (add) stringResource(R.string.change_dialog_add_source) else stringResource(R.string.change_dialog_change_source)
     val context = LocalContext.current
 
     Dialog(onDismissRequest = cancelAction) {
@@ -524,7 +525,7 @@ fun CustomChangeDialog(
                             }
                         },
                         shape = MaterialTheme.shapes.large,
-                        label = { Text("Ссылка на RSS/Telegram") },
+                        label = { Text(stringResource(R.string.change_dialog_link)) },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.onPrimary,
@@ -540,7 +541,7 @@ fun CustomChangeDialog(
                     value = sourceText,
                     onValueChange = { sourceText = it },
                     shape = MaterialTheme.shapes.large,
-                    label = { Text("Название источника") },
+                    label = { Text(stringResource(R.string.change_dialog_source)) },
                     placeholder = { Text(source) },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -554,7 +555,7 @@ fun CustomChangeDialog(
 
                 if (add && scope != null) {
                     Text(
-                        text = if (validRss) "Валидная ссылка" else "Введите корректную ссылку",
+                        text = if (validRss) stringResource(R.string.valid_link) else stringResource(R.string.enter_correct_link),
                         color = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier
                             .padding(16.dp)
@@ -568,7 +569,7 @@ fun CustomChangeDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = cancelAction) {
-                        Text("Отмена", color = MaterialTheme.colorScheme.onPrimary)
+                        Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onPrimary)
                     }
 
                     if ((validRss && rssText != "" && sourceText != "" && add)) {
@@ -578,7 +579,7 @@ fun CustomChangeDialog(
                                 onConfirm(Pair(finalSourceName, linkTransform(rssText.trim())))
                             }
                         ) {
-                            Text("Добавить", color = MaterialTheme.colorScheme.onPrimary)
+                            Text(stringResource(R.string.add), color = MaterialTheme.colorScheme.onPrimary)
                         }
                     }
 
@@ -589,7 +590,7 @@ fun CustomChangeDialog(
                                 onConfirm(Pair(source, finalSourceName))
                             }
                         ) {
-                            Text("Изменить", color = MaterialTheme.colorScheme.onPrimary)
+                            Text(stringResource(R.string.change), color = MaterialTheme.colorScheme.onPrimary)
                         }
                     }
                 }
@@ -634,7 +635,7 @@ fun CustomConfirmDialog(
 
         dismissButton = {
             TextButton(onClick = cancelAction) {
-                Text("Отмена", color = MaterialTheme.colorScheme.onBackground)
+                Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onBackground)
             }
         }
     )

@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box // для дебага
 import androidx.compose.foundation.layout.fillMaxWidth // для дебага
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import androidx.compose.ui.Alignment // для дебага
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight // для дебага
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp // для дебага
@@ -68,10 +70,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-sealed class TabScreen(val title: String, val icon: ImageVector) {
-    data object Sources: TabScreen(title = "Источники", Icons.Default.Favorite)
-    data object Titles: TabScreen(title = "Заголовки", Icons.Rounded.Menu)
-    data object Settings: TabScreen(title = "Настройки", Icons.Default.Settings)
+sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
+    data object Sources: TabScreen(titleResId = R.string.tabscreen_sources, Icons.Default.Favorite)
+    data object Titles: TabScreen(titleResId = R.string.tabscreen_titles, Icons.Rounded.Menu)
+    data object Settings: TabScreen(titleResId = R.string.tabscreen_settings, Icons.Default.Settings)
 }
 
 @Composable
@@ -198,14 +200,16 @@ fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit) {
 
     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
         tabs.forEach { tab ->
+            val tabTitle = stringResource(id = tab.titleResId)
+
             NavigationBarItem(
                 selected = selectedTab == tab,
                 onClick = { onTabSelected(tab) },
                 icon = {
-                    Icon(imageVector = tab.icon, contentDescription = tab.title)
+                    Icon(imageVector = tab.icon, contentDescription = tabTitle)
                 },
                 label = {
-                    Text(text = tab.title)
+                    Text(text = tabTitle)
                 },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = MaterialTheme.colorScheme.primary,

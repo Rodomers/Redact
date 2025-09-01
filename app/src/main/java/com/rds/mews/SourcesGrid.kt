@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import kotlinx.coroutines.delay
@@ -50,8 +51,8 @@ fun SourcesGrid(
             CustomCardWithMenu(
                 text = item,
                 listOf(
-                    Pair("Изменить") { changeDialog = item },
-                    Pair("Удалить") { delSourceName = item }
+                    Pair(stringResource(R.string.source_change)) { changeDialog = item },
+                    Pair(stringResource(R.string.source_delete)) { delSourceName = item }
                 )
             )
         }
@@ -89,10 +90,10 @@ fun SourcesGrid(
                     alignment = Alignment.TopEnd
                 ) {
                     CustomConfirmDialog(
-                        title = "Удаление источника",
-                        text = "Вы уверены, что хотите удалить источник?",
+                        title = stringResource(R.string.delsource_title),
+                        text = stringResource(R.string.delsource_text),
                         cancelAction = { delSourceName = "" },
-                        btnText = "Удалить",
+                        btnText = stringResource(R.string.delsource_btntext),
                         onConfirm = {flag ->
                             scope.launch {
                                 delSource(delSourceName, db)

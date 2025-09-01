@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,7 +53,7 @@ fun TitlesGrid(itemsList: List<Title>,
             if (itemsList.isEmpty()) {
                 item {
                     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "Потяните вниз, чтобы запустить загрузку\n(очень долгую)",
+                        Text(text = stringResource(R.string.titles_update_text),
                             fontSize = 18.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(40.dp), textAlign = TextAlign.Center)
                     }

@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
@@ -43,42 +45,42 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
     val colorSchemeDropdownVisible = remember { MutableTransitionState(false) }
     var currentTheme by remember { mutableStateOf(settingsModel.isDarkMode.value) }
     val colorSchemeDropdownItems = mutableListOf(
-        "Системная" to { settingsModel.setDarkMode("system")
+        stringResource(R.string.settings_system_theme) to { settingsModel.setDarkMode("system")
                        currentTheme = settingsModel.isDarkMode.value },
-        "Светлая" to { settingsModel.setDarkMode("light")
+        stringResource(R.string.settings_light_theme) to { settingsModel.setDarkMode("light")
                      currentTheme = settingsModel.isDarkMode.value },
-        "Тёмная" to { settingsModel.setDarkMode("dark")
+        stringResource(R.string.settings_dark_theme) to { settingsModel.setDarkMode("dark")
                      currentTheme = settingsModel.isDarkMode.value }
     )
 
     val titlesDropdownVisible = remember { MutableTransitionState(false) }
     val titlesDropdownItems = mutableListOf(
-        "10 заголовков" to { settingsModel.setTitlesNum(10) },
-        "20 заголовков" to { settingsModel.setTitlesNum(20) },
+        pluralStringResource(R.plurals.titles, count = 10, 10) to { settingsModel.setTitlesNum(10) },
+        pluralStringResource(R.plurals.titles, count = 20, 20) to { settingsModel.setTitlesNum(20) },
     )
     if (geminiApiText != defaultGeminiApiKey) {
         titlesDropdownItems.addAll(listOf(
-            "30 заголовков" to { settingsModel.setTitlesNum(30) },
-            "40 заголовков" to { settingsModel.setTitlesNum(40) },
-            "50 заголовков" to { settingsModel.setTitlesNum(50) })
+            pluralStringResource(R.plurals.titles, count = 30, 30) to { settingsModel.setTitlesNum(30) },
+            pluralStringResource(R.plurals.titles, count = 40, 40) to { settingsModel.setTitlesNum(40) },
+            pluralStringResource(R.plurals.titles, count = 50, 50) to { settingsModel.setTitlesNum(50) })
         )
     }
     else if (settingsModel.titlesNum.intValue > 25) settingsModel.setTitlesNum(25)
 
     val limitationDropdownVisible = remember { MutableTransitionState(false) }
     val limitationDropdownItems = listOf(
-        "24 часа" to { settingsModel.setTitlesPeriod(24) },
-        "48 часов" to { settingsModel.setTitlesPeriod(48) },
-        "72 часа" to { settingsModel.setTitlesPeriod(72) },
-        "96 часов" to { settingsModel.setTitlesPeriod(96) },
-        "120 часов" to { settingsModel.setTitlesPeriod(120) }
+        pluralStringResource(R.plurals.hours, count = 24, 24) to { settingsModel.setTitlesPeriod(24) },
+        pluralStringResource(R.plurals.hours, count = 48, 48) to { settingsModel.setTitlesPeriod(48) },
+        pluralStringResource(R.plurals.hours, count = 72, 72) to { settingsModel.setTitlesPeriod(72) },
+        pluralStringResource(R.plurals.hours, count = 96, 96) to { settingsModel.setTitlesPeriod(96) },
+        pluralStringResource(R.plurals.hours, count = 120, 120) to { settingsModel.setTitlesPeriod(120) }
     )
 
     val rssUpdateDropdownVisible = remember { MutableTransitionState(false) }
     val rssUpdateDropdownItems = listOf(
-        "15 минут" to { changeRssUpdateSchedule(context, settingsModel, 15) },
-        "30 минут" to { changeRssUpdateSchedule(context, settingsModel, 30) },
-        "60 минут" to { changeRssUpdateSchedule(context, settingsModel, 60) }
+        pluralStringResource(R.plurals.minutes, count = 15, 15) to { changeRssUpdateSchedule(context, settingsModel, 15) },
+        pluralStringResource(R.plurals.minutes, count = 30, 30) to { changeRssUpdateSchedule(context, settingsModel, 30) },
+        pluralStringResource(R.plurals.minutes, count = 60, 60) to { changeRssUpdateSchedule(context, settingsModel, 60) }
     )
 
     Column(
@@ -98,7 +100,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
 //                )
 //            }
 //        }
-        CustomSettingsItem(text = "Отображение дат") {
+        CustomSettingsItem(text = stringResource(R.string.settings_show_dates)) {
             Switch(
                 checked = showDates,
                 onCheckedChange = {
@@ -116,7 +118,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
                 )
             )
         }
-        CustomSettingsItem(text = "Тема оформления") {
+        CustomSettingsItem(text = stringResource(R.string.settings_color_scheme)) {
             Box {
                 Button(
                     modifier = Modifier
@@ -129,9 +131,9 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
                     )
                 ) {
                     Text(text = when (currentTheme) {
-                        "light" -> "Светлая"
-                        "dark" -> "Тёмная"
-                        else -> "Системная"
+                        "light" -> stringResource(R.string.settings_light_theme)
+                        "dark" -> stringResource(R.string.settings_dark_theme)
+                        else -> stringResource(R.string.settings_system_theme)
                     })
                 }
 
@@ -157,7 +159,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
                         containerColor = MaterialTheme.colorScheme.background
                     )
                 ) {
-                    Text(text = "${settingsModel.titlesNum.intValue} заголовков")
+                    Text(text = pluralStringResource(R.plurals.titles, count = settingsModel.titlesNum.intValue, settingsModel.titlesNum.intValue))
                 }
 
                 if (titlesDropdownVisible.currentState || titlesDropdownVisible.targetState) {
@@ -170,7 +172,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
                 }
             }
         }
-        CustomSettingsItem(text = "Срок давности новостей") {
+        CustomSettingsItem(text = stringResource(R.string.settings_news_period)) {
             Box {
                 Button(
                     modifier = Modifier
@@ -181,9 +183,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.background
                     )
-                ) {Text(text = "${settingsModel.titlesPeriod.intValue} час${
-                        if (settingsModel.titlesPeriod.intValue % 10 >= 5 || settingsModel.titlesPeriod.intValue % 10 == 0) "ов" else if (settingsModel.titlesPeriod.intValue % 10 != 1) "а" else ""
-                    }")
+                ) {Text(text = pluralStringResource(R.plurals.hours, count = settingsModel.titlesPeriod.intValue, settingsModel.titlesPeriod.intValue))
                 }
 
                 if (limitationDropdownVisible.currentState || limitationDropdownVisible.targetState) {
@@ -196,7 +196,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
                 }
             }
         }
-        CustomSettingsItem(text = "Частота фонового обновления новостей") {
+        CustomSettingsItem(text = stringResource(R.string.settings_news_update_frequency)) {
             Box {
                 Button(
                     modifier = Modifier
@@ -207,7 +207,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.background
                     )
-                ) {Text(text = "${settingsModel.rssUpdateInterval.intValue} минут")
+                ) {Text(text = pluralStringResource(R.plurals.minutes, count = settingsModel.rssUpdateInterval.intValue, settingsModel.rssUpdateInterval.intValue))
                 }
 
                 if (rssUpdateDropdownVisible.currentState || rssUpdateDropdownVisible.targetState) {
@@ -220,7 +220,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
                 }
             }
         }
-        CustomSettingsItem(text = "Ключ Gemini API") {
+        CustomSettingsItem(text = stringResource(R.string.settings_gemini_api_key)) {
             Box {
                 Button(
                     modifier = Modifier
@@ -250,7 +250,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
                         containerColor = MaterialTheme.colorScheme.background
                     )
                 ) {
-                    Text(text = if (geminiApiText != defaultGeminiApiKey) "Сброс" else "Вставить")
+                    Text(text = if (geminiApiText != defaultGeminiApiKey) stringResource(R.string.settings_reset) else stringResource(R.string.settings_paste))
                 }
             }
         }
