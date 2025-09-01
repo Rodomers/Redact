@@ -74,7 +74,7 @@ fun SourcesGrid(
                                 onSourcesChanged()
                             }
                             showAddDialog = false
-                            scheduleRssUpdate(context, settingsViewModel.rssUpdateInterval.intValue, true)
+                            scheduleRssUpdate(context, settingsViewModel.rssUpdateInterval.intValue, false)
                         },
                         add = true,
                         scope = scope

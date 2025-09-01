@@ -34,10 +34,9 @@ class RssFetcher(
         for ((index, rss) in rssList.withIndex()) {
             try {
                 var doc: Document = Jsoup.parse("", "", Parser.xmlParser())
+                val tgClient = TelegramRssClient()
                 if (rss.link.contains("t.me")) {
-
-                    val linker = rss.link.substring(rss.link.lastIndexOf('/') + 1)
-                    doc = Jsoup.connect("https://rsshub.app/telegram/channel/${linker}").get()
+                    doc = tgClient.buildRss(rss.link)
                 } else {
                     println("not tg fetch start")
                     doc = Jsoup.connect(rss.link).get() // Получение XML из RSS
@@ -45,6 +44,7 @@ class RssFetcher(
                 }
                 val items = parseRssItems(doc) // Парс полученного XML
                 for (item in items) {
+                    println(item)
                     val link = item.link ?: continue // если нет ссылки — пропускаем
                     val desc = item.description ?: continue // Нет описания новости - пропускаем
                     if (db.findMessage(rss.source, desc) != null) {
@@ -63,10 +63,10 @@ class RssFetcher(
                 }
                 feedsProcessed++
 
-                if (rss.link.contains("t.me") && index != rssList.lastIndex && rssList.drop(index + 1).any { it.link.contains("t.me") }) {
-                    println("Entered delay")
-                    delay(40000L)
-                }
+//                if (rss.link.contains("t.me") && index != rssList.lastIndex && rssList.drop(index + 1).any { it.link.contains("t.me") }) {
+//                    println("Entered delay")
+//                    delay(40000L)
+//                }
 
             } catch (e: Exception) {
                 val msg = "Ошибка при обработке RSS (id=${rss.id}, link=${rss.link}): ${e.message}"
@@ -181,9 +181,10 @@ class RssFetcher(
 }
 suspend fun RSSName(strLink: String): String? {
     try {
+        val tgClient = TelegramRssClient()
         var doc: Document
         if (strLink.contains("t.me")) {
-            doc = buildRssForTitle(strLink)
+            doc = tgClient.buildRss(strLink)
         } else {
             doc = Jsoup.connect(strLink).get() // Получение XML из RSS
         }

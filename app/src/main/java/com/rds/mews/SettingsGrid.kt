@@ -78,9 +78,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
     val rssUpdateDropdownItems = listOf(
         "15 минут" to { changeRssUpdateSchedule(context, settingsModel, 15) },
         "30 минут" to { changeRssUpdateSchedule(context, settingsModel, 30) },
-        "60 минут" to { changeRssUpdateSchedule(context, settingsModel, 60) },
-        "120 минут" to { changeRssUpdateSchedule(context, settingsModel, 120) },
-        "240 минут" to { changeRssUpdateSchedule(context, settingsModel, 240) }
+        "60 минут" to { changeRssUpdateSchedule(context, settingsModel, 60) }
     )
 
     Column(
