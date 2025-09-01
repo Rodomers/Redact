@@ -17,7 +17,7 @@ class RssFetcher(
 ) {
 
     // Основной запуск — парсит все RSS-каналы и сохраняет новые сообщения
-    suspend fun fetchAndStoreAll(maxTime: Int = 168): FetchResult {
+    suspend fun fetchAndStoreAll(messAliveTime: Long, maxTime: Int = 168): FetchResult {
         val rssList = try {
             db.getRSS() // получаем RSS из БД
         } catch (e: Exception) {
@@ -72,6 +72,9 @@ class RssFetcher(
                 val msg = "Ошибка при обработке RSS (id=${rss.id}, link=${rss.link}): ${e.message}"
                 println(msg) // Ошибка лол
                 errors.add(msg)
+            }
+            finally {
+                db.messageTimeKill(messAliveTime.toLong())
             }
         }
 

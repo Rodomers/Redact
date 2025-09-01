@@ -20,7 +20,7 @@ class RssUpdateWorker(
 
         return try {
             withContext(Dispatchers.IO) {
-                fetcher.fetchAndStoreAll(titlesPeriod)
+                fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600)
                 settingsManager.saveLong("last_rss_update", System.currentTimeMillis())
                 println("Worker: parsing finished")
             }
