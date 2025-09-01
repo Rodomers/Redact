@@ -15,6 +15,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,6 +35,7 @@ import androidx.compose.ui.window.Popup
 @Composable
 fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clipboardManager = LocalClipboardManager.current
     var text by remember { mutableStateOf("") }
+    var showDates by remember { mutableStateOf(settingsModel.showDates.value) }
     val defaultGeminiApiKey by remember { mutableStateOf("AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") }
     var geminiApiText by remember { mutableStateOf(settingsModel.userApi.value) }
     val context = LocalContext.current
@@ -97,6 +100,24 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
 //                )
 //            }
 //        }
+        CustomSettingsItem(text = "Отображение дат") {
+            Switch(
+                checked = showDates,
+                onCheckedChange = {
+                    settingsModel.setShowDates(it)
+                    showDates = settingsModel.showDates.value
+                },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.background,
+                    checkedTrackColor = MaterialTheme.colorScheme.onBackground,
+                    checkedBorderColor = MaterialTheme.colorScheme.onPrimary,
+
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                    uncheckedBorderColor = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+        }
         CustomSettingsItem(text = "Тема оформления") {
             Box {
                 Button(

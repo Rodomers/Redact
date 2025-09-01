@@ -1,6 +1,8 @@
 package com.rds.mews
 
 import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
@@ -13,13 +15,18 @@ import java.util.concurrent.TimeUnit
 
 
 // "dd.MM'\n'HH:mm"
-fun getFormattedTimeUnix(unixTime: Long): String {
+fun getFormattedTimeUnix(unixTime: Long, showDates: Boolean = false): String {
     val instant = Instant.ofEpochMilli(unixTime)
     val zoneId = ZoneId.systemDefault()
 
-    val formatter = DateTimeFormatter.ofPattern("HH:mm")
-        .withLocale(Locale.getDefault())
-        .withZone(zoneId)
+    val formatter = when (showDates) {
+        true -> DateTimeFormatter.ofPattern("HH:mm'\n'dd.MM")
+            .withLocale(Locale.getDefault())
+            .withZone(zoneId)
+        else -> DateTimeFormatter.ofPattern("HH:mm")
+            .withLocale(Locale.getDefault())
+            .withZone(zoneId)
+    }
 
     return formatter.format(instant)
 }
@@ -101,16 +108,17 @@ fun strTransform(original: String, separator: String): String {
     return res.joinToString(separator)
 }
 
-fun scheduleRssUpdate(context: Context, intervalInMinutes: Int) {
+fun scheduleRssUpdate(context: Context, intervalInMinutes: Int, sources: Boolean = false) {
     val repeatInterval = maxOf(15L, intervalInMinutes.toLong())
 
     val constraints = androidx.work.Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED)
         .build()
 
-    val repeatingRequest = PeriodicWorkRequestBuilder<RssUpdateWorker>(repeatInterval, TimeUnit.MINUTES)
+    var repeatingRequestBuilder = PeriodicWorkRequestBuilder<RssUpdateWorker>(repeatInterval, TimeUnit.MINUTES)
         .setConstraints(constraints)
-        .build()
+    if (sources) repeatingRequestBuilder = repeatingRequestBuilder.setInitialDelay(40, TimeUnit.SECONDS)
+    val repeatingRequest = repeatingRequestBuilder.build()
 
     WorkManager.getInstance(context).enqueueUniquePeriodicWork(
         "rss-update-work",

@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -73,7 +74,7 @@ fun SourcesGrid(
                                 onSourcesChanged()
                             }
                             showAddDialog = false
-                            scheduleRssUpdate(context, settingsViewModel.rssUpdateInterval.intValue)
+                            scheduleRssUpdate(context, settingsViewModel.rssUpdateInterval.intValue, true)
                         },
                         add = true,
                         scope = scope

@@ -151,7 +151,8 @@ fun MainScreen() {
                         itemsList = titlesList,
                         modifier = Modifier.padding(paddingValues),
                         isRefreshing = isTitlesRefreshing,
-                        onRefresh = ::refreshTitles
+                        onRefresh = ::refreshTitles,
+                        settingsViewModel = settingsViewModel
                     )
                 }
                 else -> SettingsGrid(

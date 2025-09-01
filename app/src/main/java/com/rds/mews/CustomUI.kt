@@ -229,7 +229,7 @@ fun SourcesAddCard(
 }
 
 @Composable
-fun TitlesCard(title: Title) {
+fun TitlesCard(title: Title, showDates: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = 0, initialPageOffsetFraction = 0f, pageCount = {2})
     val coroutineScope = rememberCoroutineScope()
@@ -259,7 +259,7 @@ fun TitlesCard(title: Title) {
                     ) { expanded = !expanded },
             ) {
                 Text(
-                    text = getFormattedTimeUnix(title.time),
+                    text = getFormattedTimeUnix(title.time, showDates),
                     textAlign = TextAlign.Left,
                     modifier = Modifier
                         .padding(8.dp)

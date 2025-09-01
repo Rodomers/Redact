@@ -20,9 +20,8 @@ class RssUpdateWorker(
 
         return try {
             withContext(Dispatchers.IO) {
-                if (fetcher.fetchAndStoreAll(titlesPeriod).errors.isEmpty()) {
-                    settingsManager.saveLong("last_rss_update", System.currentTimeMillis())
-                }
+                fetcher.fetchAndStoreAll(titlesPeriod)
+                settingsManager.saveLong("last_rss_update", System.currentTimeMillis())
                 println("Worker: parsing finished")
             }
 

@@ -83,13 +83,17 @@ fun MewsTheme(
 
             // Устанавливаем цвет иконок в строке состояния
             val insetsController = WindowCompat.getInsetsController(window, view)
-            insetsController.isAppearanceLightStatusBars = !systemDarkTheme
+            when (settingsTheme) {
+                "dark" -> insetsController.isAppearanceLightStatusBars = false
+                "light" -> insetsController.isAppearanceLightStatusBars = true
+                else -> insetsController.isAppearanceLightStatusBars = !systemDarkTheme
+            }
         }
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = typography, // Теперь ссылка на Typography корректна
+        typography = typography,
         content = content
     )
 }
