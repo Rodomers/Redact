@@ -24,20 +24,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 
 
 @Composable
-fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
-//    var darkTheme by remember { mutableStateOf(false) }
-//    var adaptiveColors by remember {mutableStateOf(false)}
-
-    val clipboardManager = LocalClipboardManager.current
+fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clipboardManager = LocalClipboardManager.current
     var text by remember { mutableStateOf("") }
+    val defaultGeminiApiKey by remember { mutableStateOf("AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") }
     var geminiApiText by remember { mutableStateOf(settingsModel.userApi.value) }
-    var botApiText by remember { mutableStateOf(settingsModel.userBotApi.value) }
+    val context = LocalContext.current
 
     val colorSchemeDropdownVisible = remember { MutableTransitionState(false) }
     var currentTheme by remember { mutableStateOf(settingsModel.isDarkMode.value) }
@@ -55,7 +53,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
         "10 заголовков" to { settingsModel.setTitlesNum(10) },
         "20 заголовков" to { settingsModel.setTitlesNum(20) },
     )
-    if (geminiApiText != "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") {
+    if (geminiApiText != defaultGeminiApiKey) {
         titlesDropdownItems.addAll(listOf(
             "30 заголовков" to { settingsModel.setTitlesNum(30) },
             "40 заголовков" to { settingsModel.setTitlesNum(40) },
@@ -63,6 +61,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
         )
     }
     else if (settingsModel.titlesNum.intValue > 25) settingsModel.setTitlesNum(25)
+
     val limitationDropdownVisible = remember { MutableTransitionState(false) }
     val limitationDropdownItems = listOf(
         "24 часа" to { settingsModel.setTitlesPeriod(24) },
@@ -70,6 +69,15 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
         "72 часа" to { settingsModel.setTitlesPeriod(72) },
         "96 часов" to { settingsModel.setTitlesPeriod(96) },
         "120 часов" to { settingsModel.setTitlesPeriod(120) }
+    )
+
+    val rssUpdateDropdownVisible = remember { MutableTransitionState(false) }
+    val rssUpdateDropdownItems = listOf(
+        "15 минут" to { changeRssUpdateSchedule(context, settingsModel, 15) },
+        "30 минут" to { changeRssUpdateSchedule(context, settingsModel, 30) },
+        "60 минут" to { changeRssUpdateSchedule(context, settingsModel, 60) },
+        "120 минут" to { changeRssUpdateSchedule(context, settingsModel, 120) },
+        "240 минут" to { changeRssUpdateSchedule(context, settingsModel, 240) }
     )
 
     Column(
@@ -169,6 +177,30 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                 }
             }
         }
+        CustomSettingsItem(text = "Частота фонового обновления новостей") {
+            Box {
+                Button(
+                    modifier = Modifier
+                        .wrapContentSize()
+                        .width(150.dp),
+                    onClick = { rssUpdateDropdownVisible.targetState = !rssUpdateDropdownVisible.currentState },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                ) {Text(text = "${settingsModel.rssUpdateInterval.intValue} минут")
+                }
+
+                if (rssUpdateDropdownVisible.currentState || rssUpdateDropdownVisible.targetState) {
+                    Popup(
+                        onDismissRequest = { rssUpdateDropdownVisible.targetState = false },
+                        alignment = Alignment.TopEnd
+                    ) {
+                        CustomDropdown(transitionState = rssUpdateDropdownVisible, buttons = rssUpdateDropdownItems)
+                    }
+                }
+            }
+        }
         CustomSettingsItem(text = "Ключ Gemini API") {
             Box {
                 Button(
@@ -177,7 +209,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                         .widthIn(min = 150.dp, max = 250.dp),
                     onClick = {
                         when (geminiApiText) {
-                            "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk" -> {
+                            defaultGeminiApiKey -> {
                                 val clipboardText: AnnotatedString? = clipboardManager.getText()
 
                                 clipboardText?.let {
@@ -189,7 +221,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                                 text = ""
                             }
                             else -> {
-                                settingsModel.setUserGeminiApi("AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk")
+                                settingsModel.setUserGeminiApi(defaultGeminiApiKey)
                                 geminiApiText = settingsModel.userApi.value
                             }
                         }
@@ -199,42 +231,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                         containerColor = MaterialTheme.colorScheme.background
                     )
                 ) {
-                    Text(text = if (geminiApiText != "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") "Сброс" else "Вставить")
-                }
-            }
-        }
-
-        CustomSettingsItem(text = "Ключ Telegram Bot API") {
-            Box {
-                Button(
-                    modifier = Modifier
-                        .wrapContentSize()
-                        .widthIn(min = 150.dp, max = 250.dp),
-                    onClick = {
-                        when (botApiText) {
-                            "" -> {
-                                val clipboardText: AnnotatedString? = clipboardManager.getText()
-
-                                clipboardText?.let {
-                                    text += it.text
-                                }
-
-                                settingsModel.setUserBotApi(text)
-                                botApiText = text
-                                text = ""
-                            }
-                            else -> {
-                                settingsModel.setUserBotApi()
-                                botApiText = settingsModel.userBotApi.value
-                            }
-                        }
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.background
-                    )
-                ) {
-                    Text(text = if (botApiText != "") "Сброс" else "Вставить")
+                    Text(text = if (geminiApiText != defaultGeminiApiKey) "Сброс" else "Вставить")
                 }
             }
         }

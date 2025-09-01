@@ -38,9 +38,6 @@ class RssFetcher(
 
                     val linker = rss.link.substring(rss.link.lastIndexOf('/') + 1)
                     doc = Jsoup.connect("https://rsshub.app/telegram/channel/${linker}").get()
-                    println("tg fetch start")
-                    delay(45000)
-                    println("tg fetch end")
                 } else {
                     println("not tg fetch start")
                     doc = Jsoup.connect(rss.link).get() // Получение XML из RSS
@@ -66,16 +63,15 @@ class RssFetcher(
                 }
                 feedsProcessed++
 
+                if (rss.link.contains("t.me") && index != rssList.lastIndex && rssList.drop(index + 1).any { it.link.contains("t.me") }) {
+                    println("Entered delay")
+                    delay(40000L)
+                }
+
             } catch (e: Exception) {
                 val msg = "Ошибка при обработке RSS (id=${rss.id}, link=${rss.link}): ${e.message}"
                 println(msg) // Ошибка лол
                 errors.add(msg)
-            }
-            finally {
-                if (rss.link.contains("rsshub") && index != rssList.lastIndex && rssList.drop(index + 1).any { it.link.contains("rsshub") }) {
-                    println("Entered delay")
-                    delay(40000L)
-                }
             }
         }
 

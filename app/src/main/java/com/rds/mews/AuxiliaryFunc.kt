@@ -1,9 +1,15 @@
 package com.rds.mews
 
+import android.content.Context
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 
 // "dd.MM'\n'HH:mm"
@@ -47,12 +53,16 @@ fun linkTransform(link: String): String {
 }
 
 suspend fun updateTitles(
-    db: DbHelper, fetcher: RssFetcher, summarizer: NewsSummarizer, settingsViewModel: SettingsViewModel, returnExisting: Boolean = false
+    db: DbHelper, fetcher: RssFetcher, summarizer: NewsSummarizer, settingsViewModel: SettingsViewModel, returnExisting: Boolean = false, readyFunc: () -> Unit,
 ): List<Title> {
-//    db.messageTimeKill(settingsViewModel.titlesPeriod.intValue.toLong() * 0)
     if (!returnExisting) {
         try {
-            if (fetcher.fetchAndStoreAll().errors.isEmpty()) {
+            val noFetchErrors = when ((System.currentTimeMillis() - settingsViewModel.lastRssUpdate.longValue) / 60000L > settingsViewModel.rssUpdateInterval.intValue) {
+                true -> fetcher.fetchAndStoreAll().errors.isEmpty()
+                else -> true
+            }
+
+            if (noFetchErrors) {
                 val titles = db.getTitles()
                 if (!(titles.any {it.text.contains("<промежуточный текст>") || it.time == 0.toLong() || it.sources.contains("<промежуточный текст>")})) {
                     db.titlesTimeKill(0)
@@ -61,13 +71,14 @@ suspend fun updateTitles(
                 summarizer.summarizeTopics(
                     maxTopics = settingsViewModel.titlesNum.intValue,
                     messageSeconds = settingsViewModel.titlesPeriod.intValue.toLong() * 3600,
-                    readyFunc = { test() }
+                    readyFunc = readyFunc
                 )
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
+    else readyFunc()
 
     val list = db.getTitles((settingsViewModel.titlesPeriod.intValue * 3600).toLong())
 
@@ -83,13 +94,34 @@ suspend fun updateTitles(
     }
 }
 
-fun test(){
-    println("ready")
-}
-
 fun strTransform(original: String, separator: String): String {
     val arr = original.split(", ")
     val res = arr.map {it -> it.trim()}.distinct()
 
     return res.joinToString(separator)
+}
+
+fun scheduleRssUpdate(context: Context, intervalInMinutes: Int) {
+    val repeatInterval = maxOf(15L, intervalInMinutes.toLong())
+
+    val constraints = androidx.work.Constraints.Builder()
+        .setRequiredNetworkType(NetworkType.CONNECTED)
+        .build()
+
+    val repeatingRequest = PeriodicWorkRequestBuilder<RssUpdateWorker>(repeatInterval, TimeUnit.MINUTES)
+        .setConstraints(constraints)
+        .build()
+
+    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        "rss-update-work",
+        ExistingPeriodicWorkPolicy.REPLACE,
+        repeatingRequest
+    )
+
+    println("Scheduled RSS update")
+}
+
+fun changeRssUpdateSchedule(context: Context, settingsModel: SettingsViewModel, newValue: Int) {
+    settingsModel.setRssUpdateInterval(newValue)
+    scheduleRssUpdate(context, newValue)
 }

@@ -155,7 +155,7 @@ class NewsSummarizer(
             println("Нет новостей для анализа") // ошибка, если нет новостей для суммаризации
         }
         val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
-        val bannedNews = "Лошади" //db.getBannedTopics() и обработка
+        val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
         val prompt = """
             Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ от 1 до $max основных событий (СТРОГО ДО $max).
             
@@ -270,7 +270,6 @@ class NewsSummarizer(
             }
         }
 
-
         titles.forEach { title ->
             println(title)
             // Составление списка новостей для нейронки
@@ -284,7 +283,7 @@ class NewsSummarizer(
                 }
             }
             val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
-            val bannedNews = "Лошади" //db.getBannedTopics() и обработка
+            val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
             val prompt = """
                 Составь резюме по теме: "${title.title}".
                 Достаточно подробно расскажи о событии, но без общих слов или воды.

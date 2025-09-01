@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -32,21 +33,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight // для дебага
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp // для дебага
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.rds.mews.ui.theme.MewsTheme
 
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+//        val settingsManager = SettingsManager(applicationContext)
+//        val currentInterval = settingsManager.getInt("rss_update_interval_minutes", 30)
+//        scheduleRssUpdate(applicationContext, currentInterval)
 
         setContent {
             MewsTheme(settingsTheme = "system") {
@@ -89,16 +100,21 @@ fun MainScreen() {
         val summarizer = NewsSummarizer(db, llm)
         val scope = rememberCoroutineScope()
         var isTitlesRefreshing by remember { mutableStateOf(false) }
+        val readyFunc = { isTitlesRefreshing = false }
 
         fun refreshTitles(returnExisting: Boolean = false) {
             scope.launch {
                 isTitlesRefreshing = true
-                val updatedList = withContext(Dispatchers.IO) {
-                    updateTitles(db, fetcher, summarizer, settingsViewModel, returnExisting = returnExisting)
+                var updatedList = withContext(Dispatchers.IO) {
+                    updateTitles(db, fetcher, summarizer, settingsViewModel, returnExisting = returnExisting, readyFunc = readyFunc)
+                }
+                while (isTitlesRefreshing) {
+                    updatedList = withContext(Dispatchers.IO) {
+                        updateTitles(db, fetcher, summarizer, settingsViewModel, returnExisting = returnExisting, readyFunc = readyFunc)
+                    }
                 }
                 titlesList.clear()
                 titlesList.addAll(updatedList)
-                isTitlesRefreshing = false
             }
         }
 
@@ -122,7 +138,8 @@ fun MainScreen() {
                         sourcesList,
                         modifier = Modifier.padding(paddingValues),
                         db = db,
-                        onSourcesChanged = updateSources
+                        onSourcesChanged = updateSources,
+                        settingsViewModel = settingsViewModel
                     )
                 }
                 TabScreen.Titles -> {

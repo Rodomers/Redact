@@ -3,6 +3,7 @@ package com.rds.mews
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
@@ -25,6 +26,14 @@ class SettingsManager(context: Context) {
 
     fun getInt(key: String, defaultValue: Int): Int {
         return sharedPreferences.getInt(key, defaultValue)
+    }
+
+    fun saveLong(key: String, value: Long) {
+        sharedPreferences.edit { putLong(key, value) }
+    }
+
+    fun getLong(key: String, defaultValue: Long): Long {
+        return sharedPreferences.getLong(key, defaultValue)
     }
 
     fun saveString(key: String, value: String) {
@@ -53,7 +62,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         const val USER_API_KEY = "user_api"
         const val CURRENT_LLM_MODEL = "current_model"
         const val SHOW_DATES = "show_dates"
-        const val USER_BOT_API = "user_bot_api"
+        const val RSS_UPDATE_INTERVAL = "rss_update_interval"
+        const val LAST_RSS_UPDATE = "last_rss_update"
     }
 
     var isDarkMode = mutableStateOf(settingsManager.getString(IS_DARK_MODE_KEY, "system"))
@@ -62,7 +72,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     var userApi = mutableStateOf(settingsManager.getString(USER_API_KEY, "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk"))
     var currentLlm = mutableStateOf(settingsManager.getString(CURRENT_LLM_MODEL, ""))
     var showDates = mutableStateOf(settingsManager.getBoolean(SHOW_DATES, false))
-    var userBotApi = mutableStateOf(settingsManager.getString(USER_BOT_API, ""))
+    var rssUpdateInterval = mutableIntStateOf(settingsManager.getInt(RSS_UPDATE_INTERVAL, 30))
+    var lastRssUpdate = mutableLongStateOf(settingsManager.getLong(LAST_RSS_UPDATE, 0L))
 
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener {_, key ->
         when (key) {
@@ -72,7 +83,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
             USER_API_KEY -> userApi.value = settingsManager.getString(USER_API_KEY, "")
             CURRENT_LLM_MODEL -> currentLlm.value = settingsManager.getString(CURRENT_LLM_MODEL, "")
             SHOW_DATES -> showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
-            USER_BOT_API -> userBotApi.value = settingsManager.getString(USER_BOT_API, "")
+            RSS_UPDATE_INTERVAL -> rssUpdateInterval.intValue = settingsManager.getInt(RSS_UPDATE_INTERVAL, 30)
+            LAST_RSS_UPDATE -> lastRssUpdate.longValue = settingsManager.getLong(LAST_RSS_UPDATE, 0L)
         }
     }
 
@@ -100,11 +112,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         userApi.value = newValue
     }
 
-    fun setUserBotApi(newValue: String = "") {
-        settingsManager.saveString(USER_BOT_API, newValue)
-        userBotApi.value = newValue
-    }
-
     fun setCurrentLlm(newValue: String) {
         settingsManager.saveString(CURRENT_LLM_MODEL, newValue)
         currentLlm.value = newValue
@@ -113,6 +120,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     fun setShowDates(newValue: Boolean) {
         settingsManager.saveBoolean(SHOW_DATES, newValue)
         showDates.value = newValue
+    }
+
+    fun setRssUpdateInterval(newValue: Int) {
+        settingsManager.saveInt(RSS_UPDATE_INTERVAL, newValue)
+        rssUpdateInterval.intValue = newValue
+    }
+
+    fun setLastRssUpdate(newValue: Long) {
+        settingsManager.saveLong(LAST_RSS_UPDATE, newValue)
+        lastRssUpdate.longValue = newValue
     }
 
     override fun onCleared() {

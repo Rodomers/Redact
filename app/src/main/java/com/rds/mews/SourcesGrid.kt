@@ -17,6 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import kotlinx.coroutines.launch
@@ -24,12 +25,14 @@ import kotlinx.coroutines.launch
 @Composable
 fun SourcesGrid(
     itemsList: List<String>, modifier: Modifier, db: DbHelper,
-    onSourcesChanged: () -> Unit
+    onSourcesChanged: () -> Unit,
+    settingsViewModel: SettingsViewModel
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var delSourceName by remember { mutableStateOf("") }
     var changeDialog by remember { mutableStateOf("") }
     val addDialogTrue = { showAddDialog = true }
+    val context = LocalContext.current
 
     val scope = rememberCoroutineScope()
 
@@ -70,6 +73,7 @@ fun SourcesGrid(
                                 onSourcesChanged()
                             }
                             showAddDialog = false
+                            scheduleRssUpdate(context, settingsViewModel.rssUpdateInterval.intValue)
                         },
                         add = true,
                         scope = scope
