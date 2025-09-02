@@ -8,9 +8,33 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 
 class SettingsManager(context: Context) {
     private val sharedPreferences: SharedPreferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    val updatingTitlesFlow: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            if (key == SettingsViewModel.UPDATING_TITLES) {
+                trySend(prefs.getBoolean(key, false))
+            }
+        }
+
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+
+        trySend(getBoolean(SettingsViewModel.UPDATING_TITLES, false))
+
+        awaitClose {
+            sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
+    suspend fun awaitTitlesUpdate() {
+        updatingTitlesFlow.first() { !it }
+    }
 
     fun saveBoolean(key: String, value: Boolean) {
         sharedPreferences.edit { putBoolean(key, value) }
@@ -64,6 +88,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         const val SHOW_DATES = "show_dates"
         const val RSS_UPDATE_INTERVAL = "rss_update_interval"
         const val LAST_RSS_UPDATE = "last_rss_update"
+        const val UPDATING_TITLES = "updating_titles"
     }
 
     var isDarkMode = mutableStateOf(settingsManager.getString(IS_DARK_MODE_KEY, "system"))
@@ -74,6 +99,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     var showDates = mutableStateOf(settingsManager.getBoolean(SHOW_DATES, false))
     var rssUpdateInterval = mutableIntStateOf(settingsManager.getInt(RSS_UPDATE_INTERVAL, 30))
     var lastRssUpdate = mutableLongStateOf(settingsManager.getLong(LAST_RSS_UPDATE, 0L))
+    var updatingTitles = mutableStateOf(settingsManager.getBoolean(UPDATING_TITLES, false))
 
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener {_, key ->
         when (key) {
@@ -85,6 +111,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
             SHOW_DATES -> showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
             RSS_UPDATE_INTERVAL -> rssUpdateInterval.intValue = settingsManager.getInt(RSS_UPDATE_INTERVAL, 30)
             LAST_RSS_UPDATE -> lastRssUpdate.longValue = settingsManager.getLong(LAST_RSS_UPDATE, 0L)
+            UPDATING_TITLES -> updatingTitles.value = settingsManager.getBoolean(UPDATING_TITLES, false)
         }
     }
 
@@ -130,6 +157,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     fun setLastRssUpdate(newValue: Long) {
         settingsManager.saveLong(LAST_RSS_UPDATE, newValue)
         lastRssUpdate.longValue = newValue
+    }
+
+    fun setUpdatingTitles(newValue: Boolean) {
+        settingsManager.saveBoolean(UPDATING_TITLES, newValue)
+        updatingTitles.value = newValue
     }
 
     override fun onCleared() {

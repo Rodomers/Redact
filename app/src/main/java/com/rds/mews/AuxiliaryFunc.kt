@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.time.Instant
@@ -60,31 +62,31 @@ fun linkTransform(link: String): String {
 }
 
 suspend fun updateTitles(
-    db: DbHelper, fetcher: RssFetcher, summarizer: NewsSummarizer, settingsViewModel: SettingsViewModel, returnExisting: Boolean = false, readyFunc: () -> Unit,
+    context: Context, db: DbHelper, settingsViewModel: SettingsViewModel, settingsManager: SettingsManager, returnExisting: Boolean = false, readyFunc: () -> Unit = {},
 ): List<Title> {
     if (!returnExisting) {
-        try {
-            val noFetchErrors = when ((System.currentTimeMillis() - settingsViewModel.lastRssUpdate.longValue) / 60000L > settingsViewModel.rssUpdateInterval.intValue) {
-                true -> fetcher.fetchAndStoreAll(messAliveTime = settingsViewModel.titlesPeriod.intValue.toLong() * 3600).errors.isEmpty()
-                else -> true
-            }
+        val constraints = androidx.work.Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
 
-            if (noFetchErrors) {
-                val titles = db.getTitles()
-                if (!(titles.any {it.text.contains("<промежуточный текст>") || it.time == 0.toLong() || it.sources.contains("<промежуточный текст>")})) {
-                    db.titlesTimeKill(0)
-                }
-                summarizer.summarizeTopics(
-                    maxTopics = settingsViewModel.titlesNum.intValue,
-                    messageSeconds = settingsViewModel.titlesPeriod.intValue.toLong() * 3600,
-                    readyFunc = readyFunc
-                )
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
+            .setConstraints(constraints)
+            .build()
+
+        settingsViewModel.setUpdatingTitles(true)
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "titles_update_work",
+            ExistingWorkPolicy.KEEP,
+            updateWorkRequest
+        )
+
+        settingsManager.awaitTitlesUpdate()
+        readyFunc()
     }
-    else readyFunc()
+    else {
+        settingsViewModel.setUpdatingTitles(false)
+        readyFunc()
+    }
 
     val list = db.getTitles((settingsViewModel.titlesPeriod.intValue * 3600).toLong())
 

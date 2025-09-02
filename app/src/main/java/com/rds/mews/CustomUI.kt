@@ -1,6 +1,5 @@
 package com.rds.mews
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.MutableTransitionState
@@ -38,7 +37,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -73,7 +71,6 @@ import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @Composable
 fun CustomDropdown(
@@ -271,7 +268,8 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                     textAlign = TextAlign.Left,
                     modifier = Modifier
                         .padding(8.dp)
-                        .wrapContentHeight(),
+                        .wrapContentHeight()
+                        .align(Alignment.CenterVertically),
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -481,7 +479,6 @@ fun CustomChangeDialog(
     scope: CoroutineScope? = null
 ) {
     val title = if (add) stringResource(R.string.change_dialog_add_source) else stringResource(R.string.change_dialog_change_source)
-    val context = LocalContext.current
 
     Dialog(onDismissRequest = cancelAction) {
         val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
@@ -505,6 +502,7 @@ fun CustomChangeDialog(
             ) {
                 Text(
                     text = title,
+                    textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
                     modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)

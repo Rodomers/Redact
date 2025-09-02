@@ -147,7 +147,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clip
                 }
             }
         }
-        CustomSettingsItem(text = "Максимум заголовков") {
+        CustomSettingsItem(text = stringResource(R.string.settings_maximum_headers)) {
             Box {
                 Button(
                     modifier = Modifier

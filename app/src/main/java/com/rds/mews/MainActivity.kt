@@ -97,22 +97,23 @@ fun MainScreen() {
         }
 
         val titlesList: SnapshotStateList<Title> = remember { mutableStateListOf() }
-        val fetcher = RssFetcher(db)
+//        val fetcher = RssFetcher(db)
         val llm = LLMClient(MODEL = settingsViewModel.currentLlm.value, apiKey = settingsViewModel.userApi.value)
-        val summarizer = NewsSummarizer(db, llm)
+//        val summarizer = NewsSummarizer(db, llm)
         val scope = rememberCoroutineScope()
         var isTitlesRefreshing by remember { mutableStateOf(false) }
-        val readyFunc = { isTitlesRefreshing = false }
+        val titlesRefreshed = { isTitlesRefreshing = false }
+        val context = LocalContext.current
 
         fun refreshTitles(returnExisting: Boolean = false) {
             scope.launch {
                 isTitlesRefreshing = true
                 var updatedList = withContext(Dispatchers.IO) {
-                    updateTitles(db, fetcher, summarizer, settingsViewModel, returnExisting = returnExisting, readyFunc = readyFunc)
+                    updateTitles(context, db, settingsViewModel, settingsManager, returnExisting = returnExisting, titlesRefreshed)
                 }
                 while (isTitlesRefreshing) {
                     updatedList = withContext(Dispatchers.IO) {
-                        updateTitles(db, fetcher, summarizer, settingsViewModel, returnExisting = returnExisting, readyFunc = readyFunc)
+                        updateTitles(context, db, settingsViewModel, settingsManager, returnExisting = returnExisting, titlesRefreshed)
                     }
                 }
                 titlesList.clear()

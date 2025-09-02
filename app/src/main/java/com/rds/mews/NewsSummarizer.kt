@@ -1,7 +1,5 @@
 package com.rds.mews
 
-import androidx.compose.ui.platform.isDebugInspectorInfoEnabled
-import com.google.firebase.crashlytics.buildtools.reloc.org.apache.http.client.HttpClient
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
@@ -157,7 +155,7 @@ class NewsSummarizer(
         val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
         val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
         val prompt = """
-            Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ от 1 до $max основных событий.
+            Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ РОВНО $max основных событий.
             СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($max). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого.
             
             ТЕБЕ ЗАПРЕЩЕНО ПИСАТЬ НА СЛЕДУЮЩИЕ ТЕМЫ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
@@ -246,12 +244,12 @@ class NewsSummarizer(
 
 
         val messages = db.getMessages(messageSeconds)
-        var rawtitles = db.getTitles()
+        var rawTitles = db.getTitles()
         var titles = mutableListOf<Topics>()
         var flagForUnfinishedTopics: Boolean = false
 
         // ЭТО ПЛОХО, но я  не знаю как переделать
-        rawtitles.forEach { title ->
+        rawTitles.forEach { title ->
             if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
                 titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
 //                db.delTitle(title.id)
@@ -261,15 +259,17 @@ class NewsSummarizer(
         println(titles)
         if(!flagForUnfinishedTopics){
             extractTopics(maxTopics, messageSeconds)
-            rawtitles = db.getTitles()
+            rawTitles = db.getTitles()
             titles = mutableListOf<Topics>()
-            rawtitles.forEach { title ->
+            rawTitles.forEach { title ->
                 if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
                     titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
 //                    db.delTitle(title.id)
                 }
             }
         }
+
+        if (titles.isEmpty()) readyFunc()
 
         titles.forEach { title ->
             println(title)

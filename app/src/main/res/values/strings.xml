@@ -11,13 +11,13 @@
     <string name="delsource_text">Are you sure you want to delete the source?</string>
     <string name="delsource_btntext">Delete</string>
 
-    <string name="titles_update_text">Pull down to update\n(Very long)</string>
+    <string name="titles_update_text">Pull down to update\n(Veery long)</string>
 
     <string name="settings_system_theme">System</string>
     <string name="settings_light_theme">Light</string>
     <string name="settings_dark_theme">Dark</string>
     <string name="settings_show_dates">Show dates</string>
-    <string name="settings_color_scheme">Color schemes</string>
+    <string name="settings_color_scheme">Color scheme</string>
     <string name="settings_maximum_headers">Maximum headers</string>
     <string name="settings_news_period">News period</string>
     <string name="settings_news_update_frequency">Background news update frequency</string>

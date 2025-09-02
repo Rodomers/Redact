@@ -10,7 +10,7 @@
     <string name="delsource_text">Вы уверены, что хотите удалить источник?</string>
     <string name="delsource_btntext">Удалить</string>
 
-    <string name="titles_update_text">Потяните вниз, чтобы обновить\n(Очень долгую)</string>
+    <string name="titles_update_text">Потяните вниз, чтобы обновить\n(Это оочень долго)</string>
 
     <string name="settings_system_theme">Системная</string>
     <string name="settings_light_theme">Светлая</string>
