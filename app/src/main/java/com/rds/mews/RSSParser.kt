@@ -74,7 +74,7 @@ class RssFetcher(
                 errors.add(msg)
             }
             finally {
-                db.messageTimeKill(messAliveTime.toLong())
+                db.messageTimeKill(messAliveTime.toLong() * 3)
             }
         }
 

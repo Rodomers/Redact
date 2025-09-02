@@ -84,7 +84,24 @@ suspend fun updateTitles(
         readyFunc()
     }
     else {
-        settingsViewModel.setUpdatingTitles(false)
+        if (settingsViewModel.updatingTitles.value) {
+            val constraints = androidx.work.Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+
+            val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
+                .setConstraints(constraints)
+                .build()
+
+            settingsViewModel.setUpdatingTitles(true)
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                "titles_update_work",
+                ExistingWorkPolicy.KEEP,
+                updateWorkRequest
+            )
+
+            settingsManager.awaitTitlesUpdate()
+        }
         readyFunc()
     }
 

@@ -359,7 +359,8 @@ class NewsSummarizer(
             // задержка перед следующим запросом
             delay(delaySeconds * 100)
         }
-        readyFunc()
+        val count = db.getTitles().filter { it.text == "<промежуточный текст>" }.size
+        if (count == 0) readyFunc()
     }
 
     data class Topics (
