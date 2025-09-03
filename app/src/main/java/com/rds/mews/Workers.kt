@@ -65,12 +65,14 @@ class TitlesUpdateWorker(
                         if (!(titles.any {it.text.contains("<промежуточный текст>") || it.time == 0.toLong() || it.sources.contains("<промежуточный текст>")})) {
                             db.titlesTimeKill(0)
                         }
-                        while (settingsManager.getBoolean("updating_titles", false)) {
+                        var iter = 0
+                        while (settingsManager.getBoolean("updating_titles", false) && iter <= 5) {
                             summarizer.summarizeTopics(
                                 maxTopics = titlesNum,
                                 messageSeconds = titlesPeriod.toLong() * 3600,
                                 readyFunc = { settingsManager.saveBoolean("updating_titles", false) }
                             )
+                            iter++
                         }
                     }
                 }

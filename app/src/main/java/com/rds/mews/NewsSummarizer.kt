@@ -15,6 +15,7 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 
 
 // ====== Класс для работы с OpenRouter API ======
@@ -154,7 +155,10 @@ class NewsSummarizer(
         }
         val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
         val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
-        val prompt = """
+            var jsonArray: JSONArray
+            var iters = 0
+            do {
+                val prompt = """
             Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ РОВНО $max основных событий.
             СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($max). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого.
             
@@ -197,14 +201,17 @@ class NewsSummarizer(
             $combinedNews
         """.trimIndent()
 
-        val response = llm.sendPrompt(prompt) ?: ""
+                val response = llm.sendPrompt(prompt) ?: ""
 
-        val cleanResponse = response.trim().replace("```json", "")
-            .replace("```", "")
-            .replace("\"\"\"", "")
-            .trim()
+                val cleanResponse = response.trim().replace("```json", "")
+                    .replace("```", "")
+                    .replace("\"\"\"", "")
+                    .trim()
 
-        val jsonArray = JSONArray(cleanResponse)
+                jsonArray = JSONArray(cleanResponse)
+                iters++
+                println("iter: $iters")
+            } while (jsonArray.length() > max && iters <= 3)
 
         for (i in 0 until jsonArray.length()) {
             val obj: JSONObject = jsonArray.getJSONObject(i)
@@ -270,22 +277,28 @@ class NewsSummarizer(
         }
 
         if (titles.isEmpty()) readyFunc()
-
-        titles.forEach { title ->
-            println(title)
-            // Составление списка новостей для нейронки
-            var suitableMessages: List<Message> = mutableListOf()
-            title.ids?.forEach { id ->
-                messages.forEach { message ->
-                    if (message.id == id){
-                        suitableMessages += message
-                    }
-
-                }
+        when (titles.size) {
+            0 -> readyFunc()
+            in maxTopics + 1..Int.MAX_VALUE -> {
+                db.titlesTimeKill(0)
+                readyFunc()
             }
-            val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
-            val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
-            val prompt = """
+            else -> {
+                titles.forEach { title ->
+                    println(title)
+                    // Составление списка новостей для нейронки
+                    var suitableMessages: List<Message> = mutableListOf()
+                    title.ids?.forEach { id ->
+                        messages.forEach { message ->
+                            if (message.id == id){
+                                suitableMessages += message
+                            }
+
+                        }
+                    }
+                    val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
+                    val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
+                    val prompt = """
                 Составь резюме по теме: "${title.title}".
                 Достаточно подробно расскажи о событии, но без общих слов или воды.
                 
@@ -315,53 +328,57 @@ class NewsSummarizer(
                 $newsText
             """.trimIndent()
 
-            val response = llm.sendPrompt(prompt) ?: return@forEach
+                    val response = llm.sendPrompt(prompt) ?: return@forEach
 
-            // Приведение ответа к адекватному виду
-            val cleanResponse = response.trim().replace("```json", "")
-                .replace("```", "")
-                .replace("\"\"\"", "")
-                .trim()
+                    // Приведение ответа к адекватному виду
+                    val cleanResponse = response.trim().replace("```json", "")
+                        .replace("```", "")
+                        .replace("\"\"\"", "")
+                        .trim()
 
-            // Парсинг ответа по полям
-            val obj = JSONObject(cleanResponse)
-            val summary = obj.getString("summary")
-            val ids = title.ids ?: return@forEach
+                    // Парсинг ответа по полям
+                    val obj = JSONObject(cleanResponse)
+                    val summary = obj.getString("summary")
+                    val ids = title.ids ?: return@forEach
 
-            // время для темы выбирается по первой новости по этой теме или по системному времени, если ошибка
-            var time: Long = System.currentTimeMillis()
-            ids.forEach { id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time) }
+                    // время для темы выбирается по первой новости по этой теме или по системному времени, если ошибка
+                    var time: Long = System.currentTimeMillis()
+                    ids.forEach { id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time) }
 
-            // линки и сурсы в особый формат по id
-            val links = mutableListOf<String>()
-            val sources = mutableListOf<String>()
+                    // линки и сурсы в особый формат по id
+                    val links = mutableListOf<String>()
+                    val sources = mutableListOf<String>()
 
-            ids.forEach { id ->
-                val mess = db.getMessage(id)
-                if (mess != null) {
-                    links.add(mess.link)
-                    sources.add(mess.source)
+                    ids.forEach { id ->
+                        val mess = db.getMessage(id)
+                        if (mess != null) {
+                            links.add(mess.link)
+                            sources.add(mess.source)
+                        }
+                    }
+
+                    println("${title.title}\t$summary$sources$links$time")
+
+                    db.delTitle(name = title.title)
+                    // Сохраняем в БД
+                    db.addTitle(
+                        titleTime = time,
+                        title = title.title,
+                        text = summary,
+                        sources = db.dbPack(*sources.toTypedArray()),
+                        links = db.dbPack(*links.toTypedArray())
+                    )
+
+                    // задержка перед следующим запросом
+                    delay(delaySeconds * 100)
                 }
+                val count = db.getTitles().filter { it.text == "<промежуточный текст>" }.size
+                if (count == 0) readyFunc()
             }
-
-            println("${title.title}\t$summary$sources$links$time")
-
-            db.delTitle(name = title.title)
-            // Сохраняем в БД
-            db.addTitle(
-                titleTime = time,
-                title = title.title,
-                text = summary,
-                sources = db.dbPack(*sources.toTypedArray()),
-                links = db.dbPack(*links.toTypedArray())
-            )
-
-            // задержка перед следующим запросом
-            delay(delaySeconds * 100)
         }
-        val count = db.getTitles().filter { it.text == "<промежуточный текст>" }.size
-        if (count == 0) readyFunc()
     }
+
+
 
     data class Topics (
         val title: String,

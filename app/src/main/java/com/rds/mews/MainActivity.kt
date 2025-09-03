@@ -1,18 +1,14 @@
 package com.rds.mews
 
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.Box // для дебага
-import androidx.compose.foundation.layout.fillMaxWidth // для дебага
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.Menu
-import androidx.compose.material3.Button // для дебага
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -29,27 +25,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.ui.Alignment // для дебага
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight // для дебага
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.dp // для дебага
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import com.rds.mews.ui.theme.MewsTheme
 
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
 
 
 class MainActivity : ComponentActivity() {
@@ -98,7 +85,7 @@ fun MainScreen() {
 
         val titlesList: SnapshotStateList<Title> = remember { mutableStateListOf() }
 //        val fetcher = RssFetcher(db)
-        val llm = LLMClient(MODEL = settingsViewModel.currentLlm.value, apiKey = settingsViewModel.userApi.value)
+//        val llm = LLMClient(MODEL = settingsViewModel.currentLlm.value, apiKey = settingsViewModel.userApi.value)
 //        val summarizer = NewsSummarizer(db, llm)
         val scope = rememberCoroutineScope()
         var isTitlesRefreshing by remember { mutableStateOf(false) }

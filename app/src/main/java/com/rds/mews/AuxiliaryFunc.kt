@@ -1,8 +1,6 @@
 package com.rds.mews
 
 import android.content.Context
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -105,7 +103,7 @@ suspend fun updateTitles(
         readyFunc()
     }
 
-    val list = db.getTitles((settingsViewModel.titlesPeriod.intValue * 3600).toLong())
+    val list = db.getTitles()
 
     return list.map {
         Title(
