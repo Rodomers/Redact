@@ -56,7 +56,7 @@ class TitlesUpdateWorker(
             try {
                 withContext(Dispatchers.IO) {
                     val noFetchErrors = when ((System.currentTimeMillis() - rssLastUpdate) / 60000L > rssUpdateInterval) {
-                        true -> fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600).errors.isEmpty()
+                        true -> fetcher.fetchAndStoreAll(messAliveTime = 120.toLong() * 3600).errors.isEmpty()
                         else -> true
                     }
 

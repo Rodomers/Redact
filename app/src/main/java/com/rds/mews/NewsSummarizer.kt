@@ -211,7 +211,7 @@ class NewsSummarizer(
                 jsonArray = JSONArray(cleanResponse)
                 iters++
                 println("iter: $iters")
-            } while (jsonArray.length() > max && iters <= 3)
+            } while (jsonArray.length() > max * 2 && iters <= 3)
 
         for (i in 0 until jsonArray.length()) {
             val obj: JSONObject = jsonArray.getJSONObject(i)
