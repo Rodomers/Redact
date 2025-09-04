@@ -19,24 +19,24 @@ import kotlinx.serialization.json.JsonArray
 
 
 // ====== Класс для работы с OpenRouter API ======
+// Апи ключ пока захардкожен, потом спокойно можно подвязать другой ключ
+// "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"
+// "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"
+// "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"
+// ---------------------------------------------------------------------
+// сейчас стоит ключ для cloud ru
+// api key d2a02527c52b1e4c1da6b640308b2170
+// key ID M2I1MTEyMGQtYmRmYS00MDE4LThhNTItMzhjMTE3ZWVhZmQ4.3979e60d1ecbaa29e535571a7199a4f5
+// secret key e586ffd44e5801b67a89adcbf4c1cfd9
+// ------------------------------------------------------------------------
 @Serializable
 class LLMClient(
-    // Апи ключ пока захардкожен, потом спокойно можно подвязать другой ключ
-    // "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"
-    // "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"
-    // "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"
-    // ---------------------------------------------------------------------
-    // сейчас стоит ключ для cloud ru
-    // api key d2a02527c52b1e4c1da6b640308b2170
-    // key ID M2I1MTEyMGQtYmRmYS00MDE4LThhNTItMzhjMTE3ZWVhZmQ4.3979e60d1ecbaa29e535571a7199a4f5
-    // secret key e586ffd44e5801b67a89adcbf4c1cfd9
-    // ------------------------------------------------------------------------
     // gemini api keys
     // AIzaSyBwT2sBtNulYoVFDpxq4uHPx-S-LCq7aAw
     // AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk
     val apiKey: String = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk",
     val MODEL: String = "gemini-2.5-flash-lite",
-    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/"
 ) {
 
     // Отправляем запрос к Gemini, получаем текст ответа
@@ -68,7 +68,7 @@ class LLMClient(
         )
 
         // Отправка POST запроса
-        val responseString: String = client.post(URL) {
+        val responseString: String = client.post("$URL$MODEL:generateContent") {
             header("x-goog-api-key", apiKey)
             contentType(ContentType.Application.Json)
             setBody(requestBody)
@@ -247,6 +247,81 @@ class NewsSummarizer(
      * можно указать время новостей в секундах, по стандарту - неделя
      * можно указать время между запросами, по стандарту - 10 секунд
      */
+    private suspend fun filterTopics(maxTopics: Int = 20){
+        var rawTitles = db.getTitles()
+        var titles = mutableListOf<Topics>()
+        rawTitles.forEach { title ->
+            if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
+                titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
+                db.delTitle(title.id)
+            }
+        }
+        println(titles)
+        var jsonArray: JSONArray
+        val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработк
+        val titlesToFilter = titles.joinToString("\n") { (title, ids) -> title }
+        val prompt = """
+            Проанализируй заголовки новостей и отбрось малозначимые/неважные/неосновные, чтобы они помещались в допустимый максимум $maxTopics. Если заголовки затрагивают забаненные темы, то удаляй их.
+            Если таких неподходящих заголовков нет, то верни исходный список.
+            
+            Забаненные новости:
+            $bannedNews
+            
+            Ответ верни в виде JSON формата:
+            [
+            "title": "<Первая новость>",
+            "title": "<Вторая новость>",
+            "title": "<Третья новость>",
+            ....
+            ]
+            где title - название темы.
+            
+            Требования:
+            1. Не добавляй никакие ``` или ""${'"'}.
+            2. Не добавляй пояснения или текст вне JSON.
+            3. Ответ должен начинаться с [ и заканчиваться ].
+            4. Отвечай на РУССКОМ языке.
+            5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ Хотя бы одним значением.
+            6. СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($maxTopics). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого. 
+            
+                   
+            Заголовки:       
+            $titlesToFilter
+        """.trimIndent()
+        val response = llm.sendPrompt(prompt) ?: ""
+
+        val cleanResponse = response.trim().replace("```json", "")
+            .replace("```", "")
+            .replace("\"\"\"", "")
+            .trim()
+
+        jsonArray = JSONArray(cleanResponse)
+        for (i in 0 until jsonArray.length()) {
+            val obj: JSONObject = jsonArray.getJSONObject(i)
+
+            val title = obj.getString("title")
+            val idsArray = obj.getJSONArray("id")
+
+            val idsLong = mutableListOf<Long>()
+            val idsStr = mutableListOf<String>()
+            for (j in 0 until idsArray.length()) {
+                idsLong.add(idsArray.getInt(j).toLong())
+                idsStr.add(idsArray.getInt(j).toString())
+
+            }
+            println(title)
+
+            db.addTitle(
+                titleTime = 0,
+                title = title,
+                text = "<промежуточный текст>",
+                sources = "<промежуточный текст>",
+                links = db.dbPack(*idsStr.toTypedArray())
+            )
+        }
+    }
+
+
     suspend fun summarizeTopics(maxTopics: Int = 20, messageSeconds: Long = 14515200, delaySeconds: Long = 10, readyFunc: () -> Unit) {
 
 
@@ -259,19 +334,20 @@ class NewsSummarizer(
         rawTitles.forEach { title ->
             if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
                 titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
-//                db.delTitle(title.id)
+                db.delTitle(title.id)
                 flagForUnfinishedTopics = true
             }
         }
         println(titles)
         if(!flagForUnfinishedTopics){
             extractTopics(maxTopics, messageSeconds)
+            filterTopics(maxTopics)
             rawTitles = db.getTitles()
             titles = mutableListOf<Topics>()
             rawTitles.forEach { title ->
                 if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
                     titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
-//                    db.delTitle(title.id)
+                    db.delTitle(title.id)
                 }
             }
         }
@@ -385,3 +461,6 @@ class NewsSummarizer(
         val ids: List<Long>?
     )
 }
+
+
+
