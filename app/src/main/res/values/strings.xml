@@ -52,5 +52,6 @@
     <string name="cancel">Cancel</string>
     <string name="add">Add</string>
     <string name="change">Change</string>
+    <string name="share_btn_desc">Share title</string>
 
 </resources>

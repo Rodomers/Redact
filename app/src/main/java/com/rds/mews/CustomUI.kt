@@ -35,32 +35,42 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.twotone.Send
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
@@ -228,12 +238,22 @@ fun SourcesAddCard(
 
 @Composable
 fun TitlesCard(title: Title, showDates: Boolean = false) {
+    val clipboardManager = LocalClipboardManager.current
     var expanded by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = 0, initialPageOffsetFraction = 0f, pageCount = {2})
     val coroutineScope = rememberCoroutineScope()
     var pagerContentHeight by remember { mutableStateOf<Int?>(null) }
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
+    val textSelectionColors = TextSelectionColors(
+        handleColor = MaterialTheme.colorScheme.onPrimary,
+        backgroundColor = MaterialTheme.colorScheme.secondary.copy(alpha=0.8f)
+    )
+    val source = stringResource(R.string.titles_card_source)
+    fun copyText() {
+        val copiedText = "${title.title}\n\n${title.text}\n\n${source}: ${title.sources}"
+        clipboardManager.setText(AnnotatedString(copiedText))
+    }
 
     Surface(
         modifier = Modifier
@@ -292,11 +312,18 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                         page ->
                     when (page) {
                         0 -> {
-                            Text(text = title.text,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.onSizeChanged { newSize ->
-                                    pagerContentHeight = newSize.height
-                                })
+                            CompositionLocalProvider(LocalTextSelectionColors provides textSelectionColors) {
+                                SelectionContainer {
+                                    Text(
+                                        text = title.text,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.onSizeChanged { newSize ->
+                                            pagerContentHeight = newSize.height
+                                        }
+                                    )
+                                }
+                            }
+
                         }
                         1 -> {
                             Column(
@@ -311,8 +338,11 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                                         .padding(vertical = 8.dp),
                                     fontWeight = FontWeight.Bold
                                 )
-                                SelectionContainer {
-                                    Text(text = title.links, modifier = Modifier.fillMaxWidth())
+
+                                CompositionLocalProvider(LocalTextSelectionColors provides textSelectionColors) {
+                                    SelectionContainer {
+                                        Text(text = title.links, modifier = Modifier.fillMaxWidth())
+                                    }
                                 }
                             }
                         }
@@ -353,6 +383,16 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                             .animateContentSize(),
                         fontWeight = if (pagerState.targetPage == 1 ) FontWeight.Bold else FontWeight.Normal
                     )
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(
+                        onClick = ::copyText
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(16.dp),
+                            imageVector = Icons.Default.Share,
+                            contentDescription = stringResource(R.string.share_btn_desc)
+                        )
+                    }
                 }
             }
         }

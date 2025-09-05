@@ -35,7 +35,8 @@ import androidx.compose.ui.window.Popup
 
 
 @Composable
-fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {val clipboardManager = LocalClipboardManager.current
+fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
+    val clipboardManager = LocalClipboardManager.current
     var text by remember { mutableStateOf("") }
     var showDates by remember { mutableStateOf(settingsModel.showDates.value) }
     val defaultGeminiApiKey by remember { mutableStateOf("AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") }
