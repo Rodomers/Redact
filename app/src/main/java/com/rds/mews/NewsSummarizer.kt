@@ -155,11 +155,8 @@ class NewsSummarizer(
         }
         val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
         val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
-            var jsonArray: JSONArray
-            var iters = 0
-            do {
-                val prompt = """
-            Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ РОВНО $max основных событий.
+        val prompt = """
+            Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ от 1 до $max основных событий.
             СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($max). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого.
             
             ТЕБЕ ЗАПРЕЩЕНО ПИСАТЬ НА СЛЕДУЮЩИЕ ТЕМЫ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
@@ -201,17 +198,14 @@ class NewsSummarizer(
             $combinedNews
         """.trimIndent()
 
-                val response = llm.sendPrompt(prompt) ?: ""
+        val response = llm.sendPrompt(prompt) ?: ""
 
-                val cleanResponse = response.trim().replace("```json", "")
-                    .replace("```", "")
-                    .replace("\"\"\"", "")
-                    .trim()
+        val cleanResponse = response.trim().replace("```json", "")
+            .replace("```", "")
+            .replace("\"\"\"", "")
+            .trim()
 
-                jsonArray = JSONArray(cleanResponse)
-                iters++
-                println("iter: $iters")
-            } while (jsonArray.length() > max * 2 && iters <= 3)
+        val jsonArray = JSONArray(cleanResponse)
 
         for (i in 0 until jsonArray.length()) {
             val obj: JSONObject = jsonArray.getJSONObject(i)
@@ -248,8 +242,8 @@ class NewsSummarizer(
      * можно указать время между запросами, по стандарту - 10 секунд
      */
     private suspend fun filterTopics(maxTopics: Int = 20){
-        var rawTitles = db.getTitles()
-        var titles = mutableListOf<Topics>()
+        val rawTitles = db.getTitles()
+        val titles = mutableListOf<Topics>()
         rawTitles.forEach { title ->
             if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
                 titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
@@ -262,7 +256,7 @@ class NewsSummarizer(
         val titlesToFilter = titles.joinToString("\n") { (title, ids) -> title }
         val prompt = """
             Проанализируй заголовки новостей и отбрось малозначимые/неважные/неосновные, чтобы они помещались в допустимый максимум $maxTopics. Если заголовки затрагивают забаненные темы, то удаляй их.
-            Если таких неподходящих заголовков нет, то верни исходный список.
+            Если таких неподходящих заголовков нет, то верни исходный список. Сортируй заголовки по убыванию их важности.
             
             Забаненные новости:
             $bannedNews
@@ -296,7 +290,8 @@ class NewsSummarizer(
             .trim()
 
         jsonArray = JSONArray(cleanResponse)
-        for (i in 0 until jsonArray.length()) {
+        val iterEnd = if (jsonArray.length() <= maxTopics) jsonArray.length() else maxTopics
+        for (i in 0 until iterEnd) {
             val obj: JSONObject = jsonArray.getJSONObject(i)
 
             val title = obj.getString("title")
@@ -334,7 +329,9 @@ class NewsSummarizer(
         rawTitles.forEach { title ->
             if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
                 titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
-                db.delTitle(title.id)
+                // это костыль для восстановления работы
+                // его и такую же строчку ниже не раскомменчивать до глобальной переделки
+//                db.delTitle(title.id)
                 flagForUnfinishedTopics = true
             }
         }
@@ -347,7 +344,7 @@ class NewsSummarizer(
             rawTitles.forEach { title ->
                 if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
                     titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
-                    db.delTitle(title.id)
+//                    db.delTitle(title.id)
                 }
             }
         }
