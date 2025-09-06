@@ -246,8 +246,8 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
     val textSelectionColors = TextSelectionColors(
-        handleColor = MaterialTheme.colorScheme.onSecondary,
-        backgroundColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha=0.8f)
+        handleColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        backgroundColor = MaterialTheme.colorScheme.onSecondary.copy(alpha=0.8f)
     )
     val source = stringResource(R.string.titles_card_source)
     fun copyText() {
