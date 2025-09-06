@@ -92,6 +92,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     }
 
     var isDarkMode = mutableStateOf(settingsManager.getString(IS_DARK_MODE_KEY, "system"))
+    var isMonetColors = mutableStateOf(settingsManager.getBoolean(IS_MONET_KEY, false))
     var titlesNum = mutableIntStateOf(settingsManager.getInt(TITLES_NUM_KEY, 10))
     var titlesPeriod = mutableIntStateOf(settingsManager.getInt(TITLES_PERIOD_KEY, 24))
     var userApi = mutableStateOf(settingsManager.getString(USER_API_KEY, "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk"))
@@ -104,6 +105,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener {_, key ->
         when (key) {
             IS_DARK_MODE_KEY -> isDarkMode.value = settingsManager.getString(IS_DARK_MODE_KEY, "system")
+            IS_MONET_KEY -> isMonetColors.value = settingsManager.getBoolean(IS_MONET_KEY, false)
             TITLES_NUM_KEY -> titlesNum.intValue = settingsManager.getInt(TITLES_NUM_KEY, 10)
             TITLES_PERIOD_KEY -> titlesPeriod.intValue = settingsManager.getInt(TITLES_PERIOD_KEY, 24)
             USER_API_KEY -> userApi.value = settingsManager.getString(USER_API_KEY, "")
@@ -122,6 +124,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     fun setDarkMode(newValue: String) {
         settingsManager.saveString(IS_DARK_MODE_KEY, newValue)
         isDarkMode.value = newValue
+    }
+
+    fun setMonetColors(newValue: Boolean) {
+        settingsManager.saveBoolean(IS_MONET_KEY, newValue)
+        isMonetColors.value = newValue
     }
 
     fun setTitlesNum(newValue: Int) {

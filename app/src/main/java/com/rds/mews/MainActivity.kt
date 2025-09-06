@@ -49,10 +49,7 @@ class MainActivity : ComponentActivity() {
 //        scheduleRssUpdate(applicationContext, currentInterval)
 
         setContent {
-            MewsTheme(settingsTheme = "system") {
-                MainScreen()
-                //TestBtn()
-            }
+            MainScreen()
         }
     }
 }
@@ -70,7 +67,7 @@ fun MainScreen() {
     val factory = SettingsViewModelFactory(settingsManager)
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
 
-    MewsTheme(settingsTheme = settingsViewModel.isDarkMode.value) {
+    MewsTheme(settingsTheme = settingsViewModel.isDarkMode.value, monetTheme = settingsViewModel.isMonetColors.value) {
         var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }
 
 
@@ -200,9 +197,9 @@ fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit) {
                     Text(text = tabTitle)
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    indicatorColor = MaterialTheme.colorScheme.onBackground
+                    selectedIconColor = MaterialTheme.colorScheme.surface,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    indicatorColor = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             )
         }

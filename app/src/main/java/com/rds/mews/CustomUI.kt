@@ -112,7 +112,7 @@ fun CustomDropdown(
                     CustomDropdownMenuItem(button.first, button.second, onDismiss = onDismiss)
                     if (index < buttons.size - 1) {
                         HorizontalDivider(
-                            color = MaterialTheme.colorScheme.secondary,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                             thickness = 1.dp,
                             modifier = Modifier.padding(horizontal = 8.dp)
                         )
@@ -160,7 +160,7 @@ fun CustomCardWithMenu(
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.onSecondary,
         shadowElevation = 0.dp
     ) {
         Row(
@@ -182,7 +182,7 @@ fun CustomCardWithMenu(
                 onClick = {toggleDropdown()},
                 modifier = Modifier
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.secondary)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
             ) {
                 Icon(imageVector = Icons.Default.MoreVert, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
             }
@@ -207,7 +207,7 @@ fun SourcesAddCard(
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.onSecondary,
         shadowElevation = 0.dp
     ) {
         Row(
@@ -227,7 +227,7 @@ fun SourcesAddCard(
             IconButton(
                 onClick = action,
                 modifier = Modifier
-                    .background(MaterialTheme.colorScheme.secondary)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
                     .fillMaxHeight()
             ) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(R.string.sources_add_icon_desc))
@@ -246,8 +246,8 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
     val textSelectionColors = TextSelectionColors(
-        handleColor = MaterialTheme.colorScheme.onPrimary,
-        backgroundColor = MaterialTheme.colorScheme.secondary.copy(alpha=0.8f)
+        handleColor = MaterialTheme.colorScheme.onSecondary,
+        backgroundColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha=0.8f)
     )
     val source = stringResource(R.string.titles_card_source)
     fun copyText() {
@@ -260,7 +260,7 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = RoundedCornerShape(25.dp),
-        color = MaterialTheme.colorScheme.primary
+        color = MaterialTheme.colorScheme.secondaryContainer
     ) {
         Column(
             modifier = Modifier
@@ -301,7 +301,7 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
 
                 HorizontalDivider(
                     thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.secondary,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.padding(bottom = 8.dp))
 
                 HorizontalPager(
@@ -316,7 +316,6 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                                 SelectionContainer {
                                     Text(
                                         text = title.text,
-                                        color = MaterialTheme.colorScheme.onPrimary,
                                         modifier = Modifier.onSizeChanged { newSize ->
                                             pagerContentHeight = newSize.height
                                         }
@@ -351,7 +350,7 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
 
                 HorizontalDivider(
                     thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.secondary,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.padding(top = 10.dp))
 
                 Row(
@@ -407,7 +406,7 @@ fun CustomSettingsItem(text: String, item: @Composable () -> Unit) {
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = RoundedCornerShape(25.dp),
-        color = MaterialTheme.colorScheme.primary
+        color = MaterialTheme.colorScheme.secondaryContainer
     ) {
         Row(
             modifier = Modifier.padding(8.dp),
@@ -566,11 +565,11 @@ fun CustomChangeDialog(
                         label = { Text(stringResource(R.string.change_dialog_link)) },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.onPrimary,
-                            cursorColor = MaterialTheme.colorScheme.onPrimary,
-                            focusedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.onPrimary,
-                            unfocusedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                            focusedBorderColor = MaterialTheme.colorScheme.onSurface,
+                            cursorColor = MaterialTheme.colorScheme.onSurface,
+                            focusedLabelColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurface,
                         )
                     )
                 }
@@ -583,18 +582,17 @@ fun CustomChangeDialog(
                     placeholder = { Text(source) },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.onPrimary,
-                        cursorColor = MaterialTheme.colorScheme.onPrimary,
-                        focusedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onPrimary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        focusedBorderColor = MaterialTheme.colorScheme.onSurface,
+                        cursorColor = MaterialTheme.colorScheme.onSurface,
+                        focusedLabelColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurface,
                     )
                 )
 
                 if (add && scope != null) {
                     Text(
                         text = if (validRss) stringResource(R.string.valid_link) else stringResource(R.string.enter_correct_link),
-                        color = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier
                             .padding(16.dp)
                     )
@@ -607,7 +605,7 @@ fun CustomChangeDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = cancelAction) {
-                        Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onPrimary)
+                        Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onSurface)
                     }
 
                     if ((validRss && rssText != "" && sourceText != "" && add)) {
@@ -617,7 +615,7 @@ fun CustomChangeDialog(
                                 onConfirm(Pair(finalSourceName, linkTransform(rssText.trim())))
                             }
                         ) {
-                            Text(stringResource(R.string.add), color = MaterialTheme.colorScheme.onPrimary)
+                            Text(stringResource(R.string.add), color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
 
@@ -628,7 +626,7 @@ fun CustomChangeDialog(
                                 onConfirm(Pair(source, finalSourceName))
                             }
                         ) {
-                            Text(stringResource(R.string.change), color = MaterialTheme.colorScheme.onPrimary)
+                            Text(stringResource(R.string.change), color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }

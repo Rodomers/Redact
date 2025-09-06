@@ -16,25 +16,29 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import android.os.Build
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.ui.platform.LocalContext
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color.LightGray,
-    secondary = Color.Gray,
+    secondaryContainer = Color.LightGray,
+    onSecondary = NearlyWhiteGray,
     background = Color.White,
     surface = Color.White,
+    onSecondaryContainer = Color.Black,
     onPrimary = Color.Black,
-    onSecondary = Color.White,
     onBackground = Color.Black,
     onSurface = Color.Black
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = LighterGray, // Светлый серый для выделения
-    secondary = Color.DarkGray, // Средний серый для второстепенных элементов
+    secondaryContainer = LighterGray, // Светлый серый для выделения
+    onSecondary = Color.DarkGray, // Средний серый для второстепенных элементов
     background = DarkGray, // Тёмный фон
+    onSecondaryContainer = Color.White,
     surface = DarkGray, // Тёмная поверхность
     onPrimary = Color.White, // Белый текст на `primary` фоне
-    onSecondary = Color.White, // Белый текст на `secondary` фоне
     onBackground = Color.White, // Белый текст на `background` фоне
     onSurface = Color.White // Белый текст на `surface` фоне
 )
@@ -56,19 +60,32 @@ val typography = Typography(
 fun MewsTheme(
     systemDarkTheme: Boolean = isSystemInDarkTheme(),
     settingsTheme: String,
+    monetTheme: Boolean,
     // Динамические цвета доступны на Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when(settingsTheme) {
-//        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-//            val context = LocalContext.current
-//            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-//        }
-        "dark" -> DarkColorScheme
-        "light" -> LightColorScheme
-        else -> if (systemDarkTheme) DarkColorScheme else LightColorScheme
+    val turnDynamicColor = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) && monetTheme
+    val context = LocalContext.current
+
+    val colorScheme = when (settingsTheme) {
+        "light" -> if (turnDynamicColor) dynamicLightColorScheme(context) else LightColorScheme
+        "dark" -> if (turnDynamicColor) dynamicDarkColorScheme(context) else DarkColorScheme
+        else -> when {
+            turnDynamicColor -> if (systemDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            else -> if (systemDarkTheme) DarkColorScheme else LightColorScheme
+        }
     }
+//    val colorScheme = when {
+//        // Если динамический цвет включен и поддерживается, используем его
+//        dynamicColor && supportsDynamicColor -> {
+//            if (systemDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+//        }
+//        // В противном случае используем вашу логику выбора темы
+//        settingsTheme == "dark" -> DarkColorScheme
+//        settingsTheme == "light" -> LightColorScheme
+//        else -> if (systemDarkTheme) DarkColorScheme else LightColorScheme
+//    }
 
     // Добавлен SideEffect для управления цветом и иконками системной строки состояния
     val view = LocalView.current

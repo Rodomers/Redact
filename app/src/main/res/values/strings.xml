@@ -17,6 +17,7 @@
     <string name="settings_light_theme">Light</string>
     <string name="settings_dark_theme">Dark</string>
     <string name="settings_show_dates">Show dates</string>
+    <string name="settings_monet_colors">Monet colors</string>
     <string name="settings_color_scheme">Color scheme</string>
     <string name="settings_maximum_headers">Maximum headers</string>
     <string name="settings_news_period">News period</string>
