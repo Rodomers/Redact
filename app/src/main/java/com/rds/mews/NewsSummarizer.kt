@@ -36,7 +36,7 @@ class LLMClient(
     // AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk
     val apiKey: String = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk",
     val MODEL: String = "gemini-2.5-flash-lite",
-    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent"
+    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/${if (MODEL != "") MODEL else "gemini-2.5-flash-lite"}:generateContent"
 ) {
 
     // Отправляем запрос к Gemini, получаем текст ответа
