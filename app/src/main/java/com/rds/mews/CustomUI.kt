@@ -59,6 +59,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +70,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -358,14 +360,15 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .wrapContentHeight(),
+                        .wrapContentHeight()
                 ) {
                     Text(
                         text = stringResource(R.string.titles_card_text),
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .wrapContentSize()
-                            .padding(top = 8.dp, bottom = 6.dp)
+                            .align(Alignment.CenterVertically)
+                            .padding(top = 6.dp, bottom = 6.dp)
                             .clickable(interactionSource, indication = null) {
                                 coroutineScope.launch { pagerState.animateScrollToPage(0) }
                             }
@@ -377,7 +380,8 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .wrapContentHeight()
-                            .padding(start = 6.dp, top = 8.dp, bottom = 6.dp)
+                            .align(Alignment.CenterVertically)
+                            .padding(start = 6.dp, top = 6.dp, bottom = 6.dp)
                             .clickable(interactionSource, indication = null) {
                                 coroutineScope.launch { pagerState.animateScrollToPage(1) }
                             }
@@ -479,10 +483,19 @@ fun CustomPullToRefreshIndicator(
     var indicatorHeight by remember { mutableIntStateOf(0) }
 
     val refreshThreshold = 80.dp
-
     val refreshThresholdPx = with(LocalDensity.current) { refreshThreshold.toPx() }
-
     val scale = lerp(0f, 1f, state.distanceFraction.coerceIn(0f, 1f))
+
+    val currentUpdatingState by LocalContext.current.observeStringSharedPreference("updating_state", "off").collectAsState("off")
+    val text = when {
+        currentUpdatingState.contains("/") -> {
+            val args = currentUpdatingState.split("/").map { it.toInt() }
+            stringResource(R.string.summarizing, args[0], args[1])
+        }
+        currentUpdatingState == "extracting_topics" -> stringResource(R.string.extracting_topics)
+        currentUpdatingState == "updating" -> stringResource(R.string.updating)
+        else -> stringResource(R.string.update)
+    }
 
     Surface(
         modifier = modifier
@@ -512,7 +525,7 @@ fun CustomPullToRefreshIndicator(
                 modifier = Modifier.padding(top = 16.dp)
             )
             Text(
-                text = stringResource(R.string.updating),
+                text = text,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
                 modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)

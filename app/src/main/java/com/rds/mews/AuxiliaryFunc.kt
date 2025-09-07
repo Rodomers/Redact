@@ -1,12 +1,16 @@
 package com.rds.mews
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -148,4 +152,22 @@ fun scheduleRssUpdate(context: Context, intervalInMinutes: Int, sources: Boolean
 fun changeRssUpdateSchedule(context: Context, settingsModel: SettingsViewModel, newValue: Int) {
     settingsModel.setRssUpdateInterval(newValue)
     scheduleRssUpdate(context, newValue)
+}
+
+fun Context.observeStringSharedPreference(key: String, defaultValue: String): Flow<String> {
+    val sharedPreferences = getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    return callbackFlow {
+        trySend(sharedPreferences.getString(key, defaultValue) ?: defaultValue)
+
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener {prefs, changedKey ->
+            if (key == changedKey) trySend(prefs.getString(key, defaultValue) ?: defaultValue)
+        }
+
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+
+        awaitClose {
+            sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
 }

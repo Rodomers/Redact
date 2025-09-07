@@ -89,6 +89,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         const val RSS_UPDATE_INTERVAL = "rss_update_interval"
         const val LAST_RSS_UPDATE = "last_rss_update"
         const val UPDATING_TITLES = "updating_titles"
+        const val UPDATING_STATE = "updating_state"
     }
 
     var isDarkMode = mutableStateOf(settingsManager.getString(IS_DARK_MODE_KEY, "system"))
@@ -101,6 +102,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     var rssUpdateInterval = mutableIntStateOf(settingsManager.getInt(RSS_UPDATE_INTERVAL, 30))
     var lastRssUpdate = mutableLongStateOf(settingsManager.getLong(LAST_RSS_UPDATE, 0L))
     var updatingTitles = mutableStateOf(settingsManager.getBoolean(UPDATING_TITLES, false))
+    val currentUpdatingState = mutableStateOf(settingsManager.getString(UPDATING_STATE, "off"))
 
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener {_, key ->
         when (key) {
@@ -114,6 +116,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
             RSS_UPDATE_INTERVAL -> rssUpdateInterval.intValue = settingsManager.getInt(RSS_UPDATE_INTERVAL, 30)
             LAST_RSS_UPDATE -> lastRssUpdate.longValue = settingsManager.getLong(LAST_RSS_UPDATE, 0L)
             UPDATING_TITLES -> updatingTitles.value = settingsManager.getBoolean(UPDATING_TITLES, false)
+            UPDATING_STATE -> currentUpdatingState.value = settingsManager.getString(UPDATING_STATE, "off")
         }
     }
 
@@ -169,6 +172,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     fun setUpdatingTitles(newValue: Boolean) {
         settingsManager.saveBoolean(UPDATING_TITLES, newValue)
         updatingTitles.value = newValue
+    }
+
+    fun setUpdatingState(newValue: String) {
+        settingsManager.saveString(UPDATING_STATE, newValue)
+        currentUpdatingState.value = newValue
     }
 
     override fun onCleared() {

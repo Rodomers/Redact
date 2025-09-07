@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,7 +48,9 @@ fun TitlesGrid(itemsList: List<Title>,
         state = pullToRefreshState,
         indicator = { CustomPullToRefreshIndicator(
             state = pullToRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter).padding(WindowInsets.statusBars.asPaddingValues())
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(WindowInsets.statusBars.asPaddingValues())
         ) }
     ) {
         LazyVerticalGrid(

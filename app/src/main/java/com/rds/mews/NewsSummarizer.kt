@@ -1,6 +1,7 @@
 package com.rds.mews
 
 import android.annotation.SuppressLint
+import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.collections.mutableListOf
@@ -13,10 +14,11 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.time.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.math.min
+import android.content.SharedPreferences
+import androidx.compose.ui.platform.LocalContext
 
 
 // ====== Класс для работы с OpenRouter API ======
@@ -140,6 +142,7 @@ class LLMClient(
 class NewsSummarizer(
     private val db: DbHelper, // Хелпер для БД
     private val llm: LLMClient, // клиенты для опенроутера
+    val settingsManager: SettingsManager
 ) {
 
     /**
@@ -195,6 +198,7 @@ class NewsSummarizer(
                 8. СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($max). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого.
                 9. Заголовок не должен быть слишком общим ("Политика", "Общественная жизнь" и т.д. не подходят, т.к. не отражают суть событий).
                 10. Заголовки не должны быть однообразными.
+                11. Учитывай, что текущее время (Unix mills) в данный момент - ${System.currentTimeMillis()}
             
             Новости:
             $combinedNews
@@ -280,6 +284,7 @@ class NewsSummarizer(
             4. Отвечай на РУССКОМ языке.
             5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ Хотя бы одним значением.
             6. СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($maxTopics). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого. 
+            7. Учитывай, что текущее время (Unix mills) в данный момент - ${System.currentTimeMillis()}
             
                    
             Заголовки:       
@@ -326,6 +331,8 @@ class NewsSummarizer(
         var titles = mutableListOf<Topics>()
         var flagForUnfinishedTopics: Boolean = false
 
+        settingsManager.saveString("updating_state", "extracting_topics")
+
         // ЭТО ПЛОХО, но я  не знаю как переделать
         rawTitles.forEach { title ->
             if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
@@ -358,7 +365,12 @@ class NewsSummarizer(
                 readyFunc()
             }
             else -> {
+                val size = titles.size
+                var current: Int = 0
+
                 while (titles.isNotEmpty()) {
+                    current++
+                    settingsManager.saveString("updating_state", "$current/$size")
                     val title = titles.first()
                     val suitableMessages: MutableList<Message> = mutableListOf()
                     title.ids?.forEach { id ->
@@ -445,6 +457,7 @@ class NewsSummarizer(
                 6. В случае, если разные источники дают противоположные точки зрения - выписывай обе.
                 7. Различные события внутри одной темы разделяй с помощью \n.
                 8. Не используй форматирование (к нему относится, например, выделение текста жирным шрифтом или курсивом).
+                9. Учитывай, что текущее время (Unix mills) в данный момент - ${System.currentTimeMillis()}
                                 
                 Новости:
                 $newsText
