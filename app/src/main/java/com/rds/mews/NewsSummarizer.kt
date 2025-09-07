@@ -1,9 +1,8 @@
 package com.rds.mews
 
-import kotlinx.coroutines.delay
+import android.annotation.SuppressLint
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.math.min
 import kotlin.collections.mutableListOf
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -13,9 +12,11 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.time.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
+import kotlin.math.min
 
 
 // ====== Класс для работы с OpenRouter API ======
@@ -320,8 +321,6 @@ class NewsSummarizer(
 
 
     suspend fun summarizeTopics(maxTopics: Int = 20, messageSeconds: Long = 14515200, delaySeconds: Long = 10, readyFunc: () -> Unit) {
-
-
         val messages = db.getMessages(messageSeconds)
         var rawTitles = db.getTitles()
         var titles = mutableListOf<Topics>()
@@ -359,41 +358,31 @@ class NewsSummarizer(
                 readyFunc()
             }
             else -> {
-                titles.forEach { title ->
-                    println(title)
-                    // Составление списка новостей для нейронки
-                    var suitableMessages: List<Message> = mutableListOf()
+                while (titles.isNotEmpty()) {
+                    val title = titles.first()
+                    val suitableMessages: MutableList<Message> = mutableListOf()
                     title.ids?.forEach { id ->
                         messages.forEach { message ->
-                            if (message.id == id){
-                                suitableMessages += message
-                            }
-
+                            if (message.id == id) suitableMessages.add(message)
                         }
                     }
                     val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
-                    val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
+                    val bannedNews = "Таких тем нет"
                     var response = sumTopic(llm, title.title, bannedNews, newsText)
-                    while(response == ""){
-                        response = sumTopic(llm, title.title, bannedNews, newsText)
-                    }
+                    while (response == "") response = sumTopic(llm, title.title, bannedNews, newsText)
 
-                    // Приведение ответа к адекватному виду
                     val cleanResponse = response.trim().replace("```json", "")
                         .replace("```", "")
                         .replace("\"\"\"", "")
                         .trim()
 
-                    // Парсинг ответа по полям
                     val obj = JSONObject(cleanResponse)
                     val summary = obj.getString("summary")
-                    val ids = title.ids ?: return@forEach
+                    val ids = title.ids ?: return
 
-                    // время для темы выбирается по первой новости по этой теме или по системному времени, если ошибка
-                    var time: Long = System.currentTimeMillis()
+                    var time = System.currentTimeMillis()
                     ids.forEach { id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time) }
 
-                    // линки и сурсы в особый формат по id
                     val links = mutableListOf<String>()
                     val sources = mutableListOf<String>()
 
@@ -408,7 +397,6 @@ class NewsSummarizer(
                     println("${title.title}\t$summary$sources$links$time")
 
                     db.delTitle(name = title.title)
-                    // Сохраняем в БД
                     db.addTitle(
                         titleTime = time,
                         title = title.title,
@@ -417,15 +405,18 @@ class NewsSummarizer(
                         links = db.dbPack(*links.toTypedArray())
                     )
 
-                    // задержка перед следующим запросом
                     delay(delaySeconds * 100)
+
+                    titles.removeAt(0)
                 }
+
                 val count = db.getTitles().filter { it.text == "<промежуточный текст>" }.size
                 if (count == 0) readyFunc()
             }
         }
     }
 
+    @SuppressLint("SuspiciousIndentation")
     private suspend fun sumTopic(llm: LLMClient, title: String, bannedNews: String, newsText: String): String {
         try{
         val prompt = """
@@ -453,6 +444,7 @@ class NewsSummarizer(
                 5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ
                 6. В случае, если разные источники дают противоположные точки зрения - выписывай обе.
                 7. Различные события внутри одной темы разделяй с помощью \n.
+                8. Не используй форматирование (к нему относится, например, выделение текста жирным шрифтом или курсивом).
                                 
                 Новости:
                 $newsText
