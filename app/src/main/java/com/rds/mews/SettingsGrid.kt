@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import android.os.Build
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -92,16 +93,6 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-//        CustomSettingsItem(text = "Тёмная тема") {
-//            Switch(checked = darkTheme, onCheckedChange = { darkTheme = it })
-//        }
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-//            CustomSettingsItem(text = "Адаптивные цвета") {
-//                Switch(
-//                    checked = adaptiveColors, onCheckedChange = { adaptiveColors = it }
-//                )
-//            }
-//        }
         CustomSettingsItem(text = stringResource(R.string.settings_show_dates)) {
             Switch(
                 checked = showDates,
@@ -120,23 +111,25 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                 )
             )
         }
-        CustomSettingsItem(text = stringResource(R.string.settings_monet_colors)) {
-            Switch(
-                checked = monetColors,
-                onCheckedChange = {
-                    settingsModel.setMonetColors(it)
-                    monetColors = settingsModel.isMonetColors.value
-                },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.background,
-                    checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            CustomSettingsItem(text = stringResource(R.string.settings_monet_colors)) {
+                Switch(
+                    checked = monetColors,
+                    onCheckedChange = {
+                        settingsModel.setMonetColors(it)
+                        monetColors = settingsModel.isMonetColors.value
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.background,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
 
-                    uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                    uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
                 )
-            )
+            }
         }
         CustomSettingsItem(text = stringResource(R.string.settings_color_scheme)) {
             Box {

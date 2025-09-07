@@ -51,20 +51,22 @@ import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.twotone.Send
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.util.lerp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
@@ -468,44 +470,54 @@ fun CustomFullscreenLoading(isVisible: Boolean, animDuration: Int = 300) {
     }
 }
 
-//@Composable
-//fun CustomPullToRefreshIndicator(modifier: Modifier = Modifier) {
-//    Surface(
-//        modifier = modifier
-//            .fillMaxWidth()
-//            .padding(horizontal = 20.dp, vertical = 10.dp),
-//        shape = Shapes.large,
-//        shadowElevation = 8.dp,
-//        color = MaterialTheme.colorScheme.background
-//    ) {
-//        Column(
-//            horizontalAlignment = Alignment.CenterHorizontally,
-//            verticalArrangement = Arrangement.Center
-//        ) {
-//            CircularProgressIndicator(
-//                strokeWidth = 3.dp,
-//                color = MaterialTheme.colorScheme.primary,
-//                modifier = Modifier.padding(top = 16.dp)
-//            )
-//            Text(
-//                text = "Обновление...",
-//                fontWeight = FontWeight.Bold,
-//                fontSize = 16.sp,
-//                modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)
-//            )
-//        }
-//    }
-//}
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CustomPullToRefreshIndicator(modifier: Modifier = Modifier) {
-    Box(
+fun CustomPullToRefreshIndicator(
+    state: PullToRefreshState,
+    modifier: Modifier = Modifier
+) {
+    var indicatorHeight by remember { mutableIntStateOf(0) }
+
+    val refreshThreshold = 80.dp
+
+    val refreshThresholdPx = with(LocalDensity.current) { refreshThreshold.toPx() }
+
+    val scale = lerp(0f, 1f, state.distanceFraction.coerceIn(0f, 1f))
+
+    Surface(
         modifier = modifier
+            .onSizeChanged { size ->
+                indicatorHeight = size.height
+            }
+            .graphicsLayer {
+                scaleY = scale
+                alpha = scale
+
+                translationY = state.distanceFraction * refreshThresholdPx - indicatorHeight
+            }
+            .padding(horizontal = 20.dp, vertical = 10.dp)
             .fillMaxWidth()
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
+            .wrapContentHeight(),
+        shape = Shapes.large,
+        shadowElevation = 8.dp,
+        color = MaterialTheme.colorScheme.secondaryContainer
     ) {
-        CircularProgressIndicator()
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator(
+                strokeWidth = 3.dp,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+            Text(
+                text = stringResource(R.string.updating),
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)
+            )
+        }
     }
 }
 

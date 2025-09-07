@@ -55,4 +55,6 @@
     <string name="change">Change</string>
     <string name="share_btn_desc">Share title</string>
 
+    <string name="updating">Updating…</string>
+
 </resources>

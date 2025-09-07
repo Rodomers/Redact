@@ -35,8 +35,8 @@ class LLMClient(
     // AIzaSyBwT2sBtNulYoVFDpxq4uHPx-S-LCq7aAw
     // AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk
     val apiKey: String = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk",
-    val MODEL: String = "gemini-2.5-flash",
-    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    val MODEL: String = "gemini-2.5-flash-lite",
+    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
 ) {
 
     // Отправляем запрос к Gemini, получаем текст ответа
@@ -158,6 +158,7 @@ class NewsSummarizer(
         val prompt = """
             Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ от 1 до $max основных событий.
             СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($max). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого.
+            Темы отсортируй по важности от наиболее важных к наименее важным.
             
             ТЕБЕ ЗАПРЕЩЕНО ПИСАТЬ НА СЛЕДУЮЩИЕ ТЕМЫ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
             $bannedNews
@@ -199,7 +200,6 @@ class NewsSummarizer(
         """.trimIndent()
 
         val response = llm.sendPrompt(prompt) ?: ""
-            println(response)
 
         val cleanResponse = response.trim().replace("```json", "")
             .replace("```", "")
@@ -207,8 +207,9 @@ class NewsSummarizer(
             .trim()
 
         val jsonArray = JSONArray(cleanResponse)
+            val iterEnd = if (jsonArray.length() <= max) jsonArray.length() else max
 
-        for (i in 0 until jsonArray.length()) {
+        for (i in 0 until iterEnd) {
             val obj: JSONObject = jsonArray.getJSONObject(i)
 
             val title = obj.getString("title")
@@ -284,7 +285,6 @@ class NewsSummarizer(
             $titlesToFilter
         """.trimIndent()
         val response = llm.sendPrompt(prompt) ?: ""
-        println(response)
 
         val cleanResponse = response.trim().replace("```json", "")
             .replace("```", "")
@@ -340,7 +340,7 @@ class NewsSummarizer(
         println(titles)
         if(!flagForUnfinishedTopics){
             extractTopics(maxTopics, messageSeconds)
-            filterTopics(maxTopics)
+//            filterTopics(maxTopics)
             rawTitles = db.getTitles()
             titles = mutableListOf<Topics>()
             rawTitles.forEach { title ->

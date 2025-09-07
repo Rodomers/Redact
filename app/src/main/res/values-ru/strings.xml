@@ -57,5 +57,7 @@
     <string name="change">Изменить</string>
     <string name="share_btn_desc">Поделиться заголовком</string>
 
+    <string name="updating">Обновление…</string>
+
 
 </resources>
