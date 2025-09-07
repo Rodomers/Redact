@@ -86,6 +86,21 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
         pluralStringResource(R.plurals.minutes, count = 60, 60) to { changeRssUpdateSchedule(context, settingsModel, 60) }
     )
 
+    val geminiModelDropdownVisible = remember { MutableTransitionState(false) }
+    var geminiModelText by remember { mutableStateOf("") }
+    geminiModelText = when (settingsModel.currentLlm.value) {
+        "gemini-2.5-flash" -> "2.5 Flash"
+        "gemini-2.0-flash" -> "2.0 Flash"
+        "gemini-2.0-flash-lite" -> "2.0 Flash Lite"
+        else -> "2.5 Flash Lite"
+    }
+    val geminiModelDropdownItems = listOf(
+        "2.5 Flash" to { settingsModel.setCurrentLlm("gemini-2.5-flash") },
+        "2.5 Flash Lite" to { settingsModel.setCurrentLlm("gemini-2.5-flash-lite") },
+        "2.0 Flash" to { settingsModel.setCurrentLlm("gemini-2.0-flash") },
+        "2.0 Flash Lite" to { settingsModel.setCurrentLlm("gemini-2.0-flash-lite") }
+    )
+
     Column(
         modifier = modifier
             .statusBarsPadding()
@@ -257,6 +272,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                             }
                             else -> {
                                 settingsModel.setUserGeminiApi(defaultGeminiApiKey)
+                                settingsModel.setCurrentLlm("gemini-2.5-flash-lite")
                                 geminiApiText = settingsModel.userApi.value
                             }
                         }
@@ -268,6 +284,33 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                 ) {
                     Text(text = if (geminiApiText != defaultGeminiApiKey) stringResource(R.string.settings_reset) else stringResource(R.string.settings_paste),
                         color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            }
+        }
+        if (geminiApiText != defaultGeminiApiKey) {
+            CustomSettingsItem(text = stringResource(R.string.settings_gemini_model)) {
+                Box {
+                    Button(
+                        modifier = Modifier
+                            .wrapContentSize()
+                            .width(150.dp),
+                        onClick = { geminiModelDropdownVisible.targetState = !geminiModelDropdownVisible.currentState },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.background
+                        )
+                    ) {Text(text = geminiModelText,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    }
+
+                    if (geminiModelDropdownVisible.currentState || geminiModelDropdownVisible.targetState) {
+                        Popup(
+                            onDismissRequest = { geminiModelDropdownVisible.targetState = false },
+                            alignment = Alignment.TopEnd
+                        ) {
+                            CustomDropdown(transitionState = geminiModelDropdownVisible, buttons = geminiModelDropdownItems)
+                        }
+                    }
                 }
             }
         }

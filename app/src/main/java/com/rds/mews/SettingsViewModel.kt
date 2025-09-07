@@ -109,7 +109,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
             TITLES_NUM_KEY -> titlesNum.intValue = settingsManager.getInt(TITLES_NUM_KEY, 10)
             TITLES_PERIOD_KEY -> titlesPeriod.intValue = settingsManager.getInt(TITLES_PERIOD_KEY, 24)
             USER_API_KEY -> userApi.value = settingsManager.getString(USER_API_KEY, "")
-            CURRENT_LLM_MODEL -> currentLlm.value = settingsManager.getString(CURRENT_LLM_MODEL, "")
+            CURRENT_LLM_MODEL -> currentLlm.value = settingsManager.getString(CURRENT_LLM_MODEL, "gemini-2.5-flash-lite")
             SHOW_DATES -> showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
             RSS_UPDATE_INTERVAL -> rssUpdateInterval.intValue = settingsManager.getInt(RSS_UPDATE_INTERVAL, 30)
             LAST_RSS_UPDATE -> lastRssUpdate.longValue = settingsManager.getLong(LAST_RSS_UPDATE, 0L)

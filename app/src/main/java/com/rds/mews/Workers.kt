@@ -40,7 +40,7 @@ class TitlesUpdateWorker(
     override suspend fun doWork(): Result {
         val settingsManager = SettingsManager(applicationContext)
         settingsManager.saveBoolean("updating_titles", true)
-        val currentLLM = settingsManager.getString("current_model", "")
+        val currentLLM = settingsManager.getString("current_model", "gemini-2.5-flash-lite")
         val llmApiKey = settingsManager.getString("user_api", "")
         val rssLastUpdate = settingsManager.getLong("last_rss_update", 0L)
         val rssUpdateInterval = settingsManager.getInt("rss_update_interval", 30)

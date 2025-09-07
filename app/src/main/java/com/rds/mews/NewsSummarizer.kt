@@ -36,7 +36,7 @@ class LLMClient(
     // AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk
     val apiKey: String = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk",
     val MODEL: String = "gemini-2.5-flash-lite",
-    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent"
 ) {
 
     // Отправляем запрос к Gemini, получаем текст ответа
@@ -158,7 +158,7 @@ class NewsSummarizer(
         val prompt = """
             Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ от 1 до $max основных событий.
             СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($max). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого.
-            Темы отсортируй по важности от наиболее важных к наименее важным.
+            ОБЯЗАТЕЛЬНО: темы отсортируй по важности от наиболее важных к наименее важным.
             
             ТЕБЕ ЗАПРЕЩЕНО ПИСАТЬ НА СЛЕДУЮЩИЕ ТЕМЫ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
             $bannedNews

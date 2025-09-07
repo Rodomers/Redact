@@ -24,6 +24,7 @@
     <string name="settings_gemini_api_key">Ключ Gemini API</string>
     <string name="settings_reset">Сброс</string>
     <string name="settings_paste">Вставить</string>
+    <string name="settings_gemini_model">Выбор модели Gemini</string>
 
     <plurals name="titles" tools:ignore="MissingQuantity">
         <item quantity="one">%d заголовок</item>

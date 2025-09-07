@@ -59,7 +59,7 @@ fun TitlesGrid(itemsList: List<Title>,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (itemsList.isEmpty()) {
+            if (itemsList.isEmpty() && !isRefreshing) {
                 item {
                     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(text = stringResource(R.string.titles_update_text),

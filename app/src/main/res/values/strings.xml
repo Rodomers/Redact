@@ -25,6 +25,7 @@
     <string name="settings_gemini_api_key">Gemini API key</string>
     <string name="settings_reset">Reset</string>
     <string name="settings_paste">Paste</string>
+    <string name="settings_gemini_model">Gemini model</string>
 
     <plurals name="titles">
         <item quantity="one">%d title</item>
