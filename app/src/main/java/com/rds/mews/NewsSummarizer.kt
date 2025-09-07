@@ -35,8 +35,8 @@ class LLMClient(
     // AIzaSyBwT2sBtNulYoVFDpxq4uHPx-S-LCq7aAw
     // AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk
     val apiKey: String = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk",
-    val MODEL: String = "gemini-2.5-flash-lite",
-    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+    val MODEL: String = "gemini-2.5-flash",
+    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 ) {
 
     // Отправляем запрос к Gemini, получаем текст ответа
@@ -158,7 +158,6 @@ class NewsSummarizer(
         val prompt = """
             Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ от 1 до $max основных событий.
             СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($max). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого.
-            Темы отсортируй по важности от наиболее важных к наименее важным.
             
             ТЕБЕ ЗАПРЕЩЕНО ПИСАТЬ НА СЛЕДУЮЩИЕ ТЕМЫ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
             $bannedNews
@@ -200,6 +199,7 @@ class NewsSummarizer(
         """.trimIndent()
 
         val response = llm.sendPrompt(prompt) ?: ""
+            println(response)
 
         val cleanResponse = response.trim().replace("```json", "")
             .replace("```", "")
@@ -207,9 +207,8 @@ class NewsSummarizer(
             .trim()
 
         val jsonArray = JSONArray(cleanResponse)
-            val iterEnd = if (jsonArray.length() <= max) jsonArray.length() else max
 
-        for (i in 0 until iterEnd) {
+        for (i in 0 until jsonArray.length()) {
             val obj: JSONObject = jsonArray.getJSONObject(i)
 
             val title = obj.getString("title")
@@ -285,6 +284,7 @@ class NewsSummarizer(
             $titlesToFilter
         """.trimIndent()
         val response = llm.sendPrompt(prompt) ?: ""
+        println(response)
 
         val cleanResponse = response.trim().replace("```json", "")
             .replace("```", "")
@@ -340,7 +340,7 @@ class NewsSummarizer(
         println(titles)
         if(!flagForUnfinishedTopics){
             extractTopics(maxTopics, messageSeconds)
-//            filterTopics(maxTopics)
+            filterTopics(maxTopics)
             rawTitles = db.getTitles()
             titles = mutableListOf<Topics>()
             rawTitles.forEach { title ->
@@ -373,37 +373,10 @@ class NewsSummarizer(
                     }
                     val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
                     val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
-                    val prompt = """
-                Составь резюме по теме: "${title.title}".
-                Достаточно подробно расскажи о событии, но без общих слов или воды.
-                
-                ТЕБЕ ЗАПРЕЩЕНО КАСАТЬСЯ СЛЕДУЮЩИХ ТЕМ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
-                $bannedNews
-                
-                Возвращай всё в СТРОГОМ JSON формате: 
-                
-                {
-                "title": "<заголовок темы>", 
-                "summary": "<резюме по теме>", 
-                }, 
-                
-                где title - название темы,
-                summary - резюме по теме.
-                
-                Требования:
-                1. Не добавляй никакие ``` или ""${'"'}.
-                2. Не добавляй пояснения или текст вне JSON.
-                3. Ответ должен начинаться с { и заканчиваться }.
-                4. Отвечай на РУССКОМ языке.
-                5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ
-                6. В случае, если разные источники дают противоположные точки зрения - выписывай обе.
-                7. Различные события внутри одной темы разделяй с помощью \n.
-                                
-                Новости:
-                $newsText
-            """.trimIndent()
-
-                    val response = llm.sendPrompt(prompt) ?: return@forEach
+                    var response = sumTopic(llm, title.title, bannedNews, newsText)
+                    while(response == ""){
+                        response = sumTopic(llm, title.title, bannedNews, newsText)
+                    }
 
                     // Приведение ответа к адекватному виду
                     val cleanResponse = response.trim().replace("```json", "")
@@ -453,7 +426,45 @@ class NewsSummarizer(
         }
     }
 
+    private suspend fun sumTopic(llm: LLMClient, title: String, bannedNews: String, newsText: String): String {
+        try{
+        val prompt = """
+                Составь резюме по теме: "$title".
+                Достаточно подробно расскажи о событии, но без общих слов или воды.
+                
+                ТЕБЕ ЗАПРЕЩЕНО КАСАТЬСЯ СЛЕДУЮЩИХ ТЕМ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
+                $bannedNews
+                
+                Возвращай всё в СТРОГОМ JSON формате: 
+                
+                {
+                "title": "<заголовок темы>", 
+                "summary": "<резюме по теме>", 
+                }, 
+                
+                где title - название темы,
+                summary - резюме по теме.
+                
+                Требования:
+                1. Не добавляй никакие ``` или ""${'"'}.
+                2. Не добавляй пояснения или текст вне JSON.
+                3. Ответ должен начинаться с { и заканчиваться }.
+                4. Отвечай на РУССКОМ языке.
+                5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ
+                6. В случае, если разные источники дают противоположные точки зрения - выписывай обе.
+                7. Различные события внутри одной темы разделяй с помощью \n.
+                                
+                Новости:
+                $newsText
+            """.trimIndent()
 
+        val response = llm.sendPrompt(prompt) ?: ""
+            println(response)
+        return response
+        } catch (e: Exception){
+            return ""
+        }
+    }
 
     data class Topics (
         val title: String,
