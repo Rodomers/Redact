@@ -68,10 +68,11 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
             pluralStringResource(R.plurals.titles, count = 50, 50) to { settingsModel.setTitlesNum(50) })
         )
     }
-    else if (settingsModel.titlesNum.intValue > 25) settingsModel.setTitlesNum(25)
+    else if (settingsModel.titlesNum.intValue > 20) settingsModel.setTitlesNum(20)
 
     val limitationDropdownVisible = remember { MutableTransitionState(false) }
     val limitationDropdownItems = listOf(
+        pluralStringResource(R.plurals.hours, count = 12, 12) to { settingsModel.setTitlesPeriod(12) },
         pluralStringResource(R.plurals.hours, count = 24, 24) to { settingsModel.setTitlesPeriod(24) },
         pluralStringResource(R.plurals.hours, count = 48, 48) to { settingsModel.setTitlesPeriod(48) },
         pluralStringResource(R.plurals.hours, count = 72, 72) to { settingsModel.setTitlesPeriod(72) },
