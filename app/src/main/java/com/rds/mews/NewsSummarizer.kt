@@ -365,8 +365,9 @@ class NewsSummarizer(
                 readyFunc()
             }
             else -> {
-                val size = titles.size
-                var current: Int = 0
+                val dbTitles = db.getTitles()
+                val size = dbTitles.size
+                var current: Int = dbTitles.filter {!it.text.contains("<промежуточный текст>")}.size
 
                 while (titles.isNotEmpty()) {
                     current++

@@ -329,11 +329,13 @@ class DbHelper(val context: Context) :
         val db = this.writableDatabase
         val values = ContentValues().apply {
             put(RSS_SOURCE, newSource)
+            put(MESS_SOURCE, newSource)
         }
 
         return when (findRSS(oldSource)) {
             null -> false
             else -> {
+                db.update(MESS_NAME, values, "$MESS_SOURCE = ?", arrayOf(oldSource))
                 db.update(RSS_NAME, values, "$RSS_SOURCE = ?", arrayOf(oldSource)) > 0
             }
         }

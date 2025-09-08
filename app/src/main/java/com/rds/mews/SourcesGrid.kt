@@ -35,6 +35,8 @@ fun SourcesGrid(
     var changeDialog by remember { mutableStateOf("") }
     val addDialogTrue = { showAddDialog = true }
     val context = LocalContext.current
+    var newSourcesPermitted by remember { mutableStateOf(db.getRSS().size < 40) }
+    val newSourcesPermittedUpdate = { newSourcesPermitted = db.getRSS().size < 40 }
 
     val scope = rememberCoroutineScope()
 
@@ -57,7 +59,7 @@ fun SourcesGrid(
             )
         }
 
-        item {
+        if (newSourcesPermitted) item {
             SourcesAddCard(addDialogTrue)
         }
 
@@ -72,6 +74,7 @@ fun SourcesGrid(
                         onConfirm = {pair ->
                             scope.launch {
                                 addSource(pair.first, pair.second, db)
+                                newSourcesPermittedUpdate()
                                 onSourcesChanged()
                             }
                             showAddDialog = false
@@ -97,6 +100,7 @@ fun SourcesGrid(
                         onConfirm = {flag ->
                             scope.launch {
                                 delSource(delSourceName, db)
+                                newSourcesPermittedUpdate()
                                 onSourcesChanged()
                                 delSourceName = ""
                             }
