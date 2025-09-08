@@ -478,13 +478,14 @@ fun CustomFullscreenLoading(isVisible: Boolean, animDuration: Int = 300) {
 @Composable
 fun CustomPullToRefreshIndicator(
     state: PullToRefreshState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isRefreshing: Boolean
 ) {
     var indicatorHeight by remember { mutableIntStateOf(0) }
 
     val refreshThreshold = 80.dp
     val refreshThresholdPx = with(LocalDensity.current) { refreshThreshold.toPx() }
-    val scale = lerp(0f, 1f, state.distanceFraction.coerceIn(0f, 1f))
+    val scale = if (isRefreshing) 1f else lerp(0f, 1f, state.distanceFraction.coerceIn(0f, 1f))
 
     val currentUpdatingState by LocalContext.current.observeStringSharedPreference("updating_state", "off").collectAsState("off")
     val text = when {
