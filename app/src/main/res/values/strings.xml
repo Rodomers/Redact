@@ -61,5 +61,6 @@
     <string name="extracting_topics">Extracting topics…</string>
     <string name="filtering_topics">Filtering topics…</string>
     <string name="summarizing">Summarizing: %1$d/%2$d</string>
+    <string name="stop_updating">Stop  updating</string>
 
 </resources>

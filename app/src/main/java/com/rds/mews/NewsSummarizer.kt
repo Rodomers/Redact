@@ -17,8 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.math.min
-import android.content.SharedPreferences
-import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.withTimeout
 
 
 // ====== Класс для работы с OpenRouter API ======
@@ -204,7 +203,15 @@ class NewsSummarizer(
             $combinedNews
         """.trimIndent()
 
-        val response = llm.sendPrompt(prompt) ?: ""
+            val response: String
+            try {
+                response = withTimeout(60000L) {
+                    llm.sendPrompt(prompt) ?: ""
+                }
+            } catch (e: Exception) {
+                println("Превышено время ожидания ответа от нейросети.")
+                return
+            }
 
         val cleanResponse = response.trim().replace("```json", "")
             .replace("```", "")
@@ -381,46 +388,56 @@ class NewsSummarizer(
                     }
                     val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
                     val bannedNews = "Таких тем нет"
-                    var response = sumTopic(llm, title.title, bannedNews, newsText)
-                    while (response == "") response = sumTopic(llm, title.title, bannedNews, newsText)
-
-                    val cleanResponse = response.trim().replace("```json", "")
-                        .replace("```", "")
-                        .replace("\"\"\"", "")
-                        .trim()
-
-                    val obj = JSONObject(cleanResponse)
-                    val summary = obj.getString("summary")
-                    val ids = title.ids ?: return
-
-                    var time = System.currentTimeMillis()
-                    ids.forEach { id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time) }
-
-                    val links = mutableListOf<String>()
-                    val sources = mutableListOf<String>()
-
-                    ids.forEach { id ->
-                        val mess = db.getMessage(id)
-                        if (mess != null) {
-                            links.add(mess.link)
-                            sources.add(mess.source)
+                    var response: String
+                    try {
+                        response = withTimeout(40000L) {
+                            sumTopic(llm, title.title, bannedNews, newsText)
                         }
+
+                        val cleanResponse = response.trim().replace("```json", "")
+                            .replace("```", "")
+                            .replace("\"\"\"", "")
+                            .trim()
+
+                        val obj = JSONObject(cleanResponse)
+                        val summary = obj.getString("summary")
+                        val ids = title.ids ?: return
+
+                        var time = System.currentTimeMillis()
+                        ids.forEach { id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time) }
+
+                        val links = mutableListOf<String>()
+                        val sources = mutableListOf<String>()
+
+                        ids.forEach { id ->
+                            val mess = db.getMessage(id)
+                            if (mess != null) {
+                                links.add(mess.link)
+                                sources.add(mess.source)
+                            }
+                        }
+
+                        println("${title.title}\t$summary$sources$links$time")
+
+                        db.delTitle(name = title.title)
+                        db.addTitle(
+                            titleTime = time,
+                            title = title.title,
+                            text = summary,
+                            sources = db.dbPack(*sources.toTypedArray()),
+                            links = db.dbPack(*links.toTypedArray())
+                        )
+
+                        delay(delaySeconds * 100)
+
+                        titles.removeAt(0)
+                    } catch (e: Exception) {
+                        println("Превышено время ожидания ответа от нейросети.")
+                        current --
+                        return
                     }
-
-                    println("${title.title}\t$summary$sources$links$time")
-
-                    db.delTitle(name = title.title)
-                    db.addTitle(
-                        titleTime = time,
-                        title = title.title,
-                        text = summary,
-                        sources = db.dbPack(*sources.toTypedArray()),
-                        links = db.dbPack(*links.toTypedArray())
-                    )
-
-                    delay(delaySeconds * 100)
-
-                    titles.removeAt(0)
+//                    response = sumTopic(llm, title.title, bannedNews, newsText)
+//                    while (response == "") response = sumTopic(llm, title.title, bannedNews, newsText)
                 }
 
                 val count = db.getTitles().filter { it.text == "<промежуточный текст>" }.size

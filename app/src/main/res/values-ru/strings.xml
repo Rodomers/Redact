@@ -63,6 +63,7 @@
     <string name="extracting_topics">Выделяю темы…</string>
     <string name="filtering_topics">Фильтрую базар…</string>
     <string name="summarizing">Резюмирую: %1$d/%2$d</string>
+    <string name="stop_updating">Прервать обновление</string>
 
 
 </resources>

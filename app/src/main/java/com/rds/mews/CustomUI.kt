@@ -479,7 +479,8 @@ fun CustomFullscreenLoading(isVisible: Boolean, animDuration: Int = 300) {
 fun CustomPullToRefreshIndicator(
     state: PullToRefreshState,
     modifier: Modifier = Modifier,
-    isRefreshing: Boolean
+    isRefreshing: Boolean,
+    stopFunc: () -> Unit
 ) {
     var indicatorHeight by remember { mutableIntStateOf(0) }
 
@@ -531,6 +532,9 @@ fun CustomPullToRefreshIndicator(
                 fontSize = 16.sp,
                 modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)
             )
+//            TextButton(onClick = stopFunc) {
+//                Text(stringResource(R.string.stop_updating))
+//            }
         }
     }
 }

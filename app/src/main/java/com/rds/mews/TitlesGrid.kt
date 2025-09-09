@@ -32,7 +32,8 @@ fun TitlesGrid(itemsList: List<Title>,
                modifier: Modifier,
                isRefreshing: Boolean,
                onRefresh: () -> Unit,
-               settingsViewModel: SettingsViewModel
+               settingsViewModel: SettingsViewModel,
+               stopRefreshingFunc: () -> Unit
 ) {
     val showDates by remember { mutableStateOf(settingsViewModel.showDates.value) }
     val pullToRefreshState = rememberPullToRefreshState()
@@ -47,7 +48,8 @@ fun TitlesGrid(itemsList: List<Title>,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(WindowInsets.statusBars.asPaddingValues()),
-            isRefreshing = isRefreshing
+            isRefreshing = isRefreshing,
+            stopFunc = stopRefreshingFunc
         ) }
     ) {
         LazyVerticalGrid(

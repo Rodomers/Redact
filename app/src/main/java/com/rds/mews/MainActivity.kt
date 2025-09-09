@@ -105,6 +105,13 @@ fun MainScreen() {
             }
         }
 
+        fun stopRefreshingTitles() {
+            isTitlesRefreshing = false
+            settingsViewModel.setUpdatingTitles(false)
+            settingsViewModel.setUpdatingState("off")
+            db.titlesTimeKill(0)
+        }
+
         Scaffold(
             bottomBar = {
                 MyBottomBar(
@@ -139,7 +146,8 @@ fun MainScreen() {
                         modifier = Modifier.padding(paddingValues),
                         isRefreshing = isTitlesRefreshing,
                         onRefresh = ::refreshTitles,
-                        settingsViewModel = settingsViewModel
+                        settingsViewModel = settingsViewModel,
+                        stopRefreshingFunc = ::stopRefreshingTitles
                     )
                 }
                 else -> SettingsGrid(
