@@ -86,7 +86,10 @@ fun MainScreen() {
 //        val summarizer = NewsSummarizer(db, llm)
         val scope = rememberCoroutineScope()
         var isTitlesRefreshing by remember { mutableStateOf(false) }
-        val titlesRefreshed = { isTitlesRefreshing = false }
+        val titlesRefreshed = {
+            settingsViewModel.setUpdatingState("updating")
+            isTitlesRefreshing = false
+        }
         val context = LocalContext.current
 
         fun refreshTitles(returnExisting: Boolean = false) {
@@ -106,10 +109,11 @@ fun MainScreen() {
         }
 
         fun stopRefreshingTitles() {
-            isTitlesRefreshing = false
+//            isTitlesRefreshing = false
             settingsViewModel.setUpdatingTitles(false)
             settingsViewModel.setUpdatingState("off")
             db.titlesTimeKill(0)
+            refreshTitles()
         }
 
         Scaffold(
@@ -143,7 +147,7 @@ fun MainScreen() {
 
                     TitlesGrid(
                         itemsList = titlesList,
-                        modifier = Modifier.padding(paddingValues),
+                        modifier = Modifier.padding(paddingValues)  ,
                         isRefreshing = isTitlesRefreshing,
                         onRefresh = ::refreshTitles,
                         settingsViewModel = settingsViewModel,

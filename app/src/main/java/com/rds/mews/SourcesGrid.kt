@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SheetState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,9 +24,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SourcesGrid(
     itemsList: List<String>, modifier: Modifier, db: DbHelper,
@@ -37,6 +40,8 @@ fun SourcesGrid(
     val context = LocalContext.current
     var newSourcesPermitted by remember { mutableStateOf(db.getRSS().size < 40) }
     val newSourcesPermittedUpdate = { newSourcesPermitted = db.getRSS().size < 40 }
+
+    val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val scope = rememberCoroutineScope()
 
@@ -65,48 +70,42 @@ fun SourcesGrid(
 
         if (showAddDialog) {
             item {
-                Popup(
+                CustomChangeBottomSheet(
                     onDismissRequest = { showAddDialog = false },
-                    alignment = Alignment.TopEnd
-                ) {
-                    CustomChangeDialog(
-                        cancelAction = { showAddDialog = false },
-                        onConfirm = {pair ->
-                            scope.launch {
-                                addSource(pair.first, pair.second, db)
-                                newSourcesPermittedUpdate()
-                                onSourcesChanged()
-                            }
-                            showAddDialog = false
-                            scheduleRssUpdate(context, settingsViewModel.rssUpdateInterval.intValue, false)
-                        },
-                        add = true,
-                        scope = scope
-                    )
-                }
+                    onConfirm = {pair ->
+                        scope.launch {
+                            addSource(pair.first, pair.second, db)
+                            newSourcesPermittedUpdate()
+                            onSourcesChanged()
+                        }
+                        showAddDialog = false
+                        scheduleRssUpdate(context, settingsViewModel.rssUpdateInterval.intValue, false)
+                    },
+                    add = true,
+                    scope = scope,
+                    sheetState = bottomSheetState
+                )
             }
         }
         if (delSourceName != "") {
             item {
-                Popup(
+                CustomErrorBottomSheet(
+                    title = stringResource(R.string.delsource_title),
+                    text = stringResource(R.string.delsource_text),
                     onDismissRequest = { delSourceName = "" },
-                    alignment = Alignment.TopEnd
-                ) {
-                    CustomConfirmDialog(
-                        title = stringResource(R.string.delsource_title),
-                        text = stringResource(R.string.delsource_text),
-                        cancelAction = { delSourceName = "" },
-                        btnText = stringResource(R.string.delsource_btntext),
-                        onConfirm = {flag ->
-                            scope.launch {
-                                delSource(delSourceName, db)
-                                newSourcesPermittedUpdate()
-                                onSourcesChanged()
-                                delSourceName = ""
-                            }
+                    cancelBtnText = stringResource(R.string.cancel),
+                    confBtnText = stringResource(R.string.delsource_btntext),
+                    onConfirm = {flag ->
+                        scope.launch {
+                            delSource(delSourceName, db)
+                            newSourcesPermittedUpdate()
+                            onSourcesChanged()
+                            delSourceName = ""
                         }
-                    )
-                }
+                    },
+                    scope = scope,
+                    sheetState = bottomSheetState
+                )
             }
         }
         if (changeDialog != "") {
@@ -115,8 +114,8 @@ fun SourcesGrid(
                     onDismissRequest = { delSourceName = "" },
                     alignment = Alignment.TopEnd
                 ) {
-                    CustomChangeDialog(
-                        cancelAction = { changeDialog = "" },
+                    CustomChangeBottomSheet(
+                        onDismissRequest = { changeDialog = "" },
                         onConfirm = {pair ->
                             scope.launch {
                                 changeSource(pair.first, pair.second, db)
@@ -125,7 +124,9 @@ fun SourcesGrid(
                             }
                         },
                         add = false,
-                        source = changeDialog
+                        source = changeDialog,
+                        scope = scope,
+                        sheetState = bottomSheetState
                     )
                 }
             }

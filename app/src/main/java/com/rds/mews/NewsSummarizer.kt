@@ -51,7 +51,7 @@ class LLMClient(
                 })
             }
             install(HttpTimeout) {
-                requestTimeoutMillis = 180000 // 60 секунд
+                requestTimeoutMillis = 60000 // 60 секунд
                 connectTimeoutMillis = 15000
                 socketTimeoutMillis = 60000
             }

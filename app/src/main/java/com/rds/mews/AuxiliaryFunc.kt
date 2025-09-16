@@ -78,7 +78,7 @@ suspend fun updateTitles(
         settingsViewModel.setUpdatingTitles(true)
         WorkManager.getInstance(context).enqueueUniqueWork(
             "titles_update_work",
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             updateWorkRequest
         )
 

@@ -38,7 +38,9 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -54,8 +56,10 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SheetState
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.CompositionLocalProvider
@@ -78,7 +82,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Popup
 import com.rds.mews.ui.theme.Shapes
@@ -501,6 +504,7 @@ fun CustomPullToRefreshIndicator(
 
     Surface(
         modifier = modifier
+            .statusBarsPadding()
             .onSizeChanged { size ->
                 indicatorHeight = size.height
             }
@@ -511,6 +515,7 @@ fun CustomPullToRefreshIndicator(
                 translationY = state.distanceFraction * refreshThresholdPx - indicatorHeight
             }
             .padding(horizontal = 20.dp, vertical = 10.dp)
+            .statusBarsPadding()
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = Shapes.large,
@@ -519,7 +524,7 @@ fun CustomPullToRefreshIndicator(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Top
         ) {
             CircularProgressIndicator(
                 strokeWidth = 3.dp,
@@ -533,84 +538,71 @@ fun CustomPullToRefreshIndicator(
                 modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)
             )
 //            TextButton(onClick = stopFunc) {
-//                Text(stringResource(R.string.stop_updating))
+//                Text(stringResource(R.string.restart_updating))
 //            }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CustomChangeDialog(
-    cancelAction: () -> Unit,
+fun CustomChangeBottomSheet(
+    onDismissRequest: () -> Unit,
     onConfirm: (Pair<String, String>) -> Unit,
     add: Boolean = false,
     source: String = stringResource(R.string.change_dialog_source),
-    scope: CoroutineScope? = null
+    scope: CoroutineScope,
+    sheetState: SheetState
 ) {
     val title = if (add) stringResource(R.string.change_dialog_add_source) else stringResource(R.string.change_dialog_change_source)
 
-    Dialog(onDismissRequest = cancelAction) {
-        val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
-        dialogWindowProvider?.window?.setDimAmount(0.6f)
-
-        var rssText by remember { mutableStateOf("") }
-        var sourceText by remember { mutableStateOf(if (!add) source else "") }
-        var validRss by remember { mutableStateOf(!add) }
-
-        Surface(
-            shape = MaterialTheme.shapes.large,
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState
+    ) {
+        val closeSheet = {
+            scope.launch { sheetState.hide() }
+                .invokeOnCompletion { if (!sheetState.isVisible) onDismissRequest() }
+        }
+        Column(
             modifier = Modifier
-                .wrapContentWidth()
-                .wrapContentHeight(),
-            shadowElevation = 8.dp,
-            color = MaterialTheme.colorScheme.surface
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = title,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)
-                )
+            Text(
+                text = title,
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp).fillMaxWidth()
+            )
 
-                if (add && scope != null) {
-                    OutlinedTextField(
-                        value = rssText,
-                        onValueChange = {
-                            rssText = it
-                            validRss = false
-                            scope.launch(Dispatchers.IO) {
-                                val res = RSSName(linkTransform(rssText))
-                                if (res != null) {
-                                    sourceText = res
-                                    validRss = true
-                                }
-                            }
-                        },
-                        shape = MaterialTheme.shapes.large,
-                        label = { Text(stringResource(R.string.change_dialog_link)) },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.onSurface,
-                            cursorColor = MaterialTheme.colorScheme.onSurface,
-                            focusedLabelColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurface,
-                        )
-                    )
-                }
+            var rssText by remember { mutableStateOf("") }
+            var sourceText by remember { mutableStateOf(if (!add) source else "") }
+            var validRss by remember { mutableStateOf(!add) }
 
+            if (add) {
                 OutlinedTextField(
-                    value = sourceText,
-                    onValueChange = { sourceText = it },
+                    value = rssText,
+                    onValueChange = {
+                        rssText = it
+                        validRss = false
+                        scope.launch(Dispatchers.IO) {
+                            val res = RSSName(linkTransform(rssText))
+                            if (res != null) {
+                                sourceText = res
+                                validRss = true
+                            }
+                        }
+                    },
                     shape = MaterialTheme.shapes.large,
-                    label = { Text(stringResource(R.string.change_dialog_source)) },
-                    placeholder = { Text(source) },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    label = { Text(stringResource(R.string.change_dialog_link)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.onSurface,
                         cursorColor = MaterialTheme.colorScheme.onSurface,
@@ -619,46 +611,134 @@ fun CustomChangeDialog(
                         unfocusedLabelColor = MaterialTheme.colorScheme.onSurface,
                     )
                 )
+            }
 
-                if (add && scope != null) {
-                    Text(
-                        text = if (validRss) stringResource(R.string.valid_link) else stringResource(R.string.enter_correct_link),
-                        modifier = Modifier
-                            .padding(16.dp)
-                    )
+            OutlinedTextField(
+                value = sourceText,
+                onValueChange = { sourceText = it },
+                shape = MaterialTheme.shapes.large,
+                label = { Text(stringResource(R.string.change_dialog_source)) },
+                placeholder = { Text(source) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.onSurface,
+                    cursorColor = MaterialTheme.colorScheme.onSurface,
+                    focusedLabelColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurface,
+                )
+            )
+
+            if (add) {
+                Text(
+                    text = if (validRss) stringResource(R.string.valid_link) else stringResource(R.string.enter_correct_link),
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = { closeSheet() }) {
+                    Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onSurface)
                 }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(end = 8.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.End
+                if ((validRss && rssText.isNotBlank() && sourceText.isNotBlank() && add)) {
+                    TextButton(
+                        onClick = {
+                            val finalSourceName = sourceText.ifEmpty { source }
+                            onConfirm(Pair(finalSourceName, linkTransform(rssText.trim())))
+                            closeSheet()
+                        }
+                    ) {
+                        Text(stringResource(R.string.add), color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+
+                if (!add && sourceText.isNotBlank()) {
+                    TextButton(
+                        onClick = {
+                            val finalSourceName = sourceText.ifEmpty { source }
+                            onConfirm(Pair(source, finalSourceName))
+                            closeSheet()
+                        }
+                    ) {
+                        Text(stringResource(R.string.change), color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CustomErrorBottomSheet(
+    title: String,
+    text: String,
+    confBtnText: String,
+    cancelBtnText: String,
+    onDismissRequest: () -> Unit,
+    onConfirm: (Boolean) -> Unit,
+    scope: CoroutineScope,
+    sheetState: SheetState
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState
+    ) {
+        val closeSheet = {
+            scope.launch { sheetState.hide() }
+                .invokeOnCompletion { if (!sheetState.isVisible) onDismissRequest() }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = title,
+                textAlign = TextAlign.Center,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp).fillMaxWidth()
+            )
+            Text(
+                text = text,
+                textAlign = TextAlign.Start,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp).fillMaxWidth()
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(
+                    onClick = {
+                        closeSheet()
+                    }
                 ) {
-                    TextButton(onClick = cancelAction) {
-                        Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onSurface)
+                    Text(cancelBtnText, color = MaterialTheme.colorScheme.onSurface)
+                }
+                TextButton(
+                    onClick = {
+                        onConfirm(true)
+                        closeSheet()
                     }
-
-                    if ((validRss && rssText != "" && sourceText != "" && add)) {
-                        TextButton(
-                            onClick = {
-                                val finalSourceName = sourceText.ifEmpty { source }
-                                onConfirm(Pair(finalSourceName, linkTransform(rssText.trim())))
-                            }
-                        ) {
-                            Text(stringResource(R.string.add), color = MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
-
-                    if (!add && sourceText != "") {
-                        TextButton(
-                            onClick = {
-                                val finalSourceName = sourceText.ifEmpty { source }
-                                onConfirm(Pair(source, finalSourceName))
-                            }
-                        ) {
-                            Text(stringResource(R.string.change), color = MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
+                ) {
+                    Text(confBtnText, color = MaterialTheme.colorScheme.onSurface)
                 }
             }
         }
