@@ -50,7 +50,10 @@ fun TitlesGrid(itemsList: List<Title>,
 
     LaunchedEffect(errState) {
         when (errState) {
-            null -> bottomSheetState.show()
+            null -> {
+                bottomSheetState.show()
+                closeIndicator()
+            }
             else -> if (bottomSheetState.isVisible) bottomSheetState.hide()
         }
     }
@@ -58,8 +61,6 @@ fun TitlesGrid(itemsList: List<Title>,
     if (errState != null) {
         val err = errState!!
         val resources = remember(err) { mapResultToUiResources(err) }
-
-        closeIndicator()
 
         CustomErrorBottomSheet(
             title = stringResource(resources[0]),
@@ -71,16 +72,17 @@ fun TitlesGrid(itemsList: List<Title>,
                 settingsViewModel.setUpdatingState("off")
                                },
             onConfirm = {
-                when (err.type) {
-                    in listOf(SummarizationErrorType.EXTRACT_TOPICS_FAILED,
-                        SummarizationErrorType.SUMMARIZE_TOPICS_FAILED) -> {
-                        onRefresh()
+                scope.launch {
+                    when (err.type) {
+                        in listOf(SummarizationErrorType.EXTRACT_TOPICS_FAILED,
+                            SummarizationErrorType.SUMMARIZE_TOPICS_FAILED) -> {
+                            onRefresh()
+                        }
+                        else -> {  }
                     }
-                    else -> { onRefresh() }
-                }
 
-                scope.launch { if (bottomSheetState.isVisible) bottomSheetState.hide() }
-                    .invokeOnCompletion { if (!bottomSheetState.isVisible) settingsViewModel.clearError() }
+                    if (bottomSheetState.isVisible) bottomSheetState.hide()
+                }.invokeOnCompletion { if (!bottomSheetState.isVisible) settingsViewModel.clearError() }
             },
             scope = scope,
             sheetState = bottomSheetState

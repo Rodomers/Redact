@@ -40,6 +40,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
     val clipboardManager = LocalClipboardManager.current
     var text by remember { mutableStateOf("") }
     var showDates by remember { mutableStateOf(settingsModel.showDates.value) }
+    var compactTab by remember { mutableStateOf(settingsModel.compactTabBar.value) }
     var monetColors by remember { mutableStateOf(settingsModel.isMonetColors.value) }
     val defaultGeminiApiKey by remember { mutableStateOf("AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") }
     var geminiApiText by remember { mutableStateOf(settingsModel.userApi.value) }
@@ -115,6 +116,24 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                 onCheckedChange = {
                     settingsModel.setShowDates(it)
                     showDates = settingsModel.showDates.value
+                },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.background,
+                    checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                    uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            )
+        }
+        CustomSettingsItem(text = stringResource(R.string.settings_compact_tab)) {
+            Switch(
+                checked = compactTab,
+                onCheckedChange = {
+                    settingsModel.setCompactTab(it)
+                    compactTab = settingsModel.compactTabBar.value
                 },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = MaterialTheme.colorScheme.background,

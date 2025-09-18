@@ -4,7 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.StringRes
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
@@ -29,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rds.mews.ui.theme.MewsTheme
@@ -68,11 +74,12 @@ fun MainScreen() {
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
 
     // отладочное
-//    settingsViewModel.setTitlesNum(5)
+//    settingsViewModel.setTitlesNum(3)
 
     MewsTheme(settingsTheme = settingsViewModel.isDarkMode.value, monetTheme = settingsViewModel.isMonetColors.value) {
         var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }
 
+        val compactTab by settingsViewModel.compactTabBar
 
         val db = DbHelper(LocalContext.current.applicationContext)
 //    db.titlesTimeKill(0)
@@ -97,8 +104,8 @@ fun MainScreen() {
         val context = LocalContext.current
 
         fun refreshTitles(returnExisting: Boolean = false) {
+            isTitlesRefreshing = true
             scope.launch {
-                isTitlesRefreshing = true
                 var updatedList = withContext(Dispatchers.IO) {
                     updateTitles(context, db, settingsViewModel, settingsManager, returnExisting = returnExisting, titlesRefreshed)
                 }
@@ -132,6 +139,7 @@ fun MainScreen() {
                     onTabSelected = { newTab ->
                         selectedTab = newTab
                     },
+                    compact = compactTab,
                 )
             }
         ) { paddingValues ->
@@ -202,10 +210,21 @@ fun MainScreen() {
 //------------------------------------------------------------------------
 
 @Composable
-fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit) {
+fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit, compact: Boolean = false) {
     val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)
 
-    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+    val targetHeight = if (compact) 62.dp else 80.dp
+
+    val animatedHeight by animateDpAsState(
+        targetValue = targetHeight,
+        animationSpec = tween(durationMillis = 300),
+        label = "NavigationBarHeight"
+    )
+
+    NavigationBar(
+        modifier = Modifier.height(animatedHeight),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
         tabs.forEach { tab ->
             val tabTitle = stringResource(id = tab.titleResId)
 
@@ -215,9 +234,9 @@ fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit) {
                 icon = {
                     Icon(imageVector = tab.icon, contentDescription = tabTitle)
                 },
-                label = {
-                    Text(text = tabTitle)
-                },
+                label = if (!compact) {
+                    { Text(text = tabTitle) }
+                } else null,
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = MaterialTheme.colorScheme.surface,
                     unselectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,

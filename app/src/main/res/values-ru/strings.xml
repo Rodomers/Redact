@@ -18,6 +18,7 @@
     <string name="settings_show_dates">Отображение дат</string>
     <string name="settings_monet_colors">Цвета Monet</string>
     <string name="settings_color_scheme">Тема оформления</string>
+    <string name="settings_compact_tab">Компактный вид навигационной панели</string>
     <string name="settings_maximum_headers">Максимум заголовков</string>
     <string name="settings_news_period">Срок давности новостей</string>
     <string name="settings_news_update_frequency">Частота фонового обновления новостей</string>
