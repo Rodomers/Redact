@@ -108,9 +108,11 @@ fun MainScreen() {
                     }
                 }
 
-                if (db.getTitles().isNotEmpty()) {
+                val filteredUpdatedList = updatedList.filter {it.text != "<промежуточный текст>"}
+
+                if (filteredUpdatedList.isNotEmpty()) {
                     titlesList.clear()
-                    titlesList.addAll(updatedList.filter {it.text != "<промежуточный текст>"})
+                    titlesList.addAll(filteredUpdatedList)
                 }
             }
         }
