@@ -273,7 +273,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                             }
                             else -> {
                                 settingsModel.setUserGeminiApi(defaultGeminiApiKey)
-                                settingsModel.setCurrentLlm("gemini-2.5-flash-lite")
+                                settingsModel.setCurrentLlm("gemini-2.0-flash")
                                 geminiApiText = settingsModel.userApi.value
                             }
                         }

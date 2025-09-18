@@ -2,6 +2,8 @@ package com.rds.mews
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.collection.IntList
+import androidx.collection.intListOf
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -78,7 +80,7 @@ suspend fun updateTitles(
         settingsViewModel.setUpdatingTitles(true)
         WorkManager.getInstance(context).enqueueUniqueWork(
             "titles_update_work",
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             updateWorkRequest
         )
 
@@ -168,6 +170,34 @@ fun Context.observeStringSharedPreference(key: String, defaultValue: String): Fl
 
         awaitClose {
             sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+}
+
+fun mapResultToUiResources(result: SummarizationResult): IntList {
+    return when (result) {
+        is SummarizationResult.Success -> {
+            intListOf(R.string.err_header_success, R.string.err_text_success, R.string.err_btn_success)
+        }
+        is SummarizationResult.Failure -> {
+            when (result.type) {
+                SummarizationErrorType.EXTRACT_TOPICS_FAILED ->
+                    intListOf(R.string.err_header_extractFail, R.string.err_text_extractFail, R.string.err_btn_extractFail)
+
+                SummarizationErrorType.SUMMARIZE_TOPICS_FAILED,
+                SummarizationErrorType.NETWORK_TIMEOUT ->
+                    intListOf(R.string.err_header_summarizing, R.string.err_text_summarizing, R.string.err_btn_summarizing)
+
+                SummarizationErrorType.CRITICAL_SUMMARIZATION_ERROR ->
+                    intListOf(R.string.err_header_sumCritical, R.string.err_text_sumCritical, R.string.err_btn_sumCritical)
+
+                SummarizationErrorType.JSON_PARSING_FAILED ->
+                    intListOf(R.string.err_header_parsing, R.string.err_text_parsing, R.string.err_btn_parsing)
+
+                SummarizationErrorType.NO_NEWS_TO_ANALYZE,
+                SummarizationErrorType.UNKNOWN_ERROR -> // Общий обработчик для остальных ошибок
+                    intListOf(R.string.err_header_interpreter, R.string.err_text_interpreter, R.string.err_btn_interpreter)
+            }
         }
     }
 }

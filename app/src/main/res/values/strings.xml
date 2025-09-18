@@ -63,4 +63,23 @@
     <string name="summarizing">Summarizing: %1$d/%2$d</string>
     <string name="restart_updating">Restart</string>
 
+    <string name="err_header_success">Success</string>
+    <string name="err_text_success">We don\'t know why this is here. The update was successful.</string>
+    <string name="err_btn_success">OK</string>
+    <string name="err_header_extractFail">Theme Error</string>
+    <string name="err_text_extractFail">An error occurred while extracting themes.\nRestart update?</string>
+    <string name="err_btn_extractFail">Restart</string>
+    <string name="err_header_summarizing">Summarization Error</string>
+    <string name="err_text_summarizing">An error occurred while summarizing one or more themes during the last update.\nRestart update?</string>
+    <string name="err_btn_summarizing">Restart</string>
+    <string name="err_header_sumCritical">Programmer Error</string>
+    <string name="err_text_sumCritical">The programmer made a mistake. Please understand, forgive, and report it to them.</string>
+    <string name="err_btn_sumCritical">OK</string>
+    <string name="err_header_interpreter">Interpreter Error</string>
+    <string name="err_text_interpreter">Unfortunately, the interpreter was unable to process the error code.</string>
+    <string name="err_btn_interpreter">OK</string>
+    <string name="err_header_parsing">Parsing Error</string>
+    <string name="err_text_parsing">An error occurred while parsing one or more channels.</string>
+    <string name="err_btn_parsing">OK</string>
+
 </resources>

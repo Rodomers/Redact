@@ -41,7 +41,7 @@ class TitlesUpdateWorker(
         val settingsManager = SettingsManager(applicationContext)
         settingsManager.saveBoolean("updating_titles", true)
         settingsManager.saveString("updating_state", "updating")
-        val currentLLM = settingsManager.getString("current_model", "gemini-2.5-flash-lite")
+        val currentLLM = settingsManager.getString("current_model", "gemini-2.0-flash")
         val llmApiKey = settingsManager.getString("user_api", "")
         val rssLastUpdate = settingsManager.getLong("last_rss_update", 0L)
         val rssUpdateInterval = settingsManager.getInt("rss_update_interval", 30)
@@ -67,8 +67,10 @@ class TitlesUpdateWorker(
                             db.titlesTimeKill(0)
                         }
                         var iter = 0
+                        var res: SummarizationResult = SummarizationResult.Failure(
+                            SummarizationErrorType.UNKNOWN_ERROR)
                         while (settingsManager.getBoolean("updating_titles", false) && iter <= 5) {
-                            summarizer.summarizeTopics(
+                            res = summarizer.summarizeTopics(
                                 maxTopics = titlesNum,
                                 messageSeconds = titlesPeriod.toLong() * 3600,
                                 readyFunc = {
@@ -76,6 +78,11 @@ class TitlesUpdateWorker(
                                 }
                             )
                             iter++
+                        }
+
+                        when (res) {
+                            is SummarizationResult.Success -> settingsManager.clearLastError()
+                            is SummarizationResult.Failure -> settingsManager.saveLastError(res)
                         }
                     }
                 }

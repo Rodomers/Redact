@@ -482,8 +482,7 @@ fun CustomFullscreenLoading(isVisible: Boolean, animDuration: Int = 300) {
 fun CustomPullToRefreshIndicator(
     state: PullToRefreshState,
     modifier: Modifier = Modifier,
-    isRefreshing: Boolean,
-    stopFunc: () -> Unit
+    isRefreshing: Boolean
 ) {
     var indicatorHeight by remember { mutableIntStateOf(0) }
 
@@ -684,7 +683,7 @@ fun CustomErrorBottomSheet(
     confBtnText: String,
     cancelBtnText: String,
     onDismissRequest: () -> Unit,
-    onConfirm: (Boolean) -> Unit,
+    onConfirm: () -> Unit,
     scope: CoroutineScope,
     sheetState: SheetState
 ) {
@@ -734,7 +733,7 @@ fun CustomErrorBottomSheet(
                 }
                 TextButton(
                     onClick = {
-                        onConfirm(true)
+                        onConfirm()
                         closeSheet()
                     }
                 ) {

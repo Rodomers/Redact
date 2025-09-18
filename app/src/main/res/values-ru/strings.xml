@@ -65,5 +65,25 @@
     <string name="summarizing">Резюмирую: %1$d/%2$d</string>
     <string name="restart_updating">Перезапуск</string>
 
+    <string name="err_header_success">Успех</string>
+    <string name="err_text_success">Мы не знаем, почему это здесь. Обновление прошло успешно.</string>
+    <string name="err_btn_success">Ок</string>
+    <string name="err_header_extractFail">Ошибка тем</string>
+    <string name="err_text_extractFail">Проишошла ошибка при выделении тем.\nПерезапустить обновление?</string>
+    <string name="err_btn_extractFail">Перезапуск</string>
+    <string name="err_header_summarizing">Ошибка суммаризации</string>
+    <string name="err_text_summarizing">Во время последнего обновления произошла ошибка при суммаризации одной
+    или нескольких тем.\nПерезапустить обновление?</string>
+    <string name="err_btn_summarizing">Перезапуск</string>
+    <string name="err_header_sumCritical">Ошибка программиста</string>
+    <string name="err_text_sumCritical">Программист ошибся. Пожалуйста, поймите, простите и сообщите ему об этом.</string>
+    <string name="err_btn_sumCritical">Ок</string>
+    <string name="err_header_interpreter">Ошибка интерпретатора</string>
+    <string name="err_text_interpreter">Увы, интерпретатор не смог обработать код ошибки.</string>
+    <string name="err_btn_interpreter">Ок</string>
+    <string name="err_header_parsing">Ошибка парсинга</string>
+    <string name="err_text_parsing">Произошла ошибка парсинга одного или нескольких каналов.</string>
+    <string name="err_btn_parsing">Ок</string>
+
 
 </resources>

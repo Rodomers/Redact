@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.mutableIntStateOf
@@ -8,10 +9,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class SettingsManager(context: Context) {
     private val sharedPreferences: SharedPreferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -30,6 +37,11 @@ class SettingsManager(context: Context) {
         awaitClose {
             sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
         }
+    }
+
+    private companion object {
+        const val KEY_LAST_ERROR_TYPE = "last_error_type"
+        const val KEY_LAST_ERROR_MESSAGE = "last_error_message"
     }
 
     suspend fun awaitTitlesUpdate() {
@@ -75,6 +87,47 @@ class SettingsManager(context: Context) {
     fun unregisterListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
     }
+
+    @SuppressLint("CommitPrefEdits")
+    fun saveLastError(failure: SummarizationResult.Failure) {
+        sharedPreferences.edit().apply {
+            putString(KEY_LAST_ERROR_TYPE, failure.type.name)
+            putString(KEY_LAST_ERROR_MESSAGE, failure.cause?.message ?: "")
+            apply()
+        }
+    }
+
+    @SuppressLint("CommitPrefEdits")
+    fun clearLastError() {
+        sharedPreferences.edit().apply {
+            remove(KEY_LAST_ERROR_TYPE)
+            remove(KEY_LAST_ERROR_MESSAGE)
+            apply()
+        }
+    }
+
+    fun getLastError(): SummarizationResult.Failure? {
+        val errorTypeName = sharedPreferences.getString(KEY_LAST_ERROR_TYPE, null) ?: return null
+
+        return try {
+            val errType = enumValueOf<SummarizationErrorType>(errorTypeName)
+            val errMess = sharedPreferences.getString(KEY_LAST_ERROR_MESSAGE, "")
+
+            SummarizationResult.Failure(errType, cause = Exception(errMess))
+        } catch(e: IllegalArgumentException) {
+            null
+        }
+    }
+
+    val lastErrorFlow: Flow<SummarizationResult.Failure?> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener {sharedPreferences, key ->
+            if (key == KEY_LAST_ERROR_TYPE) trySend(getLastError())
+        }
+
+        trySend(getLastError())
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 }
 
 class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel() {
@@ -103,6 +156,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     var lastRssUpdate = mutableLongStateOf(settingsManager.getLong(LAST_RSS_UPDATE, 0L))
     var updatingTitles = mutableStateOf(settingsManager.getBoolean(UPDATING_TITLES, false))
     val currentUpdatingState = mutableStateOf(settingsManager.getString(UPDATING_STATE, "off"))
+    private val _lastError = MutableStateFlow<SummarizationResult.Failure?>(null)
+    val lastError: StateFlow<SummarizationResult.Failure?> = _lastError.asStateFlow()
 
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener {_, key ->
         when (key) {
@@ -111,7 +166,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
             TITLES_NUM_KEY -> titlesNum.intValue = settingsManager.getInt(TITLES_NUM_KEY, 10)
             TITLES_PERIOD_KEY -> titlesPeriod.intValue = settingsManager.getInt(TITLES_PERIOD_KEY, 24)
             USER_API_KEY -> userApi.value = settingsManager.getString(USER_API_KEY, "")
-            CURRENT_LLM_MODEL -> currentLlm.value = settingsManager.getString(CURRENT_LLM_MODEL, "gemini-2.5-flash-lite")
+            CURRENT_LLM_MODEL -> currentLlm.value = settingsManager.getString(CURRENT_LLM_MODEL, "gemini-2.0-flash")
             SHOW_DATES -> showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
             RSS_UPDATE_INTERVAL -> rssUpdateInterval.intValue = settingsManager.getInt(RSS_UPDATE_INTERVAL, 15)
             LAST_RSS_UPDATE -> lastRssUpdate.longValue = settingsManager.getLong(LAST_RSS_UPDATE, 0L)
@@ -122,6 +177,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
 
     init {
         settingsManager.registerListener(listener)
+        listenForErrors()
     }
 
     fun setDarkMode(newValue: String) {
@@ -182,6 +238,19 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     override fun onCleared() {
         super.onCleared()
         settingsManager.unregisterListener(listener)
+    }
+
+    private fun checkForSavedError() {
+        _lastError.value = settingsManager.getLastError()
+    }
+
+    fun clearError() {
+        _lastError.value = null
+        settingsManager.clearLastError()
+    }
+
+    private fun listenForErrors() {
+        viewModelScope.launch { settingsManager.lastErrorFlow.collect { error -> _lastError.value = error } }
     }
 }
 

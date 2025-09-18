@@ -4,3 +4,20 @@ data class Message(var id: Long, var time: Long, var link: String, var source: S
 data class RSS(var id: Long, var source: String, var link: String)
 data class Title(var id: Long, var time: Long, var title: String, var text: String, var sources: String, var links: String)
 
+enum class SummarizationErrorType {
+    EXTRACT_TOPICS_FAILED,
+    SUMMARIZE_TOPICS_FAILED,
+    CRITICAL_SUMMARIZATION_ERROR,
+    JSON_PARSING_FAILED,
+    NETWORK_TIMEOUT,
+    NO_NEWS_TO_ANALYZE,
+    UNKNOWN_ERROR
+}
+
+sealed interface SummarizationResult {
+    data object Success : SummarizationResult
+    data class Failure(
+        val type: SummarizationErrorType,
+        val cause: Throwable? = null
+    ) : SummarizationResult
+}

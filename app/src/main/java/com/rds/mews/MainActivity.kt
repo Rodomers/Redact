@@ -67,6 +67,9 @@ fun MainScreen() {
     val factory = SettingsViewModelFactory(settingsManager)
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
 
+    // отладочное
+//    settingsViewModel.setTitlesNum(5)
+
     MewsTheme(settingsTheme = settingsViewModel.isDarkMode.value, monetTheme = settingsViewModel.isMonetColors.value) {
         var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }
 
@@ -87,7 +90,8 @@ fun MainScreen() {
         val scope = rememberCoroutineScope()
         var isTitlesRefreshing by remember { mutableStateOf(false) }
         val titlesRefreshed = {
-            settingsViewModel.setUpdatingState("updating")
+            settingsViewModel.setUpdatingState("update")
+            settingsViewModel.setUpdatingTitles(false)
             isTitlesRefreshing = false
         }
         val context = LocalContext.current
@@ -103,18 +107,21 @@ fun MainScreen() {
                         updateTitles(context, db, settingsViewModel, settingsManager, returnExisting = returnExisting, titlesRefreshed)
                     }
                 }
-                titlesList.clear()
-                titlesList.addAll(updatedList)
+
+                if (db.getTitles().isNotEmpty()) {
+                    titlesList.clear()
+                    titlesList.addAll(updatedList.filter {it.text != "<промежуточный текст>"})
+                }
             }
         }
 
-        fun stopRefreshingTitles() {
-//            isTitlesRefreshing = false
-            settingsViewModel.setUpdatingTitles(false)
-            settingsViewModel.setUpdatingState("off")
-            db.titlesTimeKill(0)
-            refreshTitles()
-        }
+//        fun stopRefreshingTitles() {
+////            isTitlesRefreshing = false
+//            settingsViewModel.setUpdatingTitles(false)
+//            settingsViewModel.setUpdatingState("off")
+//            db.titlesTimeKill(0)
+//            refreshTitles()
+//        }
 
         Scaffold(
             bottomBar = {
@@ -151,7 +158,8 @@ fun MainScreen() {
                         isRefreshing = isTitlesRefreshing,
                         onRefresh = ::refreshTitles,
                         settingsViewModel = settingsViewModel,
-                        stopRefreshingFunc = ::stopRefreshingTitles
+                        closeIndicator = titlesRefreshed,
+                        scope = scope
                     )
                 }
                 else -> SettingsGrid(
