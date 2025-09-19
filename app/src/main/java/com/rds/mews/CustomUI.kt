@@ -643,17 +643,22 @@ fun CustomChangeBottomSheet(
                     .padding(bottom = 16.dp, end = 8.dp),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = { closeSheet() }) {
+                TextButton(
+                    onClick = { closeSheet() }
+                ) {
                     Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onSurface)
                 }
 
                 if ((validRss && rssText.isNotBlank() && sourceText.isNotBlank() && add)) {
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     TextButton(
                         onClick = {
                             val finalSourceName = sourceText.ifEmpty { source }
                             onConfirm(Pair(finalSourceName, linkTransform(rssText.trim())))
                             closeSheet()
-                        }
+                        },
+                        modifier = Modifier.background(color = MaterialTheme.colorScheme.secondaryContainer, shape = Shapes.large)
                     ) {
                         Text(stringResource(R.string.add), color = MaterialTheme.colorScheme.onSurface)
                     }
@@ -665,7 +670,8 @@ fun CustomChangeBottomSheet(
                             val finalSourceName = sourceText.ifEmpty { source }
                             onConfirm(Pair(source, finalSourceName))
                             closeSheet()
-                        }
+                        },
+                        modifier = Modifier.background(color = MaterialTheme.colorScheme.secondaryContainer, shape = Shapes.large)
                     ) {
                         Text(stringResource(R.string.change), color = MaterialTheme.colorScheme.onSurface)
                     }
@@ -735,7 +741,8 @@ fun CustomErrorBottomSheet(
                     onClick = {
                         onConfirm()
                         closeSheet()
-                    }
+                    },
+                    modifier = Modifier.background(color = MaterialTheme.colorScheme.secondaryContainer, shape = Shapes.large)
                 ) {
                     Text(confBtnText, color = MaterialTheme.colorScheme.onSurface)
                 }
