@@ -405,6 +405,7 @@ class NewsSummarizer(
                     }
                 }
                 if (filterTopics) {
+                    settingsManager.saveString("updating_state", "filtering_topics")
                     errFlag = filterTopics(maxTopics)
                     if (!errFlag) {
                         for (i in 1..2) {

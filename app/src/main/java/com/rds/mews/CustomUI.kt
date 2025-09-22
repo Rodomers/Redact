@@ -498,6 +498,7 @@ fun CustomPullToRefreshIndicator(
         }
         currentUpdatingState == "extracting_topics" -> stringResource(R.string.extracting_topics)
         currentUpdatingState == "updating" -> stringResource(R.string.updating)
+        currentUpdatingState == "filtering_topics" -> stringResource(R.string.filtering_topics)
         else -> stringResource(R.string.update)
     }
 
