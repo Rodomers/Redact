@@ -42,6 +42,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
     var showDates by remember { mutableStateOf(settingsModel.showDates.value) }
     var compactTab by remember { mutableStateOf(settingsModel.compactTabBar.value) }
     var monetColors by remember { mutableStateOf(settingsModel.isMonetColors.value) }
+    var filterTopics by remember { mutableStateOf(settingsModel.filterTopics.value) }
     val defaultGeminiApiKey by remember { mutableStateOf("AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") }
     var geminiApiText by remember { mutableStateOf(settingsModel.userApi.value) }
     val context = LocalContext.current
@@ -153,6 +154,26 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                     onCheckedChange = {
                         settingsModel.setMonetColors(it)
                         monetColors = settingsModel.isMonetColors.value
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.background,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                )
+            }
+        }
+        if (geminiApiText != defaultGeminiApiKey) {
+            CustomSettingsItem(text = stringResource(R.string.settings_filter_topics)) {
+                Switch(
+                    checked = filterTopics,
+                    onCheckedChange = {
+                        settingsModel.setFilterTopics(it)
+                        filterTopics = settingsModel.filterTopics.value
                     },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.background,
@@ -293,6 +314,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                             else -> {
                                 settingsModel.setUserGeminiApi(defaultGeminiApiKey)
                                 settingsModel.setCurrentLlm("gemini-2.0-flash")
+                                settingsModel.setFilterTopics(false)
                                 geminiApiText = settingsModel.userApi.value
                             }
                         }

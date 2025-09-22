@@ -47,6 +47,7 @@ class TitlesUpdateWorker(
         val rssUpdateInterval = settingsManager.getInt("rss_update_interval", 30)
         val titlesPeriod = settingsManager.getInt("titles_period", 24)
         val titlesNum = settingsManager.getInt("titles_num", 10)
+        val filterTopics = settingsManager.getBoolean("filter_topics", false)
 
         val db = DbHelper(applicationContext)
         val fetcher = RssFetcher(db)
@@ -75,7 +76,8 @@ class TitlesUpdateWorker(
                                 messageSeconds = titlesPeriod.toLong() * 3600,
                                 readyFunc = {
                                     settingsManager.saveBoolean("updating_titles", false)
-                                }
+                                },
+                                filterTopics = filterTopics
                             )
                             iter++
                         }

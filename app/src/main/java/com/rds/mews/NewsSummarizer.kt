@@ -1,13 +1,13 @@
 package com.rds.mews
 
 import android.annotation.SuppressLint
-import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.collections.mutableListOf
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
@@ -18,6 +18,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.math.min
 import kotlinx.coroutines.withTimeout
+import org.json.JSONException
 
 
 // ====== Класс для работы с OpenRouter API ======
@@ -270,36 +271,44 @@ class NewsSummarizer(
         println(titles)
         var jsonArray: JSONArray
         val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
-        val titlesToFilter = titles.joinToString("\n") { (title, ids) -> title }
+        val titlesJsonForPrompt = JSONArray(
+            titles.map { topic ->
+                JSONObject().apply {
+                    put("title", topic.title)
+                    put("ids", JSONArray(topic.ids))
+                }
+            }
+        ).toString()
         val prompt = """
-            Проанализируй заголовки новостей и отбрось малозначимые/неважные/неосновные, чтобы они помещались в допустимый максимум $maxTopics. Если заголовки затрагивают забаненные темы, то удаляй их.
-            Если таких неподходящих заголовков нет, то верни исходный список. Сортируй заголовки по убыванию их важности.
-            
-            Забаненные новости:
-            $bannedNews
-            
-            Ответ верни в виде JSON формата:
-            [
-            "title": "<Первая новость>",
-            "title": "<Вторая новость>",
-            "title": "<Третья новость>",
-            ....
-            ]
-            где title - название темы.
-            
-            Требования:
-            1. Не добавляй никакие ``` или ""${'"'}.
-            2. Не добавляй пояснения или текст вне JSON.
-            3. Ответ должен начинаться с [ и заканчиваться ].
-            4. Отвечай на РУССКОМ языке.
-            5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ Хотя бы одним значением.
-            6. СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($maxTopics). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого. 
-            7. Учитывай, что текущее время (Unix mills) в данный момент - ${System.currentTimeMillis()}
-            
-                   
-            Заголовки:       
-            $titlesToFilter
-        """.trimIndent()
+    Проанализируй JSON-массив новостных тем. Отбрось малозначимые и те, что затрагивают забаненные темы. Оставь не более $maxTopics самых важных тем.
+    Отсортируй итоговый список по убыванию важности.
+
+    Забаненные темы:
+    $bannedNews
+
+    Верни ответ в виде JSON-массива в ТОЧНО ТАКОМ ЖЕ ФОРМАТЕ, что и на входе. Сохраняй оригинальные ID для каждой темы.
+
+    Пример формата ответа:
+    [
+      {
+        "title": "Самая важная новость",
+        "ids": [101, 102, 105]
+      },
+      {
+        "title": "Вторая по важности новость",
+        "ids": [204, 208]
+      }
+    ]
+
+    Требования:
+    1. Ответ должен быть только валидным JSON массивом. Никакого лишнего текста или пояснений.
+    2. Ответ должен начинаться с `[` и заканчиваться `]`.
+    3. Не превышай лимит в $maxTopics тем.
+    4. Сохраняй оригинальные `ids` для каждой темы, которую включаешь в ответ.
+
+    Массив тем для фильтрации:
+    $titlesJsonForPrompt
+""".trimIndent()
         val response: String
         try {
             response = withTimeout(60000L) {
@@ -315,37 +324,47 @@ class NewsSummarizer(
             .replace("\"\"\"", "")
             .trim()
 
-        jsonArray = JSONArray(cleanResponse)
-        val iterEnd = if (jsonArray.length() <= maxTopics) jsonArray.length() else maxTopics
-        for (i in 0 until iterEnd) {
-            val obj: JSONObject = jsonArray.getJSONObject(i)
+        try {
+            val jsonArray = JSONArray(cleanResponse)
+            val iterEnd = if (jsonArray.length() <= maxTopics) jsonArray.length() else maxTopics
 
-            val title = obj.getString("title")
-            val idsArray = obj.getJSONArray("id")
+            for (i in 0 until iterEnd) {
+                val obj: JSONObject = jsonArray.getJSONObject(i)
 
-            val idsLong = mutableListOf<Long>()
-            val idsStr = mutableListOf<String>()
-            for (j in 0 until idsArray.length()) {
-                idsLong.add(idsArray.getInt(j).toLong())
-                idsStr.add(idsArray.getInt(j).toString())
+                val title = obj.getString("title")
+                val idsArray = obj.getJSONArray("ids") // Исправлено на "ids"
 
+                val idsStr = mutableListOf<String>()
+                for (j in 0 until idsArray.length()) {
+                    idsStr.add(idsArray.getLong(j).toString()) // Используем getLong для безопасности
+                }
+                println("Отфильтрованная тема: $title")
+
+                db.addTitle(
+                    titleTime = 0,
+                    title = title,
+                    text = "<промежуточный текст>",
+                    sources = "<промежуточный текст>",
+                    links = db.dbPack(*idsStr.toTypedArray())
+                )
             }
-            println(title)
-
-            db.addTitle(
-                titleTime = 0,
-                title = title,
-                text = "<промежуточный текст>",
-                sources = "<промежуточный текст>",
-                links = db.dbPack(*idsStr.toTypedArray())
-            )
+        } catch (e: JSONException) {
+            println("Ошибка парсинга JSON при фильтрации тем: ${e.message}")
+            println("Невалидный ответ от LLM: $cleanResponse")
+            return false
         }
 
         return true
     }
 
 
-    suspend fun summarizeTopics(maxTopics: Int = 20, messageSeconds: Long = 14515200, delaySeconds: Long = 10, readyFunc: () -> Unit): SummarizationResult {
+    suspend fun summarizeTopics(
+        maxTopics: Int = 20,
+        messageSeconds: Long = 14515200,
+        delaySeconds: Long = 10,
+        readyFunc: () -> Unit,
+        filterTopics: Boolean = false
+    ): SummarizationResult {
         try {
             val messages = db.getMessages(messageSeconds)
             if (messages.isEmpty()) {
@@ -356,7 +375,7 @@ class NewsSummarizer(
             var rawTitles = db.getTitles()
             var titles = mutableListOf<Topics>()
             var flagForUnfinishedTopics: Boolean = false
-            var errFlag: Boolean = true
+            var errFlag: Boolean
 
             settingsManager.saveString("updating_state", "extracting_topics")
 
@@ -385,7 +404,20 @@ class NewsSummarizer(
                         return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
                     }
                 }
-//            filterTopics(maxTopics)
+                if (filterTopics) {
+                    errFlag = filterTopics(maxTopics)
+                    if (!errFlag) {
+                        for (i in 1..2) {
+                            errFlag = filterTopics(maxTopics)
+                            if (errFlag) break
+                        }
+
+                        if (!errFlag) {
+                            readyFunc()
+                            return SummarizationResult.Failure(SummarizationErrorType.FILTER_FAILED)
+                        }
+                    }
+                }
                 rawTitles = db.getTitles()
                 titles = mutableListOf<Topics>()
                 rawTitles.forEach { title ->
@@ -465,10 +497,10 @@ class NewsSummarizer(
                             )
 
                             delay(delaySeconds * 100)
-                        } catch (e: io.ktor.client.plugins.HttpRequestTimeoutException) {
+                        } catch (e: HttpRequestTimeoutException) {
                             println("Превышено время ожидания ответа от нейросети: ${e.message}")
                             return SummarizationResult.Failure(SummarizationErrorType.NETWORK_TIMEOUT, e)
-                        } catch (e: org.json.JSONException) {
+                        } catch (e: JSONException) {
                             println("Ошибка парсинга JSON: ${e.message}")
                             return SummarizationResult.Failure(SummarizationErrorType.JSON_PARSING_FAILED, e)
                         } catch (e: Exception) {

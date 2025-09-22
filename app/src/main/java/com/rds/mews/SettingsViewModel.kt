@@ -144,6 +144,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         const val UPDATING_TITLES = "updating_titles"
         const val UPDATING_STATE = "updating_state"
         const val COMPACT_TAB_BAR = "compact_tab_bar"
+        const val FILTER_TOPICS = "filter_topics"
     }
 
     var isDarkMode = mutableStateOf(settingsManager.getString(IS_DARK_MODE_KEY, "system"))
@@ -160,6 +161,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     val compactTabBar = mutableStateOf(settingsManager.getBoolean(COMPACT_TAB_BAR, false))
     private val _lastError = MutableStateFlow<SummarizationResult.Failure?>(null)
     val lastError: StateFlow<SummarizationResult.Failure?> = _lastError.asStateFlow()
+    val filterTopics = mutableStateOf(settingsManager.getBoolean(FILTER_TOPICS, false))
 
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener {_, key ->
         when (key) {
@@ -175,6 +177,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
             UPDATING_TITLES -> updatingTitles.value = settingsManager.getBoolean(UPDATING_TITLES, false)
             UPDATING_STATE -> currentUpdatingState.value = settingsManager.getString(UPDATING_STATE, "off")
             COMPACT_TAB_BAR -> compactTabBar.value = settingsManager.getBoolean(COMPACT_TAB_BAR, false)
+            FILTER_TOPICS -> filterTopics.value = settingsManager.getBoolean(FILTER_TOPICS, false)
         }
     }
 
@@ -241,6 +244,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     fun setCompactTab(newValue: Boolean) {
         settingsManager.saveBoolean(COMPACT_TAB_BAR, newValue)
         compactTabBar.value = newValue
+    }
+
+    fun setFilterTopics(newValue: Boolean) {
+        settingsManager.saveBoolean(FILTER_TOPICS, newValue)
+        filterTopics.value = newValue
     }
 
     override fun onCleared() {

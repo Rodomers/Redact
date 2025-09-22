@@ -184,9 +184,11 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
                 SummarizationErrorType.EXTRACT_TOPICS_FAILED ->
                     intListOf(R.string.err_header_extractFail, R.string.err_text_extractFail, R.string.err_btn_extractFail)
 
-                SummarizationErrorType.SUMMARIZE_TOPICS_FAILED,
-                SummarizationErrorType.NETWORK_TIMEOUT ->
+                SummarizationErrorType.SUMMARIZE_TOPICS_FAILED ->
                     intListOf(R.string.err_header_summarizing, R.string.err_text_summarizing, R.string.err_btn_summarizing)
+
+                SummarizationErrorType.NETWORK_TIMEOUT ->
+                    intListOf(R.string.err_header_network_timeout, R.string.err_text_network_timeout, R.string.err_btn_network_timeout)
 
                 SummarizationErrorType.CRITICAL_SUMMARIZATION_ERROR ->
                     intListOf(R.string.err_header_sumCritical, R.string.err_text_sumCritical, R.string.err_btn_sumCritical)
@@ -194,9 +196,22 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
                 SummarizationErrorType.JSON_PARSING_FAILED ->
                     intListOf(R.string.err_header_parsing, R.string.err_text_parsing, R.string.err_btn_parsing)
 
-                SummarizationErrorType.NO_NEWS_TO_ANALYZE,
+                SummarizationErrorType.NO_NEWS_TO_ANALYZE ->
+                    intListOf(R.string.err_header_no_news, R.string.err_text_no_news, R.string.err_btn_no_news)
+
+                SummarizationErrorType.FILTER_FAILED ->
+                    intListOf(R.string.err_header_filter_failed, R.string.err_text_filter_failed,R.string.err_btn_filter_failed)
+
                 SummarizationErrorType.UNKNOWN_ERROR -> // Общий обработчик для остальных ошибок
-                    intListOf(R.string.err_header_interpreter, R.string.err_text_interpreter, R.string.err_btn_interpreter)
+                {
+                    println(result.cause)
+
+                    intListOf(
+                        R.string.err_header_interpreter,
+                        R.string.err_text_interpreter,
+                        R.string.err_btn_interpreter
+                    )
+                }
             }
         }
     }

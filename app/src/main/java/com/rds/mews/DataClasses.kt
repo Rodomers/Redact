@@ -11,6 +11,7 @@ enum class SummarizationErrorType {
     JSON_PARSING_FAILED,
     NETWORK_TIMEOUT,
     NO_NEWS_TO_ANALYZE,
+    FILTER_FAILED,
     UNKNOWN_ERROR
 }
 

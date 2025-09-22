@@ -75,7 +75,9 @@ fun TitlesGrid(itemsList: List<Title>,
                 scope.launch {
                     when (err.type) {
                         in listOf(SummarizationErrorType.EXTRACT_TOPICS_FAILED,
-                            SummarizationErrorType.SUMMARIZE_TOPICS_FAILED) -> {
+                            SummarizationErrorType.SUMMARIZE_TOPICS_FAILED,
+                            SummarizationErrorType.NETWORK_TIMEOUT,
+                            SummarizationErrorType.FILTER_FAILED) -> {
                             onRefresh()
                         }
                         else -> {  }

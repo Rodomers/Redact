@@ -20,6 +20,7 @@
     <string name="settings_monet_colors">Monet colors</string>
     <string name="settings_color_scheme">Color scheme</string>
     <string name="settings_compact_tab">Compact tab</string>
+    <string name="settings_filter_topics">Additional topics filter</string>
     <string name="settings_maximum_headers">Maximum headers</string>
     <string name="settings_news_period">News period</string>
     <string name="settings_news_update_frequency">Background news update frequency</string>
@@ -82,5 +83,15 @@
     <string name="err_header_parsing">Parsing Error</string>
     <string name="err_text_parsing">An error occurred while parsing one or more channels.</string>
     <string name="err_btn_parsing">OK</string>
+    <string name="err_header_network_timeout">Timeout</string>
+    <string name="err_text_network_timeout">Problems connecting to the server: connection timeout.\n
+Restart the update process?</string>
+    <string name="err_btn_network_timeout">Restart</string>
+    <string name="err_header_no_news">No news</string>
+    <string name="err_text_no_news">The news list is empty. Apparently, nothing happened.</string>
+    <string name="err_btn_no_news">OK</string>
+    <string name="err_header_filter_failed">Filter error</string>
+    <string name="err_text_filter_failed">An error occurred while filtering topics.\nRestart?</string>
+    <string name="err_btn_filter_failed">Restart</string>
 
 </resources>

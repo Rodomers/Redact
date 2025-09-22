@@ -19,6 +19,7 @@
     <string name="settings_monet_colors">Цвета Monet</string>
     <string name="settings_color_scheme">Тема оформления</string>
     <string name="settings_compact_tab">Компактный вид навигационной панели</string>
+    <string name="settings_filter_topics">Дополнительный фильтр тем</string>
     <string name="settings_maximum_headers">Максимум заголовков</string>
     <string name="settings_news_period">Срок давности новостей</string>
     <string name="settings_news_update_frequency">Частота фонового обновления новостей</string>
@@ -80,11 +81,21 @@
     <string name="err_text_sumCritical">Программист ошибся. Пожалуйста, поймите, простите и сообщите ему об этом.</string>
     <string name="err_btn_sumCritical">Ок</string>
     <string name="err_header_interpreter">Ошибка интерпретатора</string>
-    <string name="err_text_interpreter">Увы, интерпретатор не смог обработать код ошибки.</string>
+    <string name="err_text_interpreter">Страшно, очень страшно. Мы не знаем, что это такое…</string>
     <string name="err_btn_interpreter">Ок</string>
     <string name="err_header_parsing">Ошибка парсинга</string>
     <string name="err_text_parsing">Произошла ошибка парсинга одного или нескольких каналов.</string>
     <string name="err_btn_parsing">Ок</string>
+    <string name="err_header_network_timeout">Таймаут</string>
+    <string name="err_text_network_timeout">Проблемы с подключением к серверу: истекло время ожидания.\n
+    Перезапустить процесс обновления?</string>
+    <string name="err_btn_network_timeout">Перезапуск</string>
+    <string name="err_header_no_news">Нет новостей</string>
+    <string name="err_text_no_news">Список новостей пуст. Видимо, ничего не произошло.</string>
+    <string name="err_btn_no_news">Ок</string>
+    <string name="err_header_filter_failed">Ошибка фильтрации</string>
+    <string name="err_text_filter_failed">Во время филтрации тем произошла ошибка.\nПерезапустить?</string>
+    <string name="err_btn_filter_failed">Перезапуск</string>
 
 
 </resources>
