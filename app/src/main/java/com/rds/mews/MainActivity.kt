@@ -215,7 +215,7 @@ fun MainScreen() {
 fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit, compact: Boolean = false) {
     val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)
 
-    val targetHeight = if (compact) 62.dp else 80.dp
+    val targetHeight = if (compact) 50.dp else 70.dp
 
     val animatedHeight by animateDpAsState(
         targetValue = targetHeight,
