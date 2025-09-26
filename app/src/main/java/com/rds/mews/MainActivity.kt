@@ -7,7 +7,9 @@ import androidx.annotation.StringRes
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material.icons.Icons
@@ -222,7 +224,10 @@ fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit, comp
     )
 
     NavigationBar(
-        modifier = Modifier.height(animatedHeight),
+        modifier = Modifier
+            .navigationBarsPadding()
+            .height(animatedHeight),
+        windowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.surface
     ) {
         tabs.forEach { tab ->
