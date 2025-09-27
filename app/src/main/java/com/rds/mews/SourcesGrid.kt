@@ -90,7 +90,7 @@ fun SourcesGrid(
             item {
                 CustomErrorBottomSheet(
                     title = stringResource(R.string.delsource_title),
-                    text = stringResource(R.string.delsource_text),
+                    text = stringResource(R.string.delsource_text, delSourceName),
                     onDismissRequest = { delSourceName = "" },
                     cancelBtnText = stringResource(R.string.cancel),
                     confBtnText = stringResource(R.string.delsource_btntext),

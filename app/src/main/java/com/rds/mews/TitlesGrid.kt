@@ -22,7 +22,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -41,6 +43,8 @@ fun TitlesGrid(itemsList: List<Title>,
                closeIndicator: () -> Unit,
                scope: CoroutineScope
 ) {
+    val clipboardManager = LocalClipboardManager.current
+
     val showDates by remember { mutableStateOf(settingsViewModel.showDates.value) }
     val pullToRefreshState = rememberPullToRefreshState()
 
@@ -79,6 +83,10 @@ fun TitlesGrid(itemsList: List<Title>,
                             SummarizationErrorType.NETWORK_TIMEOUT,
                             SummarizationErrorType.FILTER_FAILED) -> {
                             onRefresh()
+                        }
+                        SummarizationErrorType.UNKNOWN_ERROR -> {
+                            val copiedText = "${errState?.cause ?: "errCode is null"}"
+                            clipboardManager.setText(AnnotatedString(copiedText))
                         }
                         else -> {  }
                     }

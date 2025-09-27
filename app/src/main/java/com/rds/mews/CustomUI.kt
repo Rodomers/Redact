@@ -69,7 +69,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.layout.onSizeChanged
@@ -80,7 +79,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Popup
@@ -436,47 +434,6 @@ fun CustomSettingsItem(text: String, item: @Composable () -> Unit) {
     }
 }
 
-@Composable
-fun CustomFullscreenLoading(isVisible: Boolean, animDuration: Int = 300) {
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = fadeIn(animationSpec = tween(durationMillis = animDuration)),
-        exit = fadeOut(animationSpec = tween(durationMillis = animDuration))
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    onClick = {},
-                    indication = null
-                ),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            Surface(
-                shape = Shapes.large,
-                modifier = Modifier
-                    .padding(horizontal = 20.dp, vertical = 10.dp)
-                    .fillMaxWidth()
-                    .wrapContentHeight(),
-                shadowElevation = 8.dp,
-                color = MaterialTheme.colorScheme.background
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    CircularProgressIndicator(strokeWidth = 3.dp, color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 16.dp))
-                    Text("Обновление...", fontWeight = FontWeight.Bold, fontSize = 16.sp,
-                        modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp))
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomPullToRefreshIndicator(
@@ -794,8 +751,8 @@ fun CustomConfirmDialog(
     )
 }
 
-@Preview
-@Composable
-fun PreviewDialog() {
-    CustomFullscreenLoading(true)
-}
+//@Preview
+//@Composable
+//fun PreviewDialog() {
+//    CustomFullscreenLoading(true)
+//}

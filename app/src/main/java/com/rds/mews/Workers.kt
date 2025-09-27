@@ -16,12 +16,12 @@ class RssUpdateWorker(
         val fetcher = RssFetcher(db)
         val settingsManager = SettingsManager(applicationContext)
 
-        val titlesPeriod = settingsManager.getInt("titles_period", 24)
+        val titlesPeriod = settingsManager.getInt(SettingsViewModel.TITLES_PERIOD_KEY, 24)
 
         return try {
             withContext(Dispatchers.IO) {
                 fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600)
-                settingsManager.saveLong("last_rss_update", System.currentTimeMillis())
+                settingsManager.saveLong(SettingsViewModel.LAST_RSS_UPDATE, System.currentTimeMillis())
                 println("Worker: parsing finished")
             }
 
@@ -39,15 +39,15 @@ class TitlesUpdateWorker(
 ) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result {
         val settingsManager = SettingsManager(applicationContext)
-        settingsManager.saveBoolean("updating_titles", true)
-        settingsManager.saveString("updating_state", "updating")
-        val currentLLM = settingsManager.getString("current_model", "gemini-2.0-flash")
-        val llmApiKey = settingsManager.getString("user_api", "")
-        val rssLastUpdate = settingsManager.getLong("last_rss_update", 0L)
-        val rssUpdateInterval = settingsManager.getInt("rss_update_interval", 30)
-        val titlesPeriod = settingsManager.getInt("titles_period", 24)
-        val titlesNum = settingsManager.getInt("titles_num", 10)
-        val filterTopics = settingsManager.getBoolean("filter_topics", false)
+        settingsManager.saveBoolean(SettingsViewModel.UPDATING_TITLES, true)
+        settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "updating")
+        val currentLLM = settingsManager.getString(SettingsViewModel.CURRENT_LLM_MODEL, "gemini-2.0-flash")
+        val llmApiKey = settingsManager.getString(SettingsViewModel.USER_API_KEY, "")
+        val rssLastUpdate = settingsManager.getLong(SettingsViewModel.LAST_RSS_UPDATE, 0L)
+        val rssUpdateInterval = settingsManager.getInt(SettingsViewModel.RSS_UPDATE_INTERVAL, 30)
+        val titlesPeriod = settingsManager.getInt(SettingsViewModel.TITLES_PERIOD_KEY, 24)
+        val titlesNum = settingsManager.getInt(SettingsViewModel.TITLES_NUM_KEY, 10)
+        val filterTopics = settingsManager.getBoolean(SettingsViewModel.FILTER_TOPICS, false)
 
         val db = DbHelper(applicationContext)
         val fetcher = RssFetcher(db)
@@ -70,12 +70,12 @@ class TitlesUpdateWorker(
                         var iter = 0
                         var res: SummarizationResult = SummarizationResult.Failure(
                             SummarizationErrorType.UNKNOWN_ERROR)
-                        while (settingsManager.getBoolean("updating_titles", false) && iter <= 5) {
+                        while (settingsManager.getBoolean(SettingsViewModel.UPDATING_TITLES, false) && iter <= 5) {
                             res = summarizer.summarizeTopics(
                                 maxTopics = titlesNum,
                                 messageSeconds = titlesPeriod.toLong() * 3600,
                                 readyFunc = {
-                                    settingsManager.saveBoolean("updating_titles", false)
+                                    settingsManager.saveBoolean(SettingsViewModel.UPDATING_TITLES, false)
                                 },
                                 filterTopics = filterTopics
                             )
@@ -89,7 +89,7 @@ class TitlesUpdateWorker(
                     }
                 }
 
-                settingsManager.saveString("updating_state", "off")
+                settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "off")
                 Result.success()
             } catch (e: Exception) {
                 e.printStackTrace()

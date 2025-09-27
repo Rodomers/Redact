@@ -202,7 +202,7 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
                 SummarizationErrorType.FILTER_FAILED ->
                     intListOf(R.string.err_header_filter_failed, R.string.err_text_filter_failed,R.string.err_btn_filter_failed)
 
-                SummarizationErrorType.UNKNOWN_ERROR -> // Общий обработчик для остальных ошибок
+                SummarizationErrorType.UNKNOWN_ERROR ->
                 {
                     println(result.cause)
 

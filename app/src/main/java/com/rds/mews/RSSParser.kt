@@ -1,14 +1,11 @@
 package com.rds.mews
 
-import android.system.Os.link
-import kotlinx.coroutines.delay
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import com.rds.mews.TelegramRssClient
 import org.jsoup.parser.Parser
 
 // --- Парсер RSS-потоков ---`

@@ -8,7 +8,7 @@
     <string name="source_change">Change</string>
     <string name="source_delete">Delete</string>
     <string name="delsource_title">Deleting a source</string>
-    <string name="delsource_text">Are you sure you want to delete the source?</string>
+    <string name="delsource_text">Are you sure you want to delete the source \"%s\"?</string>
     <string name="delsource_btntext">Delete</string>
 
     <string name="titles_update_text">Pull down to update\n(Veery long)</string>

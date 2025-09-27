@@ -377,7 +377,7 @@ class NewsSummarizer(
             var flagForUnfinishedTopics: Boolean = false
             var errFlag: Boolean
 
-            settingsManager.saveString("updating_state", "extracting_topics")
+            settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "extracting_topics")
 
             // ЭТО ПЛОХО, но я  не знаю как переделать
             rawTitles.forEach { title ->
@@ -405,7 +405,7 @@ class NewsSummarizer(
                     }
                 }
                 if (filterTopics) {
-                    settingsManager.saveString("updating_state", "filtering_topics")
+                    settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "filtering_topics")
                     errFlag = filterTopics(maxTopics)
                     if (!errFlag) {
                         for (i in 1..2) {
@@ -443,7 +443,7 @@ class NewsSummarizer(
 
                     for (title in titles) {
                         current++
-                        settingsManager.saveString("updating_state", "$current/$size")
+                        settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "$current/$size")
                         val suitableMessages: MutableList<Message> = mutableListOf()
                         title.ids?.forEach { id ->
                             messages.forEach { message ->

@@ -7,7 +7,7 @@
     <string name="source_change">Изменить</string>
     <string name="source_delete">Удалить</string>
     <string name="delsource_title">Удаление источника</string>
-    <string name="delsource_text">Вы уверены, что хотите удалить источник?</string>
+    <string name="delsource_text">Вы уверены, что хотите удалить источник \"%s\"?</string>
     <string name="delsource_btntext">Удалить</string>
 
     <string name="titles_update_text">Потяните вниз, чтобы обновить\n(Это оочень долго)</string>
@@ -81,8 +81,9 @@
     <string name="err_text_sumCritical">Программист ошибся. Пожалуйста, поймите, простите и сообщите ему об этом.</string>
     <string name="err_btn_sumCritical">Ок</string>
     <string name="err_header_interpreter">Ошибка интерпретатора</string>
-    <string name="err_text_interpreter">Страшно, очень страшно. Мы не знаем, что это такое…</string>
-    <string name="err_btn_interpreter">Ок</string>
+    <string name="err_text_interpreter">Страшно, очень страшно. Мы не знаем, что это такое…\n
+    Вы можете скопировать текст ошибки и отправить его разработчику.</string>
+    <string name="err_btn_interpreter">Скопировать</string>
     <string name="err_header_parsing">Ошибка парсинга</string>
     <string name="err_text_parsing">Произошла ошибка парсинга одного или нескольких каналов.</string>
     <string name="err_btn_parsing">Ок</string>
