@@ -37,7 +37,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
@@ -69,6 +70,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.layout.onSizeChanged
@@ -79,6 +81,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Popup
@@ -242,12 +245,18 @@ fun SourcesAddCard(
 }
 
 @Composable
-fun TitlesCard(title: Title, showDates: Boolean = false) {
+fun TitlesCard(
+    title: Title,
+    showDates: Boolean = false,
+    isExpanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    pagerState: PagerState
+) {
     val clipboardManager = LocalClipboardManager.current
-    var expanded by remember { mutableStateOf(false) }
-    val pagerState = rememberPagerState(initialPage = 0, initialPageOffsetFraction = 0f, pageCount = {2})
+//    val pagerState = rememberPagerState(pageCount = {2})
     val coroutineScope = rememberCoroutineScope()
-    var pagerContentHeight by remember { mutableStateOf<Int?>(null) }
+    var page0Height by remember { mutableStateOf<Int?>(null) }
+//    var pagerContentHeight by remember { mutableStateOf<Int?>(null) }
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
     val textSelectionColors = TextSelectionColors(
@@ -258,6 +267,12 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
     fun copyText() {
         val copiedText = "${title.title}\n\n${title.text}\n\n${source}: ${title.sources}"
         clipboardManager.setText(AnnotatedString(copiedText))
+    }
+
+    val pagerHeight: Dp? = remember(page0Height) {
+        page0Height?.let{
+            with(density) { it.toDp() }
+        }
     }
 
     Surface(
@@ -279,7 +294,7 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                     .clickable(
                         interactionSource = interactionSource,
                         indication = null
-                    ) { expanded = !expanded },
+                    ) { onToggleExpanded() },
             ) {
                 Text(
                     text = getFormattedTimeUnix(title.time, showDates),
@@ -299,11 +314,7 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                 )
             }
 
-            if (expanded) {
-                val pagerModifier = pagerContentHeight?.let {
-                    Modifier.height(with(density) { it.toDp() })
-                } ?: Modifier.wrapContentHeight()
-
+            if (isExpanded) {
                 HorizontalDivider(
                     thickness = 1.dp,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -311,19 +322,25 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
 
                 HorizontalPager(
                     state = pagerState,
-                    modifier = pagerModifier,
-                    verticalAlignment = Alignment.Top
+                    verticalAlignment = Alignment.Top,
+                    beyondViewportPageCount = 1,
+                    modifier = Modifier
+                        .heightIn(max = 1080.dp)
+                        .fillMaxWidth()
+                        .let { baseModifier ->
+                            if (pagerHeight != null) baseModifier.height(pagerHeight)
+                            else baseModifier.alpha(0f)
+                        }
                 ) {
                         page ->
                     when (page) {
                         0 -> {
                             CompositionLocalProvider(LocalTextSelectionColors provides textSelectionColors) {
-                                SelectionContainer {
+                                SelectionContainer(
+                                    modifier = Modifier.onSizeChanged { size -> page0Height = size.height }
+                                ) {
                                     Text(
-                                        text = title.text,
-                                        modifier = Modifier.onSizeChanged { newSize ->
-                                            pagerContentHeight = newSize.height
-                                        }
+                                        text = title.text
                                     )
                                 }
                             }
@@ -333,7 +350,7 @@ fun TitlesCard(title: Title, showDates: Boolean = false) {
                             Column(
                                 modifier = Modifier
                                     .verticalScroll(rememberScrollState())
-                                    .fillMaxSize(),
+                                    .fillMaxWidth(),
                                 verticalArrangement = Arrangement.Top
                             ) {
                                 Text(
@@ -710,49 +727,30 @@ fun CustomErrorBottomSheet(
 }
 
 @Composable
-fun CustomConfirmDialog(
-    title: String,
-    text: String,
-    btnText: String,
-    cancelAction: () -> Unit,
-    onConfirm: (Boolean) -> Unit
-) {
-    val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
-    dialogWindowProvider?.window?.setDimAmount(0.6f)
+fun CustomTextDivider(text: String? = null, dateString: String? = null, date: Boolean = false) {
+    val text = when (date) {
+        true -> {
+            val formattedDate = dateString?.split(".") ?: "null".split(".")
 
-    AlertDialog(
-        onDismissRequest = cancelAction,
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = Shapes.large,
-
-        title = {
-            Text(text = title, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        },
-
-        text = {
-            Text(text = text)
-        },
-
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onConfirm(true)
-                }
-            ) {
-                Text(btnText, color = MaterialTheme.colorScheme.onBackground)
-            }
-        },
-
-        dismissButton = {
-            TextButton(onClick = cancelAction) {
-                Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onBackground)
+            when (formattedDate.last().toInt()) {
+                1 -> stringResource(R.string.date_01, formattedDate.first().toInt())
+                2 -> stringResource(R.string.date_02, formattedDate.first().toInt())
+                3 -> stringResource(R.string.date_03, formattedDate.first().toInt())
+                4 -> stringResource(R.string.date_04, formattedDate.first().toInt())
+                5 -> stringResource(R.string.date_05, formattedDate.first().toInt())
+                6 -> stringResource(R.string.date_06, formattedDate.first().toInt())
+                7 -> stringResource(R.string.date_07, formattedDate.first().toInt())
+                8 -> stringResource(R.string.date_08, formattedDate.first().toInt())
+                9 -> stringResource(R.string.date_09, formattedDate.first().toInt())
+                10 -> stringResource(R.string.date_10, formattedDate.first().toInt())
+                11 -> stringResource(R.string.date_11, formattedDate.first().toInt())
+                12 -> stringResource(R.string.date_12, formattedDate.first().toInt())
+                else -> stringResource(R.string.wrong_date)
             }
         }
-    )
-}
+        else -> text ?: "null"
+    }
 
-//@Preview
-//@Composable
-//fun PreviewDialog() {
-//    CustomFullscreenLoading(true)
-//}
+    Text(text = text, fontWeight = FontWeight.Bold, fontSize = 30.sp,
+        modifier = Modifier.padding(start = 2.dp, bottom = 8.dp, end = 40.dp))
+}

@@ -78,8 +78,9 @@
     <string name="err_text_sumCritical">The programmer made a mistake. Please understand, forgive, and report it to them.</string>
     <string name="err_btn_sumCritical">OK</string>
     <string name="err_header_interpreter">Interpreter Error</string>
-    <string name="err_text_interpreter">Unfortunately, the interpreter was unable to process the error code.</string>
-    <string name="err_btn_interpreter">OK</string>
+    <string name="err_text_interpreter">Something went terribly wrong. We\'re not sure what it is…\n
+    You can copy the error text and send it to the developer.</string>
+    <string name="err_btn_interpreter">Copy</string>
     <string name="err_header_parsing">Parsing Error</string>
     <string name="err_text_parsing">An error occurred while parsing one or more channels.</string>
     <string name="err_btn_parsing">OK</string>
@@ -93,5 +94,19 @@ Restart the update process?</string>
     <string name="err_header_filter_failed">Filter error</string>
     <string name="err_text_filter_failed">An error occurred while filtering topics.\nRestart?</string>
     <string name="err_btn_filter_failed">Restart</string>
+
+    <string name="date_01">January %d</string>
+    <string name="date_02">February %d</string>
+    <string name="date_03">March %d</string>
+    <string name="date_04">April %d</string>
+    <string name="date_05">May %d</string>
+    <string name="date_06">June %d</string>
+    <string name="date_07">July %d</string>
+    <string name="date_08">August %d</string>
+    <string name="date_09">September %d</string>
+    <string name="date_10">October %d</string>
+    <string name="date_11">November %d</string>
+    <string name="date_12">December %d</string>
+    <string name="wrong_date">Wrong date</string>
 
 </resources>

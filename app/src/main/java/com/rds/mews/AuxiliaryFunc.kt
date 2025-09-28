@@ -26,7 +26,7 @@ fun getFormattedTimeUnix(unixTime: Long, showDates: Boolean = false): String {
     val zoneId = ZoneId.systemDefault()
 
     val formatter = when (showDates) {
-        true -> DateTimeFormatter.ofPattern("HH:mm'\n'dd.MM")
+        true -> DateTimeFormatter.ofPattern("dd.MM")
             .withLocale(Locale.getDefault())
             .withZone(zoneId)
         else -> DateTimeFormatter.ofPattern("HH:mm")

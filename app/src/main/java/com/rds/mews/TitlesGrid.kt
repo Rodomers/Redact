@@ -1,16 +1,26 @@
 package com.rds.mews
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -18,6 +28,8 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -33,7 +45,7 @@ import kotlinx.coroutines.CoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun TitlesGrid(itemsList: List<Title>,
                modifier: Modifier,
@@ -45,12 +57,24 @@ fun TitlesGrid(itemsList: List<Title>,
 ) {
     val clipboardManager = LocalClipboardManager.current
 
-    val showDates by remember { mutableStateOf(settingsViewModel.showDates.value) }
+    val titlesExpanded = remember { mutableStateMapOf<Long, Boolean>() }
+
     val pullToRefreshState = rememberPullToRefreshState()
 
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val errState by settingsViewModel.lastError.collectAsStateWithLifecycle()
+
+    val showDates by settingsViewModel.showDates
+
+    val groupedByDate = remember(itemsList) {
+        itemsList.groupBy { getFormattedTimeUnix(it.time, true) }
+    }
+
+    LaunchedEffect(itemsList) {
+        val currentIds = itemsList.map {it.id}.toSet()
+        titlesExpanded.keys.retainAll(currentIds)
+    }
 
     LaunchedEffect(errState) {
         when (errState) {
@@ -129,8 +153,27 @@ fun TitlesGrid(itemsList: List<Title>,
                     }
                 }
             }
-            items(items = itemsList, key = { item -> item.id }) { item ->
-                TitlesCard(item, showDates)
+
+            groupedByDate.forEach { (date, titlesForDate) ->
+                if (showDates) stickyHeader() {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                    ) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CustomTextDivider(date = true, dateString = date)
+                    }
+                }
+
+                items(items = titlesForDate, key = {it.id}) {item ->
+                    val isExpanded = titlesExpanded[item.id] ?: false
+                    val pagerState = rememberPagerState(initialPage = 0, initialPageOffsetFraction = 0f, pageCount = {2})
+
+                    TitlesCard(item, isExpanded = isExpanded, pagerState = pagerState, onToggleExpanded = {
+                        titlesExpanded[item.id] = !isExpanded
+                    })
+                }
             }
         }
     }

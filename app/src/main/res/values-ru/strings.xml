@@ -71,7 +71,7 @@
     <string name="err_text_success">Мы не знаем, почему это здесь. Обновление прошло успешно.</string>
     <string name="err_btn_success">Ок</string>
     <string name="err_header_extractFail">Ошибка тем</string>
-    <string name="err_text_extractFail">Проишошла ошибка при выделении тем.\nПерезапустить обновление?</string>
+    <string name="err_text_extractFail">Произошла ошибка при выделении тем.\nПерезапустить обновление?</string>
     <string name="err_btn_extractFail">Перезапуск</string>
     <string name="err_header_summarizing">Ошибка суммаризации</string>
     <string name="err_text_summarizing">Во время последнего обновления произошла ошибка при суммаризации одной
@@ -98,5 +98,17 @@
     <string name="err_text_filter_failed">Во время филтрации тем произошла ошибка.\nПерезапустить?</string>
     <string name="err_btn_filter_failed">Перезапуск</string>
 
-
+    <string name="date_01">%d января</string>
+    <string name="date_02">%d февраля</string>
+    <string name="date_03">%d марта</string>
+    <string name="date_04">%d апреля</string>
+    <string name="date_05">%d мая</string>
+    <string name="date_06">%d июня</string>
+    <string name="date_07">%d июля</string>
+    <string name="date_08">%d августа</string>
+    <string name="date_09">%d сентября</string>
+    <string name="date_10">%d октября</string>
+    <string name="date_11">%d ноября</string>
+    <string name="date_12">%d декабря</string>
+    <string name="wrong_date">Неверная дата</string>
 </resources>
