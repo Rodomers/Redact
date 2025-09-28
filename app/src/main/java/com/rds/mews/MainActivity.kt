@@ -50,10 +50,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-//        val settingsManager = SettingsManager(applicationContext)
-//        val currentInterval = settingsManager.getInt("rss_update_interval_minutes", 30)
-//        scheduleRssUpdate(applicationContext, currentInterval)
-
         setContent {
             MainScreen()
         }
@@ -91,9 +87,6 @@ fun MainScreen() {
         }
 
         val titlesList: SnapshotStateList<Title> = remember { mutableStateListOf() }
-//        val fetcher = RssFetcher(db)
-//        val llm = LLMClient(MODEL = settingsViewModel.currentLlm.value, apiKey = settingsViewModel.userApi.value)
-//        val summarizer = NewsSummarizer(db, llm)
         val scope = rememberCoroutineScope()
         var isTitlesRefreshing by remember { mutableStateOf(false) }
         val titlesRefreshed = {
@@ -123,14 +116,6 @@ fun MainScreen() {
                 }
             }
         }
-
-//        fun stopRefreshingTitles() {
-////            isTitlesRefreshing = false
-//            settingsViewModel.setUpdatingTitles(false)
-//            settingsViewModel.setUpdatingState("off")
-//            db.titlesTimeKill(0)
-//            refreshTitles()
-//        }
 
         Scaffold(
             bottomBar = {
@@ -180,34 +165,6 @@ fun MainScreen() {
         }
     }
 }
-
-// --------------------ЧАСТЬ ДЛЯ ДЕБАГА--------------------------------
-//@Composable
-//fun TestBtn() {
-//    val scope = rememberCoroutineScope()
-//    Box(
-//        modifier = Modifier
-//            .padding(horizontal = 20.dp, vertical = 100.dp)
-//            .fillMaxWidth(),
-//        contentAlignment = Alignment.Center
-//    ) {
-//        Button(
-//            onClick = {
-//                scope.launch(Dispatchers.IO) {
-//                    try {
-//                        println(RSSName("https://rsshub.app/telegram/channel/evgenmt"))
-//
-//                    } catch (e: Exception) {
-//                        e.printStackTrace()
-//                    }
-//                }
-//                      },
-//        ) {
-//            Text(text = "Кнопка", fontWeight = FontWeight.Bold)
-//        }
-//    }
-//}
-//------------------------------------------------------------------------
 
 @Composable
 fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit, compact: Boolean = false) {
