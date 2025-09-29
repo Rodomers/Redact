@@ -7,6 +7,7 @@ import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ModifierLocalBeyondBoundsLayout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -70,7 +72,7 @@ fun MainScreen() {
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
 
     // отладочное
-//    settingsViewModel.setTitlesNum(3)
+    settingsViewModel.setTitlesNum(3)
 
     MewsTheme(settingsTheme = settingsViewModel.isDarkMode.value, monetTheme = settingsViewModel.isMonetColors.value) {
         var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }
@@ -89,10 +91,12 @@ fun MainScreen() {
         val titlesList: SnapshotStateList<Title> = remember { mutableStateListOf() }
         val scope = rememberCoroutineScope()
         var isTitlesRefreshing by remember { mutableStateOf(false) }
-        val titlesRefreshed = {
-            settingsViewModel.setUpdatingState("update")
-            settingsViewModel.setUpdatingTitles(false)
-            isTitlesRefreshing = false
+        val titlesRefreshed = remember(settingsViewModel) {
+            {
+                settingsViewModel.setUpdatingState("update")
+                settingsViewModel.setUpdatingTitles(false)
+                isTitlesRefreshing = false
+            }
         }
         val context = LocalContext.current
 
@@ -117,6 +121,7 @@ fun MainScreen() {
                 }
             }
         }
+        val stableOnRefresh = remember { { refreshTitles() } }
 
         Scaffold(
             bottomBar = {
@@ -129,6 +134,10 @@ fun MainScreen() {
                 )
             }
         ) { paddingValues ->
+            val modifier = remember(paddingValues) {
+                Modifier.padding(paddingValues).fillMaxSize()
+            }
+
             when (selectedTab) {
                 TabScreen.Sources -> {
                     LaunchedEffect(key1 = Unit) {
@@ -137,7 +146,7 @@ fun MainScreen() {
 
                     SourcesGrid(
                         sourcesList,
-                        modifier = Modifier.padding(paddingValues),
+                        modifier = modifier,
                         db = db,
                         onSourcesChanged = updateSources,
                         settingsViewModel = settingsViewModel
@@ -150,16 +159,16 @@ fun MainScreen() {
 
                     TitlesGrid(
                         itemsList = titlesList,
-                        modifier = Modifier.padding(paddingValues)  ,
+                        modifier = modifier,
                         isRefreshing = isTitlesRefreshing,
-                        onRefresh = ::refreshTitles,
+                        onRefresh = stableOnRefresh,
                         settingsViewModel = settingsViewModel,
                         closeIndicator = titlesRefreshed,
                         scope = scope
                     )
                 }
                 else -> SettingsGrid(
-                    modifier = Modifier.padding(paddingValues),
+                    modifier = modifier,
                     settingsModel = settingsViewModel
                 )
             }

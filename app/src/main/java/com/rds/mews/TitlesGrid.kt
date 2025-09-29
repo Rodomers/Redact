@@ -69,8 +69,8 @@ fun TitlesGrid(itemsList: List<Title>,
     }
 
     LaunchedEffect(itemsList.isEmpty(), isRefreshing) {
-        if (itemsList.isEmpty() && isRefreshing) {
-            delay(1000L)
+        if (itemsList.isEmpty() && !isRefreshing) {
+            delay(300L)
             if (itemsList.isEmpty()) showEmptyMess = true
         }
         else showEmptyMess = false
@@ -129,7 +129,8 @@ fun TitlesGrid(itemsList: List<Title>,
     }
 
     PullToRefreshBox(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize(),
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
         state = pullToRefreshState,

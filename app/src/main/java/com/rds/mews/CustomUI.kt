@@ -251,10 +251,8 @@ fun TitlesCard(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-//    val pagerState = rememberPagerState(pageCount = {2})
     val coroutineScope = rememberCoroutineScope()
     var page0Height by remember { mutableStateOf<Int?>(null) }
-//    var pagerContentHeight by remember { mutableStateOf<Int?>(null) }
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
     val textSelectionColors = TextSelectionColors(
@@ -336,16 +334,22 @@ fun TitlesCard(
                         page ->
                     when (page) {
                         0 -> {
-                            CompositionLocalProvider(LocalTextSelectionColors provides textSelectionColors) {
-                                SelectionContainer(
-                                    modifier = Modifier.onSizeChanged { size -> page0Height = size.height }
-                                ) {
-                                    Text(
-                                        text = title.text
-                                    )
+                            Column(
+                                modifier = Modifier
+                                    .verticalScroll(rememberScrollState())
+                                    .fillMaxWidth(),
+                                verticalArrangement = Arrangement.Top
+                            ) {
+                                CompositionLocalProvider(LocalTextSelectionColors provides textSelectionColors) {
+                                    SelectionContainer(
+                                        modifier = Modifier.onSizeChanged { size -> page0Height = size.height }
+                                    ) {
+                                        Text(
+                                            text = title.text
+                                        )
+                                    }
                                 }
                             }
-
                         }
                         1 -> {
                             Column(
@@ -533,7 +537,8 @@ fun CustomChangeBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
-        sheetState = sheetState
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background
     ) {
         val closeSheet = {
             scope.launch { sheetState.hide() }
@@ -671,7 +676,8 @@ fun CustomErrorBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
-        sheetState = sheetState
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background
     ) {
         val closeSheet = {
             scope.launch { sheetState.hide() }

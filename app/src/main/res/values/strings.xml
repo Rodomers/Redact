@@ -85,8 +85,7 @@
     <string name="err_text_sumCritical">The programmer made a mistake. Please understand, forgive, and report it to them.</string>
     <string name="err_btn_sumCritical">OK</string>
     <string name="err_header_interpreter">Interpreter Error</string>
-    <string name="err_text_interpreter">Something went terribly wrong. We\'re not sure what it is…\n
-    You can copy the error text and send it to the developer.</string>
+    <string name="err_text_interpreter">Something went terribly wrong. We\'re not sure what it is…\nYou can copy the error text and send it to the developer.</string>
     <string name="err_btn_interpreter">Copy</string>
     <string name="err_header_parsing">Parsing Error</string>
     <string name="err_text_parsing">An error occurred while parsing one or more channels.</string>
