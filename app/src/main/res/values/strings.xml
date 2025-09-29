@@ -5,6 +5,9 @@
     <string name="tabscreen_titles">Titles</string>
     <string name="tabscreen_settings">Settings</string>
 
+    <string name="source_type_telegram">Telegram</string>
+    <string name="source_type_rss">RSS-feeds</string>
+    <string name="source_unknown_type">Unknown source</string>
     <string name="source_change">Change</string>
     <string name="source_delete">Delete</string>
     <string name="delsource_title">Deleting a source</string>
@@ -13,6 +16,9 @@
 
     <string name="titles_update_text">Pull down to update\n(Veery long)</string>
 
+    <string name="settings_chapter_appearance">Appearance</string>
+    <string name="settings_chapter_titles">Titles</string>
+    <string name="settings_chapter_llm">LLM</string>
     <string name="settings_system_theme">System</string>
     <string name="settings_light_theme">Light</string>
     <string name="settings_dark_theme">Dark</string>
@@ -47,6 +53,7 @@
     <string name="sources_add_icon_desc">Add source</string>
     <string name="titles_card_text">Text</string>
     <string name="titles_card_source">Source</string>
+    <string name="titles_card_copied">Article text copied to clipboard.</string>
     <string name="change_dialog_source">Source name</string>
     <string name="change_dialog_add_source">Add source</string>
     <string name="change_dialog_change_source">Change source</string>

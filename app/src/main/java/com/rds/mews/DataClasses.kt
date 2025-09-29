@@ -15,6 +15,11 @@ enum class SummarizationErrorType {
     UNKNOWN_ERROR
 }
 
+enum class SourceType {
+    RSS_FEED,
+    TELEGRAM_CHANNEL
+}
+
 sealed interface SummarizationResult {
     data object Success : SummarizationResult
     data class Failure(

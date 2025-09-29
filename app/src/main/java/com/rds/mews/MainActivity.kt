@@ -80,10 +80,10 @@ fun MainScreen() {
         val db = DbHelper(LocalContext.current.applicationContext)
 //    db.titlesTimeKill(0)
 
-        val sourcesList: SnapshotStateList<String> = remember { mutableStateListOf() }
+        val sourcesList: SnapshotStateList<RSS> = remember { mutableStateListOf() }
         val updateSources: () -> Unit = {
             sourcesList.clear()
-            sourcesList.addAll(db.getRSS().map {it.source})
+            sourcesList.addAll(db.getRSS())
         }
 
         val titlesList: SnapshotStateList<Title> = remember { mutableStateListOf() }

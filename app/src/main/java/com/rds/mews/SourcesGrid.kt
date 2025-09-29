@@ -1,17 +1,23 @@
 package com.rds.mews
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,7 +34,9 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SourcesGrid(
-    itemsList: List<String>, modifier: Modifier, db: DbHelper,
+    itemsList: List<RSS>,
+    modifier: Modifier,
+    db: DbHelper,
     onSourcesChanged: () -> Unit,
     settingsViewModel: SettingsViewModel
 ) {
@@ -44,6 +52,70 @@ fun SourcesGrid(
 
     val scope = rememberCoroutineScope()
 
+    val groupedBySource by remember {
+        derivedStateOf {
+            itemsList.groupBy { defineSourceType(it.link) }
+        }
+    }
+
+    if (showAddDialog) {
+        CustomChangeBottomSheet(
+            onDismissRequest = { showAddDialog = false },
+            onConfirm = {pair ->
+                scope.launch {
+                    addSource(pair.first, pair.second, db)
+                    newSourcesPermittedUpdate()
+                    onSourcesChanged()
+                }
+                showAddDialog = false
+                scheduleRssUpdate(context, settingsViewModel.rssUpdateInterval.intValue, false)
+            },
+            add = true,
+            scope = scope,
+            sheetState = bottomSheetState
+        )
+    }
+    if (delSourceName != "") {
+        CustomErrorBottomSheet(
+            title = stringResource(R.string.delsource_title),
+            text = stringResource(R.string.delsource_text, delSourceName),
+            onDismissRequest = { delSourceName = "" },
+            cancelBtnText = stringResource(R.string.cancel),
+            confBtnText = stringResource(R.string.delsource_btntext),
+            onConfirm = {
+                scope.launch {
+                    delSource(delSourceName, db)
+                    newSourcesPermittedUpdate()
+                    onSourcesChanged()
+                    delSourceName = ""
+                }
+            },
+            scope = scope,
+            sheetState = bottomSheetState
+        )
+    }
+    if (changeDialog != "") {
+        Popup(
+            onDismissRequest = { delSourceName = "" },
+            alignment = Alignment.TopEnd
+        ) {
+            CustomChangeBottomSheet(
+                onDismissRequest = { changeDialog = "" },
+                onConfirm = {pair ->
+                    scope.launch {
+                        changeSource(pair.first, pair.second, db)
+                        onSourcesChanged()
+                        changeDialog = ""
+                    }
+                },
+                add = false,
+                source = changeDialog,
+                scope = scope,
+                sheetState = bottomSheetState
+            )
+        }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = modifier
@@ -53,81 +125,38 @@ fun SourcesGrid(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        items(items = itemsList, key = { item -> item }) { item ->
-            CustomCardWithMenu(
-                text = item,
-                listOf(
-                    Pair(stringResource(R.string.source_change)) { changeDialog = item },
-                    Pair(stringResource(R.string.source_delete)) { delSourceName = item }
-                )
-            )
-        }
-
-        if (newSourcesPermitted) item {
-            SourcesAddCard(addDialogTrue)
-        }
-
-        if (showAddDialog) {
-            item {
-                CustomChangeBottomSheet(
-                    onDismissRequest = { showAddDialog = false },
-                    onConfirm = {pair ->
-                        scope.launch {
-                            addSource(pair.first, pair.second, db)
-                            newSourcesPermittedUpdate()
-                            onSourcesChanged()
-                        }
-                        showAddDialog = false
-                        scheduleRssUpdate(context, settingsViewModel.rssUpdateInterval.intValue, false)
-                    },
-                    add = true,
-                    scope = scope,
-                    sheetState = bottomSheetState
-                )
-            }
-        }
-        if (delSourceName != "") {
-            item {
-                CustomErrorBottomSheet(
-                    title = stringResource(R.string.delsource_title),
-                    text = stringResource(R.string.delsource_text, delSourceName),
-                    onDismissRequest = { delSourceName = "" },
-                    cancelBtnText = stringResource(R.string.cancel),
-                    confBtnText = stringResource(R.string.delsource_btntext),
-                    onConfirm = {
-                        scope.launch {
-                            delSource(delSourceName, db)
-                            newSourcesPermittedUpdate()
-                            onSourcesChanged()
-                            delSourceName = ""
-                        }
-                    },
-                    scope = scope,
-                    sheetState = bottomSheetState
-                )
-            }
-        }
-        if (changeDialog != "") {
-            item {
-                Popup(
-                    onDismissRequest = { delSourceName = "" },
-                    alignment = Alignment.TopEnd
+        groupedBySource.forEach { (source, itemsForSource) ->
+            stickyHeader() {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
                 ) {
-                    CustomChangeBottomSheet(
-                        onDismissRequest = { changeDialog = "" },
-                        onConfirm = {pair ->
-                            scope.launch {
-                                changeSource(pair.first, pair.second, db)
-                                onSourcesChanged()
-                                changeDialog = ""
-                            }
-                        },
-                        add = false,
-                        source = changeDialog,
-                        scope = scope,
-                        sheetState = bottomSheetState
-                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CustomTextDivider(text = stringResource(sourcesTypeInterpreter(source)))
                 }
+            }
+
+            items(items = itemsForSource, key = { item -> item.id }) { item ->
+                CustomCardWithMenu(
+                    text = item.source,
+                    listOf(
+                        Pair(stringResource(R.string.source_change)) { changeDialog = item.source },
+                        Pair(stringResource(R.string.source_delete)) { delSourceName = item.source }
+                    )
+                )
+            }
+
+            if (itemsForSource.size % 2 != 0) item { Spacer(modifier = Modifier.height(1.dp)) }
+        }
+
+
+        if (newSourcesPermitted) {
+            item { Spacer(modifier = Modifier.height(1.dp)) }
+            item { Spacer(modifier = Modifier.height(1.dp)) }
+
+            item {
+                SourcesAddCard(addDialogTrue)
             }
         }
     }

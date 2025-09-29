@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.MutableTransitionState
@@ -46,7 +47,6 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -54,7 +54,6 @@ import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -77,13 +76,11 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Popup
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.CoroutineScope
@@ -252,6 +249,7 @@ fun TitlesCard(
     onToggleExpanded: () -> Unit,
     pagerState: PagerState
 ) {
+    val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 //    val pagerState = rememberPagerState(pageCount = {2})
     val coroutineScope = rememberCoroutineScope()
@@ -264,9 +262,12 @@ fun TitlesCard(
         backgroundColor = MaterialTheme.colorScheme.onSecondary.copy(alpha=0.8f)
     )
     val source = stringResource(R.string.titles_card_source)
+    val toastText = stringResource(R.string.titles_card_copied)
     fun copyText() {
         val copiedText = "${title.title}\n\n${title.text}\n\n${source}: ${title.sources}"
         clipboardManager.setText(AnnotatedString(copiedText))
+
+        Toast.makeText(context, toastText, Toast.LENGTH_SHORT).show()
     }
 
     val pagerHeight: Dp? = remember(page0Height) {
@@ -408,7 +409,8 @@ fun TitlesCard(
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     IconButton(
-                        onClick = ::copyText
+                        onClick = ::copyText,
+                        modifier = Modifier.height(24.dp).align(Alignment.CenterVertically)
                     ) {
                         Icon(
                             modifier = Modifier.size(16.dp),
@@ -419,7 +421,6 @@ fun TitlesCard(
                 }
             }
         }
-
     }
 }
 
@@ -752,5 +753,5 @@ fun CustomTextDivider(text: String? = null, dateString: String? = null, date: Bo
     }
 
     Text(text = text, fontWeight = FontWeight.Bold, fontSize = 30.sp,
-        modifier = Modifier.padding(start = 2.dp, bottom = 8.dp, end = 40.dp))
+        modifier = Modifier.padding(start = 2.dp, top = 8.dp, bottom = 4.dp, end = 40.dp))
 }

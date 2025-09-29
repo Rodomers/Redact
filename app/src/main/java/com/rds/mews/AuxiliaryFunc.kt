@@ -37,6 +37,20 @@ fun getFormattedTimeUnix(unixTime: Long, showDates: Boolean = false): String {
     return formatter.format(instant)
 }
 
+fun defineSourceType(link: String): SourceType {
+    return when {
+        link.contains("t.me") -> SourceType.TELEGRAM_CHANNEL
+        else -> SourceType.RSS_FEED
+    }
+}
+
+fun sourcesTypeInterpreter(sourceType: SourceType): Int {
+    return when (sourceType) {
+        SourceType.RSS_FEED -> R.string.source_type_rss
+        SourceType.TELEGRAM_CHANNEL -> R.string.source_type_telegram
+    }
+}
+
 suspend fun addSource(source: String, link: String, db: DbHelper): Long {
     return db.addRSS(source, link)
 }

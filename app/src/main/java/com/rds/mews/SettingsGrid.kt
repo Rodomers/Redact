@@ -2,11 +2,15 @@ package com.rds.mews
 
 import android.os.Build
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -115,45 +119,34 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_show_dates)) {
-            Switch(
-                checked = showDates,
-                onCheckedChange = {
-                    settingsModel.setShowDates(it)
-                    showDates = settingsModel.showDates.value
-                },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.background,
-                    checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
-
-                    uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                    uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            )
+        stickyHeader() {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+                CustomTextDivider(text = stringResource(R.string.settings_chapter_appearance))
             }
         }
-
         item {
             CustomSettingsItem(text = stringResource(R.string.settings_compact_tab)) {
-            Switch(
-                checked = compactTab,
-                onCheckedChange = {
-                    settingsModel.setCompactTab(it)
-                    compactTab = settingsModel.compactTabBar.value
-                },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.background,
-                    checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                Switch(
+                    checked = compactTab,
+                    onCheckedChange = {
+                        settingsModel.setCompactTab(it)
+                        compactTab = settingsModel.compactTabBar.value
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.background,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
 
-                    uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                    uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
                 )
-            )
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -164,28 +157,6 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                         onCheckedChange = {
                             settingsModel.setMonetColors(it)
                             monetColors = settingsModel.isMonetColors.value
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.background,
-                            checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
-
-                            uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                            uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    )
-                }
-            }
-        }
-        if (geminiApiText != defaultGeminiApiKey) {
-            item {
-                CustomSettingsItem(text = stringResource(R.string.settings_filter_topics)) {
-                    Switch(
-                        checked = filterTopics,
-                        onCheckedChange = {
-                            settingsModel.setFilterTopics(it)
-                            filterTopics = settingsModel.filterTopics.value
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.background,
@@ -237,6 +208,37 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                         }
                     }
                 }
+            }
+        }
+
+        stickyHeader() {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+                CustomTextDivider(text = stringResource(R.string.settings_chapter_titles))
+            }
+        }
+        item {
+            CustomSettingsItem(text = stringResource(R.string.settings_show_dates)) {
+                Switch(
+                    checked = showDates,
+                    onCheckedChange = {
+                        settingsModel.setShowDates(it)
+                        showDates = settingsModel.showDates.value
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.background,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                )
             }
         }
         item {
@@ -358,6 +360,79 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                 }
             }
         }
+
+        stickyHeader() {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+                CustomTextDivider(text = stringResource(R.string.settings_chapter_llm))
+            }
+        }
+        if (geminiApiText != defaultGeminiApiKey) {
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_filter_topics)) {
+                    Switch(
+                        checked = filterTopics,
+                        onCheckedChange = {
+                            settingsModel.setFilterTopics(it)
+                            filterTopics = settingsModel.filterTopics.value
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.background,
+                            checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                            uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                            uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    )
+                }
+            }
+        }
+        if (geminiApiText != defaultGeminiApiKey) {
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_gemini_model)) {
+                    Box {
+                        Button(
+                            modifier = Modifier
+                                .wrapContentSize()
+                                .width(150.dp),
+                            onClick = {
+                                geminiModelDropdownVisible.targetState =
+                                    !geminiModelDropdownVisible.currentState
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.background
+                            )
+                        ) {
+                            Text(
+                                text = geminiModelText,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+
+                        if (geminiModelDropdownVisible.currentState || geminiModelDropdownVisible.targetState) {
+                            Popup(
+                                onDismissRequest = {
+                                    geminiModelDropdownVisible.targetState = false
+                                },
+                                alignment = Alignment.TopEnd
+                            ) {
+                                CustomDropdown(
+                                    transitionState = geminiModelDropdownVisible,
+                                    buttons = geminiModelDropdownItems
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         item {
             CustomSettingsItem(text = stringResource(R.string.settings_gemini_api_key)) {
                 Box {
@@ -398,46 +473,6 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                             ),
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
-                    }
-                }
-            }
-        }
-        if (geminiApiText != defaultGeminiApiKey) {
-            item {
-                CustomSettingsItem(text = stringResource(R.string.settings_gemini_model)) {
-                    Box {
-                        Button(
-                            modifier = Modifier
-                                .wrapContentSize()
-                                .width(150.dp),
-                            onClick = {
-                                geminiModelDropdownVisible.targetState =
-                                    !geminiModelDropdownVisible.currentState
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.background
-                            )
-                        ) {
-                            Text(
-                                text = geminiModelText,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-
-                        if (geminiModelDropdownVisible.currentState || geminiModelDropdownVisible.targetState) {
-                            Popup(
-                                onDismissRequest = {
-                                    geminiModelDropdownVisible.targetState = false
-                                },
-                                alignment = Alignment.TopEnd
-                            ) {
-                                CustomDropdown(
-                                    transitionState = geminiModelDropdownVisible,
-                                    buttons = geminiModelDropdownItems
-                                )
-                            }
-                        }
                     }
                 }
             }

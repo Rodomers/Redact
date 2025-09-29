@@ -4,6 +4,9 @@
     <string name="tabscreen_titles">Заголовки</string>
     <string name="tabscreen_settings">Настройки</string>
 
+    <string name="source_type_telegram">Telegram</string>
+    <string name="source_type_rss">RSS-ленты</string>
+    <string name="source_unknown_type">Источник неизвестен</string>
     <string name="source_change">Изменить</string>
     <string name="source_delete">Удалить</string>
     <string name="delsource_title">Удаление источника</string>
@@ -12,6 +15,9 @@
 
     <string name="titles_update_text">Потяните вниз, чтобы обновить\n(Это оочень долго)</string>
 
+    <string name="settings_chapter_appearance">Внешний вид</string>
+    <string name="settings_chapter_titles">Заголовки</string>
+    <string name="settings_chapter_llm">Нейросеть</string>
     <string name="settings_system_theme">Системная</string>
     <string name="settings_light_theme">Светлая</string>
     <string name="settings_dark_theme">Тёмная</string>
@@ -49,6 +55,7 @@
     <string name="sources_add_icon_desc">Добавить источник</string>
     <string name="titles_card_text">Текст</string>
     <string name="titles_card_source">Источник</string>
+    <string name="titles_card_copied">Текст новости скопирован в буфера обмена.</string>
     <string name="change_dialog_source">Название источника</string>
     <string name="change_dialog_add_source">Добавление источника</string>
     <string name="change_dialog_change_source">Изменение источника</string>
