@@ -98,15 +98,16 @@ fun MainScreen() {
 
         fun refreshTitles(returnExisting: Boolean = false) {
             isTitlesRefreshing = true
+            var updatedList: List<Title>
+            var iter = 0
             scope.launch {
-                var updatedList = withContext(Dispatchers.IO) {
-                    updateTitles(context, db, settingsViewModel, settingsManager, returnExisting = returnExisting, titlesRefreshed)
-                }
-                while (isTitlesRefreshing) {
+                do {
+                    iter++
+                    println("iter: $iter")
                     updatedList = withContext(Dispatchers.IO) {
                         updateTitles(context, db, settingsViewModel, settingsManager, returnExisting = returnExisting, titlesRefreshed)
                     }
-                }
+                } while (isTitlesRefreshing)
 
                 val filteredUpdatedList = updatedList.filter {it.text != "<промежуточный текст>"}
 

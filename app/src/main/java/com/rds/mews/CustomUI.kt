@@ -730,7 +730,7 @@ fun CustomErrorBottomSheet(
 fun CustomTextDivider(text: String? = null, dateString: String? = null, date: Boolean = false) {
     val text = when (date) {
         true -> {
-            val formattedDate = dateString?.split(".") ?: "null".split(".")
+            val formattedDate = dateString?.split(".") ?: "00".split(".")
 
             when (formattedDate.last().toInt()) {
                 1 -> stringResource(R.string.date_01, formattedDate.first().toInt())

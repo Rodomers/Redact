@@ -27,11 +27,13 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -43,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -56,19 +59,25 @@ fun TitlesGrid(itemsList: List<Title>,
                scope: CoroutineScope
 ) {
     val clipboardManager = LocalClipboardManager.current
-
+    var showEmptyMess by remember {  mutableStateOf(false) }
     val titlesExpanded = remember { mutableStateMapOf<Long, Boolean>() }
-
     val pullToRefreshState = rememberPullToRefreshState()
-
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
     val errState by settingsViewModel.lastError.collectAsStateWithLifecycle()
-
     val showDates by settingsViewModel.showDates
 
-    val groupedByDate = remember(itemsList) {
-        itemsList.groupBy { getFormattedTimeUnix(it.time, true) }
+    val groupedByDate by remember {
+        derivedStateOf {
+            itemsList.groupBy { getFormattedTimeUnix(it.time, true) }
+        }
+    }
+
+    LaunchedEffect(itemsList.isEmpty(), isRefreshing) {
+        if (itemsList.isEmpty() && isRefreshing) {
+            delay(1000L)
+            if (itemsList.isEmpty()) showEmptyMess = true
+        }
+        else showEmptyMess = false
     }
 
     LaunchedEffect(itemsList) {
@@ -144,7 +153,7 @@ fun TitlesGrid(itemsList: List<Title>,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (itemsList.isEmpty() && !isRefreshing) {
+            if (showEmptyMess) {
                 item {
                     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(text = stringResource(R.string.titles_update_text),
