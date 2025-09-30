@@ -39,7 +39,7 @@
     <string name="settings_reset">Reset</string>
     <string name="settings_paste">Paste</string>
     <string name="settings_gemini_model">Gemini model</string>
-    <string name="settings_footnote_text">Feedback: https://t.me/mewsapp\nVersion %s</string>
+    <string name="settings_footnote_text">Feedback (Telegram): @mewsapp\nVersion %s</string>
 
     <plurals name="titles">
         <item quantity="one">%d title</item>

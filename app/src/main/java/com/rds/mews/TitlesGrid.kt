@@ -1,6 +1,5 @@
 package com.rds.mews
 
-import androidx.collection.mutableIntListOf
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -187,7 +186,10 @@ fun TitlesGrid(itemsList: List<Title>,
                 }
             }
 
-            if (itemsList.isNotEmpty()) item { TitlesGridFootnote(lastTitlesUpdate) }
+            if (itemsList.isNotEmpty()) {
+                item { TitlesGridFootnote(lastTitlesUpdate) }
+                item {Spacer(modifier = Modifier.height(1.dp))}
+            }
         }
     }
 }

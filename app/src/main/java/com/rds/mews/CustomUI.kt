@@ -70,7 +70,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -324,30 +328,22 @@ fun TitlesCard(
                     verticalAlignment = Alignment.Top,
                     beyondViewportPageCount = 1,
                     modifier = Modifier
-                        .heightIn(max = 1080.dp)
+                        .heightIn(max = 10800.dp)
                         .fillMaxWidth()
                         .let { baseModifier ->
                             if (pagerHeight != null) baseModifier.height(pagerHeight)
                             else baseModifier.alpha(0f)
                         }
-                ) {
-                        page ->
+                ) {page ->
                     when (page) {
                         0 -> {
-                            Column(
-                                modifier = Modifier
-                                    .verticalScroll(rememberScrollState())
-                                    .fillMaxWidth(),
-                                verticalArrangement = Arrangement.Top
-                            ) {
-                                CompositionLocalProvider(LocalTextSelectionColors provides textSelectionColors) {
-                                    SelectionContainer(
-                                        modifier = Modifier.onSizeChanged { size -> page0Height = size.height }
-                                    ) {
-                                        Text(
-                                            text = title.text
-                                        )
-                                    }
+                            CompositionLocalProvider(LocalTextSelectionColors provides textSelectionColors) {
+                                SelectionContainer(
+                                    modifier = Modifier.onSizeChanged { size -> page0Height = size.height }
+                                ) {
+                                    Text(
+                                        text = title.text
+                                    )
                                 }
                             }
                         }
