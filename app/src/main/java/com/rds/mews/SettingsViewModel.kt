@@ -140,6 +140,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
         const val SHOW_DATES = "show_dates"
         const val RSS_UPDATE_INTERVAL = "rss_update_interval"
         const val LAST_RSS_UPDATE = "last_rss_update"
+        const val LAST_TITLES_UPDATE = "last_titles_update"
         const val UPDATING_TITLES = "updating_titles"
         const val UPDATING_STATE = "updating_state"
         const val COMPACT_TAB_BAR = "compact_tab_bar"
@@ -155,6 +156,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     var showDates = mutableStateOf(settingsManager.getBoolean(SHOW_DATES, false))
     var rssUpdateInterval = mutableIntStateOf(settingsManager.getInt(RSS_UPDATE_INTERVAL, 15))
     var lastRssUpdate = mutableLongStateOf(settingsManager.getLong(LAST_RSS_UPDATE, 0L))
+    var lastTitlesUpdate = mutableLongStateOf(settingsManager.getLong(LAST_TITLES_UPDATE, 0L))
     var updatingTitles = mutableStateOf(settingsManager.getBoolean(UPDATING_TITLES, false))
     val currentUpdatingState = mutableStateOf(settingsManager.getString(UPDATING_STATE, "off"))
     val compactTabBar = mutableStateOf(settingsManager.getBoolean(COMPACT_TAB_BAR, false))
@@ -173,6 +175,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
             SHOW_DATES -> showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
             RSS_UPDATE_INTERVAL -> rssUpdateInterval.intValue = settingsManager.getInt(RSS_UPDATE_INTERVAL, 15)
             LAST_RSS_UPDATE -> lastRssUpdate.longValue = settingsManager.getLong(LAST_RSS_UPDATE, 0L)
+            LAST_TITLES_UPDATE -> lastTitlesUpdate.longValue = settingsManager.getLong(LAST_TITLES_UPDATE, 0L)
             UPDATING_TITLES -> updatingTitles.value = settingsManager.getBoolean(UPDATING_TITLES, false)
             UPDATING_STATE -> currentUpdatingState.value = settingsManager.getString(UPDATING_STATE, "off")
             COMPACT_TAB_BAR -> compactTabBar.value = settingsManager.getBoolean(COMPACT_TAB_BAR, false)
@@ -228,6 +231,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager): ViewModel
     fun setLastRssUpdate(newValue: Long) {
         settingsManager.saveLong(LAST_RSS_UPDATE, newValue)
         lastRssUpdate.longValue = newValue
+    }
+
+    fun setLastTitlesUpdate(newValue: Long) {
+        settingsManager.saveLong(LAST_TITLES_UPDATE, newValue)
+        lastTitlesUpdate.longValue = newValue
     }
 
     fun setUpdatingTitles(newValue: Boolean) {

@@ -477,5 +477,8 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                 }
             }
         }
+
+//        item {Spacer(modifier = Modifier.height(8.dp))}
+        item {CustomBottomFootnote(stringResource(R.string.settings_footnote_text, stringResource(R.string.app_version)))}
     }
 }

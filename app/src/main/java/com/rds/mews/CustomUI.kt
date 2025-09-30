@@ -759,5 +759,11 @@ fun CustomTextDivider(text: String? = null, dateString: String? = null, date: Bo
     }
 
     Text(text = text, fontWeight = FontWeight.Bold, fontSize = 30.sp,
-        modifier = Modifier.padding(start = 2.dp, top = 8.dp, bottom = 4.dp, end = 40.dp))
+        modifier = Modifier.padding(start = 2.dp, top = 8.dp, bottom = 4.dp, end = 50.dp))
+}
+
+@Composable
+fun CustomBottomFootnote(text: String) {
+    Text(text = text, fontWeight = FontWeight.Normal, fontSize = 12.sp, textAlign = TextAlign.Center,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp))
 }

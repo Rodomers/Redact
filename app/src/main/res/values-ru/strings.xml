@@ -14,6 +14,9 @@
     <string name="delsource_btntext">Удалить</string>
 
     <string name="titles_update_text">Потяните вниз, чтобы обновить\n(Это оочень долго)</string>
+    <string name="today">сегодня</string>
+    <string name="yesterday">вчера</string>
+    <string name="updated_footnote">Обновлено %1$s в %2$s</string>
 
     <string name="settings_chapter_appearance">Внешний вид</string>
     <string name="settings_chapter_titles">Заголовки</string>
@@ -33,6 +36,7 @@
     <string name="settings_reset">Сброс</string>
     <string name="settings_paste">Вставить</string>
     <string name="settings_gemini_model">Выбор модели Gemini</string>
+    <string name="settings_footnote_text">Обратная связь: https://t.me/mewsapp\nВерсия 1.0-alpha.6</string>
 
     <plurals name="titles" tools:ignore="MissingQuantity">
         <item quantity="one">%d заголовок</item>

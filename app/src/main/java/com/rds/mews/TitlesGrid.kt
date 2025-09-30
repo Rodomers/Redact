@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import androidx.collection.mutableIntListOf
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,9 @@ import kotlinx.coroutines.CoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.collections.first
+import kotlin.collections.last
+import kotlin.text.toInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -61,6 +65,7 @@ fun TitlesGrid(itemsList: List<Title>,
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val errState by settingsViewModel.lastError.collectAsStateWithLifecycle()
     val showDates by settingsViewModel.showDates
+    val lastTitlesUpdate by settingsViewModel.lastTitlesUpdate
 
     val groupedByDate by remember {
         derivedStateOf {
@@ -181,6 +186,41 @@ fun TitlesGrid(itemsList: List<Title>,
                     })
                 }
             }
+
+            if (itemsList.isNotEmpty()) item { TitlesGridFootnote(lastTitlesUpdate) }
         }
     }
+}
+
+@Composable
+private fun TitlesGridFootnote(
+    updatedMills: Long
+) {
+    var fPair by remember { mutableStateOf(0 to "") }
+    var date by remember { mutableStateOf("") }
+    fPair = formatUpdateTime(updatedMills)
+    date = when (fPair.first) {
+        0 -> {
+            val formattedDate = getFormattedTimeUnix(date = true, unixTime = updatedMills).split(".")
+
+            when (formattedDate.last().toInt()) {
+                1 -> stringResource(R.string.date_01, formattedDate.first().toInt())
+                2 -> stringResource(R.string.date_02, formattedDate.first().toInt())
+                3 -> stringResource(R.string.date_03, formattedDate.first().toInt())
+                4 -> stringResource(R.string.date_04, formattedDate.first().toInt())
+                5 -> stringResource(R.string.date_05, formattedDate.first().toInt())
+                6 -> stringResource(R.string.date_06, formattedDate.first().toInt())
+                7 -> stringResource(R.string.date_07, formattedDate.first().toInt())
+                8 -> stringResource(R.string.date_08, formattedDate.first().toInt())
+                9 -> stringResource(R.string.date_09, formattedDate.first().toInt())
+                10 -> stringResource(R.string.date_10, formattedDate.first().toInt())
+                11 -> stringResource(R.string.date_11, formattedDate.first().toInt())
+                12 -> stringResource(R.string.date_12, formattedDate.first().toInt())
+                else -> fPair.second
+            }
+        }
+        else -> stringResource(fPair.first)
+    }
+
+    CustomBottomFootnote(text = stringResource(R.string.updated_footnote, date, fPair.second))
 }

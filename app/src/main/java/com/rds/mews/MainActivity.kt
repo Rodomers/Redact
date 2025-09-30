@@ -72,7 +72,7 @@ fun MainScreen() {
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
 
     // отладочное
-    settingsViewModel.setTitlesNum(3)
+//    settingsViewModel.setTitlesNum(3)
 
     MewsTheme(settingsTheme = settingsViewModel.isDarkMode.value, monetTheme = settingsViewModel.isMonetColors.value) {
         var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }

@@ -14,6 +14,8 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -21,11 +23,11 @@ import java.util.concurrent.TimeUnit
 
 
 // "dd.MM'\n'HH:mm"
-fun getFormattedTimeUnix(unixTime: Long, showDates: Boolean = false): String {
+fun getFormattedTimeUnix(unixTime: Long, date: Boolean = false): String {
     val instant = Instant.ofEpochMilli(unixTime)
     val zoneId = ZoneId.systemDefault()
 
-    val formatter = when (showDates) {
+    val formatter = when (date) {
         true -> DateTimeFormatter.ofPattern("dd.MM")
             .withLocale(Locale.getDefault())
             .withZone(zoneId)
@@ -35,6 +37,25 @@ fun getFormattedTimeUnix(unixTime: Long, showDates: Boolean = false): String {
     }
 
     return formatter.format(instant)
+}
+
+fun formatUpdateTime(unixMillis: Long): Pair<Int, String> {
+    val instant = Instant.ofEpochMilli(unixMillis)
+    val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+    val date = dateTime.toLocalDate()
+    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+    val timeString = dateTime.format(timeFormatter)
+
+    val today = LocalDate.now()
+    val yesterday = today.minusDays(1)
+
+    val dateInt = when (date) {
+        today -> R.string.today
+        yesterday -> R.string.yesterday
+        else -> 0
+    }
+
+    return Pair(dateInt, timeString)
 }
 
 fun defineSourceType(link: String): SourceType {
