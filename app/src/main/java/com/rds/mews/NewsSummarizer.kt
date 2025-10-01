@@ -403,8 +403,8 @@ class NewsSummarizer(
                         readyFunc()
                         return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
                     }
-                    settingsManager.saveLong(SettingsViewModel.LAST_TITLES_UPDATE, System.currentTimeMillis())
                 }
+                settingsManager.saveLong(SettingsViewModel.LAST_TITLES_UPDATE, System.currentTimeMillis())
                 if (filterTopics) {
                     settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "filtering_topics")
                     errFlag = filterTopics(maxTopics)
