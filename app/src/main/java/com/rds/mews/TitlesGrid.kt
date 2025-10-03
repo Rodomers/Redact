@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.rememberPagerState
@@ -32,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -49,83 +51,47 @@ import kotlin.text.toInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun TitlesGrid(itemsList: List<Title>,
-               modifier: Modifier,
-               isRefreshing: Boolean,
-               onRefresh: () -> Unit,
-               settingsViewModel: SettingsViewModel,
-               closeIndicator: () -> Unit,
-               scope: CoroutineScope
+fun TitlesGrid(
+    lazyGridState: LazyGridState,
+    groupedItems: Map<String, List<Title>>,
+    modifier: Modifier,
+    isRefreshing: Boolean,
+    showEmptyMess: Boolean,
+    errState: SummarizationResult.Failure?,
+//    expandedIds: Set<Long>,
+    titlesCardStates: Set<TitleCardStates>,
+    rememberCardPage: (Long, Int) -> Unit,
+    onRefresh: () -> Unit,
+    onClearErr: () -> Unit,
+    onErrAction: (ClipboardManager) -> Unit,
+    onToggleExpanded: (Long) -> Unit,
+    showDates: Boolean,
+    lastTitlesUpdate: Long,
+    scope: CoroutineScope
 ) {
     val clipboardManager = LocalClipboardManager.current
-    var showEmptyMess by remember {  mutableStateOf(false) }
-    val titlesExpanded = remember { mutableStateMapOf<Long, Boolean>() }
-    val pullToRefreshState = rememberPullToRefreshState()
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val errState by settingsViewModel.lastError.collectAsStateWithLifecycle()
-    val showDates by settingsViewModel.showDates
-    val lastTitlesUpdate by settingsViewModel.lastTitlesUpdate
-
-    val groupedByDate by remember {
-        derivedStateOf {
-            itemsList.groupBy { getFormattedTimeUnix(it.time, true) }
-        }
-    }
-
-    LaunchedEffect(itemsList.isEmpty(), isRefreshing) {
-        if (itemsList.isEmpty() && !isRefreshing) {
-            delay(300L)
-            if (itemsList.isEmpty()) showEmptyMess = true
-        }
-        else showEmptyMess = false
-    }
-
-    LaunchedEffect(itemsList) {
-        val currentIds = itemsList.map {it.id}.toSet()
-        titlesExpanded.keys.retainAll(currentIds)
-    }
+    val pullToRefreshState = rememberPullToRefreshState()
 
     LaunchedEffect(errState) {
-        when (errState) {
-            null -> {
-                bottomSheetState.show()
-                closeIndicator()
-            }
-            else -> if (bottomSheetState.isVisible) bottomSheetState.hide()
-        }
+        if (errState != null) if (!bottomSheetState.isVisible) bottomSheetState.show()
+        else if (bottomSheetState.isVisible) bottomSheetState.hide()
     }
 
     if (errState != null) {
-        val err = errState!!
-        val resources = remember(err) { mapResultToUiResources(err) }
+        val resources = remember(errState) { mapResultToUiResources(errState) }
 
         CustomErrorBottomSheet(
             title = stringResource(resources[0]),
             text = stringResource(resources[1]),
             confBtnText = stringResource(resources[2]),
             cancelBtnText = stringResource(R.string.cancel),
-            onDismissRequest = {
-                settingsViewModel.clearError()
-                settingsViewModel.setUpdatingState("off")
-                               },
+            onDismissRequest = onClearErr,
             onConfirm = {
                 scope.launch {
-                    when (err.type) {
-                        in listOf(SummarizationErrorType.EXTRACT_TOPICS_FAILED,
-                            SummarizationErrorType.SUMMARIZE_TOPICS_FAILED,
-                            SummarizationErrorType.NETWORK_TIMEOUT,
-                            SummarizationErrorType.FILTER_FAILED) -> {
-                            onRefresh()
-                        }
-                        SummarizationErrorType.UNKNOWN_ERROR -> {
-                            val copiedText = "${errState?.cause ?: "errCode is null"}"
-                            clipboardManager.setText(AnnotatedString(copiedText))
-                        }
-                        else -> {  }
-                    }
-
+                    onErrAction(clipboardManager)
                     if (bottomSheetState.isVisible) bottomSheetState.hide()
-                }.invokeOnCompletion { if (!bottomSheetState.isVisible) settingsViewModel.clearError() }
+                }.invokeOnCompletion { if (!bottomSheetState.isVisible) onClearErr() }
             },
             scope = scope,
             sheetState = bottomSheetState
@@ -152,7 +118,8 @@ fun TitlesGrid(itemsList: List<Title>,
                 .padding(horizontal = 10.dp),
             contentPadding = WindowInsets.statusBars.asPaddingValues(),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            state = lazyGridState
         ) {
             if (showEmptyMess) {
                 item {
@@ -164,7 +131,7 @@ fun TitlesGrid(itemsList: List<Title>,
                 }
             }
 
-            groupedByDate.forEach { (date, titlesForDate) ->
+            groupedItems.forEach { (date, titlesForDate) ->
                 if (showDates) stickyHeader() {
                     Box(
                         modifier = Modifier
@@ -177,16 +144,14 @@ fun TitlesGrid(itemsList: List<Title>,
                 }
 
                 items(items = titlesForDate, key = {it.id}) {item ->
-                    val isExpanded = titlesExpanded[item.id] ?: false
-                    val pagerState = rememberPagerState(initialPage = 0, initialPageOffsetFraction = 0f, pageCount = {2})
+                    val isExpanded = titlesCardStates.find { it.id == item.id }?.expanded ?: false
+                    val pagerState = rememberPagerState(initialPage = titlesCardStates.find { it.id == item.id }?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
 
-                    TitlesCard(item, isExpanded = isExpanded, pagerState = pagerState, onToggleExpanded = {
-                        titlesExpanded[item.id] = !isExpanded
-                    })
+                    TitlesCard(item, isExpanded = isExpanded, pagerState = pagerState, onToggleExpanded = { onToggleExpanded(item.id) }, rememberPage = { page -> rememberCardPage(item.id, page) })
                 }
             }
 
-            if (itemsList.isNotEmpty()) {
+            if (groupedItems.isNotEmpty()) {
                 item { TitlesGridFootnote(lastTitlesUpdate) }
                 item {Spacer(modifier = Modifier.height(1.dp))}
             }

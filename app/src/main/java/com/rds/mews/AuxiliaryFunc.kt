@@ -101,7 +101,7 @@ fun linkTransform(link: String): String {
 }
 
 suspend fun updateTitles(
-    context: Context, db: DbHelper, settingsViewModel: SettingsViewModel, settingsManager: SettingsManager, returnExisting: Boolean = false, readyFunc: () -> Unit = {},
+    context: Context, db: DbHelper, repository: MewsRepository, settingsManager: SettingsManager, returnExisting: Boolean = false, readyFunc: () -> Unit = {},
 ): List<Title> {
     if (!returnExisting) {
         val constraints = androidx.work.Constraints.Builder()
@@ -112,7 +112,7 @@ suspend fun updateTitles(
             .setConstraints(constraints)
             .build()
 
-        settingsViewModel.setUpdatingTitles(true)
+        repository.setUpdatingTitles(true)
         WorkManager.getInstance(context).enqueueUniqueWork(
             "titles_update_work",
             ExistingWorkPolicy.KEEP,
@@ -123,7 +123,7 @@ suspend fun updateTitles(
         readyFunc()
     }
     else {
-        if (settingsViewModel.updatingTitles.value) {
+        if (settingsManager.getBoolean(repository.UPDATING_TITLES, false)) {
             val constraints = androidx.work.Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
@@ -132,7 +132,7 @@ suspend fun updateTitles(
                 .setConstraints(constraints)
                 .build()
 
-            settingsViewModel.setUpdatingTitles(true)
+            repository.setUpdatingTitles(true)
             WorkManager.getInstance(context).enqueueUniqueWork(
                 "titles_update_work",
                 ExistingWorkPolicy.KEEP,
@@ -184,11 +184,6 @@ fun scheduleRssUpdate(context: Context, intervalInMinutes: Int, sources: Boolean
     )
 
     println("Scheduled RSS update")
-}
-
-fun changeRssUpdateSchedule(context: Context, settingsModel: SettingsViewModel, newValue: Int) {
-    settingsModel.setRssUpdateInterval(newValue)
-    scheduleRssUpdate(context, newValue)
 }
 
 fun Context.observeStringSharedPreference(key: String, defaultValue: String): Flow<String> {

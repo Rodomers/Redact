@@ -16,12 +16,12 @@ class RssUpdateWorker(
         val fetcher = RssFetcher(db)
         val settingsManager = SettingsManager(applicationContext)
 
-        val titlesPeriod = settingsManager.getInt(SettingsViewModel.TITLES_PERIOD_KEY, 24)
+        val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
 
         return try {
             withContext(Dispatchers.IO) {
                 fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600)
-                settingsManager.saveLong(SettingsViewModel.LAST_RSS_UPDATE, System.currentTimeMillis())
+                settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
                 println("Worker: parsing finished")
             }
 
@@ -39,15 +39,15 @@ class TitlesUpdateWorker(
 ) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result {
         val settingsManager = SettingsManager(applicationContext)
-        settingsManager.saveBoolean(SettingsViewModel.UPDATING_TITLES, true)
-        settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "updating")
-        val currentLLM = settingsManager.getString(SettingsViewModel.CURRENT_LLM_MODEL, "gemini-2.0-flash")
-        val llmApiKey = settingsManager.getString(SettingsViewModel.USER_API_KEY, "")
-        val rssLastUpdate = settingsManager.getLong(SettingsViewModel.LAST_RSS_UPDATE, 0L)
-        val rssUpdateInterval = settingsManager.getInt(SettingsViewModel.RSS_UPDATE_INTERVAL, 30)
-        val titlesPeriod = settingsManager.getInt(SettingsViewModel.TITLES_PERIOD_KEY, 24)
-        val titlesNum = settingsManager.getInt(SettingsViewModel.TITLES_NUM_KEY, 10)
-        val filterTopics = settingsManager.getBoolean(SettingsViewModel.FILTER_TOPICS, false)
+        settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, true)
+        settingsManager.saveString(MewsRepository.UPDATING_STATE, "updating")
+        val currentLLM = settingsManager.getString(MewsRepository.CURRENT_LLM_MODEL, "gemini-2.0-flash")
+        val llmApiKey = settingsManager.getString(MewsRepository.USER_API_KEY, "")
+        val rssLastUpdate = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
+        val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
+        val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
+        val titlesNum = settingsManager.getInt(MewsRepository.TITLES_NUM, 10)
+        val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
 
         val db = DbHelper(applicationContext)
         val fetcher = RssFetcher(db)
@@ -70,12 +70,12 @@ class TitlesUpdateWorker(
                         var iter = 0
                         var res: SummarizationResult = SummarizationResult.Failure(
                             SummarizationErrorType.UNKNOWN_ERROR)
-                        while (settingsManager.getBoolean(SettingsViewModel.UPDATING_TITLES, false) && iter <= 5) {
+                        while (settingsManager.getBoolean(MewsRepository.UPDATING_TITLES, false) && iter <= 5) {
                             res = summarizer.summarizeTopics(
                                 maxTopics = titlesNum,
                                 messageSeconds = titlesPeriod.toLong() * 3600,
                                 readyFunc = {
-                                    settingsManager.saveBoolean(SettingsViewModel.UPDATING_TITLES, false)
+                                    settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
                                 },
                                 filterTopics = filterTopics
                             )
@@ -89,7 +89,7 @@ class TitlesUpdateWorker(
                     }
                 }
 
-                settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "off")
+                settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
                 Result.success()
             } catch (e: Exception) {
                 e.printStackTrace()

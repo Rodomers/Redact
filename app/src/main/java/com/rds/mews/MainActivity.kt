@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -38,8 +40,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rds.mews.ui.theme.MewsTheme
+import io.ktor.http.ContentType
 
 
 import kotlinx.coroutines.Dispatchers
@@ -66,62 +70,20 @@ sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
 
 @Composable
 fun MainScreen() {
+    val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory())
+    val titlesViewModel: TitlesViewModel = viewModel(factory = TitlesViewModelFactory(LocalContext.current.applicationContext as Application))
+    val sourcesViewModel: SourcesViewModel = viewModel(factory = SourcesViewModelFactory())
 
-    val settingsManager = SettingsManager(LocalContext.current.applicationContext)
-    val factory = SettingsViewModelFactory(settingsManager)
-    val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
+    val currentTheme by settingsViewModel.currentTheme.collectAsStateWithLifecycle()
+    val isMonetColors by settingsViewModel.isMonetColors.collectAsStateWithLifecycle()
 
     // отладочное
-//    settingsViewModel.setTitlesNum(3)
+    settingsViewModel.setTitlesNum(3)
 
-    MewsTheme(settingsTheme = settingsViewModel.isDarkMode.value, monetTheme = settingsViewModel.isMonetColors.value) {
+    MewsTheme(settingsTheme = currentTheme, monetTheme = isMonetColors) {
         var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }
 
-        val compactTab by settingsViewModel.compactTabBar
-
-        val db = DbHelper(LocalContext.current.applicationContext)
-//    db.titlesTimeKill(0)
-
-        val sourcesList: SnapshotStateList<RSS> = remember { mutableStateListOf() }
-        val updateSources: () -> Unit = {
-            sourcesList.clear()
-            sourcesList.addAll(db.getRSS())
-        }
-
-        val titlesList: SnapshotStateList<Title> = remember { mutableStateListOf() }
-        val scope = rememberCoroutineScope()
-        var isTitlesRefreshing by remember { mutableStateOf(false) }
-        val titlesRefreshed = remember(settingsViewModel) {
-            {
-                settingsViewModel.setUpdatingState("update")
-                settingsViewModel.setUpdatingTitles(false)
-                isTitlesRefreshing = false
-            }
-        }
-        val context = LocalContext.current
-
-        fun refreshTitles(returnExisting: Boolean = false) {
-            isTitlesRefreshing = true
-            var updatedList: List<Title>
-            var iter = 0
-            scope.launch {
-                do {
-                    iter++
-                    println("iter: $iter")
-                    updatedList = withContext(Dispatchers.IO) {
-                        updateTitles(context, db, settingsViewModel, settingsManager, returnExisting = returnExisting, titlesRefreshed)
-                    }
-                } while (isTitlesRefreshing)
-
-                val filteredUpdatedList = updatedList.filter {it.text != "<промежуточный текст>"}
-
-                if (filteredUpdatedList.isNotEmpty()) {
-                    titlesList.clear()
-                    titlesList.addAll(filteredUpdatedList)
-                }
-            }
-        }
-        val stableOnRefresh = remember { { refreshTitles() } }
+        val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
 
         Scaffold(
             bottomBar = {
@@ -135,35 +97,59 @@ fun MainScreen() {
             }
         ) { paddingValues ->
             val modifier = remember(paddingValues) {
-                Modifier.padding(paddingValues).fillMaxSize()
+                Modifier
+                    .padding(paddingValues)
+                    .fillMaxSize()
             }
 
             when (selectedTab) {
                 TabScreen.Sources -> {
-                    LaunchedEffect(key1 = Unit) {
-                        updateSources()
-                    }
+                    val sourcesList by sourcesViewModel.sources.collectAsState()
 
                     SourcesGrid(
                         sourcesList,
                         modifier = modifier,
-                        db = db,
-                        onSourcesChanged = updateSources,
-                        settingsViewModel = settingsViewModel
+                        onSourceAdd = { name, link -> sourcesViewModel.addSource(name, link) },
+                        onSourceDelete = { name -> sourcesViewModel.deleteSource(name) },
+                        onSourceChange = { oldName, newName -> sourcesViewModel.changeSource(oldName, newName)}
                     )
                 }
                 TabScreen.Titles -> {
+                    val gridState = titlesViewModel.gridState
+
+                    val groupedTitles by titlesViewModel.groupedTitles.collectAsState()
+                    val isRefreshing by titlesViewModel.isRefreshing.collectAsState()
+                    val err by titlesViewModel.errState.collectAsState()
+                    val showEmptyMess by titlesViewModel.showEmptyMess.collectAsState()
+                    val titlesCardStates by titlesViewModel.titleCardStates.collectAsState()
+
+                    val showDates by titlesViewModel.showDates.collectAsStateWithLifecycle()
+                    val lastTitlesUpdate by titlesViewModel.lastUpdated.collectAsStateWithLifecycle()
+
+                    val scope = rememberCoroutineScope()
+
                     LaunchedEffect(key1 = Unit) {
-                        refreshTitles(returnExisting = true)
+                        if (groupedTitles.isEmpty()) {
+                            titlesViewModel.refreshTitles(returnExisting = true)
+                        }
                     }
 
                     TitlesGrid(
-                        itemsList = titlesList,
+                        lazyGridState = gridState,
+                        groupedItems = groupedTitles,
                         modifier = modifier,
-                        isRefreshing = isTitlesRefreshing,
-                        onRefresh = stableOnRefresh,
-                        settingsViewModel = settingsViewModel,
-                        closeIndicator = titlesRefreshed,
+                        isRefreshing = isRefreshing,
+                        showEmptyMess = showEmptyMess,
+                        errState = err,
+//                        expandedIds = expandedIds,
+                        titlesCardStates = titlesCardStates,
+                        onRefresh = { titlesViewModel.refreshTitles() },
+                        onClearErr = { titlesViewModel.clearErr() },
+                        onErrAction = titlesViewModel::handleErrorAction,
+                        onToggleExpanded = titlesViewModel::toggleTitleExpanded,
+                        rememberCardPage = titlesViewModel::changeTitleCurrentPage,
+                        showDates = showDates,
+                        lastTitlesUpdate = lastTitlesUpdate,
                         scope = scope
                     )
                 }

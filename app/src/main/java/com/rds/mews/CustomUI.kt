@@ -63,6 +63,7 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -251,7 +252,8 @@ fun TitlesCard(
     showDates: Boolean = false,
     isExpanded: Boolean,
     onToggleExpanded: () -> Unit,
-    pagerState: PagerState
+    pagerState: PagerState,
+    rememberPage: (Int) -> Unit
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -276,6 +278,10 @@ fun TitlesCard(
         page0Height?.let{
             with(density) { it.toDp() }
         }
+    }
+
+    LaunchedEffect(pagerState.targetPage) {
+        rememberPage(pagerState.targetPage)
     }
 
     Surface(

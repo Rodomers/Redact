@@ -377,7 +377,7 @@ class NewsSummarizer(
             var flagForUnfinishedTopics: Boolean = false
             var errFlag: Boolean
 
-            settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "extracting_topics")
+            settingsManager.saveString(MewsRepository.UPDATING_STATE, "extracting_topics")
 
             // ЭТО ПЛОХО, но я  не знаю как переделать
             rawTitles.forEach { title ->
@@ -390,6 +390,7 @@ class NewsSummarizer(
                 }
             }
             println(titles)
+            var lastUpdate: Long = 0
 
             if (!flagForUnfinishedTopics) {
                 errFlag = extractTopics(maxTopics, messageSeconds)
@@ -404,9 +405,9 @@ class NewsSummarizer(
                         return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
                     }
                 }
-                settingsManager.saveLong(SettingsViewModel.LAST_TITLES_UPDATE, System.currentTimeMillis())
+                lastUpdate = System.currentTimeMillis()
                 if (filterTopics) {
-                    settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "filtering_topics")
+                    settingsManager.saveString(MewsRepository.UPDATING_STATE, "filtering_topics")
                     errFlag = filterTopics(maxTopics)
                     if (!errFlag) {
                         for (i in 1..2) {
@@ -444,7 +445,7 @@ class NewsSummarizer(
 
                     for (title in titles) {
                         current++
-                        settingsManager.saveString(SettingsViewModel.UPDATING_STATE, "$current/$size")
+                        settingsManager.saveString(MewsRepository.UPDATING_STATE, "$current/$size")
                         val suitableMessages: MutableList<Message> = mutableListOf()
                         title.ids?.forEach { id ->
                             messages.forEach { message ->
@@ -516,6 +517,7 @@ class NewsSummarizer(
             }
 
             readyFunc()
+            if (lastUpdate != 0L) MewsRepository.setLastTitlesUpdate(lastUpdate)
             return SummarizationResult.Success
         } catch(e: Exception) {
             e.printStackTrace()

@@ -36,23 +36,21 @@ import kotlinx.coroutines.launch
 fun SourcesGrid(
     itemsList: List<RSS>,
     modifier: Modifier,
-    db: DbHelper,
-    onSourcesChanged: () -> Unit,
-    settingsViewModel: SettingsViewModel
+    onSourceAdd: (String, String) -> Unit,
+    onSourceDelete: (String) -> Unit,
+    onSourceChange: (String, String) -> Unit
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var delSourceName by remember { mutableStateOf("") }
     var changeDialog by remember { mutableStateOf("") }
     val addDialogTrue = { showAddDialog = true }
-    val context = LocalContext.current
-    var newSourcesPermitted by remember { mutableStateOf(db.getRSS().size < 40) }
-    val newSourcesPermittedUpdate = { newSourcesPermitted = db.getRSS().size < 40 }
+    var newSourcesPermitted by remember { mutableStateOf(itemsList.size < 40) }
 
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val scope = rememberCoroutineScope()
 
-    val groupedBySource by remember {
+    val groupedBySource by remember(itemsList) {
         derivedStateOf {
             itemsList.groupBy { defineSourceType(it.link) }
         }
@@ -63,13 +61,11 @@ fun SourcesGrid(
             onDismissRequest = { showAddDialog = false },
             onConfirm = {pair ->
                 scope.launch {
-                    addSource(pair.first, pair.second, db)
-                    newSourcesPermittedUpdate()
-                    onSourcesChanged()
+                    onSourceAdd(pair.first, pair.second)
+                    newSourcesPermitted = itemsList.size + 1 < 40
                 }
                 showAddDialog = false
-                scheduleRssUpdate(context, settingsViewModel.rssUpdateInterval.intValue, false)
-            },
+                        },
             add = true,
             scope = scope,
             sheetState = bottomSheetState
@@ -84,9 +80,7 @@ fun SourcesGrid(
             confBtnText = stringResource(R.string.delsource_btntext),
             onConfirm = {
                 scope.launch {
-                    delSource(delSourceName, db)
-                    newSourcesPermittedUpdate()
-                    onSourcesChanged()
+                    onSourceDelete(delSourceName)
                     delSourceName = ""
                 }
             },
@@ -103,8 +97,7 @@ fun SourcesGrid(
                 onDismissRequest = { changeDialog = "" },
                 onConfirm = {pair ->
                     scope.launch {
-                        changeSource(pair.first, pair.second, db)
-                        onSourcesChanged()
+                        onSourceChange(pair.first, pair.second)
                         changeDialog = ""
                     }
                 },

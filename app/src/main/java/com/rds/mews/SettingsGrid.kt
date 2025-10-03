@@ -39,29 +39,31 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 
 @Composable
 fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
     val clipboardManager = LocalClipboardManager.current
     var text by remember { mutableStateOf("") }
-    var showDates by remember { mutableStateOf(settingsModel.showDates.value) }
-    var compactTab by remember { mutableStateOf(settingsModel.compactTabBar.value) }
-    var monetColors by remember { mutableStateOf(settingsModel.isMonetColors.value) }
-    var filterTopics by remember { mutableStateOf(settingsModel.filterTopics.value) }
-    val defaultGeminiApiKey by remember { mutableStateOf("AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk") }
-    var geminiApiText by remember { mutableStateOf(settingsModel.userApi.value) }
+    val showDates by settingsModel.showDates.collectAsStateWithLifecycle()
+    val compactTab by settingsModel.compactTabBar.collectAsStateWithLifecycle()
+    val monetColors by settingsModel.isMonetColors.collectAsStateWithLifecycle()
+    val filterTopics by settingsModel.filterTopics.collectAsStateWithLifecycle()
+    val titlesNum by settingsModel.titlesNum.collectAsStateWithLifecycle()
+    val defaultGeminiApiKey by remember { mutableStateOf(settingsModel.defaultApiKey) }
+    val geminiApiText by settingsModel.userApi.collectAsStateWithLifecycle()
+    val currentLlmModel by settingsModel.currentLlm.collectAsStateWithLifecycle()
+    val titlesPeriod by settingsModel.titlesPeriod.collectAsStateWithLifecycle()
+    val rssUpdateInterval by settingsModel.rssUpdateInterval.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val colorSchemeDropdownVisible = remember { MutableTransitionState(false) }
-    var currentTheme by remember { mutableStateOf(settingsModel.isDarkMode.value) }
+    val currentTheme by settingsModel.currentTheme.collectAsStateWithLifecycle()
     val colorSchemeDropdownItems = mutableListOf(
-        stringResource(R.string.settings_system_theme) to { settingsModel.setDarkMode("system")
-                       currentTheme = settingsModel.isDarkMode.value },
-        stringResource(R.string.settings_light_theme) to { settingsModel.setDarkMode("light")
-                     currentTheme = settingsModel.isDarkMode.value },
-        stringResource(R.string.settings_dark_theme) to { settingsModel.setDarkMode("dark")
-                     currentTheme = settingsModel.isDarkMode.value }
+        stringResource(R.string.settings_system_theme) to { settingsModel.setCurrentTheme("system") },
+        stringResource(R.string.settings_light_theme) to { settingsModel.setCurrentTheme("light") },
+        stringResource(R.string.settings_dark_theme) to { settingsModel.setCurrentTheme("dark") }
     )
 
     val titlesDropdownVisible = remember { MutableTransitionState(false) }
@@ -76,7 +78,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
             pluralStringResource(R.plurals.titles, count = 50, 50) to { settingsModel.setTitlesNum(50) })
         )
     }
-    else if (settingsModel.titlesNum.intValue > 20) settingsModel.setTitlesNum(20)
+    else if (titlesNum > 20) settingsModel.setTitlesNum(20)
 
     val limitationDropdownVisible = remember { MutableTransitionState(false) }
     val limitationDropdownItems = listOf(
@@ -90,14 +92,14 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
 
     val rssUpdateDropdownVisible = remember { MutableTransitionState(false) }
     val rssUpdateDropdownItems = listOf(
-        pluralStringResource(R.plurals.minutes, count = 15, 15) to { changeRssUpdateSchedule(context, settingsModel, 15) },
-        pluralStringResource(R.plurals.minutes, count = 30, 30) to { changeRssUpdateSchedule(context, settingsModel, 30) },
-        pluralStringResource(R.plurals.minutes, count = 60, 60) to { changeRssUpdateSchedule(context, settingsModel, 60) }
+        pluralStringResource(R.plurals.minutes, count = 15, 15) to { settingsModel.setRssUpdateInterval(context, 15) },
+        pluralStringResource(R.plurals.minutes, count = 30, 30) to { settingsModel.setRssUpdateInterval(context, 30) },
+        pluralStringResource(R.plurals.minutes, count = 60, 60) to { settingsModel.setRssUpdateInterval(context, 60) }
     )
 
     val geminiModelDropdownVisible = remember { MutableTransitionState(false) }
     var geminiModelText by remember { mutableStateOf("") }
-    geminiModelText = when (settingsModel.currentLlm.value) {
+    geminiModelText = when (currentLlmModel) {
         "gemini-2.5-flash" -> "2.5 Flash"
         "gemini-2.0-flash" -> "2.0 Flash"
         "gemini-2.0-flash-lite" -> "2.0 Flash Lite"
@@ -133,10 +135,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
             CustomSettingsItem(text = stringResource(R.string.settings_compact_tab)) {
                 Switch(
                     checked = compactTab,
-                    onCheckedChange = {
-                        settingsModel.setCompactTab(it)
-                        compactTab = settingsModel.compactTabBar.value
-                    },
+                    onCheckedChange = { settingsModel.setCompactTab(it) },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.background,
                         checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -154,10 +153,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                 CustomSettingsItem(text = stringResource(R.string.settings_monet_colors)) {
                     Switch(
                         checked = monetColors,
-                        onCheckedChange = {
-                            settingsModel.setMonetColors(it)
-                            monetColors = settingsModel.isMonetColors.value
-                        },
+                        onCheckedChange = { settingsModel.setMonetColors(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.background,
                             checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -203,7 +199,9 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                         ) {
                             CustomDropdown(
                                 transitionState = colorSchemeDropdownVisible,
-                                buttons = colorSchemeDropdownItems
+                                buttons = colorSchemeDropdownItems.map {(text, action) ->
+                                    text to { action() }
+                                }
                             )
                         }
                     }
@@ -225,10 +223,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
             CustomSettingsItem(text = stringResource(R.string.settings_show_dates)) {
                 Switch(
                     checked = showDates,
-                    onCheckedChange = {
-                        settingsModel.setShowDates(it)
-                        showDates = settingsModel.showDates.value
-                    },
+                    onCheckedChange = { settingsModel.setShowDates(it) },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.background,
                         checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -259,8 +254,8 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                         Text(
                             text = pluralStringResource(
                                 R.plurals.titles,
-                                count = settingsModel.titlesNum.intValue,
-                                settingsModel.titlesNum.intValue
+                                count = titlesNum,
+                                titlesNum
                             ),
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -273,7 +268,9 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                         ) {
                             CustomDropdown(
                                 transitionState = titlesDropdownVisible,
-                                buttons = titlesDropdownItems
+                                buttons = titlesDropdownItems.map {(text, action) ->
+                                    text to { action() }
+                                }
                             )
                         }
                     }
@@ -299,8 +296,8 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                         Text(
                             text = pluralStringResource(
                                 R.plurals.hours,
-                                count = settingsModel.titlesPeriod.intValue,
-                                settingsModel.titlesPeriod.intValue
+                                count = titlesPeriod,
+                                titlesPeriod
                             ),
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -313,7 +310,9 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                         ) {
                             CustomDropdown(
                                 transitionState = limitationDropdownVisible,
-                                buttons = limitationDropdownItems
+                                buttons = limitationDropdownItems.map {(text, action) ->
+                                    text to { action() }
+                                }
                             )
                         }
                     }
@@ -339,8 +338,8 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                         Text(
                             text = pluralStringResource(
                                 R.plurals.minutes,
-                                count = settingsModel.rssUpdateInterval.intValue,
-                                settingsModel.rssUpdateInterval.intValue
+                                count = rssUpdateInterval,
+                                rssUpdateInterval
                             ),
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -376,10 +375,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                 CustomSettingsItem(text = stringResource(R.string.settings_filter_topics)) {
                     Switch(
                         checked = filterTopics,
-                        onCheckedChange = {
-                            settingsModel.setFilterTopics(it)
-                            filterTopics = settingsModel.filterTopics.value
-                        },
+                        onCheckedChange = { settingsModel.setFilterTopics(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.background,
                             checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -425,7 +421,9 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                             ) {
                                 CustomDropdown(
                                     transitionState = geminiModelDropdownVisible,
-                                    buttons = geminiModelDropdownItems
+                                    buttons = geminiModelDropdownItems.map {(text, action) ->
+                                        text to { action() }
+                                    }
                                 )
                             }
                         }
@@ -450,7 +448,6 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                                     }
 
                                     settingsModel.setUserGeminiApi(text)
-                                    geminiApiText = text
                                     text = ""
                                 }
 
@@ -458,7 +455,6 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                                     settingsModel.setUserGeminiApi(defaultGeminiApiKey)
                                     settingsModel.setCurrentLlm("gemini-2.0-flash")
                                     settingsModel.setFilterTopics(false)
-                                    geminiApiText = settingsModel.userApi.value
                                 }
                             }
                         },
@@ -478,7 +474,6 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
             }
         }
 
-//        item {Spacer(modifier = Modifier.height(8.dp))}
         item {CustomBottomFootnote(stringResource(R.string.settings_footnote_text, stringResource(R.string.app_version)))}
     }
 }
