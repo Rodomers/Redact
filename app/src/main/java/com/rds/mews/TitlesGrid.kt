@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,8 +58,8 @@ fun TitlesGrid(
     modifier: Modifier,
     isRefreshing: Boolean,
     showEmptyMess: Boolean,
+    toggleEmptyMess: (Boolean) -> Unit,
     errState: SummarizationResult.Failure?,
-//    expandedIds: Set<Long>,
     titlesCardStates: Set<TitleCardStates>,
     rememberCardPage: (Long, Int) -> Unit,
     onRefresh: () -> Unit,
@@ -72,6 +73,14 @@ fun TitlesGrid(
     val clipboardManager = LocalClipboardManager.current
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val pullToRefreshState = rememberPullToRefreshState()
+
+    LaunchedEffect(groupedItems.isEmpty(), isRefreshing) {
+        if (groupedItems.isEmpty() && !isRefreshing) {
+            delay(300L)
+            if (groupedItems.isEmpty()) toggleEmptyMess(true)
+        }
+        else toggleEmptyMess(false)
+    }
 
     LaunchedEffect(errState) {
         if (errState != null) if (!bottomSheetState.isVisible) bottomSheetState.show()

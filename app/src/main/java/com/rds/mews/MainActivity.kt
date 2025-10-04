@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,7 +79,7 @@ fun MainScreen() {
     val isMonetColors by settingsViewModel.isMonetColors.collectAsStateWithLifecycle()
 
     // отладочное
-    settingsViewModel.setTitlesNum(3)
+//    settingsViewModel.setTitlesNum(3)
 
     MewsTheme(settingsTheme = currentTheme, monetTheme = isMonetColors) {
         var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }
@@ -117,11 +118,11 @@ fun MainScreen() {
                 TabScreen.Titles -> {
                     val gridState = titlesViewModel.gridState
 
-                    val groupedTitles by titlesViewModel.groupedTitles.collectAsState()
+                    val groupedTitles by titlesViewModel.groupedTitles.collectAsStateWithLifecycle()
                     val isRefreshing by titlesViewModel.isRefreshing.collectAsState()
-                    val err by titlesViewModel.errState.collectAsState()
-                    val showEmptyMess by titlesViewModel.showEmptyMess.collectAsState()
-                    val titlesCardStates by titlesViewModel.titleCardStates.collectAsState()
+                    val err by titlesViewModel.errState.collectAsStateWithLifecycle()
+                    val showEmptyMess by titlesViewModel.showEmptyMess.collectAsStateWithLifecycle()
+                    val titlesCardStates by titlesViewModel.titleCardStates.collectAsStateWithLifecycle()
 
                     val showDates by titlesViewModel.showDates.collectAsStateWithLifecycle()
                     val lastTitlesUpdate by titlesViewModel.lastUpdated.collectAsStateWithLifecycle()
@@ -140,8 +141,8 @@ fun MainScreen() {
                         modifier = modifier,
                         isRefreshing = isRefreshing,
                         showEmptyMess = showEmptyMess,
+                        toggleEmptyMess = titlesViewModel::toggleEmptyMess,
                         errState = err,
-//                        expandedIds = expandedIds,
                         titlesCardStates = titlesCardStates,
                         onRefresh = { titlesViewModel.refreshTitles() },
                         onClearErr = { titlesViewModel.clearErr() },

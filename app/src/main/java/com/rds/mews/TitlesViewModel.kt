@@ -14,11 +14,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -42,10 +44,16 @@ class TitlesViewModel(
     val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val lastUpdated: StateFlow<Long> = repository.lastTitlesUpdate.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), 0)
-    val errState: StateFlow<SummarizationResult.Failure?> = repository.lastError.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    private val _errState = MutableStateFlow<SummarizationResult.Failure?>(null)
+    val errState = _errState.asStateFlow()
 
-    val groupedTitles: StateFlow<Map<String, List<Title>>> = titles.map {list ->
-        list.groupBy { getFormattedTimeUnix(it.time, true) }
+    val groupedTitles: StateFlow<Map<String, List<Title>>> = titles
+        .filter { it.isNotEmpty() }
+        .map {list ->
+        list.filter { it.text != "<промежуточный текст>" }.map {
+            it.copy(sources = strTransform(it.sources, ", "),
+                links = strTransform(it.links, "\n"))
+        }.groupBy { getFormattedTimeUnix(it.time, true) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private val _showEmptyMessage = MutableStateFlow(false)
@@ -63,14 +71,20 @@ class TitlesViewModel(
                     .map {title -> TitleCardStates(id = title.id) }
                     .toSet()
             }
+
+            repository.lastError.collect { err -> _errState.value = err }
         }
+    }
+
+    fun toggleEmptyMess(newValue: Boolean) {
+        _showEmptyMessage.value = newValue
     }
 
     fun refreshTitles(returnExisting: Boolean = false) {
         viewModelScope.launch {
             if (_isRefreshing.value) return@launch
 
-            _isRefreshing.value = true
+            if (!returnExisting) _isRefreshing.value = true
             try {
                 val freshTitles = repository.fetchNewTitles(application, returnExisting)
                  _titles.value = freshTitles.filter { it.text != "<промежуточный текст>" }

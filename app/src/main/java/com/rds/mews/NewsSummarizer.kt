@@ -390,7 +390,6 @@ class NewsSummarizer(
                 }
             }
             println(titles)
-            var lastUpdate: Long = 0
 
             if (!flagForUnfinishedTopics) {
                 errFlag = extractTopics(maxTopics, messageSeconds)
@@ -405,7 +404,7 @@ class NewsSummarizer(
                         return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
                     }
                 }
-                lastUpdate = System.currentTimeMillis()
+
                 if (filterTopics) {
                     settingsManager.saveString(MewsRepository.UPDATING_STATE, "filtering_topics")
                     errFlag = filterTopics(maxTopics)
@@ -429,6 +428,7 @@ class NewsSummarizer(
 //                    db.delTitle(title.id)
                     }
                 }
+                MewsRepository.setLastTitlesUpdate(System.currentTimeMillis())
             }
 
             when (titles.size) {
@@ -517,7 +517,6 @@ class NewsSummarizer(
             }
 
             readyFunc()
-            if (lastUpdate != 0L) MewsRepository.setLastTitlesUpdate(lastUpdate)
             return SummarizationResult.Success
         } catch(e: Exception) {
             e.printStackTrace()

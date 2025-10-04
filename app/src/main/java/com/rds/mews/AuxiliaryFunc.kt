@@ -146,16 +146,7 @@ suspend fun updateTitles(
 
     val list = db.getTitles()
 
-    return list.map {
-        Title(
-            id = it.id,
-            time = it.time,
-            title = it.title,
-            text = it.text,
-            sources = strTransform(it.sources, ", "),
-            links = strTransform(it.links, "\n")
-        )
-    }
+    return list
 }
 
 fun strTransform(original: String, separator: String): String {
