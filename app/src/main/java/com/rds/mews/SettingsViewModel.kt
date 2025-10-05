@@ -31,7 +31,6 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     fun setRssUpdateInterval(context: Context, value: Int) {
         viewModelScope.launch {
             repository.setRssUpdateInterval(value)
-            scheduleRssUpdate(context, value)
         }
     }
     fun setFilterTopics(value: Boolean) = viewModelScope.launch { repository.setFilterTopics(value) }

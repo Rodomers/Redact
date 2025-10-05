@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -16,9 +17,9 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
             initialValue = emptyList()
         )
 
-    fun addSource(name: String, link: String) {
+    fun addSource(context: Context, name: String, link: String) {
         viewModelScope.launch {
-            repository.addSource(name, link)
+            repository.addSource(context, name, link)
         }
     }
 

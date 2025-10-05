@@ -15,6 +15,10 @@
     <string name="delsource_title">Deleting a source</string>
     <string name="delsource_text">Are you sure you want to delete the source \"%s\"?</string>
     <string name="delsource_btntext">Delete</string>
+    <string name="notification_sheet_header">Background Update</string>
+    <string name="notification_sheet_text">For the background news update to work correctly, the app needs permission to send notifications. You can do this now or grant the permission in the app settings.\nAllow?</string>
+    <string name="notification_sheet_cancel">Later</string>
+    <string name="notification_sheet_conf">Allow</string>
 
     <string name="titles_update_text">Pull down to update\n(Veery long)</string>
     <string name="today">today</string>
@@ -121,4 +125,6 @@ Restart the update process?</string>
     <string name="date_12">December, %d</string>
     <string name="wrong_date">Wrong date</string>
 
+    <string name="rss_worker_title">Updating news</string>
+    <string name="rss_worker_text">Getting data from news sources…</string>
 </resources>

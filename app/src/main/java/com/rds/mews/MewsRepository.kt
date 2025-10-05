@@ -36,10 +36,11 @@ object MewsRepository {
         flow { emit(db.getRSS()) }
     }.flowOn(Dispatchers.IO)
 
-    suspend fun addSource(name: String, link: String) {
+    suspend fun addSource(context: Context, name: String, link: String) {
         withContext(Dispatchers.IO) {
             addSource(name, link, db)
             _sourcesUpdateTrigger.value ++
+            scheduleRssUpdate(context, rssUpdateInterval.value, true)
         }
     }
 

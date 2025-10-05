@@ -106,11 +106,12 @@ fun MainScreen() {
             when (selectedTab) {
                 TabScreen.Sources -> {
                     val sourcesList by sourcesViewModel.sources.collectAsState()
+                    val context = LocalContext.current
 
                     SourcesGrid(
                         sourcesList,
                         modifier = modifier,
-                        onSourceAdd = { name, link -> sourcesViewModel.addSource(name, link) },
+                        onSourceAdd = { name, link -> sourcesViewModel.addSource(context, name, link) },
                         onSourceDelete = { name -> sourcesViewModel.deleteSource(name) },
                         onSourceChange = { oldName, newName -> sourcesViewModel.changeSource(oldName, newName)}
                     )

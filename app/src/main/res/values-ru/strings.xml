@@ -12,6 +12,10 @@
     <string name="delsource_title">Удаление источника</string>
     <string name="delsource_text">Вы уверены, что хотите удалить источник \"%s\"?</string>
     <string name="delsource_btntext">Удалить</string>
+    <string name="notification_sheet_header">Фоновое обновление</string>
+    <string name="notification_sheet_text">Для корректной работы фонового обновления новостей необходимо дать приложению разрешение на отправку уведомлений. Вы можете сделать это сейчас или выдать разрешение в настройках приложения.\nРазрешить?</string>
+    <string name="notification_sheet_cancel">Позже</string>
+    <string name="notification_sheet_conf">Разрешить</string>
 
     <string name="titles_update_text">Потяните вниз, чтобы обновить\n(Это оочень долго)</string>
     <string name="today">сегодня</string>
@@ -121,4 +125,7 @@
     <string name="date_11">%d ноября</string>
     <string name="date_12">%d декабря</string>
     <string name="wrong_date">Неверная дата</string>
+
+    <string name="rss_worker_title">Обновление новостей</string>
+    <string name="rss_worker_text">Получаем данные от наших источников…</string>
 </resources>
