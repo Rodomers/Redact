@@ -12,10 +12,10 @@
     <string name="delsource_title">Удаление источника</string>
     <string name="delsource_text">Вы уверены, что хотите удалить источник \"%s\"?</string>
     <string name="delsource_btntext">Удалить</string>
-    <string name="notification_sheet_header">Фоновое обновление</string>
-    <string name="notification_sheet_text">Для корректной работы фонового обновления новостей необходимо дать приложению разрешение на отправку уведомлений. Вы можете сделать это сейчас или выдать разрешение в настройках приложения.\nРазрешить?</string>
-    <string name="notification_sheet_cancel">Позже</string>
-    <string name="notification_sheet_conf">Разрешить</string>
+    <string name="optimization_sheet_header">Фоновое обновление</string>
+    <string name="optimization_sheet_text">Для корректной работы фонового обновления новостей необходимо дать приложению разрешение работу в фоновом режиме.\nРазрешить?</string>
+    <string name="optimization_sheet_cancel">Позже</string>
+    <string name="optimization_sheet_conf">Разрешить</string>
 
     <string name="titles_update_text">Потяните вниз, чтобы обновить\n(Это оочень долго)</string>
     <string name="today">сегодня</string>
@@ -39,6 +39,7 @@
     <string name="settings_gemini_api_key">Ключ Gemini API</string>
     <string name="settings_reset">Сброс</string>
     <string name="settings_paste">Вставить</string>
+    <string name="settings_ignore_optimization">Работа в фоне</string>
     <string name="settings_gemini_model">Выбор модели Gemini</string>
     <string name="settings_footnote_text">Обратная связь (Telegram): @mewsapp\nВерсия 1.0-alpha.6</string>
 

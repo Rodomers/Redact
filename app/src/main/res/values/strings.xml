@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_version" translatable="false">1.0-alpha.6</string>
+    <string name="app_version" translatable="false">1.0-alpha.7</string>
 
     <string name="app_name" translatable="false">Mews</string>
     <string name="title_activity_main" translatable="false">MainActivity</string>
@@ -15,10 +15,10 @@
     <string name="delsource_title">Deleting a source</string>
     <string name="delsource_text">Are you sure you want to delete the source \"%s\"?</string>
     <string name="delsource_btntext">Delete</string>
-    <string name="notification_sheet_header">Background Update</string>
-    <string name="notification_sheet_text">For the background news update to work correctly, the app needs permission to send notifications. You can do this now or grant the permission in the app settings.\nAllow?</string>
-    <string name="notification_sheet_cancel">Later</string>
-    <string name="notification_sheet_conf">Allow</string>
+    <string name="optimization_sheet_header">Background Update</string>
+    <string name="optimization_sheet_text">To ensure that background news updates work correctly, the app needs permission to run in the background.\nAllow?</string>
+    <string name="optimization_sheet_cancel">Later</string>
+    <string name="optimization_sheet_conf">Allow</string>
 
     <string name="titles_update_text">Pull down to update\n(Veery long)</string>
     <string name="today">today</string>
@@ -42,8 +42,10 @@
     <string name="settings_gemini_api_key">Gemini API key</string>
     <string name="settings_reset">Reset</string>
     <string name="settings_paste">Paste</string>
+    <string name="settings_ignore_optimization">Ignore battery optimization</string>
     <string name="settings_gemini_model">Gemini model</string>
     <string name="settings_footnote_text">Feedback (Telegram): @mewsapp\nVersion %s</string>
+
 
     <plurals name="titles">
         <item quantity="one">%d title</item>

@@ -1,7 +1,11 @@
 package com.rds.mews
 
+import android.annotation.SuppressLint
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.StringRes
@@ -16,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -23,6 +28,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -50,6 +56,7 @@ import io.ktor.http.ContentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.net.toUri
 
 
 class MainActivity : ComponentActivity() {
@@ -69,6 +76,7 @@ sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
     data object Settings: TabScreen(titleResId = R.string.tabscreen_settings, Icons.Default.Settings)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory())
@@ -85,6 +93,27 @@ fun MainScreen() {
         var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }
 
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
+        val context = LocalContext.current
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        var optimizationIgnore by remember { mutableStateOf(false) }
+
+        if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
+            val scope = rememberCoroutineScope()
+
+            CustomErrorBottomSheet(
+                title = stringResource(R.string.optimization_sheet_header),
+                text = stringResource(R.string.optimization_sheet_text),
+                cancelBtnText = stringResource(R.string.optimization_sheet_cancel),
+                confBtnText = stringResource(R.string.optimization_sheet_conf),
+                onDismissRequest = { optimizationIgnore = true },
+                onConfirm = {
+                    requestIgnoreBatteryOptimization(context)
+                    optimizationIgnore = true
+                            },
+                scope = scope,
+                sheetState = sheetState,
+            )
+        }
 
         Scaffold(
             bottomBar = {
@@ -106,7 +135,7 @@ fun MainScreen() {
             when (selectedTab) {
                 TabScreen.Sources -> {
                     val sourcesList by sourcesViewModel.sources.collectAsState()
-                    val context = LocalContext.current
+                    val context = context
 
                     SourcesGrid(
                         sourcesList,
