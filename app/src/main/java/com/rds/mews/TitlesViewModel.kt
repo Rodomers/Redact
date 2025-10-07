@@ -139,6 +139,11 @@ class TitlesViewModel(
     fun clearErr() {
         repository.clearError()
     }
+
+    init {
+        _isRefreshing.value = repository.updatingTitles.value
+        _errState.value = repository.lastError.value
+    }
 }
 
 class TitlesViewModelFactory(private val application: Application) :
