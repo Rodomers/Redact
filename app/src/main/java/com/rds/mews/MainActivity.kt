@@ -87,7 +87,7 @@ fun MainScreen() {
     val isMonetColors by settingsViewModel.isMonetColors.collectAsStateWithLifecycle()
 
     // отладочное
-//    settingsViewModel.setTitlesNum(3)
+//    settingsViewModel.setTitlesNum(1)
 
     MewsTheme(settingsTheme = currentTheme, monetTheme = isMonetColors) {
         var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }

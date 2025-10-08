@@ -141,8 +141,7 @@ class LLMClient(
 // ====== Логика суммаризации ======
 class NewsSummarizer(
     private val db: DbHelper, // Хелпер для БД
-    private val llm: LLMClient, // клиенты для опенроутера
-    val settingsManager: SettingsManager
+    private val llm: LLMClient // клиенты для опенроутера
 ) {
 
     /**
@@ -192,7 +191,7 @@ class NewsSummarizer(
                 1. Не добавляй никакие ``` или ""${'"'}.
                 2. Не добавляй пояснения или текст вне JSON.
                 3. Ответ должен начинаться с [ и заканчиваться ].
-                4. Отвечай на РУССКОМ языке.
+                4. Отвечай СТРОГО на этом языке: ${MewsRepository.getStringResource(R.string.current_language) ?: "english"}.
                 5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ Хотя бы одним значением.
                 6. НЕ ДУБЛИРУЙ НОВОСТИ. Одна новость относится к ТОЛЬКО ОДНОЙ ТЕМЕ.
                 7. Уделяй равное внимание всем источникам информации.
@@ -280,8 +279,10 @@ class NewsSummarizer(
             }
         ).toString()
         val prompt = """
-    Проанализируй JSON-массив новостных тем. Отбрось малозначимые и те, что затрагивают забаненные темы. Оставь не более $maxTopics самых важных тем.
+    Проанализируй JSON-массив новостных тем. Отбрось те, что затрагивают забаненные темы. Оставь ровно $maxTopics наиболее важных тем.
     Отсортируй итоговый список по убыванию важности.
+    Используй весь предоставленный тебе материал. Темы по возможности объединяй: например, новость об ударе по нпз, новость о закрытии аэропортов
+    и сбитиях бпла можно объединить в тему "атаки бпла". При этом ты не можешь делать темы слишком общими - такими как "политика", "спорт" и прочее.
 
     Забаненные темы:
     $bannedNews
@@ -305,6 +306,7 @@ class NewsSummarizer(
     2. Ответ должен начинаться с `[` и заканчиваться `]`.
     3. Не превышай лимит в $maxTopics тем.
     4. Сохраняй оригинальные `ids` для каждой темы, которую включаешь в ответ.
+    5. Отвечай СТРОГО на этом языке: ${MewsRepository.getStringResource(R.string.current_language) ?: "english"}
 
     Массив тем для фильтрации:
     $titlesJsonForPrompt
@@ -365,6 +367,8 @@ class NewsSummarizer(
         readyFunc: () -> Unit,
         filterTopics: Boolean = false
     ): SummarizationResult {
+        val repository = MewsRepository
+
         try {
             val messages = db.getMessages(messageSeconds)
             if (messages.isEmpty()) {
@@ -374,10 +378,10 @@ class NewsSummarizer(
 
             var rawTitles = db.getTitles()
             var titles = mutableListOf<Topics>()
-            var flagForUnfinishedTopics: Boolean = false
+            var flagForUnfinishedTopics = false
             var errFlag: Boolean
 
-            settingsManager.saveString(MewsRepository.UPDATING_STATE, "extracting_topics")
+            repository.setUpdatingState("extracting_topics")
 
             // ЭТО ПЛОХО, но я  не знаю как переделать
             rawTitles.forEach { title ->
@@ -405,8 +409,8 @@ class NewsSummarizer(
                     }
                 }
 
-                if (filterTopics) {
-                    settingsManager.saveString(MewsRepository.UPDATING_STATE, "filtering_topics")
+                if (filterTopics && db.getTitles().size > maxTopics) {
+                    repository.setUpdatingState("filtering_topics")
                     errFlag = filterTopics(maxTopics)
                     if (!errFlag) {
                         for (i in 1..2) {
@@ -445,7 +449,7 @@ class NewsSummarizer(
 
                     for (title in titles) {
                         current++
-                        settingsManager.saveString(MewsRepository.UPDATING_STATE, "$current/$size")
+                        repository.setUpdatingState("$current/$size")
                         val suitableMessages: MutableList<Message> = mutableListOf()
                         title.ids?.forEach { id ->
                             messages.forEach { message ->
@@ -549,7 +553,7 @@ class NewsSummarizer(
                 1. Не добавляй никакие ``` или ""${'"'}.
                 2. Не добавляй пояснения или текст вне JSON.
                 3. Ответ должен начинаться с { и заканчиваться }.
-                4. Отвечай на РУССКОМ языке.
+                4. Отвечай СТРОГО на этом языке: ${MewsRepository.getStringResource(R.string.current_language) ?: "english"}.
                 5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ
                 6. В случае, если разные источники дают противоположные точки зрения - выписывай обе.
                 7. Различные события внутри одной темы разделяй с помощью \n.

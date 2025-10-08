@@ -1,6 +1,7 @@
 package com.rds.mews
 
 import android.content.Context
+import androidx.glance.LocalContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,12 +23,14 @@ object MewsRepository {
 
     fun initialize(context: Context) {
         if (isInitialized) return
-        this.db = DbHelper(context.applicationContext)
-        this.settingsManager = SettingsManager(context.applicationContext)
+        val context = context.applicationContext
+        this.db = DbHelper(context)
+        this.settingsManager = SettingsManager(context)
 
         loadInitSettings()
         listenForErrors()
         checkForSavedError()
+        setContext(context)
         isInitialized = true
     }
 
@@ -192,6 +195,11 @@ object MewsRepository {
         settingsManager.saveLastError(failure)
     }
 
+    private val _context = MutableStateFlow<Context?>(null)
+    fun setContext(context: Context) {
+        _context.value = context
+    }
+
     private fun listenForErrors() {
         CoroutineScope(Dispatchers.Default).launch {
             settingsManager.lastErrorFlow.collect { error ->
@@ -207,6 +215,13 @@ object MewsRepository {
     fun clearError() {
         _lastError.value = null
         settingsManager.clearLastError()
+    }
+
+    fun getStringResource(id: Int): String? {
+        return when (_context.value) {
+            null -> null
+            else -> _context.value!!.getString(id)
+        }
     }
 
     private fun loadInitSettings() {

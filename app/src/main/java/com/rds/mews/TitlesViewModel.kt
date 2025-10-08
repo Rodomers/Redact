@@ -64,15 +64,7 @@ class TitlesViewModel(
 
     init {
         viewModelScope.launch {
-            repository.titles.collect { titleList ->
-                _titles.value = titleList
 
-                _titleCardStates.value = titleList
-                    .map {title -> TitleCardStates(id = title.id) }
-                    .toSet()
-            }
-
-            repository.lastError.collect { err -> _errState.value = err }
         }
     }
 
@@ -141,8 +133,20 @@ class TitlesViewModel(
     }
 
     init {
-        _isRefreshing.value = repository.updatingTitles.value
-        _errState.value = repository.lastError.value
+        viewModelScope.launch {
+            repository.titles.collect { titleList ->
+                _titles.value = titleList
+
+                _titleCardStates.value = titleList
+                    .map {title -> TitleCardStates(id = title.id) }
+                    .toSet()
+            }
+
+            repository.lastError.collect { err -> _errState.value = err }
+
+            _isRefreshing.value = repository.updatingTitles.value
+            _errState.value = repository.lastError.value
+        }
     }
 }
 

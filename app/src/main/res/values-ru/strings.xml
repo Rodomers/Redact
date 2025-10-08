@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="current_language">Русский</string>
+
     <string name="tabscreen_sources">Источники</string>
     <string name="tabscreen_titles">Заголовки</string>
     <string name="tabscreen_settings">Настройки</string>
