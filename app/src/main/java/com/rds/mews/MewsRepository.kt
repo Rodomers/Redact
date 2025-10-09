@@ -1,17 +1,23 @@
 package com.rds.mews
 
 import android.content.Context
-import androidx.glance.LocalContext
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -88,7 +94,13 @@ object MewsRepository {
     const val UPDATING_STATE = "updating_state"
     const val COMPACT_TAB_BAR = "compact_tab_bar"
     const val FILTER_TOPICS = "filter_topics"
-    const val ENDURE_TIME = "endure_time"
+    const val ENLARGE_TIMESTAMPS = "endure_time"
+
+    private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
+    var selectedTab: StateFlow<TabScreen> = _selectedTab.asStateFlow()
+    fun setCurrentTab(newTab: TabScreen) {
+        _selectedTab.value = newTab
+    }
 
     private val _currentTheme = MutableStateFlow("system")
     val currentTheme: StateFlow<String> = _currentTheme.asStateFlow()
@@ -189,11 +201,11 @@ object MewsRepository {
         _filterTopics.value = newValue
     }
 
-    private val _endureTime = MutableStateFlow(false)
-    val endureTime: StateFlow<Boolean> = _endureTime.asStateFlow()
-    fun setEndureTime(newValue: Boolean) {
-        settingsManager.saveBoolean(ENDURE_TIME, newValue)
-        _endureTime.value = newValue
+    private val _enlargedTime = MutableStateFlow(false)
+    val enlargedTimestamps: StateFlow<Boolean> = _enlargedTime.asStateFlow()
+    fun setEnlargeTimestamps(newValue: Boolean) {
+        settingsManager.saveBoolean(ENLARGE_TIMESTAMPS, newValue)
+        _enlargedTime.value = newValue
     }
 
     private val _lastError = MutableStateFlow<SummarizationResult.Failure?>(null)
@@ -237,6 +249,7 @@ object MewsRepository {
         _monetColors.value = settingsManager.getBoolean(IS_MONET, false)
         _compactTabBar.value = settingsManager.getBoolean(COMPACT_TAB_BAR, false)
         _showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
+        _enlargedTime.value = settingsManager.getBoolean(ENLARGE_TIMESTAMPS, false)
 
         _titlesNum.value = settingsManager.getInt(TITLES_NUM, 10)
         _titlesPeriod.value = settingsManager.getInt(TITLES_PERIOD, 24)

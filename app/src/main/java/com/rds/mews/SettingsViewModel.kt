@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -27,7 +26,7 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     val filterTopics: StateFlow<Boolean> = repository.filterTopics.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val currentLlm: StateFlow<String> = repository.currentLlmModel.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "gemini-2.0-flash")
     val userApi: StateFlow<String> = repository.userApiKey.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
-    val endureTime: StateFlow<Boolean> = repository.endureTime.stateIn(viewModelScope,
+    val endureTime: StateFlow<Boolean> = repository.enlargedTimestamps.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
     val defaultApiKey = repository.DEFAULT_GEMINI_API_KEY
 
@@ -45,7 +44,7 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     fun setFilterTopics(value: Boolean) = viewModelScope.launch { repository.setFilterTopics(value) }
     fun setCurrentLlm(value: String) = viewModelScope.launch { repository.setCurrentLlmModel(value) }
     fun setUserGeminiApi(value: String) = viewModelScope.launch { repository.setUserApiKey(value) }
-    fun setEndureTime(value: Boolean) = viewModelScope.launch { repository.setEndureTime(value) }
+    fun setEndureTime(value: Boolean) = viewModelScope.launch { repository.setEnlargeTimestamps(value) }
 }
 
 class SettingsViewModelFactory : ViewModelProvider.Factory {

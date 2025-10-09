@@ -90,7 +90,7 @@ fun MainScreen() {
 //    settingsViewModel.setTitlesNum(1)
 
     MewsTheme(settingsTheme = currentTheme, monetTheme = isMonetColors) {
-        var selectedTab by remember { mutableStateOf<TabScreen>(TabScreen.Sources) }
+        val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
 
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
         val context = LocalContext.current
@@ -133,7 +133,7 @@ fun MainScreen() {
                                 }
                             }
                         }
-                        else selectedTab = newTab
+                        else MewsRepository.setCurrentTab(newTab)
                     },
                     compact = compactTab,
                 )
