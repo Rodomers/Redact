@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -45,7 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 
 @Composable
-fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
+fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: SettingsViewModel) {
     val clipboardManager = LocalClipboardManager.current
     var text by remember { mutableStateOf("") }
     val showDates by settingsModel.showDates.collectAsStateWithLifecycle()
@@ -58,6 +59,7 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
     val currentLlmModel by settingsModel.currentLlm.collectAsStateWithLifecycle()
     val titlesPeriod by settingsModel.titlesPeriod.collectAsStateWithLifecycle()
     val rssUpdateInterval by settingsModel.rssUpdateInterval.collectAsStateWithLifecycle()
+    val endureTime by settingsModel.endureTime.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val colorSchemeDropdownVisible = remember { MutableTransitionState(false) }
@@ -121,7 +123,8 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
             .padding(horizontal = 10.dp),
         contentPadding = WindowInsets.statusBars.asPaddingValues(),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        state = gridState
     ) {
         stickyHeader() {
             Box(
@@ -138,6 +141,23 @@ fun SettingsGrid(modifier: Modifier, settingsModel: SettingsViewModel) {
                 Switch(
                     checked = compactTab,
                     onCheckedChange = { settingsModel.setCompactTab(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.background,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                )
+            }
+        }
+        item {
+            CustomSettingsItem(text = stringResource(R.string.settings_endure_time)) {
+                Switch(
+                    checked = endureTime,
+                    onCheckedChange = { settingsModel.setEndureTime(it) },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.background,
                         checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,

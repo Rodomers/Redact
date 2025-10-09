@@ -1,6 +1,7 @@
 package com.rds.mews
 
 import android.content.Context
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -10,6 +11,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
+    val gridState = LazyGridState(
+        firstVisibleItemIndex = 0,
+        firstVisibleItemScrollOffset = 0
+    )
+
     val sources: StateFlow<List<RSS>> = repository.sources
         .stateIn(
             scope = viewModelScope,

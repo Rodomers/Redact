@@ -42,6 +42,8 @@ class TitlesViewModel(
     val isRefreshing = _isRefreshing.asStateFlow()
 
     val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val endureTime: StateFlow<Boolean> = repository.endureTime.stateIn(viewModelScope,
+        SharingStarted.WhileSubscribed(5000), false)
     val lastUpdated: StateFlow<Long> = repository.lastTitlesUpdate.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), 0)
     private val _errState = MutableStateFlow<SummarizationResult.Failure?>(null)
@@ -61,12 +63,6 @@ class TitlesViewModel(
 
     private val _titleCardStates = MutableStateFlow<Set<TitleCardStates>>(emptySet())
     val titleCardStates: StateFlow<Set<TitleCardStates>> = _titleCardStates.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-
-        }
-    }
 
     fun toggleEmptyMess(newValue: Boolean) {
         _showEmptyMessage.value = newValue
@@ -110,11 +106,17 @@ class TitlesViewModel(
         }
     }
 
-    fun toggleTitleExpanded(id: Long) {
+    fun toggleTitleExpanded(id: Long?) {
         _titleCardStates.update { currentSet ->
             currentSet.map {
-                if (it.id == id) { it.copy(expanded = !it.expanded) }
-                else it
+                when (id) {
+                    null -> it.copy(expanded = false)
+                    else -> {
+                        if (it.id == id) {
+                            it.copy(expanded = !it.expanded)
+                        } else it
+                    }
+                }
             }.toSet()
         }
     }

@@ -18,6 +18,7 @@
     <string name="optimization_sheet_text">Для корректной работы фонового обновления новостей необходимо дать приложению разрешение работу в фоновом режиме.\nРазрешить?</string>
     <string name="optimization_sheet_cancel">Позже</string>
     <string name="optimization_sheet_conf">Разрешить</string>
+    <string name="no_sources">Нет источников :(</string>
 
     <string name="titles_update_text">Потяните вниз, чтобы обновить\n(Это оочень долго)</string>
     <string name="today">сегодня</string>
@@ -34,6 +35,7 @@
     <string name="settings_monet_colors">Цвета Monet</string>
     <string name="settings_color_scheme">Тема оформления</string>
     <string name="settings_compact_tab">Компактная навигационная панель</string>
+    <string name="settings_endure_time">Вынести время из карточек заголовков</string>
     <string name="settings_filter_topics">Дополнительный фильтр тем</string>
     <string name="settings_maximum_headers">Максимум заголовков</string>
     <string name="settings_news_period">Срок давности новостей</string>

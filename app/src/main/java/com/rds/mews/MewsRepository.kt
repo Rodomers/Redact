@@ -88,6 +88,7 @@ object MewsRepository {
     const val UPDATING_STATE = "updating_state"
     const val COMPACT_TAB_BAR = "compact_tab_bar"
     const val FILTER_TOPICS = "filter_topics"
+    const val ENDURE_TIME = "endure_time"
 
     private val _currentTheme = MutableStateFlow("system")
     val currentTheme: StateFlow<String> = _currentTheme.asStateFlow()
@@ -186,6 +187,13 @@ object MewsRepository {
     fun setFilterTopics(newValue: Boolean) {
         settingsManager.saveBoolean(FILTER_TOPICS, newValue)
         _filterTopics.value = newValue
+    }
+
+    private val _endureTime = MutableStateFlow(false)
+    val endureTime: StateFlow<Boolean> = _endureTime.asStateFlow()
+    fun setEndureTime(newValue: Boolean) {
+        settingsManager.saveBoolean(ENDURE_TIME, newValue)
+        _endureTime.value = newValue
     }
 
     private val _lastError = MutableStateFlow<SummarizationResult.Failure?>(null)

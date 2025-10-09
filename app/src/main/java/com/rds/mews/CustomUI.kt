@@ -250,7 +250,8 @@ fun TitlesCard(
     isExpanded: Boolean,
     onToggleExpanded: () -> Unit,
     pagerState: PagerState,
-    rememberPage: (Int) -> Unit
+    rememberPage: (Int) -> Unit,
+    noTime: Boolean = false
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -302,13 +303,15 @@ fun TitlesCard(
                         indication = null
                     ) { onToggleExpanded() },
             ) {
-                Text(
-                    text = getFormattedTimeUnix(title.time, showDates),
-                    textAlign = TextAlign.Left,
-                    modifier = Modifier
-                        .padding(8.dp)
-                        .wrapContentWidth()
-                )
+                if (!noTime) {
+                    Text(
+                        text = getFormattedTimeUnix(title.time, showDates),
+                        textAlign = TextAlign.Left,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .wrapContentWidth()
+                    )
+                }
                 Text(
                     text = title.title,
                     textAlign = TextAlign.Left,
@@ -765,4 +768,10 @@ fun CustomTextDivider(text: String? = null, dateString: String? = null, date: Bo
 fun CustomBottomFootnote(text: String) {
     Text(text = text, fontWeight = FontWeight.Normal, fontSize = 12.sp, textAlign = TextAlign.Center,
         modifier = Modifier.padding(start = 20.dp, end = 20.dp))
+}
+
+@Composable
+fun CustomTimeMark(time: Long) {
+    Text(text = getFormattedTimeUnix(time), fontWeight = FontWeight.Normal, fontSize = 13.sp, textAlign = TextAlign.Center,
+        modifier = Modifier.padding(top = 4.dp, end = 10.dp))
 }

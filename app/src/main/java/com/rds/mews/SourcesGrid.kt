@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,6 +35,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SourcesGrid(
+    gridState: LazyGridState,
     itemsList: List<RSS>,
     modifier: Modifier,
     onSourceAdd: (String, String) -> Unit,
@@ -116,8 +118,22 @@ fun SourcesGrid(
             .padding(horizontal = 10.dp),
         contentPadding = WindowInsets.statusBars.asPaddingValues(),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        state = gridState
     ) {
+        if (groupedBySource.isEmpty()) {
+            stickyHeader() {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CustomTextDivider(text = stringResource(R.string.no_sources))
+                }
+            }
+        }
+
         groupedBySource.forEach { (source, itemsForSource) ->
             stickyHeader() {
                 Box(

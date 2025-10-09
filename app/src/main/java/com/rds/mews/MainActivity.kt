@@ -97,9 +97,12 @@ fun MainScreen() {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         var optimizationIgnore by remember { mutableStateOf(false) }
 
-        if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
-            val scope = rememberCoroutineScope()
+        val sourcesGridState = sourcesViewModel.gridState
+        val titlesGridState = titlesViewModel.gridState
+        val settingsGridState = settingsViewModel.gridState
+        val scope = rememberCoroutineScope()
 
+        if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
             CustomErrorBottomSheet(
                 title = stringResource(R.string.optimization_sheet_header),
                 text = stringResource(R.string.optimization_sheet_text),
@@ -120,7 +123,17 @@ fun MainScreen() {
                 MyBottomBar(
                     selectedTab = selectedTab,
                     onTabSelected = { newTab ->
-                        selectedTab = newTab
+                        if (selectedTab == newTab) {
+                            when (selectedTab) {
+                                TabScreen.Sources -> scope.launch { sourcesGridState.animateScrollToItem(0) }
+                                TabScreen.Settings -> scope.launch { settingsGridState.animateScrollToItem(0) }
+                                TabScreen.Titles -> scope.launch {
+                                    if (titlesGridState.firstVisibleItemIndex == 0) titlesViewModel.toggleTitleExpanded(null)
+                                    else titlesGridState.animateScrollToItem(0)
+                                }
+                            }
+                        }
+                        else selectedTab = newTab
                     },
                     compact = compactTab,
                 )
@@ -138,7 +151,8 @@ fun MainScreen() {
                     val context = context
 
                     SourcesGrid(
-                        sourcesList,
+                        gridState = sourcesGridState,
+                        itemsList = sourcesList,
                         modifier = modifier,
                         onSourceAdd = { name, link -> sourcesViewModel.addSource(context, name, link) },
                         onSourceDelete = { name -> sourcesViewModel.deleteSource(name) },
@@ -146,8 +160,6 @@ fun MainScreen() {
                     )
                 }
                 TabScreen.Titles -> {
-                    val gridState = titlesViewModel.gridState
-
                     val groupedTitles by titlesViewModel.groupedTitles.collectAsStateWithLifecycle()
                     val isRefreshing by titlesViewModel.isRefreshing.collectAsState()
                     val err by titlesViewModel.errState.collectAsStateWithLifecycle()
@@ -155,6 +167,7 @@ fun MainScreen() {
                     val titlesCardStates by titlesViewModel.titleCardStates.collectAsStateWithLifecycle()
 
                     val showDates by titlesViewModel.showDates.collectAsStateWithLifecycle()
+                    val endureTime by titlesViewModel.endureTime.collectAsStateWithLifecycle()
                     val lastTitlesUpdate by titlesViewModel.lastUpdated.collectAsStateWithLifecycle()
 
                     val scope = rememberCoroutineScope()
@@ -166,7 +179,7 @@ fun MainScreen() {
                     }
 
                     TitlesGrid(
-                        lazyGridState = gridState,
+                        lazyGridState = titlesGridState,
                         groupedItems = groupedTitles,
                         modifier = modifier,
                         isRefreshing = isRefreshing,
@@ -181,13 +194,15 @@ fun MainScreen() {
                         rememberCardPage = titlesViewModel::changeTitleCurrentPage,
                         showDates = showDates,
                         lastTitlesUpdate = lastTitlesUpdate,
-                        scope = scope
+                        scope = scope,
+                        endureTime = endureTime
                     )
                 }
                 else -> SettingsGrid(
-                    modifier = modifier,
-                    settingsModel = settingsViewModel
-                )
+                        gridState = settingsGridState,
+                        modifier = modifier,
+                        settingsModel = settingsViewModel
+                    )
             }
         }
     }

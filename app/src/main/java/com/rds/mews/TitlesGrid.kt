@@ -4,12 +4,14 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -25,10 +27,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,13 +36,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.collections.first
@@ -68,7 +65,8 @@ fun TitlesGrid(
     onToggleExpanded: (Long) -> Unit,
     showDates: Boolean,
     lastTitlesUpdate: Long,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    endureTime: Boolean = false
 ) {
     val clipboardManager = LocalClipboardManager.current
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -156,7 +154,17 @@ fun TitlesGrid(
                     val isExpanded = titlesCardStates.find { it.id == item.id }?.expanded ?: false
                     val pagerState = rememberPagerState(initialPage = titlesCardStates.find { it.id == item.id }?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
 
-                    TitlesCard(item, isExpanded = isExpanded, pagerState = pagerState, onToggleExpanded = { onToggleExpanded(item.id) }, rememberPage = { page -> rememberCardPage(item.id, page) })
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 20000.dp),
+//                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (endureTime) {
+                            CustomTimeMark(item.time)
+                        }
+                        TitlesCard(item, isExpanded = isExpanded, pagerState = pagerState, onToggleExpanded = { onToggleExpanded(item.id) }, rememberPage = { page -> rememberCardPage(item.id, page) }, noTime = endureTime)
+                    }
                 }
             }
 

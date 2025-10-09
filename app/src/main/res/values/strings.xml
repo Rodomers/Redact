@@ -20,6 +20,7 @@
     <string name="optimization_sheet_text">To ensure that background news updates work correctly, the app needs permission to run in the background.\nAllow?</string>
     <string name="optimization_sheet_cancel">Later</string>
     <string name="optimization_sheet_conf">Allow</string>
+    <string name="no_sources">No sources :(</string>
 
     <string name="titles_update_text">Pull down to update\n(Veery long)</string>
     <string name="today">today</string>
@@ -36,6 +37,7 @@
     <string name="settings_monet_colors">Monet colors</string>
     <string name="settings_color_scheme">Color scheme</string>
     <string name="settings_compact_tab">Compact tab</string>
+    <string name="settings_endure_time">Endure time out of title cards</string>
     <string name="settings_filter_topics">Additional topics filter</string>
     <string name="settings_maximum_headers">Maximum headers</string>
     <string name="settings_news_period">News period</string>
