@@ -772,6 +772,6 @@ fun CustomBottomFootnote(text: String) {
 
 @Composable
 fun CustomTimeMark(time: Long) {
-    Text(text = getFormattedTimeUnix(time).split(":").joinToString("\n"), fontWeight = FontWeight.Bold, fontSize = 20.sp, textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = 4.dp, end = 10.dp).width(35.dp))
+    Text(text = getFormattedTimeUnix(time).split(":").joinToString("\n"), fontWeight = FontWeight.Bold, fontSize = 18.sp, textAlign = TextAlign.Start,
+        modifier = Modifier.padding(top = 4.dp, end = 10.dp).width(30.dp))
 }

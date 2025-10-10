@@ -153,23 +153,6 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 )
             }
         }
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_endure_time)) {
-                Switch(
-                    checked = endureTime,
-                    onCheckedChange = { settingsModel.setEndureTime(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.background,
-                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
-
-                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                )
-            }
-        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             item {
                 CustomSettingsItem(text = stringResource(R.string.settings_monet_colors)) {
@@ -246,6 +229,23 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 Switch(
                     checked = showDates,
                     onCheckedChange = { settingsModel.setShowDates(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.background,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                )
+            }
+        }
+        item {
+            CustomSettingsItem(text = stringResource(R.string.settings_endure_time)) {
+                Switch(
+                    checked = endureTime,
+                    onCheckedChange = { settingsModel.setEndureTime(it) },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.background,
                         checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
