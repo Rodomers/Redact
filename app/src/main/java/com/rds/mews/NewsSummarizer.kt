@@ -529,6 +529,8 @@ class NewsSummarizer(
             e.printStackTrace()
             readyFunc()
             return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
+        } finally {
+            readyFunc()
         }
     }
 

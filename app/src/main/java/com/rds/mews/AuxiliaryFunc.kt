@@ -120,7 +120,7 @@ suspend fun updateTitles(
         repository.setUpdatingTitles(true)
         WorkManager.getInstance(context).enqueueUniqueWork(
             "titles_update_work",
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             updateWorkRequest
         )
 

@@ -95,10 +95,20 @@ class TitlesUpdateWorker(
                 Result.success()
             } catch (e: Exception) {
                 e.printStackTrace()
+                val errorResult = SummarizationResult.Failure(
+                    SummarizationErrorType.UNKNOWN_ERROR,
+                    e
+                )
+                repository.saveLastError(errorResult)
                 Result.failure()
             }
         } catch(e: Exception) {
             e.printStackTrace()
+            val errorResult = SummarizationResult.Failure(
+                SummarizationErrorType.UNKNOWN_ERROR,
+                e
+            )
+            repository.saveLastError(errorResult)
             Result.failure()
         }
         finally {
