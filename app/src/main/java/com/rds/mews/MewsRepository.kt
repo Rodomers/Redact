@@ -1,23 +1,17 @@
 package com.rds.mews
 
+import android.app.AlarmManager
 import android.content.Context
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -49,7 +43,8 @@ object MewsRepository {
         withContext(Dispatchers.IO) {
             addSource(name, link, db)
             _sourcesUpdateTrigger.value ++
-            scheduleRssUpdate(context, rssUpdateInterval.value, true)
+            AlarmScheduler.cancel(context, true)
+            setRssUpdate(context, true)
         }
     }
 
@@ -95,6 +90,9 @@ object MewsRepository {
     const val COMPACT_TAB_BAR = "compact_tab_bar"
     const val FILTER_TOPICS = "filter_topics"
     const val ENLARGE_TIMESTAMPS = "endure_time"
+    const val TITLES_AUTO_UPDATE = "auto_update_titles"
+    const val TITLES_AUTO_UPDATE_TIME = "auto_update_titles_time"
+    const val ALARMS_ALLOWED = "exact_alarms_allowed"
 
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
     var selectedTab: StateFlow<TabScreen> = _selectedTab.asStateFlow()
@@ -154,9 +152,11 @@ object MewsRepository {
 
     private val _rssUpdateInterval = MutableStateFlow(15)
     val rssUpdateInterval: StateFlow<Int> = _rssUpdateInterval.asStateFlow()
-    fun setRssUpdateInterval(newValue: Int) {
+    fun setRssUpdateInterval(context: Context, newValue: Int) {
         settingsManager.saveInt(RSS_UPDATE_INTERVAL, newValue)
         _rssUpdateInterval.value = newValue
+        AlarmScheduler.cancel(context, true)
+        setRssUpdate(context)
     }
 
     private val _lastRssUpdate = MutableStateFlow(0L)
@@ -208,6 +208,23 @@ object MewsRepository {
         _enlargedTime.value = newValue
     }
 
+    private val _titlesAutoUpdate = MutableStateFlow(false)
+    val titlesAutoUpdate: StateFlow<Boolean> = _titlesAutoUpdate.asStateFlow()
+    fun setTitlesAutoUpdate(newValue: Boolean) {
+        settingsManager.saveBoolean(TITLES_AUTO_UPDATE, newValue)
+        _titlesAutoUpdate.value = newValue
+    }
+    fun cancelTitlesAutoUpdates(context: Context) {
+        AlarmScheduler.cancel(context)
+    }
+
+    private val _exactAlarmsAllowed = MutableStateFlow(false)
+    val exactAlarmsAllowed: StateFlow<Boolean> = _exactAlarmsAllowed.asStateFlow()
+    fun setExactAlarmsAllowed(newValue: Boolean) {
+        settingsManager.saveBoolean(ALARMS_ALLOWED, newValue)
+        _exactAlarmsAllowed.value = newValue
+    }
+
     private val _lastError = MutableStateFlow<SummarizationResult.Failure?>(null)
     val lastError: StateFlow<SummarizationResult.Failure?> = _lastError.asStateFlow()
 
@@ -250,6 +267,8 @@ object MewsRepository {
         _compactTabBar.value = settingsManager.getBoolean(COMPACT_TAB_BAR, false)
         _showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
         _enlargedTime.value = settingsManager.getBoolean(ENLARGE_TIMESTAMPS, false)
+        _titlesAutoUpdate.value = settingsManager.getBoolean(TITLES_AUTO_UPDATE, false)
+        _exactAlarmsAllowed.value = settingsManager.getBoolean(ALARMS_ALLOWED, false)
 
         _titlesNum.value = settingsManager.getInt(TITLES_NUM, 10)
         _titlesPeriod.value = settingsManager.getInt(TITLES_PERIOD, 24)

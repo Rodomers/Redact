@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -28,6 +29,10 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     val userApi: StateFlow<String> = repository.userApiKey.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
     val endureTime: StateFlow<Boolean> = repository.enlargedTimestamps.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
+    val titlesAutoUpdate: StateFlow<Boolean> = repository.titlesAutoUpdate.stateIn(viewModelScope,
+        SharingStarted.WhileSubscribed(5000), false)
+    val exactAlarmsAllowed: StateFlow<Boolean> = repository.exactAlarmsAllowed.stateIn(viewModelScope,
+        SharingStarted.WhileSubscribed(5000), false)
     val defaultApiKey = repository.DEFAULT_GEMINI_API_KEY
 
     fun setCompactTab(value: Boolean) = viewModelScope.launch { repository.setCompactTab(value) }
@@ -38,13 +43,18 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     fun setTitlesPeriod(value: Int) = viewModelScope.launch { repository.setTitlesPeriod(value) }
     fun setRssUpdateInterval(context: Context, value: Int) {
         viewModelScope.launch {
-            repository.setRssUpdateInterval(value)
+            repository.setRssUpdateInterval(context,value)
         }
     }
     fun setFilterTopics(value: Boolean) = viewModelScope.launch { repository.setFilterTopics(value) }
     fun setCurrentLlm(value: String) = viewModelScope.launch { repository.setCurrentLlmModel(value) }
     fun setUserGeminiApi(value: String) = viewModelScope.launch { repository.setUserApiKey(value) }
     fun setEndureTime(value: Boolean) = viewModelScope.launch { repository.setEnlargeTimestamps(value) }
+    fun setTitlesAutoUpdate(context: Context, value: Boolean) = viewModelScope.launch {
+        repository.setTitlesAutoUpdate(value)
+        if (!value) repository.cancelTitlesAutoUpdates(context)
+    }
+    fun setAlarmsAllowed(value: Boolean) = viewModelScope.launch { repository.setExactAlarmsAllowed(value) }
 }
 
 class SettingsViewModelFactory : ViewModelProvider.Factory {

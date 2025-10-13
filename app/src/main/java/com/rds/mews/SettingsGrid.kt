@@ -1,8 +1,9 @@
 package com.rds.mews
 
+import android.content.Context
+import android.content.Intent
 import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import android.provider.Settings
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -24,14 +25,17 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -43,10 +47,12 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: SettingsViewModel) {
+fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: SettingsViewModel, mainActivity: MainActivity) {
     val clipboardManager = LocalClipboardManager.current
     var text by remember { mutableStateOf("") }
     val showDates by settingsModel.showDates.collectAsStateWithLifecycle()
@@ -60,6 +66,12 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
     val titlesPeriod by settingsModel.titlesPeriod.collectAsStateWithLifecycle()
     val rssUpdateInterval by settingsModel.rssUpdateInterval.collectAsStateWithLifecycle()
     val endureTime by settingsModel.endureTime.collectAsStateWithLifecycle()
+    val titlesAutoUpdate by settingsModel.titlesAutoUpdate.collectAsStateWithLifecycle()
+    val alarmsAllowed by settingsModel.exactAlarmsAllowed.collectAsStateWithLifecycle()
+    var showAlarmsSheet by remember { mutableStateOf(false) }
+    val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     val colorSchemeDropdownVisible = remember { MutableTransitionState(false) }
@@ -115,6 +127,26 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         "2.0 Flash" to { settingsModel.setCurrentLlm("gemini-2.0-flash") },
         "2.0 Flash Lite" to { settingsModel.setCurrentLlm("gemini-2.0-flash-lite") }
     )
+
+    if (showAlarmsSheet) {
+        CustomErrorBottomSheet(
+            title = stringResource(R.string.settings_alarms_sheet_title),
+            text = stringResource(R.string.settings_alarms_sheet_text),
+            confBtnText = stringResource(R.string.settings_alarms_sheet_conf),
+            cancelBtnText = stringResource(R.string.settings_alarms_sheet_cancel),
+            onDismissRequest = { showAlarmsSheet = false },
+            onConfirm = {
+                showAlarmsSheet = false
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).also { intent ->
+                        mainActivity.startActivity(intent)
+                    }
+                }
+                        },
+            scope = scope,
+            sheetState = bottomSheetState
+        )
+    }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(1),
@@ -246,6 +278,31 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 Switch(
                     checked = endureTime,
                     onCheckedChange = { settingsModel.setEndureTime(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.background,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                )
+            }
+        }
+        item {
+            CustomSettingsItem(text = stringResource(R.string.settings_titles_auto_update)) {
+                Switch(
+                    checked = alarmsAllowed && titlesAutoUpdate,
+                    onCheckedChange = { newState ->
+                        when (newState) {
+                            true -> {
+                                if (alarmsAllowed) settingsModel.setTitlesAutoUpdate(context, true)
+                                else showAlarmsSheet = true
+                            }
+                            else -> settingsModel.setTitlesAutoUpdate(context, false)
+                        }
+                    },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.background,
                         checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,

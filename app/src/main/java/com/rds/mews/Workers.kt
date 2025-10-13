@@ -12,7 +12,6 @@ class RssUpdateWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
-
     override suspend fun doWork(): Result {
         val db = DbHelper(applicationContext)
         val fetcher = RssFetcher(db)
@@ -31,6 +30,9 @@ class RssUpdateWorker(
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure()
+        } finally {
+            val nextRssUpdate = System.currentTimeMillis() + repository.rssUpdateInterval.value * 3600 * 1000L
+            AlarmScheduler.schedule(applicationContext, nextRssUpdate)
         }
     }
 }
@@ -50,6 +52,7 @@ class TitlesUpdateWorker(
         val titlesPeriod = repository.titlesPeriod.value
         val titlesNum = repository.titlesNum.value
         val filterTopics = repository.filterTopics.value
+        val autoUpdate = repository.titlesAutoUpdate.value
 
         val db = DbHelper(applicationContext)
         val fetcher = RssFetcher(db)
@@ -113,6 +116,10 @@ class TitlesUpdateWorker(
         }
         finally {
             repository.setUpdatingTitles(false)
+            if (autoUpdate) {
+                val nextRunTimeMills = System.currentTimeMillis() + titlesPeriod * 3600 * 1000L
+                AlarmScheduler.schedule(applicationContext, nextRunTimeMills)
+            }
         }
     }
 }

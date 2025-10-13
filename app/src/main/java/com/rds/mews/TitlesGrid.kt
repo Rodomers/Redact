@@ -72,8 +72,6 @@ fun TitlesGrid(
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val pullToRefreshState = rememberPullToRefreshState()
 
-    println("isRefreshing: $isRefreshing")
-
     LaunchedEffect(groupedItems.isEmpty(), isRefreshing) {
         if (groupedItems.isEmpty() && !isRefreshing) {
             delay(300L)

@@ -53,7 +53,15 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setContent {
-            MainScreen()
+            MainScreen(this)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val alarmsAllowed = isScheduleExactAlarm(this)
+        if (alarmsAllowed != MewsRepository.exactAlarmsAllowed.value) {
+            MewsRepository.setExactAlarmsAllowed(alarmsAllowed)
         }
     }
 }
@@ -66,7 +74,7 @@ sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen() {
+fun MainScreen(mainActivity: MainActivity) {
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory())
     val titlesViewModel: TitlesViewModel = viewModel(factory = TitlesViewModelFactory(LocalContext.current.applicationContext as Application))
     val sourcesViewModel: SourcesViewModel = viewModel(factory = SourcesViewModelFactory())
@@ -82,29 +90,29 @@ fun MainScreen() {
 
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
         val context = LocalContext.current
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        var optimizationIgnore by remember { mutableStateOf(false) }
+//        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+//        var optimizationIgnore by remember { mutableStateOf(false) }
 
         val sourcesGridState = sourcesViewModel.gridState
         val titlesGridState = titlesViewModel.gridState
         val settingsGridState = settingsViewModel.gridState
         val scope = rememberCoroutineScope()
 
-        if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
-            CustomErrorBottomSheet(
-                title = stringResource(R.string.optimization_sheet_header),
-                text = stringResource(R.string.optimization_sheet_text),
-                cancelBtnText = stringResource(R.string.optimization_sheet_cancel),
-                confBtnText = stringResource(R.string.optimization_sheet_conf),
-                onDismissRequest = { optimizationIgnore = true },
-                onConfirm = {
-                    requestIgnoreBatteryOptimization(context)
-                    optimizationIgnore = true
-                            },
-                scope = scope,
-                sheetState = sheetState,
-            )
-        }
+//        if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
+//            CustomErrorBottomSheet(
+//                title = stringResource(R.string.optimization_sheet_header),
+//                text = stringResource(R.string.optimization_sheet_text),
+//                cancelBtnText = stringResource(R.string.optimization_sheet_cancel),
+//                confBtnText = stringResource(R.string.optimization_sheet_conf),
+//                onDismissRequest = { optimizationIgnore = true },
+//                onConfirm = {
+//                    requestIgnoreBatteryOptimization(context)
+//                    optimizationIgnore = true
+//                            },
+//                scope = scope,
+//                sheetState = sheetState,
+//            )
+//        }
 
         Scaffold(
             bottomBar = {
@@ -149,8 +157,8 @@ fun MainScreen() {
                 }
                 TabScreen.Titles -> {
                     val groupedTitles by titlesViewModel.groupedTitles.collectAsStateWithLifecycle()
-                    val isRefreshing by titlesViewModel.isRefreshing.collectAsState()
-                    val err by titlesViewModel.errState.collectAsState()
+                    val isRefreshing by titlesViewModel.isRefreshing.collectAsStateWithLifecycle()
+                    val err by titlesViewModel.errState.collectAsStateWithLifecycle()
                     val showEmptyMess by titlesViewModel.showEmptyMess.collectAsStateWithLifecycle()
                     val titlesCardStates by titlesViewModel.titleCardStates.collectAsStateWithLifecycle()
 
@@ -189,7 +197,8 @@ fun MainScreen() {
                 else -> SettingsGrid(
                         gridState = settingsGridState,
                         modifier = modifier,
-                        settingsModel = settingsViewModel
+                        settingsModel = settingsViewModel,
+                        mainActivity = mainActivity
                     )
             }
         }

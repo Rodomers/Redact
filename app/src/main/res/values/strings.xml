@@ -18,7 +18,7 @@
     <string name="delsource_btntext">Delete</string>
     <string name="optimization_sheet_header">Background Update</string>
     <string name="optimization_sheet_text">To ensure that background news updates work correctly, the app needs permission to run in the background.\nAllow?</string>
-    <string name="optimization_sheet_cancel">Later</string>
+    <string name="optimization_sheet_cancel">Maybe Later</string>
     <string name="optimization_sheet_conf">Allow</string>
     <string name="no_sources">No sources :(</string>
 
@@ -39,6 +39,7 @@
     <string name="settings_compact_tab">Compact tab</string>
     <string name="settings_endure_time">Enlarged timestamps</string>
     <string name="settings_filter_topics">Additional topics filter</string>
+    <string name="settings_titles_auto_update">Titles auto update</string>
     <string name="settings_maximum_headers">Maximum headers</string>
     <string name="settings_news_period">News period</string>
     <string name="settings_news_update_frequency">Background news update frequency</string>
@@ -48,6 +49,10 @@
     <string name="settings_ignore_optimization">Ignore battery optimization</string>
     <string name="settings_gemini_model">Gemini model</string>
     <string name="settings_footnote_text">Feedback (Telegram): @mewsapp\nVersion %s</string>
+    <string name="settings_alarms_sheet_title">Exact Alarm Permission</string>
+    <string name="settings_alarms_sheet_text">To ensure timely background updates, the app requires permission to set exact alarms. Would you like to grant it?</string>
+    <string name="settings_alarms_sheet_cancel">Maybe Later</string>
+    <string name="settings_alarms_sheet_conf">Grant</string>
 
 
     <plurals name="titles">

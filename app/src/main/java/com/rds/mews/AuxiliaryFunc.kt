@@ -1,19 +1,19 @@
 package com.rds.mews
 
 import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.collection.IntList
 import androidx.collection.intListOf
 import androidx.core.net.toUri
-import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -161,25 +161,21 @@ fun strTransform(original: String, separator: String): String {
     return res.joinToString(separator)
 }
 
-fun scheduleRssUpdate(context: Context, intervalInMinutes: Int, sources: Boolean = false) {
-    val repeatInterval = maxOf(15L, intervalInMinutes.toLong())
-
+fun setRssUpdate(context: Context, sources: Boolean = false) {
     val constraints = androidx.work.Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED)
         .build()
 
-    var repeatingRequestBuilder = PeriodicWorkRequestBuilder<RssUpdateWorker>(repeatInterval, TimeUnit.MINUTES)
+    val oneTimeWorkRequestBuilder = OneTimeWorkRequestBuilder<RssUpdateWorker>()
         .setConstraints(constraints)
-    if (sources) repeatingRequestBuilder = repeatingRequestBuilder.setInitialDelay(40, TimeUnit.SECONDS)
-    val repeatingRequest = repeatingRequestBuilder.build()
+    if (sources) oneTimeWorkRequestBuilder.setInitialDelay(40, TimeUnit.SECONDS)
+    val workRequest = oneTimeWorkRequestBuilder.build()
 
-    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-        "rss-update-work",
-        ExistingPeriodicWorkPolicy.REPLACE,
-        repeatingRequest
+    WorkManager.getInstance(context).enqueueUniqueWork(
+        "rss-update-work-once",
+        ExistingWorkPolicy.REPLACE,
+        workRequest
     )
-
-    println("Scheduled RSS update")
 }
 
 fun Context.observeStringSharedPreference(key: String, defaultValue: String): Flow<String> {
@@ -246,6 +242,12 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
 fun isBatteryOptimizationIgnored(context: Context): Boolean {
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     return powerManager.isIgnoringBatteryOptimizations(context.packageName)
+}
+
+fun isScheduleExactAlarm(context: Context): Boolean {
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) alarmManager.canScheduleExactAlarms()
+        else true
 }
 
 @SuppressLint("BatteryLife")
