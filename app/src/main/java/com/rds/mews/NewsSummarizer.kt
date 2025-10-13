@@ -13,6 +13,7 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -412,7 +413,7 @@ class NewsSummarizer(
                     }
                 }
 
-                if (filterTopics && db.getTitles().size > maxTopics) {
+                if (filterTopics) {
                     repository.setUpdatingState("filtering_topics")
                     errFlag = filterTopics(maxTopics)
                     if (!errFlag) {
@@ -513,6 +514,9 @@ class NewsSummarizer(
                         } catch (e: JSONException) {
                             println("Ошибка парсинга JSON: ${e.message}")
                             return SummarizationResult.Failure(SummarizationErrorType.JSON_PARSING_FAILED, e)
+                        } catch (e: CancellationException) {
+                            println("Работа была отменена.")
+                            throw e
                         } catch (e: Exception) {
                             println("Неизвестная ошибка при суммаризации темы: ${e.message}")
                             return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
@@ -529,8 +533,6 @@ class NewsSummarizer(
             e.printStackTrace()
             readyFunc()
             return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
-        } finally {
-            readyFunc()
         }
     }
 

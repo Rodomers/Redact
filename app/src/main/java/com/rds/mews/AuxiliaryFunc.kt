@@ -109,6 +109,8 @@ suspend fun updateTitles(
     context: Context, db: DbHelper, repository: MewsRepository, settingsManager: SettingsManager, returnExisting: Boolean = false, readyFunc: () -> Unit = {},
 ): List<Title> {
     if (!returnExisting) {
+        repository.cancelTitlesAutoUpdates(context)
+
         val constraints = androidx.work.Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -120,7 +122,7 @@ suspend fun updateTitles(
         repository.setUpdatingTitles(true)
         WorkManager.getInstance(context).enqueueUniqueWork(
             "titles_update_work",
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             updateWorkRequest
         )
 
@@ -140,7 +142,7 @@ suspend fun updateTitles(
             repository.setUpdatingTitles(true)
             WorkManager.getInstance(context).enqueueUniqueWork(
                 "titles_update_work",
-                ExistingWorkPolicy.KEEP,
+                ExistingWorkPolicy.REPLACE,
                 updateWorkRequest
             )
 

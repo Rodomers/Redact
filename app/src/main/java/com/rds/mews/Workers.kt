@@ -3,6 +3,7 @@ package com.rds.mews
 import android.content.Context
 import androidx.compose.runtime.collectAsState
 import androidx.work.CoroutineWorker
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,6 +21,10 @@ class RssUpdateWorker(
         val titlesPeriod = repository.titlesPeriod.value
 
         return try {
+            val workManager = WorkManager.getInstance(applicationContext)
+            workManager.cancelAllWorkByTag("rss-update-work")
+            workManager.cancelAllWorkByTag("rss-update-work-once")
+
             withContext(Dispatchers.IO) {
                 fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600)
                 repository.setLastRssUpdate(System.currentTimeMillis())
@@ -63,7 +68,11 @@ class TitlesUpdateWorker(
             try {
                 withContext(Dispatchers.IO) {
                     val noFetchErrors = when ((System.currentTimeMillis() - rssLastUpdate) / 60000L > rssUpdateInterval) {
-                        true -> fetcher.fetchAndStoreAll(messAliveTime = 120.toLong() * 3600).errors.isEmpty()
+                        true -> {
+                            val result = fetcher.fetchAndStoreAll(messAliveTime = 120.toLong() * 3600).errors.isEmpty()
+                            repository.setLastRssUpdate(System.currentTimeMillis())
+                            result
+                        }
                         else -> true
                     }
 
@@ -81,6 +90,10 @@ class TitlesUpdateWorker(
                                 messageSeconds = titlesPeriod.toLong() * 3600,
                                 readyFunc = {
                                     repository.setUpdatingTitles(false)
+                                    if (autoUpdate) {
+                                        val nextRunTimeMills = System.currentTimeMillis() + titlesPeriod * 3600 * 1000L
+                                        AlarmScheduler.schedule(applicationContext, nextRunTimeMills)
+                                    }
                                 },
                                 filterTopics = filterTopics
                             )
@@ -113,13 +126,8 @@ class TitlesUpdateWorker(
             )
             repository.saveLastError(errorResult)
             Result.failure()
-        }
-        finally {
+        } finally {
             repository.setUpdatingTitles(false)
-            if (autoUpdate) {
-                val nextRunTimeMills = System.currentTimeMillis() + titlesPeriod * 3600 * 1000L
-                AlarmScheduler.schedule(applicationContext, nextRunTimeMills)
-            }
         }
     }
 }

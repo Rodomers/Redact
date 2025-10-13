@@ -9,6 +9,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class TitlesViewModel(
     private val application: Application,
@@ -67,7 +69,12 @@ class TitlesViewModel(
 
             if (!returnExisting) _isRefreshing.value = true
             try {
-                val freshTitles = repository.fetchNewTitles(application, returnExisting)
+                val freshTitles = withContext(Dispatchers.IO) {
+                    repository.fetchNewTitles(
+                        application,
+                        returnExisting
+                    )
+                }
                  _titles.value = freshTitles.filter { it.text != "<промежуточный текст>" }
                 _titleCardStates.value = _titles.value
                     .map {title -> TitleCardStates(id = title.id) }
