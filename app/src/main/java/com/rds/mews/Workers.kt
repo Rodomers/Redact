@@ -58,7 +58,7 @@ class TitlesUpdateWorker(
 
         val fetcher = RssFetcher(db)
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey)
-        val summarizer = NewsSummarizer(db, llm, settingsManager)
+        val summarizer = NewsSummarizer(db, llm)
 
         settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, true)
         settingsManager.saveString(MewsRepository.UPDATING_STATE, "updating")
