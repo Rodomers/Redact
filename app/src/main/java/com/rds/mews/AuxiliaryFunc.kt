@@ -105,56 +105,56 @@ fun linkTransform(link: String): String {
     return res
 }
 
-suspend fun updateTitles(
-    context: Context, db: DbHelper, repository: MewsRepository, settingsManager: SettingsManager, returnExisting: Boolean = false, readyFunc: () -> Unit = {},
-): List<Title> {
-    if (!returnExisting) {
-        repository.cancelTitlesAutoUpdates(context)
-
-        val constraints = androidx.work.Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
-            .setConstraints(constraints)
-            .build()
-
-        repository.setUpdatingTitles(true)
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            "titles_update_work",
-            ExistingWorkPolicy.KEEP,
-            updateWorkRequest
-        )
-
-        settingsManager.awaitTitlesUpdate()
-        readyFunc()
-    }
-    else {
-        if (settingsManager.getBoolean(repository.UPDATING_TITLES, false)) {
-            val constraints = androidx.work.Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
-
-            val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
-                .setConstraints(constraints)
-                .build()
-
-            repository.setUpdatingTitles(true)
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                "titles_update_work",
-                ExistingWorkPolicy.REPLACE,
-                updateWorkRequest
-            )
-
-            settingsManager.awaitTitlesUpdate()
-        }
-        readyFunc()
-    }
-
-    val list = db.getTitles()
-
-    return list
-}
+//suspend fun updateTitles(
+//    context: Context, db: DbHelper, repository: MewsRepository, settingsManager: SettingsManager, returnExisting: Boolean = false, readyFunc: () -> Unit = {},
+//): List<Title> {
+//    if (!returnExisting) {
+//        repository.cancelTitlesAutoUpdates(context)
+//
+//        val constraints = androidx.work.Constraints.Builder()
+//            .setRequiredNetworkType(NetworkType.CONNECTED)
+//            .build()
+//
+//        val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
+//            .setConstraints(constraints)
+//            .build()
+//
+//        repository.setUpdatingTitles(true)
+//        WorkManager.getInstance(context).enqueueUniqueWork(
+//            "titles_update_work",
+//            ExistingWorkPolicy.KEEP,
+//            updateWorkRequest
+//        )
+//
+//        settingsManager.awaitTitlesUpdate()
+//        readyFunc()
+//    }
+//    else {
+//        if (settingsManager.getBoolean(repository.UPDATING_TITLES, false)) {
+//            val constraints = androidx.work.Constraints.Builder()
+//                .setRequiredNetworkType(NetworkType.CONNECTED)
+//                .build()
+//
+//            val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
+//                .setConstraints(constraints)
+//                .build()
+//
+//            repository.setUpdatingTitles(true)
+//            WorkManager.getInstance(context).enqueueUniqueWork(
+//                "titles_update_work",
+//                ExistingWorkPolicy.REPLACE,
+//                updateWorkRequest
+//            )
+//
+//            settingsManager.awaitTitlesUpdate()
+//        }
+//        readyFunc()
+//    }
+//
+//    val list = db.getTitles()
+//
+//    return list
+//}
 
 fun strTransform(original: String, separator: String): String {
     val arr = original.split(", ")

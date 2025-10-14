@@ -1,6 +1,10 @@
 package com.rds.mews
 
 import android.content.Context
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -61,17 +65,34 @@ object MewsRepository {
         }
     }
 
-    val titles: Flow<List<Title>> = flow {
-        emit(db.getTitles())
+
+    private val _titlesUpdateTrigger = MutableStateFlow(0)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val titles: Flow<List<Title>> = _titlesUpdateTrigger.flatMapLatest {
+        flow {
+            emit(db.getTitles())
+        }
     }.flowOn(Dispatchers.IO)
 
-    suspend fun fetchNewTitles(
-        context: Context,
-        returnExisting: Boolean
-    ): List<Title> {
-        return withContext(Dispatchers.IO) {
-            updateTitles(context, db, MewsRepository, settingsManager, returnExisting)
-        }
+    fun triggerTitlesRefresh() {
+        _titlesUpdateTrigger.value++
+    }
+
+    fun startTitlesUpdate(context: Context) {
+        val constraints = androidx.work.Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
+            .build()
+
+        val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "titles_update_work",
+            ExistingWorkPolicy.REPLACE,
+            updateWorkRequest
+        )
     }
 
     const val CURRENT_THEME = "current_theme"

@@ -32,20 +32,20 @@ class TitlesViewModel(
         firstVisibleItemScrollOffset = 0
     )
 
-//    private val workManager = WorkManager.getInstance(application)
-//    val workInfo: StateFlow<WorkInfo?> = workManager
-//        .getWorkInfosForUniqueWorkFlow("titles_update_work")
-//        .map { it.firstOrNull() }
-//        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    private val workManager = WorkManager.getInstance(application)
+    val workInfo: StateFlow<WorkInfo?> = workManager
+        .getWorkInfosForUniqueWorkFlow("titles_update_work")
+        .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _titles = MutableStateFlow<List<Title>>(emptyList())
     val titles = _titles.asStateFlow()
 
-    private val _isRefreshing = MutableStateFlow(false)
-    val isRefreshing = _isRefreshing.asStateFlow()
-//    val isRefreshing: StateFlow<Boolean> = workInfo.map {
-//        it?.state == WorkInfo.State.RUNNING || it?.state == WorkInfo.State.ENQUEUED
-//    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+//    private val _isRefreshing = MutableStateFlow(false)
+//    val isRefreshing = _isRefreshing.asStateFlow()
+    val isRefreshing: StateFlow<Boolean> = workInfo.map {
+        it?.state == WorkInfo.State.RUNNING || it?.state == WorkInfo.State.ENQUEUED
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val enlargedTimestamps: StateFlow<Boolean> = repository.enlargedTimestamps.stateIn(viewModelScope,
@@ -74,28 +74,8 @@ class TitlesViewModel(
         _showEmptyMessage.value = newValue
     }
 
-    fun refreshTitles(returnExisting: Boolean = false) {
-        viewModelScope.launch {
-            if (_isRefreshing.value) return@launch
-
-            if (!returnExisting) _isRefreshing.value = true
-            try {
-                val freshTitles = withContext(Dispatchers.IO) {
-                    repository.fetchNewTitles(
-                        application,
-                        returnExisting
-                    )
-                }
-                 _titles.value = freshTitles.filter { it.text != "<промежуточный текст>" }
-                _titleCardStates.value = _titles.value
-                    .map {title -> TitleCardStates(id = title.id) }
-                    .toSet()
-            } catch (e: Exception) {
-                repository.saveLastError(SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e.cause))
-            } finally {
-                _isRefreshing.value = false
-            }
-        }
+    fun refreshTitles() {
+        repository.startTitlesUpdate(application)
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -147,18 +127,23 @@ class TitlesViewModel(
 
     init {
         viewModelScope.launch {
-            repository.titles.collect { titleList ->
-                _titles.value = titleList
+            repository.titles.collect { titleListFromDb ->
+                val actualTitles = titleListFromDb.filter { it.text != "<промежуточный текст>" }
 
-                _titleCardStates.value = titleList
-                    .map {title -> TitleCardStates(id = title.id) }
-                    .toSet()
+                _titles.value = actualTitles
+
+                if (_titleCardStates.value.map { it.id }.toSet() != actualTitles.map { it.id }.toSet()) {
+                    _titleCardStates.value = actualTitles
+                        .map { title -> TitleCardStates(id = title.id) }
+                        .toSet()
+                }
             }
+        }
 
-            repository.lastError.collect { err -> _errState.value = err }
-
-            _isRefreshing.value = repository.updatingTitles.value
-            _errState.value = repository.lastError.value
+        viewModelScope.launch {
+            repository.lastError.collect { error ->
+                _errState.value = error
+            }
         }
     }
 }

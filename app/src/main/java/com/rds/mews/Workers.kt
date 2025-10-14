@@ -3,9 +3,9 @@ package com.rds.mews
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 
 class RssUpdateWorker(
     appContext: Context,
@@ -33,7 +33,7 @@ class RssUpdateWorker(
             Result.failure()
         } finally {
             val nextRssUpdate = System.currentTimeMillis() + rssUpdateInterval * 60 * 1000L
-            AlarmScheduler.schedule(applicationContext, nextRssUpdate)
+            AlarmScheduler.schedule(applicationContext, nextRssUpdate, rss = true)
         }
     }
 }
@@ -42,7 +42,6 @@ class TitlesUpdateWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
-
     override suspend fun doWork(): Result {
         val settingsManager = SettingsManager(applicationContext)
         val db = DbHelper(applicationContext)
@@ -54,7 +53,6 @@ class TitlesUpdateWorker(
         val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
         val titlesNum = settingsManager.getInt(MewsRepository.TITLES_NUM, 10)
         val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
-        val autoUpdate = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
 
         val fetcher = RssFetcher(db)
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey)
@@ -71,6 +69,7 @@ class TitlesUpdateWorker(
                 val noFetchErrors = if (needToFetchRss) {
                     val result = fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600).errors.isEmpty()
                     settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
+
                     result
                 } else {
                     true
@@ -78,46 +77,65 @@ class TitlesUpdateWorker(
 
                 if (isStopped) return@withContext
 
-                    if (noFetchErrors) {
-                        val titles = db.getTitles()
-                        if (!(titles.any {it.text.contains("<промежуточный текст>") || it.time == 0.toLong() || it.sources.contains("<промежуточный текст>")})) {
-                            db.titlesTimeKill(0)
-                        }
-                        var iter = 0
-                        var res: SummarizationResult = SummarizationResult.Failure(
-                            SummarizationErrorType.UNKNOWN_ERROR)
-                        while (settingsManager.getBoolean(MewsRepository.UPDATING_TITLES, false) && iter <= 5) {
-                            res = summarizer.summarizeTopics(
-                                maxTopics = titlesNum,
-                                messageSeconds = titlesPeriod.toLong() * 3600,
-                                readyFunc = {
-                                    settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
-                                },
-                                filterTopics = filterTopics
-                            )
-                            iter++
-                        }
-
-                    when (res) {
-                        is SummarizationResult.Success -> settingsManager.clearLastError()
-                        is SummarizationResult.Failure -> settingsManager.saveLastError(res)
+                if (noFetchErrors) {
+                    val titles = db.getTitles()
+                    if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
+                        db.titlesTimeKill(0)
+                    }
+                    var iter = 0
+                    var res: SummarizationResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
+                    while (settingsManager.getBoolean(MewsRepository.UPDATING_TITLES, false) && iter <= 5 && !isStopped) {
+                        res = summarizer.summarizeTopics(
+                            maxTopics = titlesNum,
+                            messageSeconds = titlesPeriod.toLong() * 3600,
+                            readyFunc = {
+                                settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
+                            },
+                            filterTopics = filterTopics
+                        )
+                        if (res is SummarizationResult.Success) break
+                        iter++
                     }
 
-                    if (autoUpdate && !isStopped) {
-                        val nextRunTimeMills = System.currentTimeMillis() + titlesPeriod * 3600 * 1000L
-                        AlarmScheduler.schedule(applicationContext, nextRunTimeMills)
+                    when (res) {
+                        is SummarizationResult.Success -> {
+                            settingsManager.clearLastError()
+                            MewsRepository.triggerTitlesRefresh()
+                        }
+                        is SummarizationResult.Failure -> settingsManager.saveLastError(res)
                     }
                 }
             }
             settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
             settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
+
+            val autoUpdateEnabled = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
+            val titlesUpdatePeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
+            if (autoUpdateEnabled) {
+                val nextRunTimeMills = System.currentTimeMillis() + titlesUpdatePeriod * 3600 * 1000L
+                AlarmScheduler.schedule(applicationContext, nextRunTimeMills)
+            }
+
             return Result.success()
+        } catch (e: CancellationException) {
+            // Ловим отмену
+            println("TitlesUpdateWorker: Пойман CancellationException. Работа была отменена системой.")
+            // ОБЯЗАТЕЛЬНО перебрасываем, чтобы WorkManager правильно обработал отмену
+            throw e
         } catch (e: Exception) {
+            // Логируем не только сообщение, но и точный тип исключения!
+            println("TitlesUpdateWorker: Поймана ошибка. Тип: ${e.javaClass.simpleName}, Сообщение: ${e.message}")
             e.printStackTrace()
             val errorResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
             settingsManager.saveLastError(errorResult)
-            if (isStopped) return Result.failure()
+            return Result.retry()
+        }  finally {
+            // ЭТОТ БЛОК ВЫПОЛНИТСЯ ВСЕГДА!
+            // isStopped - это свойство воркера, которое покажет, была ли работа прервана извне.
+            println("TitlesUpdateWorker: Вход в блок FINALLY. isStopped = $isStopped")
+            settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
+            settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
+            println("TitlesUpdateWorker: Состояние обновлено на 'off'.")
         }
-        return Result.retry()
     }
 }

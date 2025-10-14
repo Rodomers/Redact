@@ -473,6 +473,7 @@ fun CustomPullToRefreshIndicator(
 
     val currentUpdatingState by MewsRepository.updatingState.collectAsStateWithLifecycle()
     val text = when {
+        currentUpdatingState == "summarizing_topics" -> stringResource(R.string.summarizing, 0, 0)
         currentUpdatingState.contains("/") -> {
             val args = currentUpdatingState.split("/").map { it.toInt() }
             stringResource(R.string.summarizing, args[0], args[1])

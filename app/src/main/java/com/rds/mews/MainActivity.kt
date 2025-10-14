@@ -90,29 +90,29 @@ fun MainScreen(mainActivity: MainActivity) {
 
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
         val context = LocalContext.current
-//        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-//        var optimizationIgnore by remember { mutableStateOf(false) }
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        var optimizationIgnore by remember { mutableStateOf(false) }
 
         val sourcesGridState = sourcesViewModel.gridState
         val titlesGridState = titlesViewModel.gridState
         val settingsGridState = settingsViewModel.gridState
         val scope = rememberCoroutineScope()
 
-//        if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
-//            CustomErrorBottomSheet(
-//                title = stringResource(R.string.optimization_sheet_header),
-//                text = stringResource(R.string.optimization_sheet_text),
-//                cancelBtnText = stringResource(R.string.optimization_sheet_cancel),
-//                confBtnText = stringResource(R.string.optimization_sheet_conf),
-//                onDismissRequest = { optimizationIgnore = true },
-//                onConfirm = {
-//                    requestIgnoreBatteryOptimization(context)
-//                    optimizationIgnore = true
-//                            },
-//                scope = scope,
-//                sheetState = sheetState,
-//            )
-//        }
+        if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
+            CustomErrorBottomSheet(
+                title = stringResource(R.string.optimization_sheet_header),
+                text = stringResource(R.string.optimization_sheet_text),
+                cancelBtnText = stringResource(R.string.optimization_sheet_cancel),
+                confBtnText = stringResource(R.string.optimization_sheet_conf),
+                onDismissRequest = { optimizationIgnore = true },
+                onConfirm = {
+                    requestIgnoreBatteryOptimization(context)
+                    optimizationIgnore = true
+                            },
+                scope = scope,
+                sheetState = sheetState,
+            )
+        }
 
         Scaffold(
             bottomBar = {
@@ -167,12 +167,6 @@ fun MainScreen(mainActivity: MainActivity) {
                     val lastTitlesUpdate by titlesViewModel.lastUpdated.collectAsStateWithLifecycle()
 
                     val scope = rememberCoroutineScope()
-
-                    LaunchedEffect(key1 = Unit) {
-                        if (groupedTitles.isEmpty()) {
-                            titlesViewModel.refreshTitles(returnExisting = true)
-                        }
-                    }
 
                     TitlesGrid(
                         lazyGridState = titlesGridState,

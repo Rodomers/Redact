@@ -7,20 +7,30 @@ import kotlin.collections.mutableListOf
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.math.min
 import kotlinx.coroutines.withTimeout
 import org.json.JSONException
+import kotlinx.coroutines.sync.withPermit
 
+
+private data class SummaryResult(
+    val originalTitle: String,
+    val summary: String,
+    val time: Long,
+    val sources: List<String>,
+    val links: List<String>
+)
 
 // ====== Класс для работы с OpenRouter API ======
 // Апи ключ пока захардкожен, потом спокойно можно подвязать другой ключ
@@ -367,7 +377,6 @@ class NewsSummarizer(
     suspend fun summarizeTopics(
         maxTopics: Int = 20,
         messageSeconds: Long = 14515200,
-        delaySeconds: Long = 10,
         readyFunc: () -> Unit,
         filterTopics: Boolean = false
     ): SummarizationResult {
@@ -440,88 +449,86 @@ class NewsSummarizer(
             }
 
             when (titles.size) {
-                0 -> readyFunc()
+                0 -> {
+                    readyFunc()
+                    return SummarizationResult.Success
+                }
                 in maxTopics + 1..Int.MAX_VALUE -> {
                     db.titlesTimeKill(0)
                     readyFunc()
                     return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
                 }
                 else -> {
-                    val dbTitles = db.getTitles()
-                    val size = dbTitles.size
-                    var current: Int = dbTitles.filter {!it.text.contains("<промежуточный текст>")}.size
+                    var counter: Int = 0
+                    val titlesCounter = titles.size
 
-                    for (title in titles) {
-                        current++
-                        repository.setUpdatingState("$current/$size")
-                        val suitableMessages: MutableList<Message> = mutableListOf()
-                        title.ids?.forEach { id ->
-                            messages.forEach { message ->
-                                if (message.id == id) suitableMessages.add(message)
-                            }
-                        }
-                        val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
-                        val bannedNews = "Таких тем нет"
-                        var response: String
-                        try {
-                            response = withTimeout(40000L) {
-                                sumTopic(llm, title.title, bannedNews, newsText)
-                            }
+                    val semaphore = Semaphore(5)
 
-                            if (response == "") {
-                                return SummarizationResult.Failure(SummarizationErrorType.SUMMARIZE_TOPICS_FAILED)
-                            }
+                    val summarizedResults = coroutineScope {
+                        titles.map { title ->
+                            async(Dispatchers.IO) {
+                                semaphore.withPermit {
+                                    try {
+                                        counter++
+                                        repository.setUpdatingState("${counter}/${titlesCounter}")
 
-                            val cleanResponse = response.trim().replace("```json", "")
-                                .replace("```", "")
-                                .replace("\"\"\"", "")
-                                .trim()
+                                        val suitableMessages: MutableList<Message> = mutableListOf()
+                                        title.ids?.forEach { id ->
+                                            messages.find { it.id == id }?.let { suitableMessages.add(it) }
+                                        }
+                                        val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
+                                        val bannedNews = "Таких тем нет"
 
-                            val obj = JSONObject(cleanResponse)
-                            val summary = obj.getString("summary")
-                            val ids = title.ids ?: return SummarizationResult.Failure(
-                                SummarizationErrorType.CRITICAL_SUMMARIZATION_ERROR)
+                                        val response = withTimeout(40000L) {
+                                            sumTopic(llm, title.title, bannedNews, newsText)
+                                        }
 
-                            var time = System.currentTimeMillis()
-                            ids.forEach { id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time) }
+                                        if (response.isBlank()) {
+                                            println("Пустой ответ от LLM для темы: ${title.title}")
+                                            return@withPermit null
+                                        }
 
-                            val links = mutableListOf<String>()
-                            val sources = mutableListOf<String>()
+                                        val cleanResponse = response.trim().replace("```json", "")
+                                            .replace("```", "").replace("\"\"\"", "").trim()
 
-                            ids.forEach { id ->
-                                val mess = db.getMessage(id)
-                                if (mess != null) {
-                                    links.add(mess.link)
-                                    sources.add(mess.source)
+                                        val obj = JSONObject(cleanResponse)
+                                        val summary = obj.getString("summary")
+                                        val ids = title.ids ?: return@withPermit null
+
+                                        var time = System.currentTimeMillis()
+                                        ids.forEach { id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time) }
+
+                                        val links = mutableListOf<String>()
+                                        val sources = mutableListOf<String>()
+                                        ids.forEach { id ->
+                                            db.getMessage(id)?.let { mess ->
+                                                links.add(mess.link)
+                                                sources.add(mess.source)
+                                            }
+                                        }
+
+                                        SummaryResult(title.title, summary, time, sources, links)
+
+                                    } catch (e: Exception) {
+                                        println("Ошибка при обработке темы '${title.title}': ${e.message}")
+                                        return@withPermit null
+                                    }
                                 }
                             }
+                        }.mapNotNull { it.await() }
+                    }
 
-                            println("${title.title}\t$summary$sources$links$time")
-
+                    if (summarizedResults.isNotEmpty()) {
+                        summarizedResults.forEach { result ->
+                            println("Обновление в БД: ${result.originalTitle}")
                             db.updateTitle(
-                                name = title.title,
-                                newTime = time,
-                                newText = summary,
-                                newSources = db.dbPack(*sources.toTypedArray()),
-                                newLinks = db.dbPack(*links.toTypedArray())
+                                name = result.originalTitle,
+                                newTime = result.time,
+                                newText = result.summary,
+                                newSources = db.dbPack(*result.sources.toTypedArray()),
+                                newLinks = db.dbPack(*result.links.toTypedArray())
                             )
-
-                            delay(delaySeconds * 100)
-                        } catch (e: HttpRequestTimeoutException) {
-                            println("Превышено время ожидания ответа от нейросети: ${e.message}")
-                            return SummarizationResult.Failure(SummarizationErrorType.NETWORK_TIMEOUT, e)
-                        } catch (e: JSONException) {
-                            println("Ошибка парсинга JSON: ${e.message}")
-                            return SummarizationResult.Failure(SummarizationErrorType.JSON_PARSING_FAILED, e)
-                        } catch (e: CancellationException) {
-                            println("Работа была отменена.")
-                            throw e
-                        } catch (e: Exception) {
-                            println("Неизвестная ошибка при суммаризации темы: ${e.message}")
-                            return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
                         }
-//                    response = sumTopic(llm, title.title, bannedNews, newsText)
-//                    while (response == "") response = sumTopic(llm, title.title, bannedNews, newsText)
                     }
                 }
             }
