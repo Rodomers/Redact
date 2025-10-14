@@ -498,13 +498,12 @@ class NewsSummarizer(
 
                             println("${title.title}\t$summary$sources$links$time")
 
-                            db.delTitle(name = title.title)
-                            db.addTitle(
-                                titleTime = time,
-                                title = title.title,
-                                text = summary,
-                                sources = db.dbPack(*sources.toTypedArray()),
-                                links = db.dbPack(*links.toTypedArray())
+                            db.updateTitle(
+                                name = title.title,
+                                newTime = time,
+                                newText = summary,
+                                newSources = db.dbPack(*sources.toTypedArray()),
+                                newLinks = db.dbPack(*links.toTypedArray())
                             )
 
                             delay(delaySeconds * 100)

@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import io.ktor.util.collections.StringMap
 
 class DbHelper(val context: Context) :
     SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
@@ -339,6 +340,25 @@ class DbHelper(val context: Context) :
                 db.update(RSS_NAME, values, "$RSS_SOURCE = ?", arrayOf(oldSource)) > 0
             }
         }
+    }
+
+    @Synchronized
+    fun updateTitle(
+        name: String,
+        newText: String,
+        newSources: String,
+        newLinks: String,
+        newTime: Long
+    ): Boolean {
+        val db = this.writableDatabase
+        val values = ContentValues().apply {
+            put(TITLES_TEXT, newText)
+            put(TITLES_SOURCES, newSources)
+            put(TITLES_LINKS, newLinks)
+            put(TITLES_TIME, newTime)
+        }
+
+        return db.update(TITLES_NAME, values, "$TITLE = ?", arrayOf(name)) > 0
     }
 
     @Synchronized

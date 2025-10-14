@@ -9,6 +9,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,11 +32,20 @@ class TitlesViewModel(
         firstVisibleItemScrollOffset = 0
     )
 
+//    private val workManager = WorkManager.getInstance(application)
+//    val workInfo: StateFlow<WorkInfo?> = workManager
+//        .getWorkInfosForUniqueWorkFlow("titles_update_work")
+//        .map { it.firstOrNull() }
+//        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     private val _titles = MutableStateFlow<List<Title>>(emptyList())
     val titles = _titles.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
+//    val isRefreshing: StateFlow<Boolean> = workInfo.map {
+//        it?.state == WorkInfo.State.RUNNING || it?.state == WorkInfo.State.ENQUEUED
+//    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val enlargedTimestamps: StateFlow<Boolean> = repository.enlargedTimestamps.stateIn(viewModelScope,
