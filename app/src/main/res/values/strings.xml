@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_version" translatable="false">1.0-alpha.7</string>
+    <string name="app_version" translatable="false">1.0-alpha.8</string>
     <string name="current_language">English</string>
 
     <string name="app_name" translatable="false">Mews</string>

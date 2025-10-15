@@ -41,8 +41,6 @@ class TitlesViewModel(
     private val _titles = MutableStateFlow<List<Title>>(emptyList())
     val titles = _titles.asStateFlow()
 
-//    private val _isRefreshing = MutableStateFlow(false)
-//    val isRefreshing = _isRefreshing.asStateFlow()
     val isRefreshing: StateFlow<Boolean> = workInfo.map {
         it?.state == WorkInfo.State.RUNNING || it?.state == WorkInfo.State.ENQUEUED
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
