@@ -15,6 +15,7 @@ import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -459,16 +460,18 @@ class NewsSummarizer(
                     return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
                 }
                 else -> {
-                    var counter: Int = 0
+                    var counter = 0
                     val titlesCounter = titles.size
+                    var emptyAnswer = false
 
-                    val semaphore = Semaphore(5)
+                    val semaphore = Semaphore(3)
 
                     val summarizedResults = coroutineScope {
                         titles.map { title ->
                             async(Dispatchers.IO) {
                                 semaphore.withPermit {
                                     try {
+                                        delay(200L)
                                         counter++
                                         repository.setUpdatingState("${counter}/${titlesCounter}")
 
@@ -485,6 +488,7 @@ class NewsSummarizer(
 
                                         if (response.isBlank()) {
                                             println("Пустой ответ от LLM для темы: ${title.title}")
+                                            emptyAnswer = true
                                             return@withPermit null
                                         }
 
@@ -528,6 +532,13 @@ class NewsSummarizer(
                                 newSources = db.dbPack(*result.sources.toTypedArray()),
                                 newLinks = db.dbPack(*result.links.toTypedArray())
                             )
+                        }
+                    }
+
+                    if (summarizedResults.size != titles.size) {
+                        return when (emptyAnswer) {
+                            true -> SummarizationResult.Failure(SummarizationErrorType.EMPTY_ANSWER)
+                            else -> SummarizationResult.Failure(SummarizationErrorType.SUMMARIZE_TOPICS_FAILED)
                         }
                     }
                 }

@@ -83,7 +83,7 @@ fun MainScreen(mainActivity: MainActivity) {
     val isMonetColors by settingsViewModel.isMonetColors.collectAsStateWithLifecycle()
 
     // отладочное
-//    settingsViewModel.setTitlesNum(1)
+//    settingsViewModel.setTitlesNum(5)
 
     MewsTheme(settingsTheme = currentTheme, monetTheme = isMonetColors) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()

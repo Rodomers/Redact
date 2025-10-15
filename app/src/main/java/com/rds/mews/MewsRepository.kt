@@ -1,20 +1,26 @@
 package com.rds.mews
 
 import android.content.Context
+import androidx.lifecycle.viewModelScope
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -47,7 +53,7 @@ object MewsRepository {
             addSource(name, link, db)
             _sourcesUpdateTrigger.value ++
             AlarmScheduler.cancel(context, true)
-            setRssUpdate(context, true)
+            setRssUpdate(context, true, rssUpdateInterval.value)
         }
     }
 
@@ -79,20 +85,7 @@ object MewsRepository {
     }
 
     fun startTitlesUpdate(context: Context) {
-        val constraints = androidx.work.Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(true)
-            .build()
-
-        val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
-            .setConstraints(constraints)
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            "titles_update_work",
-            ExistingWorkPolicy.REPLACE,
-            updateWorkRequest
-        )
+        setTitlesUpdate(context)
     }
 
     const val CURRENT_THEME = "current_theme"
@@ -176,7 +169,7 @@ object MewsRepository {
         settingsManager.saveInt(RSS_UPDATE_INTERVAL, newValue)
         _rssUpdateInterval.value = newValue
         AlarmScheduler.cancel(context, true)
-        setRssUpdate(context)
+        setRssUpdate(context, intervalMin = rssUpdateInterval.value)
     }
 
     private val _lastRssUpdate = MutableStateFlow(0L)

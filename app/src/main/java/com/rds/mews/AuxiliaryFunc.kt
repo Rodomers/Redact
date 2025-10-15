@@ -11,9 +11,12 @@ import android.provider.Settings
 import androidx.collection.IntList
 import androidx.collection.intListOf
 import androidx.core.net.toUri
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -163,20 +166,41 @@ fun strTransform(original: String, separator: String): String {
     return res.joinToString(separator)
 }
 
-fun setRssUpdate(context: Context, sources: Boolean = false) {
+fun setRssUpdate(context: Context, sources: Boolean = false, intervalMin: Int = 30) {
     val constraints = androidx.work.Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED)
         .build()
 
-    val oneTimeWorkRequestBuilder = OneTimeWorkRequestBuilder<RssUpdateWorker>()
+    val periodicWorkRequestBuilder = PeriodicWorkRequestBuilder<RssUpdateWorker>(
+        intervalMin.toLong(), TimeUnit.MINUTES
+    ).setConstraints(constraints)
+    if (sources) {
+        periodicWorkRequestBuilder.setInitialDelay(40, TimeUnit.SECONDS)
+    }
+
+    val workRequest = periodicWorkRequestBuilder.build()
+
+    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        "rss-update-work",
+        ExistingPeriodicWorkPolicy.REPLACE,
+        workRequest
+    )
+}
+
+fun setTitlesUpdate(context: Context) {
+    val constraints = androidx.work.Constraints.Builder()
+        .setRequiredNetworkType(NetworkType.CONNECTED)
+        .build()
+
+    val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
         .setConstraints(constraints)
-    if (sources) oneTimeWorkRequestBuilder.setInitialDelay(40, TimeUnit.SECONDS)
-    val workRequest = oneTimeWorkRequestBuilder.build()
+        .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+        .build()
 
     WorkManager.getInstance(context).enqueueUniqueWork(
-        "rss-update-work-once",
+        "titles_update_work",
         ExistingWorkPolicy.REPLACE,
-        workRequest
+        updateWorkRequest
     )
 }
 
@@ -210,6 +234,8 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
 
                 SummarizationErrorType.SUMMARIZE_TOPICS_FAILED ->
                     intListOf(R.string.err_header_summarizing, R.string.err_text_summarizing, R.string.err_btn_summarizing)
+                SummarizationErrorType.EMPTY_ANSWER ->
+                    intListOf(R.string.err_header_empty_answer, R.string.err_text_empty_answer, R.string.err_btn_empty_answer)
 
                 SummarizationErrorType.NETWORK_TIMEOUT ->
                     intListOf(R.string.err_header_network_timeout, R.string.err_text_network_timeout, R.string.err_btn_network_timeout)

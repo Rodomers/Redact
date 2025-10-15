@@ -86,6 +86,7 @@ class TitlesViewModel(
             in listOf(
                 SummarizationErrorType.EXTRACT_TOPICS_FAILED,
                 SummarizationErrorType.SUMMARIZE_TOPICS_FAILED,
+                SummarizationErrorType.EMPTY_ANSWER,
                 SummarizationErrorType.NETWORK_TIMEOUT,
                 SummarizationErrorType.FILTER_FAILED
             ) -> refreshTitles()

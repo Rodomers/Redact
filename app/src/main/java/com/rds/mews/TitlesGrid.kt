@@ -85,7 +85,7 @@ fun TitlesGrid(
         else if (bottomSheetState.isVisible) bottomSheetState.hide()
     }
 
-    if (errState != null) {
+    if (errState != null && !isRefreshing) {
         val resources = remember(errState) { mapResultToUiResources(errState) }
 
         CustomErrorBottomSheet(

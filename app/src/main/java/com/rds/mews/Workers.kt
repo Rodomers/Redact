@@ -27,13 +27,13 @@ class RssUpdateWorker(
                 println("RssUpdateWorker: parsing finished successfully.")
             }
 
+//            val nextRssUpdate = System.currentTimeMillis() + rssUpdateInterval * 60 * 1000L
+//            AlarmScheduler.schedule(applicationContext, nextRssUpdate, rss = true)
+
             Result.success()
         } catch (e: Exception) {
             e.printStackTrace()
-            Result.failure()
-        } finally {
-            val nextRssUpdate = System.currentTimeMillis() + rssUpdateInterval * 60 * 1000L
-            AlarmScheduler.schedule(applicationContext, nextRssUpdate, rss = true)
+            Result.retry()
         }
     }
 }
@@ -111,27 +111,22 @@ class TitlesUpdateWorker(
 
             val autoUpdateEnabled = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
             val titlesUpdatePeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
-            if (autoUpdateEnabled) {
-                val nextRunTimeMills = System.currentTimeMillis() + titlesUpdatePeriod * 3600 * 1000L
-                AlarmScheduler.schedule(applicationContext, nextRunTimeMills)
-            }
+//            if (autoUpdateEnabled) {
+//                val nextRunTimeMills = System.currentTimeMillis() + titlesUpdatePeriod * 3600 * 1000L
+//                AlarmScheduler.schedule(applicationContext, nextRunTimeMills)
+//            }
 
             return Result.success()
         } catch (e: CancellationException) {
-            // Ловим отмену
             println("TitlesUpdateWorker: Пойман CancellationException. Работа была отменена системой.")
-            // ОБЯЗАТЕЛЬНО перебрасываем, чтобы WorkManager правильно обработал отмену
             throw e
         } catch (e: Exception) {
-            // Логируем не только сообщение, но и точный тип исключения!
             println("TitlesUpdateWorker: Поймана ошибка. Тип: ${e.javaClass.simpleName}, Сообщение: ${e.message}")
             e.printStackTrace()
             val errorResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
             settingsManager.saveLastError(errorResult)
             return Result.retry()
         }  finally {
-            // ЭТОТ БЛОК ВЫПОЛНИТСЯ ВСЕГДА!
-            // isStopped - это свойство воркера, которое покажет, была ли работа прервана извне.
             println("TitlesUpdateWorker: Вход в блок FINALLY. isStopped = $isStopped")
             settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
             settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)

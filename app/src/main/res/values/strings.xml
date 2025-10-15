@@ -101,6 +101,10 @@
     <string name="err_header_summarizing">Summarization Error</string>
     <string name="err_text_summarizing">An error occurred while summarizing one or more themes during the last update.\nRestart update?</string>
     <string name="err_btn_summarizing">Restart</string>
+    <string name="err_header_empty_answer">LLM not responding</string>
+    <string name="err_text_empty_answer">While updating one or more topics, the neural network returned an empty response. Your API key request limit has likely been reached.
+        \nTry to restart the update?</string>
+    <string name="err_btn_empty_answer">Restart</string>
     <string name="err_header_sumCritical">Programmer Error</string>
     <string name="err_text_sumCritical">The programmer made a mistake. Please understand, forgive, and report it to them.</string>
     <string name="err_btn_sumCritical">OK</string>
@@ -111,8 +115,8 @@
     <string name="err_text_parsing">An error occurred while parsing one or more channels.</string>
     <string name="err_btn_parsing">OK</string>
     <string name="err_header_network_timeout">Timeout</string>
-    <string name="err_text_network_timeout">Problems connecting to the server: connection timeout.\n
-Restart the update process?</string>
+    <string name="err_text_network_timeout">Problems connecting to the server: connection timeout.
+        \nRestart the update process?</string>
     <string name="err_btn_network_timeout">Restart</string>
     <string name="err_header_no_news">No news</string>
     <string name="err_text_no_news">The news list is empty. Apparently, nothing happened.</string>

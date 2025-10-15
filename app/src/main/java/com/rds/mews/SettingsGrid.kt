@@ -290,31 +290,31 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 )
             }
         }
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_titles_auto_update)) {
-                Switch(
-                    checked = alarmsAllowed && titlesAutoUpdate,
-                    onCheckedChange = { newState ->
-                        when (newState) {
-                            true -> {
-                                if (alarmsAllowed) settingsModel.setTitlesAutoUpdate(context, true)
-                                else showAlarmsSheet = true
-                            }
-                            else -> settingsModel.setTitlesAutoUpdate(context, false)
-                        }
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.background,
-                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
-
-                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                )
-            }
-        }
+//        item {
+//            CustomSettingsItem(text = stringResource(R.string.settings_titles_auto_update)) {
+//                Switch(
+//                    checked = alarmsAllowed && titlesAutoUpdate,
+//                    onCheckedChange = { newState ->
+//                        when (newState) {
+//                            true -> {
+//                                if (alarmsAllowed) settingsModel.setTitlesAutoUpdate(context, true)
+//                                else showAlarmsSheet = true
+//                            }
+//                            else -> settingsModel.setTitlesAutoUpdate(context, false)
+//                        }
+//                    },
+//                    colors = SwitchDefaults.colors(
+//                        checkedThumbColor = MaterialTheme.colorScheme.background,
+//                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+//                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+//
+//                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+//                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
+//                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+//                    )
+//                )
+//            }
+//        }
         item {
             CustomSettingsItem(text = stringResource(R.string.settings_maximum_headers)) {
                 Box {

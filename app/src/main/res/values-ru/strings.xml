@@ -103,6 +103,10 @@
     <string name="err_text_summarizing">Во время последнего обновления произошла ошибка при суммаризации одной
     или нескольких тем.\nПерезапустить обновление?</string>
     <string name="err_btn_summarizing">Перезапуск</string>
+    <string name="err_header_empty_answer">LLM не отвечает</string>
+    <string name="err_text_empty_answer">Во время обновления одной или нескольких тем нейросеть вернула пустой ответ. Вероятно, достигнут лимит запросов вашего API ключа.
+    \nПопробовать перезапустить обновление?</string>
+    <string name="err_btn_empty_answer">Перезапуск</string>
     <string name="err_header_sumCritical">Ошибка программиста</string>
     <string name="err_text_sumCritical">Программист ошибся. Пожалуйста, поймите, простите и сообщите ему об этом.</string>
     <string name="err_btn_sumCritical">Ок</string>
@@ -113,8 +117,8 @@
     <string name="err_text_parsing">Произошла ошибка парсинга одного или нескольких каналов.</string>
     <string name="err_btn_parsing">Ок</string>
     <string name="err_header_network_timeout">Таймаут</string>
-    <string name="err_text_network_timeout">Проблемы с подключением к серверу: истекло время ожидания.\n
-    Перезапустить процесс обновления?</string>
+    <string name="err_text_network_timeout">Проблемы с подключением к серверу: истекло время ожидания.
+        \nПерезапустить процесс обновления?</string>
     <string name="err_btn_network_timeout">Перезапуск</string>
     <string name="err_header_no_news">Нет новостей</string>
     <string name="err_text_no_news">Список новостей пуст. Видимо, ничего не произошло.</string>
