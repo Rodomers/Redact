@@ -78,6 +78,8 @@ dependencies {
     implementation(libs.androidx.foundation.layout)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.glance)
+    implementation(libs.androidx.compose.animation)
+    implementation(libs.androidx.compose.animation.core)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

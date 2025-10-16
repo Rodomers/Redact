@@ -57,7 +57,10 @@ object AlarmScheduler {
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE
         )
-        if (pendingIntent != null) alarmManager.cancel(pendingIntent)
+        if (pendingIntent != null) {
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
     }
 }
 

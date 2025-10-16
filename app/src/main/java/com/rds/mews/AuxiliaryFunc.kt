@@ -1,7 +1,9 @@
 package com.rds.mews
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -10,6 +12,9 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.collection.IntList
 import androidx.collection.intListOf
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat.getSystemService
+import androidx.core.content.ContextCompat.startActivity
 import androidx.core.net.toUri
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -31,14 +36,16 @@ import java.util.concurrent.TimeUnit
 
 
 // "dd.MM'\n'HH:mm"
-fun getFormattedTimeUnix(unixTime: Long, date: Boolean = false): String {
+@SuppressLint("WeekBasedYear")
+fun getFormattedTimeUnix(unixTime: Long, date: Boolean = false, fullDate: Boolean = false): String {
     val instant = Instant.ofEpochMilli(unixTime)
     val zoneId = ZoneId.systemDefault()
 
-    val formatter = when (date) {
-        true -> DateTimeFormatter.ofPattern("dd.MM")
+    val formatter = when {
+        date -> DateTimeFormatter.ofPattern("dd.MM")
             .withLocale(Locale.getDefault())
             .withZone(zoneId)
+        fullDate -> DateTimeFormatter.ofPattern("dd.MM.yyyy")
         else -> DateTimeFormatter.ofPattern("HH:mm")
             .withLocale(Locale.getDefault())
             .withZone(zoneId)
@@ -285,4 +292,8 @@ fun requestIgnoreBatteryOptimization(context: Context) {
         data = "package:${context.packageName}".toUri()
     }
     context.startActivity(intent)
+}
+
+fun isNotificationPermissionGranted(context: Context): Boolean {
+    return NotificationManagerCompat.from(context).areNotificationsEnabled()
 }

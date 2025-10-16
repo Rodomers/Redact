@@ -1,6 +1,5 @@
 package com.rds.mews
 
-import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -23,9 +22,13 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -47,7 +50,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -128,6 +130,25 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         "2.0 Flash Lite" to { settingsModel.setCurrentLlm("gemini-2.0-flash-lite") }
     )
 
+    val autoUpdateScreenState = remember { MutableTransitionState(false) }
+    val autoUpdateItems: List<@Composable () -> Unit> = listOf(
+        {
+            CustomSettingsItem(
+                text = "buy"
+            ) { Text("fuwpa") }
+        },
+        {
+            CustomSettingsItem(
+                text = "buy"
+            ) { Text("fuwpa") }
+        },
+        {
+            CustomSettingsItem(
+                text = "buy"
+            ) { Text("fuwpa") }
+        }
+    )
+
     if (showAlarmsSheet) {
         CustomErrorBottomSheet(
             title = stringResource(R.string.settings_alarms_sheet_title),
@@ -148,49 +169,32 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         )
     }
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(1),
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 10.dp),
-        contentPadding = WindowInsets.statusBars.asPaddingValues(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        state = gridState
-    ) {
-        stickyHeader() {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
-                CustomTextDivider(text = stringResource(R.string.settings_chapter_appearance))
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(1),
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp),
+            contentPadding = WindowInsets.statusBars.asPaddingValues(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            state = gridState
+        ) {
+            stickyHeader() {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CustomTextDivider(text = stringResource(R.string.settings_chapter_appearance))
+                }
             }
-        }
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_compact_tab)) {
-                Switch(
-                    checked = compactTab,
-                    onCheckedChange = { settingsModel.setCompactTab(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.background,
-                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
-
-                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                )
-            }
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_monet_colors)) {
+                CustomSettingsItem(text = stringResource(R.string.settings_compact_tab)) {
                     Switch(
-                        checked = monetColors,
-                        onCheckedChange = { settingsModel.setMonetColors(it) },
+                        checked = compactTab,
+                        onCheckedChange = { settingsModel.setCompactTab(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.background,
                             checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -203,282 +207,35 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                     )
                 }
             }
-        }
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_color_scheme)) {
-                Box {
-                    Button(
-                        modifier = Modifier
-                            .wrapContentSize()
-                            .width(150.dp),
-                        onClick = {
-                            colorSchemeDropdownVisible.targetState =
-                                !colorSchemeDropdownVisible.currentState
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.background
-                        )
-                    ) {
-                        Text(
-                            text = when (currentTheme) {
-                                "light" -> stringResource(R.string.settings_light_theme)
-                                "dark" -> stringResource(R.string.settings_dark_theme)
-                                else -> stringResource(R.string.settings_system_theme)
-                            }, color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                item {
+                    CustomSettingsItem(text = stringResource(R.string.settings_monet_colors)) {
+                        Switch(
+                            checked = monetColors,
+                            onCheckedChange = { settingsModel.setMonetColors(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.background,
+                                checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
 
-                    if (colorSchemeDropdownVisible.currentState || colorSchemeDropdownVisible.targetState) {
-                        Popup(
-                            onDismissRequest = { colorSchemeDropdownVisible.targetState = false },
-                            alignment = Alignment.TopEnd
-                        ) {
-                            CustomDropdown(
-                                transitionState = colorSchemeDropdownVisible,
-                                buttons = colorSchemeDropdownItems.map {(text, action) ->
-                                    text to { action() }
-                                }
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                                uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
                             )
-                        }
+                        )
                     }
                 }
             }
-        }
-
-        stickyHeader() {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
-                CustomTextDivider(text = stringResource(R.string.settings_chapter_titles))
-            }
-        }
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_show_dates)) {
-                Switch(
-                    checked = showDates,
-                    onCheckedChange = { settingsModel.setShowDates(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.background,
-                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
-
-                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                )
-            }
-        }
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_endure_time)) {
-                Switch(
-                    checked = endureTime,
-                    onCheckedChange = { settingsModel.setEndureTime(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.background,
-                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
-
-                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                )
-            }
-        }
-//        item {
-//            CustomSettingsItem(text = stringResource(R.string.settings_titles_auto_update)) {
-//                Switch(
-//                    checked = alarmsAllowed && titlesAutoUpdate,
-//                    onCheckedChange = { newState ->
-//                        when (newState) {
-//                            true -> {
-//                                if (alarmsAllowed) settingsModel.setTitlesAutoUpdate(context, true)
-//                                else showAlarmsSheet = true
-//                            }
-//                            else -> settingsModel.setTitlesAutoUpdate(context, false)
-//                        }
-//                    },
-//                    colors = SwitchDefaults.colors(
-//                        checkedThumbColor = MaterialTheme.colorScheme.background,
-//                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-//                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
-//
-//                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-//                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
-//                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
-//                    )
-//                )
-//            }
-//        }
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_maximum_headers)) {
-                Box {
-                    Button(
-                        modifier = Modifier
-                            .wrapContentSize()
-                            .width(150.dp),
-                        onClick = {
-                            titlesDropdownVisible.targetState = !titlesDropdownVisible.currentState
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.background
-                        )
-                    ) {
-                        Text(
-                            text = pluralStringResource(
-                                R.plurals.titles,
-                                count = titlesNum,
-                                titlesNum
-                            ),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-
-                    if (titlesDropdownVisible.currentState || titlesDropdownVisible.targetState) {
-                        Popup(
-                            onDismissRequest = { titlesDropdownVisible.targetState = false },
-                            alignment = Alignment.TopEnd
-                        ) {
-                            CustomDropdown(
-                                transitionState = titlesDropdownVisible,
-                                buttons = titlesDropdownItems.map {(text, action) ->
-                                    text to { action() }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_news_period)) {
-                Box {
-                    Button(
-                        modifier = Modifier
-                            .wrapContentSize()
-                            .width(150.dp),
-                        onClick = {
-                            limitationDropdownVisible.targetState =
-                                !limitationDropdownVisible.currentState
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.background
-                        )
-                    ) {
-                        Text(
-                            text = pluralStringResource(
-                                R.plurals.hours,
-                                count = titlesPeriod,
-                                titlesPeriod
-                            ),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-
-                    if (limitationDropdownVisible.currentState || limitationDropdownVisible.targetState) {
-                        Popup(
-                            onDismissRequest = { limitationDropdownVisible.targetState = false },
-                            alignment = Alignment.TopEnd
-                        ) {
-                            CustomDropdown(
-                                transitionState = limitationDropdownVisible,
-                                buttons = limitationDropdownItems.map {(text, action) ->
-                                    text to { action() }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_news_update_frequency)) {
-                Box {
-                    Button(
-                        modifier = Modifier
-                            .wrapContentSize()
-                            .width(150.dp),
-                        onClick = {
-                            rssUpdateDropdownVisible.targetState =
-                                !rssUpdateDropdownVisible.currentState
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.background
-                        )
-                    ) {
-                        Text(
-                            text = pluralStringResource(
-                                R.plurals.minutes,
-                                count = rssUpdateInterval,
-                                rssUpdateInterval
-                            ),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-
-                    if (rssUpdateDropdownVisible.currentState || rssUpdateDropdownVisible.targetState) {
-                        Popup(
-                            onDismissRequest = { rssUpdateDropdownVisible.targetState = false },
-                            alignment = Alignment.TopEnd
-                        ) {
-                            CustomDropdown(
-                                transitionState = rssUpdateDropdownVisible,
-                                buttons = rssUpdateDropdownItems
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        stickyHeader() {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
-                CustomTextDivider(text = stringResource(R.string.settings_chapter_llm))
-            }
-        }
-        if (geminiApiText != defaultGeminiApiKey) {
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_filter_topics)) {
-                    Switch(
-                        checked = filterTopics,
-                        onCheckedChange = { settingsModel.setFilterTopics(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.background,
-                            checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
-
-                            uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                            uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    )
-                }
-            }
-        }
-        if (geminiApiText != defaultGeminiApiKey) {
-            item {
-                CustomSettingsItem(text = stringResource(R.string.settings_gemini_model)) {
+                CustomSettingsItem(text = stringResource(R.string.settings_color_scheme)) {
                     Box {
                         Button(
                             modifier = Modifier
                                 .wrapContentSize()
                                 .width(150.dp),
                             onClick = {
-                                geminiModelDropdownVisible.targetState =
-                                    !geminiModelDropdownVisible.currentState
+                                colorSchemeDropdownVisible.targetState =
+                                    !colorSchemeDropdownVisible.currentState
                             },
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
@@ -486,21 +243,22 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             )
                         ) {
                             Text(
-                                text = geminiModelText,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                text = when (currentTheme) {
+                                    "light" -> stringResource(R.string.settings_light_theme)
+                                    "dark" -> stringResource(R.string.settings_dark_theme)
+                                    else -> stringResource(R.string.settings_system_theme)
+                                }, color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         }
 
-                        if (geminiModelDropdownVisible.currentState || geminiModelDropdownVisible.targetState) {
+                        if (colorSchemeDropdownVisible.currentState || colorSchemeDropdownVisible.targetState) {
                             Popup(
-                                onDismissRequest = {
-                                    geminiModelDropdownVisible.targetState = false
-                                },
+                                onDismissRequest = { colorSchemeDropdownVisible.targetState = false },
                                 alignment = Alignment.TopEnd
                             ) {
                                 CustomDropdown(
-                                    transitionState = geminiModelDropdownVisible,
-                                    buttons = geminiModelDropdownItems.map {(text, action) ->
+                                    transitionState = colorSchemeDropdownVisible,
+                                    buttons = colorSchemeDropdownItems.map {(text, action) ->
                                         text to { action() }
                                     }
                                 )
@@ -509,50 +267,309 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                     }
                 }
             }
-        }
-        item {
-            CustomSettingsItem(text = stringResource(R.string.settings_gemini_api_key)) {
-                Box {
-                    Button(
-                        modifier = Modifier
-                            .wrapContentSize()
-                            .widthIn(min = 150.dp, max = 250.dp),
-                        onClick = {
-                            when (geminiApiText) {
-                                defaultGeminiApiKey -> {
-                                    val clipboardText: AnnotatedString? = clipboardManager.getText()
 
-                                    clipboardText?.let {
-                                        text += it.text
-                                    }
+            stickyHeader() {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CustomTextDivider(text = stringResource(R.string.settings_chapter_titles))
+                }
+            }
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_show_dates)) {
+                    Switch(
+                        checked = showDates,
+                        onCheckedChange = { settingsModel.setShowDates(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.background,
+                            checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
 
-                                    settingsModel.setUserGeminiApi(text)
-                                    text = ""
-                                }
-
-                                else -> {
-                                    settingsModel.setUserGeminiApi(defaultGeminiApiKey)
-                                    settingsModel.setCurrentLlm("gemini-2.0-flash")
-                                    settingsModel.setFilterTopics(false)
-                                }
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.background
+                            uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                            uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
                         )
+                    )
+                }
+            }
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_endure_time)) {
+                    Switch(
+                        checked = endureTime,
+                        onCheckedChange = { settingsModel.setEndureTime(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.background,
+                            checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                            uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                            uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    )
+                }
+            }
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_titles_auto_update)) {
+                    IconButton(
+                        modifier = Modifier
+                            .wrapContentSize(),
+                        onClick = {
+                            autoUpdateScreenState.targetState = !autoUpdateScreenState.currentState
+                        }
                     ) {
-                        Text(
-                            text = if (geminiApiText != defaultGeminiApiKey) stringResource(R.string.settings_reset) else stringResource(
-                                R.string.settings_paste
-                            ),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
+                    }
+                }
+            }
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_maximum_headers)) {
+                    Box {
+                        Button(
+                            modifier = Modifier
+                                .wrapContentSize()
+                                .width(150.dp),
+                            onClick = {
+                                titlesDropdownVisible.targetState = !titlesDropdownVisible.currentState
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.background
+                            )
+                        ) {
+                            Text(
+                                text = pluralStringResource(
+                                    R.plurals.titles,
+                                    count = titlesNum,
+                                    titlesNum
+                                ),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+
+                        if (titlesDropdownVisible.currentState || titlesDropdownVisible.targetState) {
+                            Popup(
+                                onDismissRequest = { titlesDropdownVisible.targetState = false },
+                                alignment = Alignment.TopEnd
+                            ) {
+                                CustomDropdown(
+                                    transitionState = titlesDropdownVisible,
+                                    buttons = titlesDropdownItems.map {(text, action) ->
+                                        text to { action() }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_news_period)) {
+                    Box {
+                        Button(
+                            modifier = Modifier
+                                .wrapContentSize()
+                                .width(150.dp),
+                            onClick = {
+                                limitationDropdownVisible.targetState =
+                                    !limitationDropdownVisible.currentState
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.background
+                            )
+                        ) {
+                            Text(
+                                text = pluralStringResource(
+                                    R.plurals.hours,
+                                    count = titlesPeriod,
+                                    titlesPeriod
+                                ),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+
+                        if (limitationDropdownVisible.currentState || limitationDropdownVisible.targetState) {
+                            Popup(
+                                onDismissRequest = { limitationDropdownVisible.targetState = false },
+                                alignment = Alignment.TopEnd
+                            ) {
+                                CustomDropdown(
+                                    transitionState = limitationDropdownVisible,
+                                    buttons = limitationDropdownItems.map {(text, action) ->
+                                        text to { action() }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_news_update_frequency)) {
+                    Box {
+                        Button(
+                            modifier = Modifier
+                                .wrapContentSize()
+                                .width(150.dp),
+                            onClick = {
+                                rssUpdateDropdownVisible.targetState =
+                                    !rssUpdateDropdownVisible.currentState
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.background
+                            )
+                        ) {
+                            Text(
+                                text = pluralStringResource(
+                                    R.plurals.minutes,
+                                    count = rssUpdateInterval,
+                                    rssUpdateInterval
+                                ),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+
+                        if (rssUpdateDropdownVisible.currentState || rssUpdateDropdownVisible.targetState) {
+                            Popup(
+                                onDismissRequest = { rssUpdateDropdownVisible.targetState = false },
+                                alignment = Alignment.TopEnd
+                            ) {
+                                CustomDropdown(
+                                    transitionState = rssUpdateDropdownVisible,
+                                    buttons = rssUpdateDropdownItems
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            stickyHeader() {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CustomTextDivider(text = stringResource(R.string.settings_chapter_llm))
+                }
+            }
+            if (geminiApiText != defaultGeminiApiKey) {
+                item {
+                    CustomSettingsItem(text = stringResource(R.string.settings_filter_topics)) {
+                        Switch(
+                            checked = filterTopics,
+                            onCheckedChange = { settingsModel.setFilterTopics(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.background,
+                                checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                                uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
                         )
                     }
                 }
             }
+            if (geminiApiText != defaultGeminiApiKey) {
+                item {
+                    CustomSettingsItem(text = stringResource(R.string.settings_gemini_model)) {
+                        Box {
+                            Button(
+                                modifier = Modifier
+                                    .wrapContentSize()
+                                    .width(150.dp),
+                                onClick = {
+                                    geminiModelDropdownVisible.targetState =
+                                        !geminiModelDropdownVisible.currentState
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.background
+                                )
+                            ) {
+                                Text(
+                                    text = geminiModelText,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+
+                            if (geminiModelDropdownVisible.currentState || geminiModelDropdownVisible.targetState) {
+                                Popup(
+                                    onDismissRequest = {
+                                        geminiModelDropdownVisible.targetState = false
+                                    },
+                                    alignment = Alignment.TopEnd
+                                ) {
+                                    CustomDropdown(
+                                        transitionState = geminiModelDropdownVisible,
+                                        buttons = geminiModelDropdownItems.map {(text, action) ->
+                                            text to { action() }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_gemini_api_key)) {
+                    Box {
+                        Button(
+                            modifier = Modifier
+                                .wrapContentSize()
+                                .widthIn(min = 150.dp, max = 250.dp),
+                            onClick = {
+                                when (geminiApiText) {
+                                    defaultGeminiApiKey -> {
+                                        val clipboardText: AnnotatedString? = clipboardManager.getText()
+
+                                        clipboardText?.let {
+                                            text += it.text
+                                        }
+
+                                        settingsModel.setUserGeminiApi(text)
+                                        text = ""
+                                    }
+
+                                    else -> {
+                                        settingsModel.setUserGeminiApi(defaultGeminiApiKey)
+                                        settingsModel.setCurrentLlm("gemini-2.0-flash")
+                                        settingsModel.setFilterTopics(false)
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.background
+                            )
+                        ) {
+                            Text(
+                                text = if (geminiApiText != defaultGeminiApiKey) stringResource(R.string.settings_reset) else stringResource(
+                                    R.string.settings_paste
+                                ),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {CustomBottomFootnote(stringResource(R.string.settings_footnote_text, stringResource(R.string.app_version)))}
         }
 
-        item {CustomBottomFootnote(stringResource(R.string.settings_footnote_text, stringResource(R.string.app_version)))}
+        DeferredUpdateTab(
+            transitionState = autoUpdateScreenState,
+            onDismissRequest = {},
+            items = autoUpdateItems
+        )
     }
 }

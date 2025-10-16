@@ -158,7 +158,7 @@ fun MainScreen(mainActivity: MainActivity) {
                 TabScreen.Titles -> {
                     val groupedTitles by titlesViewModel.groupedTitles.collectAsStateWithLifecycle()
                     val isRefreshing by titlesViewModel.isRefreshing.collectAsStateWithLifecycle()
-                    val err by titlesViewModel.errState.collectAsState()
+                    val err by titlesViewModel.errState.collectAsStateWithLifecycle()
                     val showEmptyMess by titlesViewModel.showEmptyMess.collectAsStateWithLifecycle()
                     val titlesCardStates by titlesViewModel.titleCardStates.collectAsStateWithLifecycle()
 
