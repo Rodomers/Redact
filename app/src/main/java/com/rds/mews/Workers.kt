@@ -109,13 +109,6 @@ class TitlesUpdateWorker(
             settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
             settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
 
-            val autoUpdateEnabled = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
-            val titlesUpdatePeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
-//            if (autoUpdateEnabled) {
-//                val nextRunTimeMills = System.currentTimeMillis() + titlesUpdatePeriod * 3600 * 1000L
-//                AlarmScheduler.schedule(applicationContext, nextRunTimeMills)
-//            }
-
             return Result.success()
         } catch (e: CancellationException) {
             println("TitlesUpdateWorker: Пойман CancellationException. Работа была отменена системой.")

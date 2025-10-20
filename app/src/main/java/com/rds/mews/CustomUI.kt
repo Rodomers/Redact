@@ -41,7 +41,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
@@ -58,6 +57,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
@@ -87,10 +87,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.CoroutineScope
@@ -98,14 +103,40 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+
+class CenteredPopupPositionProvider(
+    private val inputBounds: IntRect
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize
+    ): IntOffset {
+        // Вычисляем центральную точку кнопки
+        val anchorCenterX = inputBounds.left + inputBounds.width / 2
+        val anchorCenterY = inputBounds.top + inputBounds.height / 2
+
+        // Вычисляем смещение для центрирования Popup
+        val popupX = anchorCenterX - popupContentSize.width / 2
+        val popupY = anchorCenterY - popupContentSize.height / 2
+
+        return IntOffset(popupX, popupY)
+    }
+}
+
 @Composable
 fun CustomDropdown(
     transitionState: MutableTransitionState<Boolean>,
     buttons: List<Pair<String, () -> Unit>>,
-    animDuration: Int = 200
+    animDuration: Int = 200,
+    timeList: Boolean = false
 ) {
+    val surfaceWidth = if (timeList) 70.dp else 150.dp
+    val maxHeight = if (timeList) 180.dp else 360.dp
+
     Surface(
-        modifier = Modifier.width(150.dp),
+        modifier = Modifier.width(surfaceWidth).heightIn(max = maxHeight),
         shape = Shapes.small,
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 4.dp
@@ -113,7 +144,7 @@ fun CustomDropdown(
         AnimatedVisibility(
             visibleState = transitionState,
             enter = expandVertically(
-                expandFrom = Alignment.Top,
+                expandFrom = Alignment.CenterVertically,
                 animationSpec = tween(durationMillis = animDuration),
                 clip = false
             ) + fadeIn(),
@@ -124,15 +155,17 @@ fun CustomDropdown(
             ) + fadeOut()
         ) {
             val onDismiss = remember(transitionState) { { transitionState.targetState = false } }
-            Column {
+            LazyColumn {
                 buttons.forEachIndexed { index, button ->
-                    CustomDropdownMenuItem(button.first, button.second, onDismiss = onDismiss)
+                    item { CustomDropdownMenuItem(button.first, button.second, onDismiss = onDismiss) }
                     if (index < buttons.size - 1) {
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            thickness = 1.dp,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
+                        item {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                thickness = 1.dp,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -151,6 +184,7 @@ private fun CustomDropdownMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(35.dp)
+            .padding(horizontal = 4.dp)
             .clickable {
                 onClick()
                 onDismiss()
@@ -570,7 +604,9 @@ fun CustomChangeBottomSheet(
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
-                modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp).fillMaxWidth()
+                modifier = Modifier
+                    .padding(horizontal = 40.dp, vertical = 16.dp)
+                    .fillMaxWidth()
             )
 
             var rssText by remember { mutableStateOf("") }
@@ -710,14 +746,18 @@ fun CustomErrorBottomSheet(
                 textAlign = TextAlign.Center,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp).fillMaxWidth()
+                modifier = Modifier
+                    .padding(horizontal = 40.dp, vertical = 16.dp)
+                    .fillMaxWidth()
             )
             Text(
                 text = text,
                 textAlign = TextAlign.Start,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Normal,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp).fillMaxWidth()
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
+                    .fillMaxWidth()
             )
             Row(
                 modifier = Modifier
@@ -784,7 +824,9 @@ fun CustomBottomFootnote(text: String) {
 @Composable
 fun CustomTimeMark(time: Long) {
     Text(text = getFormattedTimeUnix(time).split(":").joinToString("\n"), fontWeight = FontWeight.Bold, fontSize = 18.sp, textAlign = TextAlign.Start,
-        modifier = Modifier.padding(top = 4.dp, end = 10.dp).width(30.dp))
+        modifier = Modifier
+            .padding(top = 4.dp, end = 10.dp)
+            .width(30.dp))
 }
 
 @Composable
@@ -792,7 +834,8 @@ fun DeferredUpdateTab(
     transitionState: MutableTransitionState<Boolean>,
     onDismissRequest: () -> Unit,
     animDuration: Int = 200,
-    items: List<@Composable () -> Unit>
+    items: List<@Composable () -> Unit>,
+    indexes: List<Int>? = null
 ) {
     LaunchedEffect(transitionState.targetState) {
         if (transitionState.currentState != transitionState.targetState && !transitionState.targetState) {
@@ -829,33 +872,38 @@ fun DeferredUpdateTab(
                         .wrapContentHeight()
                         .padding(8.dp),
                     shape = Shapes.large,
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.surface
                 ) {
                     Column(modifier = Modifier.wrapContentSize()) {
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.padding(8.dp).heightIn(max = 360.dp)
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .heightIn(max = 360.dp)
                         ) {
-                            items.forEach {
-                                item { it() }
+                            items.forEachIndexed { id, it ->
+                                if (indexes?.contains(id) ?: true) item { it() }
                             }
                         }
+                        HorizontalDivider(modifier = Modifier.padding(4.dp))
                         Row(
                             modifier = Modifier
                                 .wrapContentHeight()
                                 .fillMaxWidth()
-                                .padding(top = 16.dp)
-                                .heightIn(max = 40.dp)
-                                .background(MaterialTheme.colorScheme.secondaryContainer)
+                                .padding()
+                                .heightIn(max = 35.dp)
                         ) {
                             IconButton(onClick = { transitionState.targetState = false },
                                 modifier = Modifier
                                     .fillMaxHeight()
+                                    .padding(start = 8.dp, bottom = 4.dp, top = 0.dp)
                                     .align(Alignment.CenterVertically)
                             ) {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
+                                Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
                             }
-                            Spacer(modifier = Modifier.heightIn(max = 40.dp).weight(1f))
+                            Spacer(modifier = Modifier
+                                .heightIn(max = 40.dp)
+                                .weight(1f))
                         }
                     }
                 }

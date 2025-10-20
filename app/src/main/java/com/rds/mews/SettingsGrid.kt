@@ -7,6 +7,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -35,21 +37,29 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.roundToIntRect
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rds.mews.ui.theme.Shapes
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,10 +78,19 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
     val titlesPeriod by settingsModel.titlesPeriod.collectAsStateWithLifecycle()
     val rssUpdateInterval by settingsModel.rssUpdateInterval.collectAsStateWithLifecycle()
     val endureTime by settingsModel.endureTime.collectAsStateWithLifecycle()
-    val titlesAutoUpdate by settingsModel.titlesAutoUpdate.collectAsStateWithLifecycle()
-    val alarmsAllowed by settingsModel.exactAlarmsAllowed.collectAsStateWithLifecycle()
+    val titlesAlarmUpdate by settingsModel.titlesAlarmUpdate.collectAsStateWithLifecycle()
+    val alarmMins by settingsModel.titlesAlarmMins.collectAsStateWithLifecycle()
+    val alarmFrequency by settingsModel.titlesUpdateFrequency.collectAsStateWithLifecycle()
+    var alarmHrsText by remember { mutableIntStateOf(alarmMins / 60) }
+    var alarmMinsText by remember { mutableIntStateOf(alarmMins % 60) }
     var showAlarmsSheet by remember { mutableStateOf(false) }
+    var showNotificationsSheet by remember { mutableStateOf(false) }
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    LaunchedEffect(alarmMins) {
+        alarmHrsText = alarmMins / 60
+        alarmMinsText = alarmMins % 60
+    }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -130,22 +149,187 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         "2.0 Flash Lite" to { settingsModel.setCurrentLlm("gemini-2.0-flash-lite") }
     )
 
+    val alarmHoursListVisible = remember { MutableTransitionState(false) }
+    val alarmHrsItems = (0..23).toList().map { num ->
+        intTimeToStr(num) to {
+            alarmHrsText = num
+            settingsModel.setTitlesAlarmMins(context, alarmHrsText * 60 + alarmMinsText)
+        }
+    }
+    val alarmMinutesListVisible = remember { MutableTransitionState(false) }
+    val alarmMinsItems = (0..59).toList().map {num ->
+        intTimeToStr(num) to {
+            alarmMinsText = num
+            settingsModel.setTitlesAlarmMins(context, alarmHrsText * 60 + alarmMinsText)
+        }
+    }
+
+    val titlesFrequencyListVisible = remember { MutableTransitionState(false) }
+    val titlesFrequencyItems = listOf (
+        pluralStringResource(R.plurals.hours, count = 12, 12) to { settingsModel.setTitlesUpdFrequency(context, 12) },
+        pluralStringResource(R.plurals.hours, count = 24, 24) to { settingsModel.setTitlesUpdFrequency(context, 24) },
+        pluralStringResource(R.plurals.hours, count = 48, 48) to { settingsModel.setTitlesUpdFrequency(context, 48) },
+        pluralStringResource(R.plurals.hours, count = 72, 72) to { settingsModel.setTitlesUpdFrequency(context, 72) },
+        pluralStringResource(R.plurals.hours, count = 96, 96) to { settingsModel.setTitlesUpdFrequency(context, 96) },
+        pluralStringResource(R.plurals.hours, count = 120, 120) to { settingsModel.setTitlesUpdFrequency(context, 120) }
+    )
+
     val autoUpdateScreenState = remember { MutableTransitionState(false) }
+    val autoUpdateIndexes = remember { mutableStateOf<List<Int>?>(listOf(0)) }
+    LaunchedEffect(titlesAlarmUpdate) {
+        autoUpdateIndexes.value = if (titlesAlarmUpdate) null else listOf(0)
+    }
     val autoUpdateItems: List<@Composable () -> Unit> = listOf(
         {
-            CustomSettingsItem(
-                text = "buy"
-            ) { Text("fuwpa") }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            CustomSettingsItem(text = stringResource(R.string.settings_titles_alarm_update)) {
+                Switch(
+                    checked = titlesAlarmUpdate,
+                    onCheckedChange = {
+                        settingsModel.setTitlesAlarmUpdate(
+                            context = context,
+                            activity = mainActivity,
+                            onShowNotificationsSheet = { showNotificationsSheet = true },
+                            onShowAlarmsSheet = { showAlarmsSheet = true },
+                            value = it
+                            )
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.background,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                        uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                )
+            }
         },
         {
-            CustomSettingsItem(
-                text = "buy"
-            ) { Text("fuwpa") }
+            CustomSettingsItem(text = stringResource(R.string.settings_titles_update_frequency)) {
+                Box {
+                    Button(
+                        modifier = Modifier
+                            .width(150.dp)
+                            .wrapContentHeight(),
+                        onClick = {
+                            titlesFrequencyListVisible.targetState =
+                                !titlesFrequencyListVisible.currentState
+                        },
+                        shape = Shapes.small,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.background
+                        )
+                    ) {
+                        Text(
+                            text = pluralStringResource(R.plurals.hours, alarmFrequency, alarmFrequency),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+
+                    if (titlesFrequencyListVisible.currentState || titlesFrequencyListVisible.targetState) {
+                        Popup(
+                            onDismissRequest = {
+                                titlesFrequencyListVisible.targetState = false
+                            }
+                        ) {
+                            CustomDropdown(
+                                transitionState = titlesFrequencyListVisible,
+                                buttons = titlesFrequencyItems.map { (text, action) ->
+                                    text to { action() }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         },
         {
-            CustomSettingsItem(
-                text = "buy"
-            ) { Text("fuwpa") }
+            CustomSettingsItem(text = stringResource(R.string.settings_titles_update_time)) {
+                var hoursAnchorBounds by remember { mutableStateOf<IntRect?>(null) }
+                var minsAnchorBounds by remember { mutableStateOf<IntRect?>(null) }
+
+                Box {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            modifier = Modifier
+                                .width(70.dp)
+                                .wrapContentHeight()
+                                .onGloballyPositioned {
+                                    hoursAnchorBounds = it.boundsInWindow().roundToIntRect()
+                                },
+                            onClick = { alarmHoursListVisible.targetState = !alarmHoursListVisible.currentState },
+                            shape = Shapes.small,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.background
+                            )
+                        ) {
+                            Text(
+                                text = intTimeToStr(alarmHrsText),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Text(text = ":", fontSize = 22.sp, modifier = Modifier.padding(horizontal = 2.dp))
+                        Button(
+                            modifier = Modifier
+                                .width(70.dp)
+                                .wrapContentHeight()
+                                .onGloballyPositioned {
+                                    minsAnchorBounds = it.boundsInWindow().roundToIntRect()
+                                },
+                            onClick = { alarmMinutesListVisible.targetState = !alarmMinutesListVisible.currentState },
+                            shape = Shapes.small,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.background
+                            )
+                        ) {
+                            Text(
+                                text = intTimeToStr(alarmMinsText),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+
+                    if (alarmHoursListVisible.currentState || alarmHoursListVisible.targetState) {
+                        hoursAnchorBounds?.let {
+                            Popup(
+                                popupPositionProvider = CenteredPopupPositionProvider(it),
+                                onDismissRequest = {
+                                    alarmHoursListVisible.targetState = false
+                                }
+                            ) {
+                                CustomDropdown(
+                                    transitionState = alarmHoursListVisible,
+                                    buttons = alarmHrsItems.map {(text, action) ->
+                                        text to { action() }
+                                    },
+                                    timeList = true
+                                )
+                            }
+                        }
+                    }
+                    if (alarmMinutesListVisible.currentState || alarmMinutesListVisible.targetState) {
+                        minsAnchorBounds?.let {
+                            Popup(
+                                popupPositionProvider = CenteredPopupPositionProvider(it),
+                                onDismissRequest = {
+                                    alarmMinutesListVisible.targetState = false
+                                }
+                            ) {
+                                CustomDropdown(
+                                    transitionState = alarmMinutesListVisible,
+                                    buttons = alarmMinsItems.map {(text, action) ->
+                                        text to { action() }
+                                    },
+                                    timeList = true
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     )
 
@@ -164,6 +348,22 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                     }
                 }
                         },
+            scope = scope,
+            sheetState = bottomSheetState
+        )
+    }
+
+    if (showNotificationsSheet) {
+        CustomErrorBottomSheet(
+            title = stringResource(R.string.settings_notification_sheet_title),
+            text = stringResource(R.string.settings_notification_sheet_text),
+            confBtnText = stringResource(R.string.settings_notification_sheet_conf),
+            cancelBtnText = stringResource(R.string.settings_notification_sheet_cancel),
+            onDismissRequest = { showNotificationsSheet = false },
+            onConfirm = {
+                showAlarmsSheet = false
+                requestNotificationPermission(mainActivity)
+            },
             scope = scope,
             sheetState = bottomSheetState
         )
@@ -569,7 +769,8 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         DeferredUpdateTab(
             transitionState = autoUpdateScreenState,
             onDismissRequest = {},
-            items = autoUpdateItems
+            items = autoUpdateItems,
+            indexes = autoUpdateIndexes.value
         )
     }
 }

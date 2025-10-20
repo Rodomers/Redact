@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import android.app.Activity
 import android.content.Context
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.lifecycle.ViewModel
@@ -7,7 +8,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -29,8 +29,12 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     val userApi: StateFlow<String> = repository.userApiKey.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
     val endureTime: StateFlow<Boolean> = repository.enlargedTimestamps.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
-    val titlesAutoUpdate: StateFlow<Boolean> = repository.titlesAutoUpdate.stateIn(viewModelScope,
+    val titlesAlarmUpdate: StateFlow<Boolean> = repository.titlesAlarmUpdate.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
+    val titlesAlarmMins: StateFlow<Int> = repository.titlesAlarmTimeMins.stateIn(viewModelScope,
+        SharingStarted.WhileSubscribed(5000), 540)
+    val titlesUpdateFrequency: StateFlow<Int> = repository.titlesAutoUpdateFrequency.stateIn(viewModelScope,
+        SharingStarted.WhileSubscribed(5000), 24)
     val exactAlarmsAllowed: StateFlow<Boolean> = repository.exactAlarmsAllowed.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
     val defaultApiKey = repository.DEFAULT_GEMINI_API_KEY
@@ -50,11 +54,35 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     fun setCurrentLlm(value: String) = viewModelScope.launch { repository.setCurrentLlmModel(value) }
     fun setUserGeminiApi(value: String) = viewModelScope.launch { repository.setUserApiKey(value) }
     fun setEndureTime(value: Boolean) = viewModelScope.launch { repository.setEnlargeTimestamps(value) }
-    fun setTitlesAutoUpdate(context: Context, value: Boolean) = viewModelScope.launch {
-        repository.setTitlesAutoUpdate(value)
-        if (!value) repository.cancelTitlesAutoUpdates(context)
+    fun setTitlesAlarmUpdate(
+        context: Context,
+        activity: Activity,
+        onShowNotificationsSheet: () -> Unit,
+        onShowAlarmsSheet: () -> Unit,
+        value: Boolean
+    ) = viewModelScope.launch {
+        when {
+            !isNotificationPermissionGranted(context) -> { handleNotificationsPermissionRequest(
+                activity,
+                onShouldShowDialog = onShowNotificationsSheet
+            ) }
+            !isScheduleExactAlarm(context) -> onShowAlarmsSheet
+            else -> {
+                repository.setTitlesAlarmUpdate(value)
+                repository.planTitlesUpdate(context)
+            }
+        }
+    }
+    fun setTitlesAlarmMins (context: Context, value: Int) = viewModelScope.launch {
+        repository.setTitlesAlarmMins(value)
+        repository.planTitlesUpdate(context)
+    }
+    fun setTitlesUpdFrequency (context: Context, value: Int) = viewModelScope.launch {
+        repository.setTitlesAutoUpdateFrequency(value)
+        repository.planTitlesUpdate(context)
     }
     fun setAlarmsAllowed(value: Boolean) = viewModelScope.launch { repository.setExactAlarmsAllowed(value) }
+    fun planTitlesAutoUpdate(context: Context) = viewModelScope.launch { repository.planTitlesUpdate(context) }
 }
 
 class SettingsViewModelFactory : ViewModelProvider.Factory {

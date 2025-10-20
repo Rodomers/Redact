@@ -464,7 +464,7 @@ class NewsSummarizer(
                     val titlesCounter = titles.size
                     var emptyAnswer = false
 
-                    val semaphore = Semaphore(3)
+                    val semaphore = Semaphore(2)
 
                     val summarizedResults = coroutineScope {
                         titles.map { title ->

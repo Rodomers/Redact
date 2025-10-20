@@ -63,6 +63,10 @@ class MainActivity : ComponentActivity() {
         if (alarmsAllowed != MewsRepository.exactAlarmsAllowed.value) {
             MewsRepository.setExactAlarmsAllowed(alarmsAllowed)
         }
+        val notificationsAllowed = isNotificationPermissionGranted(this)
+        if (notificationsAllowed != MewsRepository.notificationsGranted.value) {
+            MewsRepository.setNotificationsGranted(notificationsAllowed)
+        }
     }
 }
 
@@ -158,7 +162,7 @@ fun MainScreen(mainActivity: MainActivity) {
                 TabScreen.Titles -> {
                     val groupedTitles by titlesViewModel.groupedTitles.collectAsStateWithLifecycle()
                     val isRefreshing by titlesViewModel.isRefreshing.collectAsStateWithLifecycle()
-                    val err by titlesViewModel.errState.collectAsStateWithLifecycle()
+                    val err by titlesViewModel.errState.collectAsState()
                     val showEmptyMess by titlesViewModel.showEmptyMess.collectAsStateWithLifecycle()
                     val titlesCardStates by titlesViewModel.titleCardStates.collectAsStateWithLifecycle()
 

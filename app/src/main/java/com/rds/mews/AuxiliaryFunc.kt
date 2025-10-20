@@ -2,19 +2,20 @@ package com.rds.mews
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.AlarmManager
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.collection.IntList
 import androidx.collection.intListOf
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat.getSystemService
-import androidx.core.content.ContextCompat.startActivity
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -73,6 +74,10 @@ fun formatUpdateTime(unixMillis: Long): Pair<Int, String> {
     return Pair(dateInt, timeString)
 }
 
+fun intTimeToStr(time: Int): String {
+    return if (time / 10 == 0) "0${time.toString()}" else time.toString()
+}
+
 fun defineSourceType(link: String): SourceType {
     return when {
         link.contains("t.me") -> SourceType.TELEGRAM_CHANNEL
@@ -114,57 +119,6 @@ fun linkTransform(link: String): String {
     println(res)
     return res
 }
-
-//suspend fun updateTitles(
-//    context: Context, db: DbHelper, repository: MewsRepository, settingsManager: SettingsManager, returnExisting: Boolean = false, readyFunc: () -> Unit = {},
-//): List<Title> {
-//    if (!returnExisting) {
-//        repository.cancelTitlesAutoUpdates(context)
-//
-//        val constraints = androidx.work.Constraints.Builder()
-//            .setRequiredNetworkType(NetworkType.CONNECTED)
-//            .build()
-//
-//        val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
-//            .setConstraints(constraints)
-//            .build()
-//
-//        repository.setUpdatingTitles(true)
-//        WorkManager.getInstance(context).enqueueUniqueWork(
-//            "titles_update_work",
-//            ExistingWorkPolicy.KEEP,
-//            updateWorkRequest
-//        )
-//
-//        settingsManager.awaitTitlesUpdate()
-//        readyFunc()
-//    }
-//    else {
-//        if (settingsManager.getBoolean(repository.UPDATING_TITLES, false)) {
-//            val constraints = androidx.work.Constraints.Builder()
-//                .setRequiredNetworkType(NetworkType.CONNECTED)
-//                .build()
-//
-//            val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
-//                .setConstraints(constraints)
-//                .build()
-//
-//            repository.setUpdatingTitles(true)
-//            WorkManager.getInstance(context).enqueueUniqueWork(
-//                "titles_update_work",
-//                ExistingWorkPolicy.REPLACE,
-//                updateWorkRequest
-//            )
-//
-//            settingsManager.awaitTitlesUpdate()
-//        }
-//        readyFunc()
-//    }
-//
-//    val list = db.getTitles()
-//
-//    return list
-//}
 
 fun strTransform(original: String, separator: String): String {
     val arr = original.split(", ")
@@ -296,4 +250,47 @@ fun requestIgnoreBatteryOptimization(context: Context) {
 
 fun isNotificationPermissionGranted(context: Context): Boolean {
     return NotificationManagerCompat.from(context).areNotificationsEnabled()
+}
+
+fun handleNotificationsPermissionRequest(activity: Activity, onShouldShowDialog: () -> Unit): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        return true
+    }
+
+    val permission = Manifest.permission.POST_NOTIFICATIONS
+
+    return when {
+        ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED -> {
+            true
+        }
+
+        ActivityCompat.shouldShowRequestPermissionRationale(activity, permission) -> {
+            onShouldShowDialog()
+            false
+        }
+
+        else -> {
+            requestNotificationPermission(activity)
+            false
+        }
+    }
+}
+
+fun requestNotificationPermission(activity: Activity) {
+    val notificationRequestCode = 101
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            activity,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasPermission) {
+            ActivityCompat.requestPermissions(
+                activity,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                notificationRequestCode
+            )
+        }
+    }
 }

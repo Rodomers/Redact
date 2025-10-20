@@ -1,28 +1,20 @@
 package com.rds.mews
 
 import android.content.Context
-import androidx.lifecycle.viewModelScope
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.OutOfQuotaPolicy
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Calendar
+import java.util.Date
 
 object MewsRepository {
     private lateinit var db: DbHelper
@@ -71,6 +63,32 @@ object MewsRepository {
         }
     }
 
+    suspend fun planTitlesUpdate(context: Context) {
+        if (titlesAlarmUpdate.value) {
+            val updateFrequencyHours = titlesAutoUpdateFrequency.value
+            val updateTimeMins = titlesAlarmTimeMins.value
+
+            val nextRunTime = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, updateTimeMins / 60)
+                set(Calendar.MINUTE, updateTimeMins % 60)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+
+            while (nextRunTime.before(Calendar.getInstance())) {
+                nextRunTime.add(Calendar.HOUR_OF_DAY, updateFrequencyHours)
+            }
+
+            val nextRunTimeMillis = nextRunTime.timeInMillis
+            AlarmScheduler.schedule(context, nextRunTimeMillis)
+
+            println("MewsRepository: Следующее обновление запланировано на ${Date(nextRunTimeMillis)}")
+
+        } else {
+            AlarmScheduler.cancel(context)
+            println("MewsRepository: Автообновление отключено, запланированные задачи отменены.")
+        }
+    }
 
     private val _titlesUpdateTrigger = MutableStateFlow(0)
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -104,8 +122,10 @@ object MewsRepository {
     const val FILTER_TOPICS = "filter_topics"
     const val ENLARGE_TIMESTAMPS = "endure_time"
     const val TITLES_AUTO_UPDATE = "auto_update_titles"
-    const val TITLES_AUTO_UPDATE_TIME = "auto_update_titles_time"
+    const val TITLES_AUTO_UPDATE_FREQUENCY = "auto_update_titles_frequency"
     const val ALARMS_ALLOWED = "exact_alarms_allowed"
+    const val TITLES_ALARM_MINS = "titles_alarm_time"
+    const val NOTIFICATIONS_GRANTED = "notifications_granted"
 
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
     var selectedTab: StateFlow<TabScreen> = _selectedTab.asStateFlow()
@@ -221,14 +241,28 @@ object MewsRepository {
         _enlargedTime.value = newValue
     }
 
-    private val _titlesAutoUpdate = MutableStateFlow(false)
-    val titlesAutoUpdate: StateFlow<Boolean> = _titlesAutoUpdate.asStateFlow()
-    fun setTitlesAutoUpdate(newValue: Boolean) {
+    private val _titlesAlarmUpdate = MutableStateFlow(false)
+    val titlesAlarmUpdate: StateFlow<Boolean> = _titlesAlarmUpdate.asStateFlow()
+    fun setTitlesAlarmUpdate(newValue: Boolean) {
         settingsManager.saveBoolean(TITLES_AUTO_UPDATE, newValue)
-        _titlesAutoUpdate.value = newValue
+        _titlesAlarmUpdate.value = newValue
     }
     fun cancelTitlesAutoUpdates(context: Context) {
         AlarmScheduler.cancel(context)
+    }
+
+    private val _titlesAlarmTimeMins = MutableStateFlow(540)
+    val titlesAlarmTimeMins: StateFlow<Int> = _titlesAlarmTimeMins.asStateFlow()
+    fun setTitlesAlarmMins(newValue: Int) {
+        settingsManager.saveInt(TITLES_ALARM_MINS, newValue)
+        _titlesAlarmTimeMins.value = newValue
+    }
+
+    private val _titlesAutoUpdateFrequency = MutableStateFlow(0)
+    val titlesAutoUpdateFrequency: StateFlow<Int> = _titlesAutoUpdateFrequency.asStateFlow()
+    fun setTitlesAutoUpdateFrequency(newValue: Int) {
+        settingsManager.saveInt(TITLES_AUTO_UPDATE_FREQUENCY, newValue)
+        _titlesAutoUpdateFrequency.value = newValue
     }
 
     private val _exactAlarmsAllowed = MutableStateFlow(false)
@@ -236,6 +270,13 @@ object MewsRepository {
     fun setExactAlarmsAllowed(newValue: Boolean) {
         settingsManager.saveBoolean(ALARMS_ALLOWED, newValue)
         _exactAlarmsAllowed.value = newValue
+    }
+
+    private val _notificationsGranted = MutableStateFlow(false)
+    val notificationsGranted: StateFlow<Boolean> = _notificationsGranted.asStateFlow()
+    fun setNotificationsGranted(newValue: Boolean) {
+        settingsManager.saveBoolean(NOTIFICATIONS_GRANTED, newValue)
+        _notificationsGranted.value = newValue
     }
 
     private val _lastError = MutableStateFlow<SummarizationResult.Failure?>(null)
@@ -280,8 +321,11 @@ object MewsRepository {
         _compactTabBar.value = settingsManager.getBoolean(COMPACT_TAB_BAR, false)
         _showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
         _enlargedTime.value = settingsManager.getBoolean(ENLARGE_TIMESTAMPS, false)
-        _titlesAutoUpdate.value = settingsManager.getBoolean(TITLES_AUTO_UPDATE, false)
+        _titlesAlarmUpdate.value = settingsManager.getBoolean(TITLES_AUTO_UPDATE, false)
+        _titlesAlarmTimeMins.value = settingsManager.getInt(TITLES_ALARM_MINS, 540)
+        _titlesAutoUpdateFrequency.value = settingsManager.getInt(TITLES_AUTO_UPDATE_FREQUENCY, 24)
         _exactAlarmsAllowed.value = settingsManager.getBoolean(ALARMS_ALLOWED, false)
+        _notificationsGranted.value = settingsManager.getBoolean(NOTIFICATIONS_GRANTED, false)
 
         _titlesNum.value = settingsManager.getInt(TITLES_NUM, 10)
         _titlesPeriod.value = settingsManager.getInt(TITLES_PERIOD, 24)

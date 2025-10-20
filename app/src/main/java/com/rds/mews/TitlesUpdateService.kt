@@ -10,6 +10,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
+import java.util.Calendar
+import java.util.Date
 import java.util.concurrent.CancellationException
 
 class TitlesUpdateService : Service() {
@@ -110,10 +112,31 @@ class TitlesUpdateService : Service() {
             // --- ПЛАНИРОВАНИЕ СЛЕДУЮЩЕГО ЗАПУСКА ---
             val autoUpdateEnabled = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
             if (autoUpdateEnabled) {
-                val titlesUpdatePeriodHours = settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_TIME, 24)
-                val nextRunTimeMillis = System.currentTimeMillis() + titlesUpdatePeriodHours * 3600 * 1000L
+                val titlesUpdatePeriodHours = settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
+                val titlesUpdateTimeMins = settingsManager.getInt(MewsRepository.TITLES_ALARM_MINS, 540)
+
+                val nextRunTime = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, titlesUpdateTimeMins / 60)
+                    set(Calendar.MINUTE, titlesUpdateTimeMins % 60)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+
+                while (nextRunTime.before(Calendar.getInstance())) {
+                    nextRunTime.add(Calendar.HOUR_OF_DAY, titlesUpdatePeriodHours)
+                }
+
+                val nextRunTimeMillis = nextRunTime.timeInMillis
                 AlarmScheduler.schedule(applicationContext, nextRunTimeMillis)
-                println("TitlesUpdateService: Следующее обновление запланировано на ${java.util.Date(nextRunTimeMillis)}")
+
+                println("TitlesUpdateService: Следующее обновление запланировано на ${
+                    Date(
+                        nextRunTimeMillis
+                    )
+                }")
+            } else {
+                AlarmScheduler.cancel(applicationContext)
+                println("TitlesUpdateService: Автообновление отключено, запланированные задачи отменены.")
             }
 
         } catch (e: CancellationException) {
@@ -134,25 +157,25 @@ class TitlesUpdateService : Service() {
     private fun createNotification(): Notification {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Обновление заголовков",
+            getString(R.string.titles_service_title),
             NotificationManager.IMPORTANCE_LOW
         )
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Mews")
-            .setContentText("Идёт обработка новостей...")
-            .setSmallIcon(R.drawable.ic_launcher_monochrome) // Замените на свою иконку
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.titles_service_text))
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .build()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        job.cancel() // Отменяем все корутины при уничтожении сервиса
+        job.cancel()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        return null // Не используем привязку
+        return null
     }
 }

@@ -1,8 +1,8 @@
 <resources>
     <string name="app_version" translatable="false">1.0-alpha.8</string>
     <string name="current_language">English</string>
-
     <string name="app_name" translatable="false">Mews</string>
+
     <string name="title_activity_main" translatable="false">MainActivity</string>
     <string name="tabscreen_sources">Sources</string>
     <string name="tabscreen_titles">Titles</string>
@@ -40,6 +40,9 @@
     <string name="settings_endure_time">Enlarged timestamps</string>
     <string name="settings_filter_topics">Additional topics filter</string>
     <string name="settings_titles_auto_update">Titles auto update</string>
+    <string name="settings_titles_alarm_update">Update at a fixed time</string>
+    <string name="settings_titles_update_time">Update time</string>
+    <string name="settings_titles_update_frequency">Update interval</string>
     <string name="settings_maximum_headers">Maximum headers</string>
     <string name="settings_news_period">News period</string>
     <string name="settings_news_update_frequency">Background news update frequency</string>
@@ -51,8 +54,13 @@
     <string name="settings_footnote_text">Feedback (Telegram): @mewsapp\nVersion %s</string>
     <string name="settings_alarms_sheet_title">Exact Alarm Permission</string>
     <string name="settings_alarms_sheet_text">To ensure timely background updates, the app requires permission to set exact alarms. Would you like to grant it?</string>
-    <string name="settings_alarms_sheet_cancel">Maybe Later</string>
+    <string name="settings_alarms_sheet_cancel">Maybe later</string>
     <string name="settings_alarms_sheet_conf">Grant</string>
+    <string name="settings_notification_sheet_title">Notification Permission</string>
+    <string name="settings_notification_sheet_text">For this feature to work correctly, the application needs permission to send notifications. You can grant it now within the app or later in the settings.
+    \nGrant permission?</string>
+    <string name="settings_notification_sheet_cancel">Maybe later</string>
+    <string name="settings_notification_sheet_conf">Grant</string>
 
 
     <plurals name="titles">
@@ -141,4 +149,6 @@
 
     <string name="rss_worker_title">Updating news</string>
     <string name="rss_worker_text">Getting data from news sources…</string>
+    <string name="titles_service_title">Updating Titles</string>
+    <string name="titles_service_text">Processing news in the background…</string>
 </resources>
