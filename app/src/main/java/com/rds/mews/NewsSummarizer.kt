@@ -78,7 +78,8 @@ class LLMClient(
                 )
             ),
             generationConfig = GenerationConfig(
-                temperature = 0.5
+                temperature = 0.5,
+                maxOutputTokens = 8192
             )
         )
 
@@ -115,7 +116,8 @@ class LLMClient(
 
     @Serializable
     data class GenerationConfig(
-        val temperature: Double
+        val temperature: Double,
+        val maxOutputTokens: Int? = null
     )
 
     @Serializable
@@ -164,60 +166,52 @@ class NewsSummarizer(
      */
     private suspend fun extractTopics(max: Int = 20, messageSeconds: Long = 14515200): Boolean {
         try {
-        val messages = db.getMessages(messageSeconds)
-        if (messages.isEmpty()) {
-            println("Нет новостей для анализа") // ошибка, если нет новостей для суммаризации
-            return false
-        }
-        val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
-        val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
-        val prompt = """
-            Проанализируй новости и выдели ТОЛЬКО ИЗ НИХ от 1 до $max основных событий.
-            СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($max). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого.
-            ОБЯЗАТЕЛЬНО: темы отсортируй по важности от наиболее важных к наименее важным.
-                Используй весь предоставленный тебе материал. Темы по возможности объединяй: например, новость об ударе по нпз, новость о закрытии аэропортов 
-                и сбитиях бпла можно объединить в тему "атаки бпла". При этом ты не можешь делать темы слишком общими - такими как "политика", "спорт" и прочее.
-            
-            ТЕБЕ ЗАПРЕЩЕНО ПИСАТЬ НА СЛЕДУЮЩИЕ ТЕМЫ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
-            $bannedNews
-            
-            Ответ верни в виде JSON формата:
-            [
-              {
-                "title": "<Первая новость>",
-                "id": [<id1>, <id2>, <id3>, ...]
-              },
-              {
-                "title": "<Вторая новость>",
-                "id": [<id1>, <id2>, <id3>, ...]
-              },
-              {
-                "title": "<Третья новость>",
-                "id": [<id1>, <id2>, <id3>, ...]
-              },
-              ....
-            ]
-            где title - название темы,
-            id - список id, относящихся к теме.
-                        
-            
-            Требования:
-                1. Не добавляй никакие ``` или ""${'"'}.
-                2. Не добавляй пояснения или текст вне JSON.
-                3. Ответ должен начинаться с [ и заканчиваться ].
-                4. Заголовки пиши СТРОГО на этом языке: ${MewsRepository.getStringResource(R.string.current_language) ?: "english"}.
-                5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ Хотя бы одним значением.
-                6. НЕ ДУБЛИРУЙ НОВОСТИ. Одна новость относится к ТОЛЬКО ОДНОЙ ТЕМЕ.
-                7. Уделяй равное внимание всем источникам информации.
-                8. СТРОГО ЗАПРЕЩЕНО ПРЕВЫШАТЬ МАКСИМАЛЬНОЕ КОЛИЧЕСТВО СОБЫТИЙ ($max). В случае превышения отказывайся от наименее важной информации и сокращай количество до необходимого.
-                9. Заголовок не должен быть слишком общим ("Политика", "Общественная жизнь" и т.д. не подходят, т.к. не отражают суть событий).
-                10. Заголовки не должны быть однообразными.
-                11. Учитывай, что текущее время (Unix mills) в данный момент - ${System.currentTimeMillis()}
-                12. ЗАПРЕЩЕНО дублировать заголовки
-            
-            Новости:
-            $combinedNews
-        """.trimIndent()
+            // Рекомендуется сортировать сообщения по времени, от старых к новым.
+            // Это поможет модели уделить больше внимания последним событиям.
+            val messages = db.getMessages(messageSeconds).sortedBy { it.time }
+            if (messages.isEmpty()) {
+                println("Нет новостей для анализа")
+                return false
+            }
+            val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
+            val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
+
+            val prompt = """
+                Твоя задача — проанализировать список новостей и сгруппировать их по ключевым событиям.
+
+                **Инструкции:**
+                1.  **Выдели от 1 до $max главных событий.** Это строгий лимит, который нельзя превышать.
+                2.  **Сортируй события по важности:** от самых значимых к менее значимым. Наиболее свежие и резонансные события должны быть выше в списке.
+                3.  **Объединяй связанные новости.** Например, сообщения об атаках дронов, закрытии аэропортов и сбитиях БПЛА следует объединять в одну тему: "Атаки БПЛА на российские регионы".
+                4.  **Избегай слишком общих тем.** Заголовки вроде "Политика", "Спорт" или "Происшествия" запрещены. Заголовок должен отражать суть события.
+                5.  **Не дублируй новости.** Каждая новость (каждый id) может относиться только к ОДНОЙ теме.
+                6.  **Игнорируй запрещённые темы:** $bannedNews.
+                7.  **Учитывай временной контекст:** Новости, произошедшие позже, как правило, важнее. Текущее время (Unix millis) - ${System.currentTimeMillis()}.
+
+                **Формат ответа:**
+                -   Верни ответ СТРОГО в виде JSON-массива.
+                -   Никакого текста до или после JSON. Ответ должен начинаться с `[` и заканчиваться `]`.
+                -   Все поля в JSON должны быть заполнены.
+                -   Язык заголовков: ${MewsRepository.getStringResource(R.string.current_language) ?: "russian"}.
+
+                **Пример формата ответа:**
+                [
+                  {
+                    "title": "Новые санкции против технологического сектора РФ",
+                    "id": [101,
+                    105,
+                    112]
+                  },
+                  {
+                    "title": "Запуск новой линии метро в Москве",
+                    "id": [102,
+                    108]
+                  }
+                ]
+
+                **Новости для анализа:**
+                $combinedNews
+            """.trimIndent()
 
             val response: String
             try {
@@ -229,38 +223,37 @@ class NewsSummarizer(
                 return false
             }
 
-        val cleanResponse = response.trim().replace("```json", "")
-            .replace("```", "")
-            .replace("\"\"\"", "")
-            .trim()
+            val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
 
-        val jsonArray = JSONArray(cleanResponse)
+            val jsonArray = JSONArray(cleanResponse)
             val iterEnd = if (jsonArray.length() <= max) jsonArray.length() else max
 
-        for (i in 0 until iterEnd) {
-            val obj: JSONObject = jsonArray.getJSONObject(i)
+            for (i in 0 until iterEnd) {
+                val obj: JSONObject = jsonArray.getJSONObject(i)
 
-            val title = obj.getString("title")
-            val idsArray = obj.getJSONArray("id")
+                val title = obj.getString("title")
+                val idsArray = obj.getJSONArray("id")
 
-            val idsLong = mutableListOf<Long>()
-            val idsStr = mutableListOf<String>()
-            for (j in 0 until idsArray.length()) {
-                idsLong.add(idsArray.getInt(j).toLong())
-                idsStr.add(idsArray.getInt(j).toString())
+                val idsLong = mutableListOf<Long>()
+                val idsStr = mutableListOf<String>()
+                for (j in 0 until idsArray.length()) {
+                    // Исправлено: ID сообщений могут быть большими, используем getLong
+                    val messageId = idsArray.getLong(j)
+                    idsLong.add(messageId)
+                    idsStr.add(messageId.toString())
+                }
 
+                db.addTitle(
+                    titleTime = 0,
+                    title = title,
+                    text = "<промежуточный текст>",
+                    sources = "<промежуточный текст>",
+                    links = db.dbPack(*idsStr.toTypedArray())
+                )
             }
-
-            db.addTitle(
-                titleTime = 0,
-                title = title,
-                text = "<промежуточный текст>",
-                sources = "<промежуточный текст>",
-                links = db.dbPack(*idsStr.toTypedArray())
-            )
-        }
-        } catch (e:Exception){
+        } catch (e: Exception) {
             e.printStackTrace()
+            return false // Добавлено, чтобы функция возвращала false в случае ошибки
         }
 
         return true
@@ -277,13 +270,17 @@ class NewsSummarizer(
         val rawTitles = db.getTitles()
         val titles = mutableListOf<Topics>()
         rawTitles.forEach { title ->
-            if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
-                titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
+            if (title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>") {
+                titles.add(Topics(title.title, db.dbUnpack(title.links).map { id -> id.toLong() }))
                 db.delTitle(title.id)
             }
         }
-        println(titles)
-        var jsonArray: JSONArray
+
+        if (titles.isEmpty()) {
+            println("Нет тем для фильтрации")
+            return true // Не ошибка, просто нет работы
+        }
+
         val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
         val titlesJsonForPrompt = JSONArray(
             titles.map { topic ->
@@ -293,39 +290,26 @@ class NewsSummarizer(
                 }
             }
         ).toString()
+
         val prompt = """
-    Проанализируй JSON-массив новостных тем. Отбрось те, что затрагивают забаненные темы. Оставь ровно $maxTopics наиболее важных тем.
-    Отсортируй итоговый список по убыванию важности.
-    Используй весь предоставленный тебе материал. Темы по возможности объединяй: например, новость об ударе по нпз, новость о закрытии аэропортов
-    и сбитиях бпла можно объединить в тему "атаки бпла". При этом ты не можешь делать темы слишком общими - такими как "политика", "спорт" и прочее.
+            Твоя задача — отфильтровать и отсортировать новостные темы.
 
-    Забаненные темы:
-    $bannedNews
+            **Инструкции:**
+            1.  **Проанализируй JSON-массив тем.**
+            2.  **Удали темы, связанные с запрещёнными категориями:** $bannedNews.
+            3.  **Оставь ровно $maxTopics самых важных тем.** Если тем изначально меньше, оставь все.
+            4.  **Отсортируй итоговый список по убыванию важности.** Самые свежие и значимые темы должны быть первыми.
+            5.  **Объединяй схожие темы, если это возможно**, сохраняя при этом все уникальные ID сообщений.
 
-    Верни ответ в виде JSON-массива в ТОЧНО ТАКОМ ЖЕ ФОРМАТЕ, что и на входе. Сохраняй оригинальные ID для каждой темы.
+            **Формат ответа:**
+            -   Верни результат в виде JSON-массива в ТОМ ЖЕ ФОРМАТЕ, что и на входе.
+            -   Сохраняй оригинальные `ids` для каждой темы.
+            -   Ответ должен быть только валидным JSON, без лишних слов. Начинаться с `[` и заканчиваться `]`.
+            -   Язык заголовков: ${MewsRepository.getStringResource(R.string.current_language) ?: "russian"}.
 
-    Пример формата ответа:
-    [
-      {
-        "title": "Самая важная новость",
-        "ids": [101, 102, 105]
-      },
-      {
-        "title": "Вторая по важности новость",
-        "ids": [204, 208]
-      }
-    ]
-
-    Требования:
-    1. Ответ должен быть только валидным JSON массивом. Никакого лишнего текста или пояснений.
-    2. Ответ должен начинаться с `[` и заканчиваться `]`.
-    3. Не превышай лимит в $maxTopics тем.
-    4. Сохраняй оригинальные `ids` для каждой темы, которую включаешь в ответ.
-    5. Отвечай СТРОГО на этом языке: ${MewsRepository.getStringResource(R.string.current_language) ?: "english"}
-
-    Массив тем для фильтрации:
-    $titlesJsonForPrompt
-""".trimIndent()
+            **Массив тем для фильтрации:**
+            $titlesJsonForPrompt
+        """.trimIndent()
         val response: String
         try {
             response = withTimeout(60000L) {
@@ -336,10 +320,7 @@ class NewsSummarizer(
             return false
         }
 
-        val cleanResponse = response.trim().replace("```json", "")
-            .replace("```", "")
-            .replace("\"\"\"", "")
-            .trim()
+        val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
 
         try {
             val jsonArray = JSONArray(cleanResponse)
@@ -349,13 +330,12 @@ class NewsSummarizer(
                 val obj: JSONObject = jsonArray.getJSONObject(i)
 
                 val title = obj.getString("title")
-                val idsArray = obj.getJSONArray("ids") // Исправлено на "ids"
+                val idsArray = obj.getJSONArray("ids")
 
                 val idsStr = mutableListOf<String>()
                 for (j in 0 until idsArray.length()) {
-                    idsStr.add(idsArray.getLong(j).toString()) // Используем getLong для безопасности
+                    idsStr.add(idsArray.getLong(j).toString())
                 }
-                println("Отфильтрованная тема: $title")
 
                 db.addTitle(
                     titleTime = 0,
@@ -556,35 +536,32 @@ class NewsSummarizer(
     @SuppressLint("SuspiciousIndentation")
     private suspend fun sumTopic(llm: LLMClient, title: String, bannedNews: String, newsText: String): String {
         try{
-        val prompt = """
-                Составь резюме по теме: "$title".
-                Достаточно подробно расскажи о событии, но без общих слов или воды.
-                
-                ТЕБЕ ЗАПРЕЩЕНО КАСАТЬСЯ СЛЕДУЮЩИХ ТЕМ, ТЫ ИХ ИГНОРИРУЕШЬ И НЕ УЧИТЫВАЕШЬ:
-                $bannedNews
-                
-                Возвращай всё в СТРОГОМ JSON формате: 
-                
+            val prompt = """
+                Твоя задача — составить краткое, но информативное резюме по заданной новостной теме.
+
+                **Тема:** "$title"
+
+                **Инструкции:**
+                1.  **Напиши подробное резюме.** Изложи суть события, избегая "воды" и общих фраз.
+                2.  **Структурируй текст.** Если в рамках одной темы есть несколько подсобытий, раздели их переносом строки (`\n`).
+                3.  **Отражай разные точки зрения.** Если источники предоставляют противоречивую информацию, упомяни обе позиции.
+                4.  **Игнорируй запрещённые темы:** $bannedNews.
+                5.  **Учитывай временной контекст:** Текущее время (Unix millis) - ${System.currentTimeMillis()}.
+
+                **Формат ответа:**
+                -   Верни СТРОГО один JSON-объект.
+                -   Ответ должен начинаться с `{` и заканчиваться `}`. Никаких пояснений или другого текста вне JSON.
+                -   Все поля должны быть заполнены.
+                -   Не используй Markdown-форматирование (жирный шрифт, курсив и т.д.).
+                -   Язык ответа: ${MewsRepository.getStringResource(R.string.current_language) ?: "russian"}.
+
+                **Пример формата ответа:**
                 {
-                "title": "<заголовок темы>", 
-                "summary": "<резюме по теме>", 
-                }, 
+                  "title": "$title",
+                  "summary": "Резюме новостного события. Описание ключевых деталей, действующих лиц и последствий.\nВторое подсобытие в рамках этой же темы."
+                }
                 
-                где title - название темы,
-                summary - резюме по теме.
-                
-                Требования:
-                1. Не добавляй никакие ``` или ""${'"'}.
-                2. Не добавляй пояснения или текст вне JSON.
-                3. Ответ должен начинаться с { и заканчиваться }.
-                4. Отвечай СТРОГО на этом языке: ${MewsRepository.getStringResource(R.string.current_language) ?: "english"}.
-                5. Не оставляй поля пустыми НИ В КОЕМ СЛУЧАЕ! ВСЁ ПОЛЯ ДОЛЖНЫ БЫТЬ ЗАПОЛНЕНЫ
-                6. В случае, если разные источники дают противоположные точки зрения - выписывай обе.
-                7. Различные события внутри одной темы разделяй с помощью \n.
-                8. Не используй форматирование (к нему относится, например, выделение текста жирным шрифтом или курсивом).
-                9. Учитывай, что текущее время (Unix mills) в данный момент - ${System.currentTimeMillis()}
-                                
-                Новости:
+                **Новости для составления резюме:**
                 $newsText
             """.trimIndent()
 

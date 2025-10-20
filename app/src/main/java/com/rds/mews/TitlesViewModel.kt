@@ -42,7 +42,7 @@ class TitlesViewModel(
     val titles = _titles.asStateFlow()
 
     val isRefreshing: StateFlow<Boolean> = workInfo.map {
-        it?.state == WorkInfo.State.RUNNING || it?.state == WorkInfo.State.ENQUEUED
+        it?.state == WorkInfo.State.RUNNING
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
