@@ -4,7 +4,6 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import io.ktor.util.collections.StringMap
 
 class DbHelper(val context: Context) :
     SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {

@@ -149,6 +149,10 @@
 
     <string name="rss_worker_title">Updating news</string>
     <string name="rss_worker_text">Getting data from news sources…</string>
+    <string name="titles_service_name">News foreground service</string>
     <string name="titles_service_title">Updating Titles</string>
     <string name="titles_service_text">Processing news in the background…</string>
+    <string name="titles_updated_name">Successful titles update</string>
+    <string name="titles_updated_title">Titles successfully updated</string>
+    <string name="titles_updated_text">Tap the notification to read</string>
 </resources>

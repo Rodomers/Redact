@@ -14,7 +14,7 @@ object AlarmScheduler {
     private const val RSS_REQUEST_CODE = 102
     private const val TAG = "AlarmScheduler"
 
-    fun schedule(context: Context, timeMills: Long, rss: Boolean = false) {
+    fun schedule(context: Context, timeMills: Long, rss: Boolean = false, oneTimeTitlesUpdate: Boolean = false) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         val receiver = when (rss) {
@@ -32,6 +32,7 @@ object AlarmScheduler {
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+        if (requestCode == TITLES_REQUEST_CODE) intent.putExtra("oneTimeTitlesUpdate", oneTimeTitlesUpdate)
 
         if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMills, pendingIntent)
@@ -67,6 +68,7 @@ object AlarmScheduler {
 class TitlesAlarmReceiver: BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val serviceIntent = Intent(context, TitlesUpdateService::class.java)
+        serviceIntent.putExtra("oneTimeUpdate", intent.getBooleanExtra("oneTimeTitlesUpdate", false))
 
         context.startForegroundService(serviceIntent)
     }

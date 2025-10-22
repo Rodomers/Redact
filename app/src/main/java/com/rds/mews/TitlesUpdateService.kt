@@ -1,11 +1,15 @@
 package com.rds.mews
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import kotlinx.coroutines.currentCoroutineContext
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -25,35 +29,45 @@ class TitlesUpdateService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val oneTimeUpdate = intent?.getBooleanExtra("oneTimeUpdate", false) ?: false
         startForeground(NOTIFICATION_ID, createNotification())
 
         scope.launch {
             try {
-                doWork()
+                doWork(oneTimeUpdate)
             } catch (e: Exception) {
-                // Обработка непредвиденных ошибок на уровне сервиса
                 println("TitlesUpdateService: Глобальная ошибка в корутине: ${e.message}")
                 e.printStackTrace()
             } finally {
-                // Убеждаемся, что сервис всегда останавливается
                 stopSelf(startId)
             }
         }
 
-        // Если система убьет сервис, не перезапускать его автоматически
         return START_NOT_STICKY
     }
 
-    private suspend fun doWork() {
+    private suspend fun doWork(oneTimeUpdate: Boolean) {
         val applicationContext = this.applicationContext
         val settingsManager = SettingsManager(applicationContext)
         val db = DbHelper(applicationContext)
+
+        if (!isNetworkAvailable(applicationContext)) {
+            AlarmScheduler.schedule(applicationContext, System.currentTimeMillis() + 300000L)
+            println("TitlesUpdateService: задача перепланирована на ${System.currentTimeMillis() + 300000L} unix")
+            return
+        }
+
+        if (!oneTimeUpdate) AlarmScheduler.cancel(applicationContext)
 
         val currentLLM = settingsManager.getString(MewsRepository.CURRENT_LLM_MODEL, "gemini-2.0-flash")
         val llmApiKey = settingsManager.getString(MewsRepository.USER_API_KEY, MewsRepository.DEFAULT_GEMINI_API_KEY)
         val rssLastUpdate = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
         val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
-        val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
+        val titlesPeriod = if (!oneTimeUpdate) {
+            settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
+        } else {
+            settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
+        }
         val titlesNum = settingsManager.getInt(MewsRepository.TITLES_NUM, 10)
         val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
 
@@ -110,9 +124,8 @@ class TitlesUpdateService : Service() {
             settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
             settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
 
-            // --- ПЛАНИРОВАНИЕ СЛЕДУЮЩЕГО ЗАПУСКА ---
             val autoUpdateEnabled = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
-            if (autoUpdateEnabled) {
+            if (autoUpdateEnabled && !oneTimeUpdate) {
                 val titlesUpdatePeriodHours = settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
                 val titlesUpdateTimeMins = settingsManager.getInt(MewsRepository.TITLES_ALARM_MINS, 540)
 
@@ -140,6 +153,7 @@ class TitlesUpdateService : Service() {
                 println("TitlesUpdateService: Автообновление отключено, запланированные задачи отменены.")
             }
 
+            if (!oneTimeUpdate) sendSuccessNotification()
         } catch (e: CancellationException) {
             println("TitlesUpdateService: Корутина отменена.")
         } catch (e: Exception) {
@@ -158,17 +172,61 @@ class TitlesUpdateService : Service() {
     private fun createNotification(): Notification {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            getString(R.string.titles_service_title),
+            getString(R.string.titles_service_name),
             NotificationManager.IMPORTANCE_LOW
         )
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.app_name))
+            .setContentTitle(getString(R.string.titles_service_title))
             .setContentText(getString(R.string.titles_service_text))
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .build()
+    }
+
+    private fun sendSuccessNotification() {
+        val channelId = "update_service_channel"
+        val notificationId = 1
+
+        val channel = NotificationChannel(
+            channelId,
+            getString(R.string.titles_updated_name),
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(channel)
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setContentTitle(getString(R.string.titles_updated_title))
+            .setContentText(getString(R.string.titles_updated_text))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        if (isNotificationPermissionGranted(applicationContext)) {
+            manager.notify(notificationId, notification)
+        }
+    }
+
+    @SuppressLint("ServiceCast")
+    private fun isNetworkAvailable(context: Context): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val activeNetwork = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return when {
+            activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
+            activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
+            activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
+            else -> false
+        }
     }
 
     override fun onDestroy() {

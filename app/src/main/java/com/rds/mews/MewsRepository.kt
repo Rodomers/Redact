@@ -1,25 +1,18 @@
 package com.rds.mews
 
 import android.content.Context
-import android.content.SharedPreferences
-import androidx.compose.runtime.collectAsState
-import com.rds.mews.ui.theme.MewsTheme
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
@@ -307,6 +300,7 @@ object MewsRepository {
     fun setExactAlarmsAllowed(newValue: Boolean) {
         settingsManager.saveBoolean(ALARMS_ALLOWED, newValue)
         _exactAlarmsAllowed.value = newValue
+        if (!newValue) setTitlesAlarmUpdate(false)
     }
 
     private val _notificationsGranted = MutableStateFlow(false)
@@ -314,6 +308,7 @@ object MewsRepository {
     fun setNotificationsGranted(newValue: Boolean) {
         settingsManager.saveBoolean(NOTIFICATIONS_GRANTED, newValue)
         _notificationsGranted.value = newValue
+        if (!newValue) setTitlesAlarmUpdate(false)
     }
 
     fun saveLastError(failure: SummarizationResult.Failure) {

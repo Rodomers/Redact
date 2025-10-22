@@ -151,6 +151,10 @@
 
     <string name="rss_worker_title">Обновление новостей</string>
     <string name="rss_worker_text">Получаем данные от наших источников…</string>
+    <string name="titles_service_name">Служба фонового обновления новостей</string>
     <string name="titles_service_title">Обновление заголовков</string>
     <string name="titles_service_text">Идёт фоновая обработка новостей…</string>
+    <string name="titles_updated_name">Успешное обновление</string>
+    <string name="titles_updated_title">Заголовки обновлены</string>
+    <string name="titles_updated_text">Нажмите на уведомление, чтобы прочитать</string>
 </resources>

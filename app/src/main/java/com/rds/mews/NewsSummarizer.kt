@@ -239,7 +239,7 @@ class NewsSummarizer(
             var counter = 0
             val titlesCounter = titlesToSummarize.size
             var emptyAnswer = false
-            val semaphore = Semaphore(1) // Ограничиваем до 2 одновременных запросов к LLM
+            val semaphore = Semaphore(2) // Ограничиваем до 2 одновременных запросов к LLM
 
             val summarizedResults = coroutineScope {
                 titlesToSummarize.map { title ->

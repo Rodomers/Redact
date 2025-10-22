@@ -56,7 +56,6 @@ import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Share
@@ -113,11 +112,9 @@ class CenteredPopupPositionProvider(
         layoutDirection: LayoutDirection,
         popupContentSize: IntSize
     ): IntOffset {
-        // Вычисляем центральную точку кнопки
         val anchorCenterX = inputBounds.left + inputBounds.width / 2
         val anchorCenterY = inputBounds.top + inputBounds.height / 2
 
-        // Вычисляем смещение для центрирования Popup
         val popupX = anchorCenterX - popupContentSize.width / 2
         val popupY = anchorCenterY - popupContentSize.height / 2
 
@@ -884,11 +881,12 @@ fun DeferredUpdateTab(
                         ) {
                             if (header != null) {
                                 stickyHeader() {
-                                    Box(
+                                    Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .background(MaterialTheme.colorScheme.surface)
                                     ) {
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         CustomTextDivider(text = header)
                                     }
                                 }

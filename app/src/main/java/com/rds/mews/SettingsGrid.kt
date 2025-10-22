@@ -302,8 +302,8 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             ) {
                                 CustomDropdown(
                                     transitionState = alarmHoursListVisible,
-                                    buttons = alarmHrsItems.map {(text, action) ->
-                                        text to { action() }
+                                    buttons = alarmHrsItems.mapNotNull {(text, action) ->
+                                        if (!(alarmFrequency == 12 && text.toInt() > 12)) text to { action() } else null
                                     },
                                     timeList = true
                                 )

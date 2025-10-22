@@ -13,7 +13,6 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.collection.IntList
 import androidx.collection.intListOf
-import androidx.compose.ui.res.stringResource
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -150,20 +149,28 @@ fun setRssUpdate(context: Context, sources: Boolean = false, intervalMin: Int = 
 }
 
 fun setTitlesUpdate(context: Context) {
-    val constraints = androidx.work.Constraints.Builder()
-        .setRequiredNetworkType(NetworkType.CONNECTED)
-        .build()
+    if (isNotificationPermissionGranted(context)) {
+        val serviceIntent = Intent(context, TitlesUpdateService::class.java)
+        serviceIntent.putExtra("oneTimeUpdate", true)
 
-    val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
-        .setConstraints(constraints)
-        .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-        .build()
+        context.startForegroundService(serviceIntent)
+    }
+    else {
+        val constraints = androidx.work.Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
 
-    WorkManager.getInstance(context).enqueueUniqueWork(
-        "titles_update_work",
-        ExistingWorkPolicy.REPLACE,
-        updateWorkRequest
-    )
+        val updateWorkRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>()
+            .setConstraints(constraints)
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "titles_update_work",
+            ExistingWorkPolicy.REPLACE,
+            updateWorkRequest
+        )
+    }
 }
 
 fun Context.observeStringSharedPreference(key: String, defaultValue: String): Flow<String> {
