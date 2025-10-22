@@ -66,8 +66,9 @@ object AlarmScheduler {
 
 class TitlesAlarmReceiver: BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val workRequest = OneTimeWorkRequestBuilder<TitlesUpdateWorker>().build()
-        WorkManager.getInstance(context).enqueue(workRequest)
+        val serviceIntent = Intent(context, TitlesUpdateService::class.java)
+
+        context.startForegroundService(serviceIntent)
     }
 }
 

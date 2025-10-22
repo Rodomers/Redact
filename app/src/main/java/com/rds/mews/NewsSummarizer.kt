@@ -154,136 +154,265 @@ class LLMClient(
 
 // ====== Логика суммаризации ======
 class NewsSummarizer(
-    private val db: DbHelper, // Хелпер для БД
-    private val llm: LLMClient // клиенты для опенроутера
+    private val db: DbHelper,
+    private val llm: LLMClient
 ) {
 
     /**
-     * Этап 1: выделяем темы из новостей и сохраняем в titles
-     * Функцию можно впринципе не вызывать, она приватная и нужна только для следующей
-     * можно указать сколько тем извлечь
-     * можно указать на актуальность новостей в секундах, по стандарту - неделя
+     * Вспомогательный класс для хранения информации о теме.
      */
-    private suspend fun extractTopics(max: Int = 20, messageSeconds: Long = 14515200): Boolean {
+    data class Topics(
+        val title: String,
+        val ids: List<Long>?
+    )
+
+    /**
+     * Вспомогательный класс для хранения финального результата суммаризации.
+     */
+    private data class SummaryResult(
+        val originalTitle: String,
+        val summary: String,
+        val time: Long,
+        val sources: List<String>,
+        val links: List<String>
+    )
+
+    // Определяем размер пакета. Можете настроить это значение.
+    // 50-100 новостей - безопасный размер, чтобы не превысить лимит токенов LLM.
+    private val NEWS_BATCH_SIZE = 70
+
+    /**
+     * Основная публичная функция, которую нужно вызывать для запуска всего процесса.
+     * Она управляет извлечением, фильтрацией и последующей суммаризацией тем.
+     */
+    suspend fun summarizeTopics(
+        maxTopics: Int = 20,
+        messageSeconds: Long = 14515200, // 168 дней ~ 6 месяцев
+        readyFunc: () -> Unit,
+        settingsManager: SettingsManager,
+        filterTopics: Boolean = false
+    ): SummarizationResult {
         try {
-            // Рекомендуется сортировать сообщения по времени, от старых к новым.
-            // Это поможет модели уделить больше внимания последним событиям.
+            // Получаем все сообщения и сортируем от старых к новым
             val messages = db.getMessages(messageSeconds).sortedBy { it.time }
             if (messages.isEmpty()) {
-                println("Нет новостей для анализа")
-                return false
+                readyFunc()
+                return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE)
             }
-            val combinedNews = messages.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
-            val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
 
-            val prompt = """
-                Твоя задача — проанализировать список новостей и сгруппировать их по ключевым событиям.
+            // Проверяем, есть ли незавершенные темы с прошлого раза
+            val unfinishedTitles = db.getTitles().filter {
+                it.text == "<промежуточный текст>" && it.time.toInt() == 0
+            }
 
-                **Инструкции:**
-                1.  **Выдели от 1 до $max главных событий.** Это строгий лимит, который нельзя превышать.
-                2.  **Сортируй события по важности:** от самых значимых к менее значимым. Наиболее свежие и резонансные события должны быть выше в списке.
-                3.  **Объединяй связанные новости.** Например, сообщения об атаках дронов, закрытии аэропортов и сбитиях БПЛА следует объединять в одну тему: "Атаки БПЛА на российские регионы".
-                4.  **Избегай слишком общих тем.** Заголовки вроде "Политика", "Спорт" или "Происшествия" запрещены. Заголовок должен отражать суть события.
-                5.  **Не дублируй новости.** Каждая новость (каждый id) может относиться только к ОДНОЙ теме.
-                6.  **Игнорируй запрещённые темы:** $bannedNews.
-                7.  **Учитывай временной контекст:** Новости, произошедшие позже, как правило, важнее. Текущее время (Unix millis) - ${System.currentTimeMillis()}.
+            if (unfinishedTitles.isEmpty()) {
+                // Если незавершенных тем нет, запускаем полный цикл извлечения
+                settingsManager.saveString(MewsRepository.UPDATING_STATE, "extracting_topics")
+                val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
 
-                **Формат ответа:**
-                -   Верни ответ СТРОГО в виде JSON-массива.
-                -   Никакого текста до или после JSON. Ответ должен начинаться с `[` и заканчиваться `]`.
-                -   Все поля в JSON должны быть заполнены.
-                -   Язык заголовков: ${MewsRepository.getStringResource(R.string.current_language) ?: "russian"}.
+                // Запускаем новый, безопасный процесс пакетной обработки
+                val success = processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics)
 
-                **Пример формата ответа:**
-                [
-                  {
-                    "title": "Новые санкции против технологического сектора РФ",
-                    "id": [101,
-                    105,
-                    112]
-                  },
-                  {
-                    "title": "Запуск новой линии метро в Москве",
-                    "id": [102,
-                    108]
-                  }
-                ]
-
-                **Новости для анализа:**
-                $combinedNews
-            """.trimIndent()
-
-            val response: String
-            try {
-                response = withTimeout(60000L) {
-                    llm.sendPrompt(prompt) ?: ""
+                if (!success) {
+                    readyFunc()
+                    return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
                 }
-            } catch (e: Exception) {
-                println("Превышено время ожидания ответа от нейросети.")
-                return false
+                settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
+            } else {
+                println("Найдены незавершенные темы с прошлого запуска. Продолжаем суммаризацию.")
             }
 
-            val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
+            // Получаем список тем для суммаризации (либо только что созданные, либо незавершенные)
+            val titlesToSummarize = db.getTitles().filter {
+                it.text == "<промежуточный текст>"
+            }.map {
+                Topics(it.title, db.dbUnpack(it.links).mapNotNull { id -> id.toLongOrNull() })
+            }
 
-            val jsonArray = JSONArray(cleanResponse)
-            val iterEnd = if (jsonArray.length() <= max) jsonArray.length() else max
+            if (titlesToSummarize.isEmpty()) {
+                readyFunc()
+                return SummarizationResult.Success // Нет тем для суммаризации
+            }
 
-            for (i in 0 until iterEnd) {
-                val obj: JSONObject = jsonArray.getJSONObject(i)
+            // --- Начало блока непосредственной суммаризации тем ---
 
-                val title = obj.getString("title")
-                val idsArray = obj.getJSONArray("id")
+            var counter = 0
+            val titlesCounter = titlesToSummarize.size
+            var emptyAnswer = false
+            val semaphore = Semaphore(1) // Ограничиваем до 2 одновременных запросов к LLM
 
-                val idsLong = mutableListOf<Long>()
-                val idsStr = mutableListOf<String>()
-                for (j in 0 until idsArray.length()) {
-                    // Исправлено: ID сообщений могут быть большими, используем getLong
-                    val messageId = idsArray.getLong(j)
-                    idsLong.add(messageId)
-                    idsStr.add(messageId.toString())
+            val summarizedResults = coroutineScope {
+                titlesToSummarize.map { title ->
+                    async(Dispatchers.IO) {
+                        semaphore.withPermit {
+                            try {
+                                delay(200L) // Небольшая задержка между запросами
+                                counter++
+                                settingsManager.saveString(MewsRepository.UPDATING_STATE, "${counter}/${titlesCounter}")
+                                val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
+
+                                val suitableMessages = title.ids?.mapNotNull { id -> messages.find { it.id == id } } ?: emptyList()
+                                val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
+
+                                if (newsText.isBlank()) return@withPermit null
+
+                                val bannedNews = "Таких тем нет"
+
+                                val response = withTimeout(40000L) {
+                                    sumTopic(llm, title.title, bannedNews, newsText, currentLanguage)
+                                }
+
+                                if (response.isBlank()) {
+                                    println("Пустой ответ от LLM для темы: ${title.title}")
+                                    emptyAnswer = true
+                                    return@withPermit null
+                                }
+
+                                val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
+                                val obj = JSONObject(cleanResponse)
+                                val summary = obj.getString("summary")
+
+                                val ids = title.ids ?: return@withPermit null
+                                val time = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
+                                val links = suitableMessages.map { it.link }
+                                val sources = suitableMessages.map { it.source }
+
+                                SummaryResult(title.title, summary, time, sources.distinct(), links.distinct())
+
+                            } catch (e: Exception) {
+                                println("Ошибка при обработке темы '${title.title}': ${e.message}")
+                                e.printStackTrace()
+                                return@withPermit null
+                            }
+                        }
+                    }
+                }.mapNotNull { it.await() }
+            }
+
+            if (summarizedResults.isNotEmpty()) {
+                summarizedResults.forEach { result ->
+                    println("Обновление в БД: ${result.originalTitle}")
+                    db.updateTitle(
+                        name = result.originalTitle,
+                        newTime = result.time,
+                        newText = result.summary,
+                        newSources = db.dbPack(*result.sources.toTypedArray()),
+                        newLinks = db.dbPack(*result.links.toTypedArray())
+                    )
                 }
-
-                db.addTitle(
-                    titleTime = 0,
-                    title = title,
-                    text = "<промежуточный текст>",
-                    sources = "<промежуточный текст>",
-                    links = db.dbPack(*idsStr.toTypedArray())
-                )
             }
+
+            // Проверяем, все ли темы удалось обработать
+            if (summarizedResults.size != titlesToSummarize.size) {
+                return if (emptyAnswer) {
+                    SummarizationResult.Failure(SummarizationErrorType.EMPTY_ANSWER)
+                } else {
+                    SummarizationResult.Failure(SummarizationErrorType.SUMMARIZE_TOPICS_FAILED)
+                }
+            }
+
+            readyFunc()
+            return SummarizationResult.Success
         } catch (e: Exception) {
             e.printStackTrace()
-            return false // Добавлено, чтобы функция возвращала false в случае ошибки
+            readyFunc()
+            return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
         }
-
-        return true
     }
 
     /**
-     * Этап 2: для каждой темы создаем краткое резюме с указанием источников
-     * Эту функцию уже вызывать в коде, она загружает всё в бд
-     * можно указать максимальное количество тем
-     * можно указать время новостей в секундах, по стандарту - неделя
-     * можно указать время между запросами, по стандарту - 10 секунд
+     * Этап 1: Функция-оркестратор. Разбивает новости на пакеты, извлекает из них темы
+     * и отправляет на финальное объединение.
      */
-    private suspend fun filterTopics(maxTopics: Int = 20): Boolean {
-        val rawTitles = db.getTitles()
-        val titles = mutableListOf<Topics>()
-        rawTitles.forEach { title ->
-            if (title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>") {
-                titles.add(Topics(title.title, db.dbUnpack(title.links).map { id -> id.toLong() }))
-                db.delTitle(title.id)
+    private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, currentLanguage: String, filterTopics: Boolean = false): Boolean {
+        // 1. Разбиваем все сообщения на пакеты (чанки)
+        val messageBatches = messages.chunked(NEWS_BATCH_SIZE)
+        val allExtractedTopics = mutableListOf<Topics>()
+
+        try {
+            // 2. Асинхронно извлекаем темы из каждого пакета
+            coroutineScope {
+                messageBatches.map { batch ->
+                    async(Dispatchers.IO) {
+                        extractTopicsFromBatch(batch, maxTopics, currentLanguage)
+                    }
+                }.forEach { deferred ->
+                    deferred.await()?.let { topicsFromBatch ->
+                        allExtractedTopics.addAll(topicsFromBatch)
+                    }
+                }
             }
-        }
 
-        if (titles.isEmpty()) {
-            println("Нет тем для фильтрации")
-            return true // Не ошибка, просто нет работы
-        }
+            if (allExtractedTopics.isEmpty()) {
+                println("Не удалось извлечь ни одной темы из новостей.")
+                return false
+            }
 
-        val bannedNews = "Таких тем нет" //db.getBannedTopics() и обработка
+            // 3. Отправляем все извлеченные темы на финальное объединение и фильтрацию
+            return if (filterTopics) mergeAndFilterTopics(allExtractedTopics, maxTopics, currentLanguage) else true
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        }
+    }
+
+    /**
+     * Этап 1.1: Извлекает темы из ОДНОГО пакета новостей.
+     */
+    private suspend fun extractTopicsFromBatch(messagesBatch: List<Message>, max: Int, currentLanguage: String): List<Topics>? {
+        val combinedNews = messagesBatch.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
+        val bannedNews = "Таких тем нет"
+
+        val prompt = """
+            Твоя задача — проанализировать список новостей и сгруппировать их по ключевым событиям.
+
+            Инструкции:
+            1.  Выдели от 1 до $max главных событий из предоставленного списка.
+            2.  Сортируй события по важности.
+            3.  Объединяй связанные новости в одну тему.
+            4.  Каждая новость (id) может относиться только к ОДНОЙ теме.
+            5.  Игнорируй запрещённые темы: $bannedNews.
+            6.  Текущее время (Unix millis) - ${System.currentTimeMillis()}.
+
+            Формат ответа:
+            -   Верни ответ СТРОГО в виде JSON-массива. Никакого текста до или после.
+            -   Язык заголовков: ${currentLanguage}.
+
+            Пример: [{"title": "Новые санкции", "id": [101, 105]}, {"title": "Запуск метро", "id": [102, 108]}]
+
+            Новости для анализа:
+            $combinedNews
+        """.trimIndent()
+
+        try {
+            val response = withTimeout(60000L) { llm.sendPrompt(prompt) ?: "" }
+            if (response.isBlank()) return null
+
+            val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
+            val jsonArray = JSONArray(cleanResponse)
+            val topics = mutableListOf<Topics>()
+
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val title = obj.getString("title")
+                val idsArray = obj.getJSONArray("id")
+                val ids = (0 until idsArray.length()).map { idsArray.getLong(it) }
+                topics.add(Topics(title, ids))
+            }
+            return topics
+        } catch (e: Exception) {
+            println("Ошибка при извлечении тем из пакета: ${e.message}")
+            return null
+        }
+    }
+
+    /**
+     * Этап 2: Объединяет, фильтрует и ранжирует темы, полученные со всех пакетов.
+     */
+    private suspend fun mergeAndFilterTopics(topics: List<Topics>, maxTopics: Int, currentLanguage: String): Boolean {
         val titlesJsonForPrompt = JSONArray(
-            titles.map { topic ->
+            topics.map { topic ->
                 JSONObject().apply {
                     put("title", topic.title)
                     put("ids", JSONArray(topic.ids))
@@ -291,51 +420,43 @@ class NewsSummarizer(
             }
         ).toString()
 
-        val prompt = """
-            Твоя задача — отфильтровать и отсортировать новостные темы.
+        val bannedNews = "Таких тем нет"
 
-            **Инструкции:**
-            1.  **Проанализируй JSON-массив тем.**
+        val prompt = """
+            Твоя задача — проанализировать список новостных тем, объединить дубликаты, отфильтровать и отсортировать их.
+
+            Инструкции:
+            1.  **Объедини очень похожие темы.** Например, "Атаки дронов на РФ" и "Налеты БПЛА на регионы России" должны стать одной темой. При объединении сохрани все уникальные ID сообщений из обеих тем.
             2.  **Удали темы, связанные с запрещёнными категориями:** $bannedNews.
             3.  **Оставь ровно $maxTopics самых важных тем.** Если тем изначально меньше, оставь все.
-            4.  **Отсортируй итоговый список по убыванию важности.** Самые свежие и значимые темы должны быть первыми.
-            5.  **Объединяй схожие темы, если это возможно**, сохраняя при этом все уникальные ID сообщений.
+            4.  **Отсортируй итоговый список по убыванию важности.**
+            5.  Сохраняй оригинальные `ids` для каждой темы.
 
-            **Формат ответа:**
+            Формат ответа:
             -   Верни результат в виде JSON-массива в ТОМ ЖЕ ФОРМАТЕ, что и на входе.
-            -   Сохраняй оригинальные `ids` для каждой темы.
-            -   Ответ должен быть только валидным JSON, без лишних слов. Начинаться с `[` и заканчиваться `]`.
-            -   Язык заголовков: ${MewsRepository.getStringResource(R.string.current_language) ?: "russian"}.
+            -   Ответ должен быть только валидным JSON, без лишних слов.
+            -   Язык заголовков: ${currentLanguage}.
 
-            **Массив тем для фильтрации:**
+            Массив тем для обработки:
             $titlesJsonForPrompt
         """.trimIndent()
-        val response: String
-        try {
-            response = withTimeout(60000L) {
-                llm.sendPrompt(prompt) ?: ""
-            }
-        } catch (e: Exception) {
-            println("Превышено время ожидания ответа от нейросети.")
-            return false
-        }
-
-        val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
 
         try {
+            val response = withTimeout(60000L) { llm.sendPrompt(prompt) ?: "" }
+            if (response.isBlank()) return false
+
+            val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
             val jsonArray = JSONArray(cleanResponse)
-            val iterEnd = if (jsonArray.length() <= maxTopics) jsonArray.length() else maxTopics
+            val iterEnd = min(jsonArray.length(), maxTopics)
+
+            // Очищаем старые промежуточные заголовки перед добавлением новых
+            db.titlesTimeKill(0)
 
             for (i in 0 until iterEnd) {
-                val obj: JSONObject = jsonArray.getJSONObject(i)
-
+                val obj = jsonArray.getJSONObject(i)
                 val title = obj.getString("title")
                 val idsArray = obj.getJSONArray("ids")
-
-                val idsStr = mutableListOf<String>()
-                for (j in 0 until idsArray.length()) {
-                    idsStr.add(idsArray.getLong(j).toString())
-                }
+                val idsStr = (0 until idsArray.length()).map { idsArray.getLong(it).toString() }
 
                 db.addTitle(
                     titleTime = 0,
@@ -345,238 +466,57 @@ class NewsSummarizer(
                     links = db.dbPack(*idsStr.toTypedArray())
                 )
             }
+            return true
         } catch (e: JSONException) {
-            println("Ошибка парсинга JSON при фильтрации тем: ${e.message}")
-            println("Невалидный ответ от LLM: $cleanResponse")
+            println("Ошибка парсинга JSON при финальном объединении тем: ${e.message}")
+            println("Невалидный ответ от LLM")
+            return false
+        } catch (e: Exception) {
+            println("Общая ошибка при финальном объединении тем: ${e.message}")
             return false
         }
-
-        return true
     }
 
+    /**
+     * Этап 3: Создает детальное резюме для одной конкретной темы.
+     */
+    @SuppressLint("SuspiciousIndentation")
+    private suspend fun sumTopic(llm: LLMClient, title: String, bannedNews: String, newsText: String, currentLanguage: String = "russian"): String {
+        val prompt = """
+            Твоя задача — составить краткое, но информативное резюме по заданной новостной теме.
 
-    suspend fun summarizeTopics(
-        maxTopics: Int = 20,
-        messageSeconds: Long = 14515200,
-        readyFunc: () -> Unit,
-        filterTopics: Boolean = false
-    ): SummarizationResult {
-        val repository = MewsRepository
+            **Тема:** "$title"
+
+            **Инструкции:**
+            1.  **Напиши подробное резюме.** Изложи суть события, избегая "воды" и общих фраз.
+            2.  **Структурируй текст.** Если в рамках одной темы есть несколько подсобытий, раздели их переносом строки (`\n`).
+            3.  **Отражай разные точки зрения.** Если источники предоставляют противоречивую информацию, упомяни обе позиции.
+            4.  **Игнорируй запрещённые темы:** $bannedNews.
+            5.  **Учитывай временной контекст:** Текущее время (Unix millis) - ${System.currentTimeMillis()}.
+
+            **Формат ответа:**
+            -   Верни СТРОГО один JSON-объект.
+            -   Ответ должен начинаться с `{` и заканчиваться `}`. Никаких пояснений или другого текста вне JSON.
+            -   Не используй Markdown-форматирование (жирный шрифт, курсив и т.д.).
+            -   Язык ответа: ${currentLanguage}.
+
+            **Пример формата ответа:**
+            {
+              "title": "$title",
+              "summary": "Резюме новостного события. Описание ключевых деталей, действующих лиц и последствий.\nВторое подсобытие в рамках этой же темы."
+            }
+            
+            **Новости для составления резюме:**
+            $newsText
+        """.trimIndent()
 
         try {
-            val messages = db.getMessages(messageSeconds)
-            if (messages.isEmpty()) {
-                readyFunc()
-                return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE)
-            }
-
-            var rawTitles = db.getTitles()
-            var titles = mutableListOf<Topics>()
-            var flagForUnfinishedTopics = false
-            var errFlag: Boolean
-
-            repository.setUpdatingState("extracting_topics")
-
-            // ЭТО ПЛОХО, но я  не знаю как переделать
-            rawTitles.forEach { title ->
-                if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
-                    titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
-                    // это костыль для восстановления работы
-                    // его и такую же строчку ниже не раскомменчивать до глобальной переделки
-//                db.delTitle(title.id)
-                    flagForUnfinishedTopics = true
-                }
-            }
-            println(titles)
-
-            if (!flagForUnfinishedTopics) {
-                errFlag = extractTopics(maxTopics, messageSeconds)
-                if (!errFlag) {
-                    for (i in 1..2) {
-                        errFlag = extractTopics(maxTopics, messageSeconds)
-                        if (errFlag) break
-                    }
-
-                    if (!errFlag) {
-                        readyFunc()
-                        return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
-                    }
-                }
-
-                if (filterTopics) {
-                    repository.setUpdatingState("filtering_topics")
-                    errFlag = filterTopics(maxTopics)
-                    if (!errFlag) {
-                        for (i in 1..2) {
-                            errFlag = filterTopics(maxTopics)
-                            if (errFlag) break
-                        }
-
-                        if (!errFlag) {
-                            readyFunc()
-                            return SummarizationResult.Failure(SummarizationErrorType.FILTER_FAILED)
-                        }
-                    }
-                }
-                rawTitles = db.getTitles()
-                titles = mutableListOf<Topics>()
-                rawTitles.forEach { title ->
-                    if(title.text == "<промежуточный текст>" && title.time.toInt() == 0 && title.sources == "<промежуточный текст>"){
-                        titles.add(Topics(title.title,db.dbUnpack(title.links).map { id -> id.toLong() }))
-//                    db.delTitle(title.id)
-                    }
-                }
-                MewsRepository.setLastTitlesUpdate(System.currentTimeMillis())
-            }
-
-            when (titles.size) {
-                0 -> {
-                    readyFunc()
-                    return SummarizationResult.Success
-                }
-                in maxTopics + 1..Int.MAX_VALUE -> {
-                    db.titlesTimeKill(0)
-                    readyFunc()
-                    return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
-                }
-                else -> {
-                    var counter = 0
-                    val titlesCounter = titles.size
-                    var emptyAnswer = false
-
-                    val semaphore = Semaphore(2)
-
-                    val summarizedResults = coroutineScope {
-                        titles.map { title ->
-                            async(Dispatchers.IO) {
-                                semaphore.withPermit {
-                                    try {
-                                        delay(200L)
-                                        counter++
-                                        repository.setUpdatingState("${counter}/${titlesCounter}")
-
-                                        val suitableMessages: MutableList<Message> = mutableListOf()
-                                        title.ids?.forEach { id ->
-                                            messages.find { it.id == id }?.let { suitableMessages.add(it) }
-                                        }
-                                        val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
-                                        val bannedNews = "Таких тем нет"
-
-                                        val response = withTimeout(40000L) {
-                                            sumTopic(llm, title.title, bannedNews, newsText)
-                                        }
-
-                                        if (response.isBlank()) {
-                                            println("Пустой ответ от LLM для темы: ${title.title}")
-                                            emptyAnswer = true
-                                            return@withPermit null
-                                        }
-
-                                        val cleanResponse = response.trim().replace("```json", "")
-                                            .replace("```", "").replace("\"\"\"", "").trim()
-
-                                        val obj = JSONObject(cleanResponse)
-                                        val summary = obj.getString("summary")
-                                        val ids = title.ids ?: return@withPermit null
-
-                                        var time = System.currentTimeMillis()
-                                        ids.forEach { id -> time = min(db.getMessage(id)?.time ?: Long.MAX_VALUE, time) }
-
-                                        val links = mutableListOf<String>()
-                                        val sources = mutableListOf<String>()
-                                        ids.forEach { id ->
-                                            db.getMessage(id)?.let { mess ->
-                                                links.add(mess.link)
-                                                sources.add(mess.source)
-                                            }
-                                        }
-
-                                        SummaryResult(title.title, summary, time, sources, links)
-
-                                    } catch (e: Exception) {
-                                        println("Ошибка при обработке темы '${title.title}': ${e.message}")
-                                        return@withPermit null
-                                    }
-                                }
-                            }
-                        }.mapNotNull { it.await() }
-                    }
-
-                    if (summarizedResults.isNotEmpty()) {
-                        summarizedResults.forEach { result ->
-                            println("Обновление в БД: ${result.originalTitle}")
-                            db.updateTitle(
-                                name = result.originalTitle,
-                                newTime = result.time,
-                                newText = result.summary,
-                                newSources = db.dbPack(*result.sources.toTypedArray()),
-                                newLinks = db.dbPack(*result.links.toTypedArray())
-                            )
-                        }
-                    }
-
-                    if (summarizedResults.size != titles.size) {
-                        return when (emptyAnswer) {
-                            true -> SummarizationResult.Failure(SummarizationErrorType.EMPTY_ANSWER)
-                            else -> SummarizationResult.Failure(SummarizationErrorType.SUMMARIZE_TOPICS_FAILED)
-                        }
-                    }
-                }
-            }
-
-            readyFunc()
-            return SummarizationResult.Success
-        } catch(e: Exception) {
+            return llm.sendPrompt(prompt) ?: ""
+        } catch (e: Exception) {
             e.printStackTrace()
-            readyFunc()
-            return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
-        }
-    }
-
-    @SuppressLint("SuspiciousIndentation")
-    private suspend fun sumTopic(llm: LLMClient, title: String, bannedNews: String, newsText: String): String {
-        try{
-            val prompt = """
-                Твоя задача — составить краткое, но информативное резюме по заданной новостной теме.
-
-                **Тема:** "$title"
-
-                **Инструкции:**
-                1.  **Напиши подробное резюме.** Изложи суть события, избегая "воды" и общих фраз.
-                2.  **Структурируй текст.** Если в рамках одной темы есть несколько подсобытий, раздели их переносом строки (`\n`).
-                3.  **Отражай разные точки зрения.** Если источники предоставляют противоречивую информацию, упомяни обе позиции.
-                4.  **Игнорируй запрещённые темы:** $bannedNews.
-                5.  **Учитывай временной контекст:** Текущее время (Unix millis) - ${System.currentTimeMillis()}.
-
-                **Формат ответа:**
-                -   Верни СТРОГО один JSON-объект.
-                -   Ответ должен начинаться с `{` и заканчиваться `}`. Никаких пояснений или другого текста вне JSON.
-                -   Все поля должны быть заполнены.
-                -   Не используй Markdown-форматирование (жирный шрифт, курсив и т.д.).
-                -   Язык ответа: ${MewsRepository.getStringResource(R.string.current_language) ?: "russian"}.
-
-                **Пример формата ответа:**
-                {
-                  "title": "$title",
-                  "summary": "Резюме новостного события. Описание ключевых деталей, действующих лиц и последствий.\nВторое подсобытие в рамках этой же темы."
-                }
-                
-                **Новости для составления резюме:**
-                $newsText
-            """.trimIndent()
-
-        val response = llm.sendPrompt(prompt) ?: ""
-            println(response)
-        return response
-        } catch (e: Exception){
             return ""
         }
     }
-
-    data class Topics (
-        val title: String,
-        val ids: List<Long>?
-    )
 }
 
 

@@ -91,7 +91,8 @@ class TitlesUpdateWorker(
                             readyFunc = {
                                 settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
                             },
-                            filterTopics = filterTopics
+                            filterTopics = filterTopics,
+                            settingsManager = settingsManager
                         )
                         if (res is SummarizationResult.Success) break
                         iter++
@@ -106,8 +107,6 @@ class TitlesUpdateWorker(
                     }
                 }
             }
-            settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
-            settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
 
             return Result.success()
         } catch (e: CancellationException) {

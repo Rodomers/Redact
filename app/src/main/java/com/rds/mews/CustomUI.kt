@@ -518,8 +518,8 @@ fun CustomPullToRefreshIndicator(
     val currentUpdatingState by MewsRepository.updatingState.collectAsStateWithLifecycle()
     val text = when {
         currentUpdatingState == "summarizing_topics" -> stringResource(R.string.summarizing, 0, 0)
-        currentUpdatingState.contains("/") -> {
-            val args = currentUpdatingState.split("/").map { it.toInt() }
+        currentUpdatingState?.contains("/") ?: false -> {
+            val args = currentUpdatingState!!.split("/").map { it.toInt() }
             stringResource(R.string.summarizing, args[0], args[1])
         }
         currentUpdatingState == "extracting_topics" -> stringResource(R.string.extracting_topics)
@@ -835,7 +835,8 @@ fun DeferredUpdateTab(
     onDismissRequest: () -> Unit,
     animDuration: Int = 200,
     items: List<@Composable () -> Unit>,
-    indexes: List<Int>? = null
+    indexes: List<Int>? = null,
+    header: String? = null
 ) {
     LaunchedEffect(transitionState.targetState) {
         if (transitionState.currentState != transitionState.targetState && !transitionState.targetState) {
@@ -881,6 +882,18 @@ fun DeferredUpdateTab(
                                 .padding(8.dp)
                                 .heightIn(max = 360.dp)
                         ) {
+                            if (header != null) {
+                                stickyHeader() {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colorScheme.surface)
+                                    ) {
+                                        CustomTextDivider(text = header)
+                                    }
+                                }
+                            }
+
                             items.forEachIndexed { id, it ->
                                 if (indexes?.contains(id) ?: true) item { it() }
                             }

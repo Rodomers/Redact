@@ -53,7 +53,7 @@ class TitlesUpdateService : Service() {
         val llmApiKey = settingsManager.getString(MewsRepository.USER_API_KEY, MewsRepository.DEFAULT_GEMINI_API_KEY)
         val rssLastUpdate = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
         val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
-        val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
+        val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
         val titlesNum = settingsManager.getInt(MewsRepository.TITLES_NUM, 10)
         val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
 
@@ -92,7 +92,8 @@ class TitlesUpdateService : Service() {
                         readyFunc = {
                             settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
                         },
-                        filterTopics = filterTopics
+                        filterTopics = filterTopics,
+                        settingsManager = settingsManager
                     )
                     if (res is SummarizationResult.Success) break
                     iter++

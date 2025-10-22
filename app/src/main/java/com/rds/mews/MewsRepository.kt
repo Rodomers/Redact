@@ -1,16 +1,24 @@
 package com.rds.mews
 
 import android.content.Context
+import android.content.SharedPreferences
+import androidx.compose.runtime.collectAsState
+import com.rds.mews.ui.theme.MewsTheme
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -19,20 +27,52 @@ import java.util.Date
 object MewsRepository {
     private lateinit var db: DbHelper
     private lateinit var settingsManager: SettingsManager
+    private lateinit var externalScope: CoroutineScope
+    lateinit var lastError: StateFlow<SummarizationResult.Failure?>
+    lateinit var lastTitlesUpdate: StateFlow<Long>
+    lateinit var updatingTitles: StateFlow<Boolean>
+    lateinit var updatingState: StateFlow<String?>
     private var isInitialized = false
     private val _sourcesUpdateTrigger = MutableStateFlow(0)
 
-    fun initialize(context: Context) {
+    fun initialize(context: Context, externalScope: CoroutineScope) {
         if (isInitialized) return
         val context = context.applicationContext
         this.db = DbHelper(context)
         this.settingsManager = SettingsManager(context)
+        this.externalScope = externalScope
 
         loadInitSettings()
-        listenForErrors()
-        checkForSavedError()
         setContext(context)
         isInitialized = true
+
+        lastError = settingsManager.lastErrorFlow
+            .stateIn(
+                scope = MewsRepository.externalScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = null
+            )
+
+        lastTitlesUpdate = settingsManager.lastTitlesUpdateFlow
+            .stateIn(
+                scope = MewsRepository.externalScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = settingsManager.getLong(LAST_TITLES_UPDATE, 0L)
+            )
+
+        updatingTitles = settingsManager.updatingTitlesFlow
+            .stateIn(
+                scope = MewsRepository.externalScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = settingsManager.getBoolean(UPDATING_TITLES, false)
+            )
+
+        updatingState = settingsManager.updatingTitlesStateFlow
+            .stateIn(
+                scope = MewsRepository.externalScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = settingsManager.getString(MewsRepository.UPDATING_STATE, "off")
+            )
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -76,7 +116,8 @@ object MewsRepository {
             }
 
             while (nextRunTime.before(Calendar.getInstance())) {
-                nextRunTime.add(Calendar.HOUR_OF_DAY, updateFrequencyHours)
+                if (updateFrequencyHours == 12) nextRunTime.add(Calendar.HOUR_OF_DAY, 12)
+                else nextRunTime.add(Calendar.HOUR_OF_DAY, 24)
             }
 
             val nextRunTimeMillis = nextRunTime.timeInMillis
@@ -88,6 +129,10 @@ object MewsRepository {
             AlarmScheduler.cancel(context)
             println("MewsRepository: Автообновление отключено, запланированные задачи отменены.")
         }
+    }
+
+    fun delTitles(time: Long? = null) {
+        db.titlesTimeKill(time?:0)
     }
 
     private val _titlesUpdateTrigger = MutableStateFlow(0)
@@ -126,6 +171,7 @@ object MewsRepository {
     const val ALARMS_ALLOWED = "exact_alarms_allowed"
     const val TITLES_ALARM_MINS = "titles_alarm_time"
     const val NOTIFICATIONS_GRANTED = "notifications_granted"
+    const val CURRENT_LANGUAGE = "current_language"
 
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
     var selectedTab: StateFlow<TabScreen> = _selectedTab.asStateFlow()
@@ -199,25 +245,16 @@ object MewsRepository {
         _lastRssUpdate.value = newValue
     }
 
-    private val _lastTitlesUpdate = MutableStateFlow(0L)
-    val lastTitlesUpdate: StateFlow<Long> = _lastTitlesUpdate.asStateFlow()
     fun setLastTitlesUpdate(newValue: Long) {
         settingsManager.saveLong(LAST_TITLES_UPDATE, newValue)
-        _lastTitlesUpdate.value = newValue
     }
 
-    private val _updatingTitles = MutableStateFlow(false)
-    val updatingTitles: StateFlow<Boolean> = _updatingTitles.asStateFlow()
     fun setUpdatingTitles(newValue: Boolean) {
         settingsManager.saveBoolean(UPDATING_TITLES, newValue)
-        _updatingTitles.value = newValue
     }
 
-    private val _updatingState = MutableStateFlow("off")
-    val updatingState: StateFlow<String> = _updatingState.asStateFlow()
     fun setUpdatingState(newValue: String) {
         settingsManager.saveString(UPDATING_STATE, newValue)
-        _updatingState.value = newValue
     }
 
     private val _compactTabBar = MutableStateFlow(false)
@@ -279,9 +316,6 @@ object MewsRepository {
         _notificationsGranted.value = newValue
     }
 
-    private val _lastError = MutableStateFlow<SummarizationResult.Failure?>(null)
-    val lastError: StateFlow<SummarizationResult.Failure?> = _lastError.asStateFlow()
-
     fun saveLastError(failure: SummarizationResult.Failure) {
         settingsManager.saveLastError(failure)
     }
@@ -291,20 +325,7 @@ object MewsRepository {
         _context.value = context
     }
 
-    private fun listenForErrors() {
-        CoroutineScope(Dispatchers.Default).launch {
-            settingsManager.lastErrorFlow.collect { error ->
-                _lastError.value = error
-            }
-        }
-    }
-
-    private fun checkForSavedError() {
-        _lastError.value = settingsManager.getLastError()
-    }
-
     fun clearError() {
-        _lastError.value = null
         settingsManager.clearLastError()
     }
 
@@ -313,6 +334,13 @@ object MewsRepository {
             null -> null
             else -> _context.value!!.getString(id)
         }
+    }
+
+    private val _currentLanguage = MutableStateFlow<String?>(getStringResource(R.string.current_language))
+    val currentLanguage = _currentLanguage.asStateFlow()
+    fun setCurrentLanguage(newValue: String) {
+        settingsManager.saveString(CURRENT_LANGUAGE, newValue)
+        _currentLanguage.value = newValue
     }
 
     private fun loadInitSettings() {
@@ -335,9 +363,5 @@ object MewsRepository {
 
         _rssUpdateInterval.value = settingsManager.getInt(RSS_UPDATE_INTERVAL, 15)
         _lastRssUpdate.value = settingsManager.getLong(LAST_RSS_UPDATE, 0L)
-        _lastTitlesUpdate.value = settingsManager.getLong(LAST_TITLES_UPDATE, 0L)
-
-        _updatingTitles.value = settingsManager.getBoolean(UPDATING_TITLES, false)
-        _updatingState.value = settingsManager.getString(UPDATING_STATE, "off")
     }
 }

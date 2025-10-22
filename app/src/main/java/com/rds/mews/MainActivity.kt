@@ -102,6 +102,8 @@ fun MainScreen(mainActivity: MainActivity) {
         val settingsGridState = settingsViewModel.gridState
         val scope = rememberCoroutineScope()
 
+        MewsRepository.setCurrentLanguage(stringResource(R.string.current_language))
+
         if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
             CustomErrorBottomSheet(
                 title = stringResource(R.string.optimization_sheet_header),

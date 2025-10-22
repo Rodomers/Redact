@@ -770,7 +770,8 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             transitionState = autoUpdateScreenState,
             onDismissRequest = {},
             items = autoUpdateItems,
-            indexes = autoUpdateIndexes.value
+            indexes = autoUpdateIndexes.value,
+            header = stringResource(R.string.settings_titles_auto_update)
         )
     }
 }

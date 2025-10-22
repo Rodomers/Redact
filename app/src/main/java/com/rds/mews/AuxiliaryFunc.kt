@@ -13,6 +13,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.collection.IntList
 import androidx.collection.intListOf
+import androidx.compose.ui.res.stringResource
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat

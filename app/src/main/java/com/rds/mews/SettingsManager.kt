@@ -28,6 +28,36 @@ class SettingsManager(context: Context) {
         }
     }
 
+    val updatingTitlesStateFlow: Flow<String?> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener {prefs, key ->
+            if (key == MewsRepository.UPDATING_STATE) {
+                trySend(prefs.getString(key, "off"))
+            }
+        }
+
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getString(MewsRepository.UPDATING_STATE, "off"))
+
+        awaitClose {
+            sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
+    val lastTitlesUpdateFlow: Flow<Long> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener {prefs, key ->
+            if (key == MewsRepository.LAST_TITLES_UPDATE) {
+                trySend(prefs.getLong(key, 0L))
+            }
+        }
+
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getLong(MewsRepository.LAST_TITLES_UPDATE, 0L))
+
+        awaitClose {
+            sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
     private companion object {
         const val KEY_LAST_ERROR_TYPE = "last_error_type"
         const val KEY_LAST_ERROR_MESSAGE = "last_error_message"
