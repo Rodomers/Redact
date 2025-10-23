@@ -51,6 +51,7 @@ import kotlin.text.toInt
 @Composable
 fun TitlesGrid(
     lazyGridState: LazyGridState,
+    mainActivity: MainActivity,
     groupedItems: Map<String, List<Title>>,
     modifier: Modifier,
     isRefreshing: Boolean,
@@ -61,7 +62,7 @@ fun TitlesGrid(
     rememberCardPage: (Long, Int) -> Unit,
     onRefresh: () -> Unit,
     onClearErr: () -> Unit,
-    onErrAction: (ClipboardManager) -> Unit,
+    onErrAction: (ClipboardManager, MainActivity) -> Unit,
     onToggleExpanded: (Long) -> Unit,
     showDates: Boolean,
     lastTitlesUpdate: Long,
@@ -96,7 +97,7 @@ fun TitlesGrid(
             onDismissRequest = onClearErr,
             onConfirm = {
                 scope.launch {
-                    onErrAction(clipboardManager)
+                    onErrAction(clipboardManager, mainActivity)
                     if (bottomSheetState.isVisible) bottomSheetState.hide()
                 }.invokeOnCompletion { if (!bottomSheetState.isVisible) onClearErr() }
             },

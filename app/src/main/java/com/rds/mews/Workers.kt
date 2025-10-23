@@ -110,6 +110,8 @@ class TitlesUpdateWorker(
 
             return Result.success()
         } catch (e: CancellationException) {
+            settingsManager.clearLastError()
+            settingsManager.saveLastError(SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED))
             println("TitlesUpdateWorker: Пойман CancellationException. Работа была отменена системой.")
             throw e
         } catch (e: Exception) {

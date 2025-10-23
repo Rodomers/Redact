@@ -513,19 +513,6 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_titles_auto_update)) {
-                    IconButton(
-                        modifier = Modifier
-                            .wrapContentSize(),
-                        onClick = {
-                            autoUpdateScreenState.targetState = !autoUpdateScreenState.currentState
-                        }
-                    ) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
-                    }
-                }
-            }
-            item {
                 CustomSettingsItem(text = stringResource(R.string.settings_maximum_headers)) {
                     Box {
                         Button(
@@ -645,6 +632,19 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                                 )
                             }
                         }
+                    }
+                }
+            }
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_titles_auto_update)) {
+                    IconButton(
+                        modifier = Modifier
+                            .wrapContentSize(),
+                        onClick = {
+                            autoUpdateScreenState.targetState = !autoUpdateScreenState.currentState
+                        }
+                    ) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
                     }
                 }
             }

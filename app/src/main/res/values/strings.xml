@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_version" translatable="false">1.0-alpha.8</string>
+    <string name="app_version" translatable="false">1.0-alpha.9</string>
     <string name="current_language">English</string>
     <string name="app_name" translatable="false">Mews</string>
 
@@ -132,6 +132,10 @@
     <string name="err_header_filter_failed">Filter error</string>
     <string name="err_text_filter_failed">An error occurred while filtering topics.\nRestart?</string>
     <string name="err_btn_filter_failed">Restart</string>
+    <string name="err_header_job_cancelled">Job Cancelled</string>
+    <string name="err_text_job_cancelled">The background job was cancelled by the system. To prevent this from happening, you can grant the app permission to send notifications.
+        \nGrant permission?</string>
+    <string name="err_btn_job_cancelled">Grant</string>
 
     <string name="date_01">January, %d</string>
     <string name="date_02">February, %d</string>

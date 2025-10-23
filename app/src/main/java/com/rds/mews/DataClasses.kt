@@ -14,6 +14,7 @@ enum class SummarizationErrorType {
     EMPTY_ANSWER,
     NO_NEWS_TO_ANALYZE,
     FILTER_FAILED,
+    JOB_CANCELLED,
     UNKNOWN_ERROR
 }
 

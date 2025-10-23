@@ -50,6 +50,7 @@ class TitlesUpdateService : Service() {
         val applicationContext = this.applicationContext
         val settingsManager = SettingsManager(applicationContext)
         val db = DbHelper(applicationContext)
+        val updateDelta = System.currentTimeMillis() - settingsManager.getLong(MewsRepository.LAST_TITLES_UPDATE, 0L)
 
         if (!isNetworkAvailable(applicationContext)) {
             AlarmScheduler.schedule(applicationContext, System.currentTimeMillis() + 300000L)
@@ -64,7 +65,7 @@ class TitlesUpdateService : Service() {
         val rssLastUpdate = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
         val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
         val titlesPeriod = if (!oneTimeUpdate) {
-            settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
+            updateDelta - 900000L
         } else {
             settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
         }
@@ -92,7 +93,7 @@ class TitlesUpdateService : Service() {
 
             if (!currentCoroutineContext().isActive) return
 
-            if (noFetchErrors) {
+            if ((oneTimeUpdate || updateDelta >= 7200000L) && noFetchErrors) {
                 val titles = db.getTitles()
                 if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
                     db.titlesTimeKill(0)
@@ -120,9 +121,8 @@ class TitlesUpdateService : Service() {
                     }
                     is SummarizationResult.Failure -> settingsManager.saveLastError(res)
                 }
+                settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
             }
-            settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
-            settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
 
             val autoUpdateEnabled = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
             if (autoUpdateEnabled && !oneTimeUpdate) {

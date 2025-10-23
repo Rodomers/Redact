@@ -3,11 +3,13 @@ package com.rds.mews
 import android.app.Application
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -40,18 +42,8 @@ class TitlesViewModel(
     private val _titles = MutableStateFlow<List<Title>>(emptyList())
     val titles = _titles.asStateFlow()
 
-    val isRefreshing: StateFlow<Boolean> = combine(
-        workInfo,
-        repository.updatingTitles
-    ) { info, isUpdating ->
-        val isWorkerRunning = info?.state == WorkInfo.State.RUNNING
 
-        isWorkerRunning && isUpdating
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
-    )
+    val isRefreshing: StateFlow<Boolean> = repository.updatingTitles
 
     val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val enlargedTimestamps: StateFlow<Boolean> = repository.enlargedTimestamps.stateIn(viewModelScope,
@@ -85,7 +77,7 @@ class TitlesViewModel(
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
-    fun handleErrorAction(clipboardManager: ClipboardManager) {
+    fun handleErrorAction(clipboardManager: ClipboardManager, activity: MainActivity) {
         val err = errState.value ?: return
 
         when (err.type) {
@@ -96,6 +88,7 @@ class TitlesViewModel(
                 SummarizationErrorType.NETWORK_TIMEOUT,
                 SummarizationErrorType.FILTER_FAILED
             ) -> refreshTitles()
+            SummarizationErrorType.JOB_CANCELLED -> requestNotificationPermission(activity)
             SummarizationErrorType.UNKNOWN_ERROR -> {
                 val copiedText = "${err.cause}"
                 clipboardManager.setText(AnnotatedString(copiedText))

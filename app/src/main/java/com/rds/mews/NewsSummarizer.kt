@@ -239,14 +239,14 @@ class NewsSummarizer(
             var counter = 0
             val titlesCounter = titlesToSummarize.size
             var emptyAnswer = false
-            val semaphore = Semaphore(2) // Ограничиваем до 2 одновременных запросов к LLM
+            val semaphore = Semaphore(titlesCounter) // Ограничиваем до 2 одновременных запросов к LLM (злобное вайбкодерское ха-ха)
 
             val summarizedResults = coroutineScope {
                 titlesToSummarize.map { title ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
                             try {
-                                delay(200L) // Небольшая задержка между запросами
+//                                delay(200L) // Небольшая задержка между запросами
                                 counter++
                                 settingsManager.saveString(MewsRepository.UPDATING_STATE, "${counter}/${titlesCounter}")
                                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
@@ -400,6 +400,7 @@ class NewsSummarizer(
                 val ids = (0 until idsArray.length()).map { idsArray.getLong(it) }
                 topics.add(Topics(title, ids))
             }
+
             return topics
         } catch (e: Exception) {
             println("Ошибка при извлечении тем из пакета: ${e.message}")

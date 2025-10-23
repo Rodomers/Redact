@@ -162,7 +162,7 @@ fun MainScreen(mainActivity: MainActivity) {
                 }
                 TabScreen.Titles -> {
                     val groupedTitles by titlesViewModel.groupedTitles.collectAsStateWithLifecycle()
-                    val isRefreshing by titlesViewModel.isRefreshing.collectAsStateWithLifecycle()
+                    val isRefreshing by titlesViewModel.isRefreshing.collectAsState()
                     val err by titlesViewModel.errState.collectAsState()
                     val showEmptyMess by titlesViewModel.showEmptyMess.collectAsStateWithLifecycle()
                     val titlesCardStates by titlesViewModel.titleCardStates.collectAsStateWithLifecycle()
@@ -190,7 +190,8 @@ fun MainScreen(mainActivity: MainActivity) {
                         showDates = showDates,
                         lastTitlesUpdate = lastTitlesUpdate,
                         scope = scope,
-                        endureTime = endureTime
+                        endureTime = endureTime,
+                        mainActivity = mainActivity
                     )
                 }
                 else -> SettingsGrid(

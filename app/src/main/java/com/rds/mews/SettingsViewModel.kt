@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
+
     val gridState = LazyGridState(
         firstVisibleItemIndex = 0,
         firstVisibleItemScrollOffset = 0
@@ -56,10 +58,10 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     fun setEndureTime(value: Boolean) = viewModelScope.launch { repository.setEnlargeTimestamps(value) }
     fun setTitlesAlarmUpdate(
         context: Context,
-        activity: Activity,
         onShowNotificationsSheet: () -> Unit,
         onShowAlarmsSheet: () -> Unit,
-        value: Boolean
+        value: Boolean,
+        activity: MainActivity
     ) = viewModelScope.launch {
         when {
             !isNotificationPermissionGranted(context) -> { handleNotificationsPermissionRequest(

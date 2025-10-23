@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -220,6 +221,8 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
 
                 SummarizationErrorType.FILTER_FAILED ->
                     intListOf(R.string.err_header_filter_failed, R.string.err_text_filter_failed,R.string.err_btn_filter_failed)
+                SummarizationErrorType.JOB_CANCELLED ->
+                    intListOf(R.string.err_header_job_cancelled, R.string.err_text_job_cancelled, R.string.err_btn_job_cancelled)
 
                 SummarizationErrorType.UNKNOWN_ERROR ->
                 {

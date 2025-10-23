@@ -134,6 +134,10 @@
     <string name="err_header_filter_failed">Ошибка фильтрации</string>
     <string name="err_text_filter_failed">Во время филтрации тем произошла ошибка.\nПерезапустить?</string>
     <string name="err_btn_filter_failed">Перезапуск</string>
+    <string name="err_header_job_cancelled">Работа отменена</string>
+    <string name="err_text_job_cancelled">Выполнение фоновой работы было отменено системой. Чтобы этого не происходило, вы можете выдать приложению разрешение на отправку уведомлений.
+    \nВыдать разрешение?</string>
+    <string name="err_btn_job_cancelled">Выдать</string>
 
     <string name="date_01">%d января</string>
     <string name="date_02">%d февраля</string>
