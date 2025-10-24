@@ -239,15 +239,15 @@ class NewsSummarizer(
             var counter = 0
             val titlesCounter = titlesToSummarize.size
             var emptyAnswer = false
-            val semaphore = Semaphore(titlesCounter) // Ограничиваем до 2 одновременных запросов к LLM (злобное вайбкодерское ха-ха)
+            val semaphore = Semaphore(2) // Ограничиваем до 2 одновременных запросов к LLM (злобное вайбкодерское ха-ха)
 
             val summarizedResults = coroutineScope {
                 titlesToSummarize.map { title ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
                             try {
-//                                delay(200L) // Небольшая задержка между запросами
                                 counter++
+                                if (counter > 1) delay(6000L)
                                 settingsManager.saveString(MewsRepository.UPDATING_STATE, "${counter}/${titlesCounter}")
                                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
 
