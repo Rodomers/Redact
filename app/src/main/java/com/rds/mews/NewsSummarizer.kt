@@ -1,17 +1,18 @@
 package com.rds.mews
 
+import android.annotation.SuppressLint
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.collections.mutableListOf
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -20,10 +21,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.math.min
 import kotlinx.coroutines.withTimeout
+import org.json.JSONException
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.serialization.SerializationException
-import kotlin.coroutines.cancellation.CancellationException
-import kotlin.math.pow
+import java.io.Closeable
 
 
 private data class SummaryResult(
@@ -34,95 +34,62 @@ private data class SummaryResult(
     val links: List<String>
 )
 
-@Serializable
-private data class TopicExtractionResponse(
-    val title: String,
-    val id: List<Long>
-)
-
-@Serializable
-private data class SummarizationResponse(
-    val title: String,
-    val summary: String
-)
-
-private class RateLimitException(message: String) : Exception(message)
-
 class LLMClient(
-    val apiKey: String,
+    val apiKey: String = "",
     val MODEL: String = "gemini-2.0-flash-lite",
     private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/${if (MODEL != "") MODEL else "gemini-2.0-flash"}:generateContent"
-) {
+) : Closeable {
+    private val jsonParser = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
+
     private val httpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-            })
+            json(jsonParser)
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 60000
+            connectTimeoutMillis = 15000
+            socketTimeoutMillis = 60000
         }
     }
 
-    suspend fun sendPromptWithRetries(
-        prompt: String,
-        totalTimeoutMillis: Long = 90000L,
-        maxRetries: Int = 3,
-        initialDelayMillis: Long = 4000L
-    ): String? {
-        return try {
-            withTimeout(totalTimeoutMillis) {
-                var currentAttempt = 0
-                while (currentAttempt < maxRetries) {
-                    try {
-                        return@withTimeout sendSinglePrompt(prompt)
-                    } catch (e: ClientRequestException) {
-                        if (e.response.status == HttpStatusCode.TooManyRequests) {
-                            throw RateLimitException("API rate limit exceeded. Status: 429.")
-                        }
-                        currentAttempt++
-                        if (currentAttempt >= maxRetries) throw e
-                        val delayTime = initialDelayMillis * (2.0.pow(currentAttempt - 1).toLong())
-                        println("Попытка $currentAttempt/$maxRetries не удалась: ${e.message}. Повтор через ${delayTime / 1000}с...")
-                        delay(delayTime)
-
-                    } catch (e: Exception) {
-                        currentAttempt++
-                        if (currentAttempt >= maxRetries) throw e
-                        val delayTime = initialDelayMillis * (2.0.pow(currentAttempt - 1).toLong())
-                        println("Попытка $currentAttempt/$maxRetries не удалась: ${e.message}. Повтор через ${delayTime / 1000}с...")
-                        delay(delayTime)
-                    }
-                }
-                null
-            }
-        } catch (e: Exception) {
-            throw e
-        }
-    }
-
-    private suspend fun sendSinglePrompt(prompt: String): String? {
+    suspend fun sendPrompt(prompt: String): String? {
         val requestBody = GeminiRequest(
-            contents = listOf(ContentInput(parts = listOf(PartInput(prompt)))),
-            generationConfig = GenerationConfig(temperature = 0.5, maxOutputTokens = 8192)
+            contents = listOf(
+                ContentInput(
+                    parts = listOf(PartInput(prompt))
+                )
+            ),
+            generationConfig = GenerationConfig(
+                temperature = 0.5,
+                maxOutputTokens = 8192
+            )
         )
 
-        val responseString: String = httpClient.post(URL) {
-            header("x-goog-api-key", apiKey)
-            contentType(ContentType.Application.Json)
-            setBody(requestBody)
-        }.body()
+        try {
+            val responseString: String = httpClient.post(URL) {
+                header("x-goog-api-key", apiKey)
+                contentType(ContentType.Application.Json)
+                setBody(requestBody)
+            }.body()
 
-        val json = Json { ignoreUnknownKeys = true }
-        val geminiResponse = json.decodeFromString<GeminiResponse>(responseString)
+            val geminiResponse = jsonParser.decodeFromString<GeminiResponse>(responseString)
 
-        return geminiResponse.candidates?.takeIf { it.isNotEmpty() }?.let {
-            it.flatMap { candidate -> candidate.content.parts }.joinToString("\n") { part -> part.text }
+            return geminiResponse.candidates
+                ?.takeIf { it.isNotEmpty() }
+                ?.flatMap { candidate -> candidate.content.parts }
+                ?.joinToString("\n") { part -> part.text }
+
+        } catch (e: Exception) {
+            println("Error during API call: ${e.message}")
+            e.printStackTrace()
+            return null
         }
     }
 
-    fun close() {
+    override fun close() {
         httpClient.close()
     }
 
@@ -186,8 +153,7 @@ class NewsSummarizer(
         val links: List<String>
     )
 
-    private val _newsBatchSize = 70
-    private val _interRequestDelay = 2000L
+    private val NEWS_BATCH_SIZE = 70
 
     suspend fun summarizeTopics(
         maxTopics: Int = 20,
@@ -197,8 +163,6 @@ class NewsSummarizer(
         filterTopics: Boolean = false
     ): SummarizationResult {
         try {
-            val bannedNews = "Таких тем нет"
-
             val messages = db.getMessages(messageSeconds).sortedBy { it.time }
             if (messages.isEmpty()) {
                 readyFunc()
@@ -213,12 +177,15 @@ class NewsSummarizer(
                 settingsManager.saveString(MewsRepository.UPDATING_STATE, "extracting_topics")
                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
 
-                val success = processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics, bannedNews)
+                val success = processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics)
+
                 if (!success) {
                     readyFunc()
                     return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
                 }
                 settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
+            } else {
+                println("Найдены незавершенные темы с прошлого запуска. Продолжаем суммаризацию.")
             }
 
             val titlesToSummarize = db.getTitles().filter {
@@ -232,51 +199,62 @@ class NewsSummarizer(
                 return SummarizationResult.Success
             }
 
+            var counter = 0
+            val titlesCounter = titlesToSummarize.size
+            var emptyAnswer = false
             val semaphore = Semaphore(3)
-            val successfulSummaries = mutableListOf<SummaryResult>()
-            val failedTasksExceptions = mutableListOf<Throwable>()
 
-            coroutineScope {
-                val deferredJobs = titlesToSummarize.mapIndexed { index, title ->
+            val summarizedResults = coroutineScope {
+                titlesToSummarize.map { title ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
-                            if (index > 0) delay(_interRequestDelay)
+                            try {
+                                counter++
+                                if (counter > 1) delay(6000L)
+                                settingsManager.saveString(MewsRepository.UPDATING_STATE, "${counter}/${titlesCounter}")
+                                val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
 
-                            settingsManager.saveString(MewsRepository.UPDATING_STATE, "${index + 1}/${titlesToSummarize.size}")
-                            val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
+                                val suitableMessages = title.ids?.mapNotNull { id -> messages.find { it.id == id } } ?: emptyList()
+                                val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
 
-                            val suitableMessages = title.ids?.mapNotNull { id -> messages.find { it.id == id } } ?: emptyList()
-                            if (suitableMessages.isEmpty()) return@withPermit null
+                                if (newsText.isBlank()) return@withPermit null
 
-                            val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
+                                val bannedNews = "Таких тем нет"
 
-                            val summaryResponse = sumTopic(llm, title.title, bannedNews, newsText, currentLanguage)
+                                val response = withTimeout(40000L) {
+                                    sumTopic(llm, title.title, bannedNews, newsText, currentLanguage)
+                                }
 
-                            if (summaryResponse == null) {
-                                throw IllegalStateException("Received empty answer from LLM for topic: ${title.title}")
+                                if (response.isBlank()) {
+                                    println("Пустой ответ от LLM для темы: ${title.title}")
+                                    emptyAnswer = true
+                                    return@withPermit null
+                                }
+
+                                val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
+                                val obj = JSONObject(cleanResponse)
+                                val summary = obj.getString("summary")
+
+                                val ids = title.ids ?: return@withPermit null
+                                val time = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
+                                val links = suitableMessages.map { it.link }
+                                val sources = suitableMessages.map { it.source }
+
+                                SummaryResult(title.title, summary, time, sources.distinct(), links.distinct())
+
+                            } catch (e: Exception) {
+                                println("Ошибка при обработке темы '${title.title}': ${e.message}")
+                                e.printStackTrace()
+                                return@withPermit null
                             }
-
-                            val time = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
-                            val links = suitableMessages.map { it.link }.distinct()
-                            val sources = suitableMessages.map { it.source }.distinct()
-
-                            SummaryResult(title.title, summaryResponse.summary, time, sources, links)
                         }
                     }
-                }
-
-                deferredJobs.forEach { deferred ->
-                    try {
-                        deferred.await()?.let { successfulSummaries.add(it) }
-                    } catch (e: Exception) {
-                        failedTasksExceptions.add(e)
-                        e.printStackTrace()
-                    }
-                }
+                }.mapNotNull { it.await() }
             }
 
-            if (successfulSummaries.isNotEmpty()) {
-                successfulSummaries.forEach { result ->
+            if (summarizedResults.isNotEmpty()) {
+                summarizedResults.forEach { result ->
+                    println("Обновление в БД: ${result.originalTitle}")
                     db.updateTitle(
                         name = result.originalTitle,
                         newTime = result.time,
@@ -287,17 +265,12 @@ class NewsSummarizer(
                 }
             }
 
-            if (failedTasksExceptions.isNotEmpty()) {
-                val firstError = failedTasksExceptions.first()
-                val errorType = when (firstError) {
-                    is SerializationException -> SummarizationErrorType.JSON_PARSING_FAILED
-                    is TimeoutCancellationException -> SummarizationErrorType.NETWORK_TIMEOUT
-                    is CancellationException -> SummarizationErrorType.JOB_CANCELLED
-                    is IllegalStateException -> SummarizationErrorType.EMPTY_ANSWER
-                    is RateLimitException -> SummarizationErrorType.RATE_LIMIT_EXCEEDED
-                    else -> SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
+            if (summarizedResults.size != titlesToSummarize.size) {
+                return if (emptyAnswer) {
+                    SummarizationResult.Failure(SummarizationErrorType.EMPTY_ANSWER)
+                } else {
+                    SummarizationResult.Failure(SummarizationErrorType.SUMMARIZE_TOPICS_FAILED)
                 }
-                return SummarizationResult.Failure(errorType, firstError)
             }
 
             readyFunc()
@@ -309,77 +282,41 @@ class NewsSummarizer(
         }
     }
 
-    private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, currentLanguage: String, filterTopics: Boolean = false, bannedNews: String): Boolean {
-        return try {
-            val messageBatches = messages.chunked(_newsBatchSize)
-            val allExtractedTopics = coroutineScope {
+    private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, currentLanguage: String, filterTopics: Boolean = false): Boolean {
+        val messageBatches = messages.chunked(NEWS_BATCH_SIZE)
+        val allExtractedTopics = mutableListOf<Topics>()
+
+        try {
+            coroutineScope {
                 messageBatches.map { batch ->
                     async(Dispatchers.IO) {
-                        extractTopicsFromBatch(batch, maxTopics, currentLanguage, bannedNews)
+                        extractTopicsFromBatch(batch, maxTopics, currentLanguage)
                     }
-                }.mapNotNull { it.await() }.flatten()
+                }.forEach { deferred ->
+                    deferred.await()?.let { topicsFromBatch ->
+                        allExtractedTopics.addAll(topicsFromBatch)
+                    }
+                }
             }
 
             if (allExtractedTopics.isEmpty()) {
                 println("Не удалось извлечь ни одной темы из новостей.")
-                false
+                return false
             }
 
-            if (filterTopics) mergeAndFilterTopics(allExtractedTopics, maxTopics, currentLanguage, bannedNews) else true
+            return if (filterTopics) mergeAndFilterTopics(allExtractedTopics, maxTopics, currentLanguage) else true
+
         } catch (e: Exception) {
-            println("Критическая ошибка на этапе извлечения тем: ${e.message}")
             e.printStackTrace()
-            false
+            return false
         }
     }
 
-    private suspend fun extractTopicsFromBatch(messagesBatch: List<Message>, max: Int, currentLanguage: String, bannedNews: String): List<Topics>? {
-        val prompt = createExtractionPrompt(messagesBatch, max, currentLanguage, bannedNews)
-
-        val response = llm.sendPromptWithRetries(prompt) ?: return null
-        val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
-
-        val topicsResponse = Json.decodeFromString<List<TopicExtractionResponse>>(cleanResponse)
-        return topicsResponse.map { Topics(it.title, it.id) }
-    }
-
-    private suspend fun mergeAndFilterTopics(topics: List<Topics>, maxTopics: Int, currentLanguage: String, bannedNews: String): Boolean {
-        val prompt = createMergePrompt(topics, maxTopics, currentLanguage, bannedNews)
-
-        val response = llm.sendPromptWithRetries(prompt) ?: return false
-        val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
-
-        val finalTopics = Json.decodeFromString<List<TopicExtractionResponse>>(cleanResponse)
-        val iterEnd = min(finalTopics.size, maxTopics)
-
-        db.titlesTimeKill(0)
-
-        for (i in 0 until iterEnd) {
-            val topic = finalTopics[i]
-            db.addTitle(
-                titleTime = 0,
-                title = topic.title,
-                text = "<промежуточный текст>",
-                sources = "<промежуточный текст>",
-                links = db.dbPack(*topic.id.map { it.toString() }.toTypedArray())
-            )
-        }
-        return true
-    }
-
-    private suspend fun sumTopic(llm: LLMClient, title: String, bannedNews: String, newsText: String, currentLanguage: String = "russian"): SummarizationResponse? {
-        val prompt = createSummaryPrompt(title, bannedNews, newsText, currentLanguage)
-
-        val response = llm.sendPromptWithRetries(prompt) ?: return null
-        val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
-
-        return Json.decodeFromString<SummarizationResponse>(cleanResponse)
-    }
-
-    private fun createExtractionPrompt(messagesBatch: List<Message>, max: Int, currentLanguage: String, bannedNews: String): String {
+    private suspend fun extractTopicsFromBatch(messagesBatch: List<Message>, max: Int, currentLanguage: String): List<Topics>? {
         val combinedNews = messagesBatch.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }
+        val bannedNews = "Таких тем нет"
 
-        return """
+        val prompt = """
     Ты — опытный новостной редактор. Твоя задача — проанализировать список новостей и сгруппировать их по ключевым событиям.
 
     Инструкции:
@@ -400,13 +337,46 @@ class NewsSummarizer(
     Новости для анализа:
     $combinedNews
 """.trimIndent()
+
+        try {
+            val response = withTimeout(60000L) { llm.sendPrompt(prompt) ?: "" }
+            if (response.isBlank()) return null
+
+            val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
+            val jsonArray = JSONArray(cleanResponse)
+            val topics = mutableListOf<Topics>()
+
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val title = obj.getString("title")
+                val idsArray = obj.getJSONArray("id")
+                val ids = (0 until idsArray.length()).map { idsArray.getLong(it) }
+                topics.add(Topics(title, ids))
+            }
+
+            return topics
+        } catch (e: Exception) {
+            println("Ошибка при извлечении тем из пакета: ${e.message}")
+            return null
+        }
     }
 
-    private fun createMergePrompt(topics: List<Topics>, maxTopics: Int, currentLanguage: String, bannedNews: String): String {
-        val titlesJsonForPrompt = Json.encodeToString(
-            topics.map { TopicExtractionResponse(it.title, it.ids ?: emptyList()) }
-        )
-        return """
+    /**
+     * Этап 2: Объединяет, фильтрует и ранжирует темы, полученные со всех пакетов.
+     */
+    private suspend fun mergeAndFilterTopics(topics: List<Topics>, maxTopics: Int, currentLanguage: String): Boolean {
+        val titlesJsonForPrompt = JSONArray(
+            topics.map { topic ->
+                JSONObject().apply {
+                    put("title", topic.title)
+                    put("ids", JSONArray(topic.ids))
+                }
+            }
+        ).toString()
+
+        val bannedNews = "Таких тем нет"
+
+        val prompt = """
     Ты — главный редактор, твоя задача — проанализировать предложенный список новостных тем, объединить дубликаты, отфильтровать маловажные и привести заголовки к единому стандарту.
 
     Инструкции:
@@ -424,10 +394,48 @@ class NewsSummarizer(
     Массив тем для обработки:
     $titlesJsonForPrompt
 """.trimIndent()
+
+        try {
+            val response = withTimeout(60000L) { llm.sendPrompt(prompt) ?: "" }
+            if (response.isBlank()) return false
+
+            val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
+            val jsonArray = JSONArray(cleanResponse)
+            val iterEnd = min(jsonArray.length(), maxTopics)
+
+            db.titlesTimeKill(0)
+
+            for (i in 0 until iterEnd) {
+                val obj = jsonArray.getJSONObject(i)
+                val title = obj.getString("title")
+                val idsArray = obj.getJSONArray("ids")
+                val idsStr = (0 until idsArray.length()).map { idsArray.getLong(it).toString() }
+
+                db.addTitle(
+                    titleTime = 0,
+                    title = title,
+                    text = "<промежуточный текст>",
+                    sources = "<промежуточный текст>",
+                    links = db.dbPack(*idsStr.toTypedArray())
+                )
+            }
+            return true
+        } catch (e: JSONException) {
+            println("Ошибка парсинга JSON при финальном объединении тем: ${e.message}")
+            println("Невалидный ответ от LLM")
+            return false
+        } catch (e: Exception) {
+            println("Общая ошибка при финальном объединении тем: ${e.message}")
+            return false
+        }
     }
 
-    private fun createSummaryPrompt(title: String, bannedNews: String, newsText: String, currentLanguage: String): String {
-        return """
+    /**
+     * Этап 3: Создает детальное резюме для одной конкретной темы.
+     */
+    @SuppressLint("SuspiciousIndentation")
+    private suspend fun sumTopic(llm: LLMClient, title: String, bannedNews: String, newsText: String, currentLanguage: String = "russian"): String {
+        val prompt = """
     Ты — беспристрастный новостной аналитик. Твоя задача — составить структурированное и информативное резюме по заданной новостной теме на основе предоставленных материалов.
 
     **Тема:** "$title"
@@ -455,6 +463,13 @@ class NewsSummarizer(
     **Новости для составления резюме:**
     $newsText
 """.trimIndent()
+
+        try {
+            return llm.sendPrompt(prompt) ?: ""
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return ""
+        }
     }
 }
 

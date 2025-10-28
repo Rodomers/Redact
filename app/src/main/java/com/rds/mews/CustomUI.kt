@@ -375,7 +375,7 @@ fun TitlesCard(
                     verticalAlignment = Alignment.Top,
                     beyondViewportPageCount = 1,
                     modifier = Modifier
-                        .heightIn(max = 10800.dp)
+                        .heightIn(max = 2048.dp)
                         .fillMaxWidth()
                         .let { baseModifier ->
                             if (pagerHeight != null) baseModifier.height(pagerHeight)

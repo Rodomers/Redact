@@ -158,8 +158,7 @@ fun TitlesGrid(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 20000.dp),
-//                        verticalAlignment = Alignment.CenterVertically
+                            .heightIn(max = 4000.dp),
                     ) {
                         if (endureTime) {
                             CustomTimeMark(item.time)
