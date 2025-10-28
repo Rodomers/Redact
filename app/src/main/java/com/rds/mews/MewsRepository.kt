@@ -78,6 +78,7 @@ object MewsRepository {
             addSource(name, link, db)
             _sourcesUpdateTrigger.value ++
             AlarmScheduler.cancel(context, true)
+            setLastRssUpdate(0L)
             setRssUpdate(context, true, rssUpdateInterval.value)
         }
     }

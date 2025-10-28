@@ -15,6 +15,8 @@ enum class SummarizationErrorType {
     NO_NEWS_TO_ANALYZE,
     FILTER_FAILED,
     JOB_CANCELLED,
+    RATE_LIMIT_EXCEEDED,
+    NO_NETWORK,
     UNKNOWN_ERROR
 }
 

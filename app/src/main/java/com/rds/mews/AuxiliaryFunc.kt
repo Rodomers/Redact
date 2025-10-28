@@ -223,6 +223,10 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
                     intListOf(R.string.err_header_filter_failed, R.string.err_text_filter_failed,R.string.err_btn_filter_failed)
                 SummarizationErrorType.JOB_CANCELLED ->
                     intListOf(R.string.err_header_job_cancelled, R.string.err_text_job_cancelled, R.string.err_btn_job_cancelled)
+                SummarizationErrorType.RATE_LIMIT_EXCEEDED ->
+                    intListOf(R.string.err_header_rate_limit_exceeded, R.string.err_text_rate_limit_exceeded, R.string.err_btn_rate_limit_exceeded)
+                SummarizationErrorType.NO_NETWORK ->
+                    intListOf(R.string.err_header_no_network, R.string.err_text_no_network, R.string.err_btn_no_network)
 
                 SummarizationErrorType.UNKNOWN_ERROR ->
                 {

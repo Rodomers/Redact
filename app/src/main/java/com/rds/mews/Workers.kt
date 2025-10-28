@@ -27,9 +27,6 @@ class RssUpdateWorker(
                 println("RssUpdateWorker: parsing finished successfully.")
             }
 
-//            val nextRssUpdate = System.currentTimeMillis() + rssUpdateInterval * 60 * 1000L
-//            AlarmScheduler.schedule(applicationContext, nextRssUpdate, rss = true)
-
             Result.success()
         } catch (e: Exception) {
             e.printStackTrace()

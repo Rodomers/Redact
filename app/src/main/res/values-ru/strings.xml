@@ -108,11 +108,11 @@
     <string name="err_text_extractFail">Произошла ошибка при выделении тем.\nПерезапустить обновление?</string>
     <string name="err_btn_extractFail">Перезапуск</string>
     <string name="err_header_summarizing">Ошибка суммаризации</string>
-    <string name="err_text_summarizing">Во время последнего обновления произошла ошибка при суммаризации одной
-    или нескольких тем.\nПерезапустить обновление?</string>
+    <string name="err_text_summarizing">Во время последнего обновления произошла ошибка при суммаризации одной или нескольких тем.
+        \nПерезапустить обновление?</string>
     <string name="err_btn_summarizing">Перезапуск</string>
-    <string name="err_header_empty_answer">LLM не отвечает</string>
-    <string name="err_text_empty_answer">Во время обновления одной или нескольких тем нейросеть вернула пустой ответ. Вероятно, достигнут лимит запросов вашего API ключа.
+    <string name="err_header_empty_answer">Пустой ответ LLM</string>
+    <string name="err_text_empty_answer">Во время обновления одной или нескольких тем нейросеть вернула пустой ответ.
     \nПопробовать перезапустить обновление?</string>
     <string name="err_btn_empty_answer">Перезапуск</string>
     <string name="err_header_sumCritical">Ошибка программиста</string>
@@ -138,6 +138,12 @@
     <string name="err_text_job_cancelled">Выполнение фоновой работы было отменено системой. Чтобы этого не происходило, вы можете выдать приложению разрешение на отправку уведомлений.
     \nВыдать разрешение?</string>
     <string name="err_btn_job_cancelled">Выдать</string>
+    <string name="err_header_rate_limit_exceeded">Достигнут лимит</string>
+    <string name="err_text_rate_limit_exceeded">Достигнут лимит запросов к нейросети. Вы можете заменить ключ Gemini или подождать восполнения лимита.</string>
+    <string name="err_btn_rate_limit_exceeded">Ок</string>
+    <string name="err_header_no_network">Нет сети</string>
+    <string name="err_text_no_network">Нет связи с сервером. Проверьте своё подключение к интернету (и текущий IP).</string>
+    <string name="err_btn_no_network">Ок</string>
 
     <string name="date_01">%d января</string>
     <string name="date_02">%d февраля</string>

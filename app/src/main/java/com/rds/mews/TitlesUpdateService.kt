@@ -50,7 +50,7 @@ class TitlesUpdateService : Service() {
         val applicationContext = this.applicationContext
         val settingsManager = SettingsManager(applicationContext)
         val db = DbHelper(applicationContext)
-        val updateDelta = System.currentTimeMillis() - settingsManager.getLong(MewsRepository.LAST_TITLES_UPDATE, 0L)
+        val updateDeltaMills = System.currentTimeMillis() - settingsManager.getLong(MewsRepository.LAST_TITLES_UPDATE, 0L)
 
         if (!isNetworkAvailable(applicationContext)) {
             AlarmScheduler.schedule(applicationContext, System.currentTimeMillis() + 300000L)
@@ -65,7 +65,7 @@ class TitlesUpdateService : Service() {
         val rssLastUpdate = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
         val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
         val titlesPeriod = if (!oneTimeUpdate) {
-            updateDelta - 900000L
+            updateDeltaMills / 3600000L + 1
         } else {
             settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
         }
@@ -93,7 +93,7 @@ class TitlesUpdateService : Service() {
 
             if (!currentCoroutineContext().isActive) return
 
-            if ((oneTimeUpdate || updateDelta >= 7200000L) && noFetchErrors) {
+            if ((oneTimeUpdate || updateDeltaMills >= 7200000L) && noFetchErrors) {
                 val titles = db.getTitles()
                 if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
                     db.titlesTimeKill(0)
