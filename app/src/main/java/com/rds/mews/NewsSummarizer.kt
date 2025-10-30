@@ -304,7 +304,22 @@ class NewsSummarizer(
                 return false
             }
 
-            return if (filterTopics) mergeAndFilterTopics(allExtractedTopics, maxTopics, currentLanguage) else true
+            return if (filterTopics) {
+                mergeAndFilterTopics(allExtractedTopics, maxTopics, currentLanguage)
+            } else {
+                allExtractedTopics.forEach { batch ->
+                    val idsStr = batch.ids?.map { it.toString() } ?: listOf("")
+
+                    db.addTitle(
+                        title = batch.title,
+                        titleTime = 0,
+                        text = "<промежуточный текст>",
+                        sources = "<промежуточный текст>",
+                        links = db.dbPack(*idsStr.toTypedArray())
+                    )
+                }
+                true
+            }
 
         } catch (e: Exception) {
             e.printStackTrace()
