@@ -25,6 +25,7 @@ object MewsRepository {
     lateinit var lastTitlesUpdate: StateFlow<Long>
     lateinit var updatingTitles: StateFlow<Boolean>
     lateinit var updatingState: StateFlow<String?>
+    lateinit var bannedNewsFlow: StateFlow<Set<String>>
     private var isInitialized = false
     private val _sourcesUpdateTrigger = MutableStateFlow(0)
 
@@ -66,6 +67,13 @@ object MewsRepository {
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = settingsManager.getString(MewsRepository.UPDATING_STATE, "off")
             )
+
+        bannedNewsFlow = settingsManager.bannedNewsFlow
+            .stateIn(
+                scope = MewsRepository.externalScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = settingsManager.getStringSet(MewsRepository.BANNED_NEWS_SET, setOf(""))
+        )
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -166,6 +174,7 @@ object MewsRepository {
     const val TITLES_ALARM_MINS = "titles_alarm_time"
     const val NOTIFICATIONS_GRANTED = "notifications_granted"
     const val CURRENT_LANGUAGE = "current_language"
+    const val BANNED_NEWS_SET = "banned_news_set"
 
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
     var selectedTab: StateFlow<TabScreen> = _selectedTab.asStateFlow()
@@ -249,6 +258,20 @@ object MewsRepository {
 
     fun setUpdatingState(newValue: String) {
         settingsManager.saveString(UPDATING_STATE, newValue)
+    }
+
+    fun setBannedNews(newValue: Set<String>) {
+        settingsManager.saveStringSet(BANNED_NEWS_SET, newValue)
+    }
+
+    fun addBannedNew(newValue: String) {
+        if (!bannedNewsFlow.value.contains(newValue)) settingsManager.saveStringSet(BANNED_NEWS_SET, bannedNewsFlow.value + newValue)
+        println(bannedNewsFlow.value)
+    }
+
+    fun delBannedNew(value: String) {
+        if (bannedNewsFlow.value.contains(value)) settingsManager.saveStringSet(BANNED_NEWS_SET, bannedNewsFlow.value - value)
+        println(bannedNewsFlow.value)
     }
 
     private val _compactTabBar = MutableStateFlow(false)

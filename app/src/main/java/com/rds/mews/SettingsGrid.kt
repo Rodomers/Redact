@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -26,6 +27,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -81,6 +83,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
     val titlesAlarmUpdate by settingsModel.titlesAlarmUpdate.collectAsStateWithLifecycle()
     val alarmMins by settingsModel.titlesAlarmMins.collectAsStateWithLifecycle()
     val alarmFrequency by settingsModel.titlesUpdateFrequency.collectAsStateWithLifecycle()
+    val bannedNews by settingsModel.bannedNews.collectAsStateWithLifecycle()
     var alarmHrsText by remember { mutableIntStateOf(alarmMins / 60) }
     var alarmMinsText by remember { mutableIntStateOf(alarmMins % 60) }
     var showAlarmsSheet by remember { mutableStateOf(false) }
@@ -332,6 +335,28 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             }
         }
     )
+
+    val bannedNewsScreenState = remember { MutableTransitionState(false) }
+    val bannedNewsItems: MutableList<@Composable () -> Unit> = mutableListOf()
+    bannedNews.forEach { it ->
+        if (it != ""){
+            bannedNewsItems.add(
+                {
+                    CustomSettingsItem(it) {
+                        IconButton(
+                            onClick = { settingsModel.delBannedNews(it) }
+                        ) {
+                            Icon(modifier = Modifier.size(16.dp),
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.ban_btn_desc)
+                            )
+                        }
+                    }
+                }
+            )
+        }
+    }
+    println("bannedNewsItems: ${bannedNewsItems.size}")
 
     if (showAlarmsSheet) {
         CustomErrorBottomSheet(
@@ -762,6 +787,21 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                     }
                 }
             }
+            if (filterTopics && bannedNews.isNotEmpty()) {
+                item {
+                    CustomSettingsItem(text = stringResource(R.string.settings_banned_news)) {
+                        IconButton(
+                            modifier = Modifier
+                                .wrapContentSize(),
+                            onClick = {
+                                bannedNewsScreenState.targetState = !bannedNewsScreenState.currentState
+                            }
+                        ) {
+                            Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
+                        }
+                    }
+                }
+            }
 
             item {CustomBottomFootnote(stringResource(R.string.settings_footnote_text, stringResource(R.string.app_version)))}
         }
@@ -772,6 +812,13 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             items = autoUpdateItems,
             indexes = autoUpdateIndexes.value,
             header = stringResource(R.string.settings_titles_auto_update)
+        )
+
+        DeferredUpdateTab(
+            transitionState = bannedNewsScreenState,
+            onDismissRequest = {},
+            items = bannedNewsItems,
+            header = stringResource(R.string.settings_banned_news)
         )
     }
 }

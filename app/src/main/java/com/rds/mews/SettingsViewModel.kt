@@ -40,6 +40,7 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     val exactAlarmsAllowed: StateFlow<Boolean> = repository.exactAlarmsAllowed.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
     val defaultApiKey = repository.DEFAULT_GEMINI_API_KEY
+    val bannedNews = repository.bannedNewsFlow
 
     fun setCompactTab(value: Boolean) = viewModelScope.launch { repository.setCompactTab(value) }
     fun setMonetColors(value: Boolean) = viewModelScope.launch { repository.setMonetColors(value) }
@@ -56,6 +57,8 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     fun setCurrentLlm(value: String) = viewModelScope.launch { repository.setCurrentLlmModel(value) }
     fun setUserGeminiApi(value: String) = viewModelScope.launch { repository.setUserApiKey(value) }
     fun setEndureTime(value: Boolean) = viewModelScope.launch { repository.setEnlargeTimestamps(value) }
+    fun setBannedNews(value: Set<String>) = viewModelScope.launch { repository.setBannedNews(value) }
+    fun delBannedNews(value: String) = viewModelScope.launch { repository.delBannedNew(value) }
     fun setTitlesAlarmUpdate(
         context: Context,
         onShowNotificationsSheet: () -> Unit,

@@ -58,6 +58,21 @@ class SettingsManager(context: Context) {
         }
     }
 
+    val bannedNewsFlow: Flow<Set<String>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener {prefs, key ->
+            if (key == MewsRepository.BANNED_NEWS_SET) {
+                trySend(prefs.getStringSet(key, setOf("")) ?: setOf(""))
+            }
+        }
+
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getStringSet(MewsRepository.BANNED_NEWS_SET, setOf("")))
+
+        awaitClose {
+            sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
     private companion object {
         const val KEY_LAST_ERROR_TYPE = "last_error_type"
         const val KEY_LAST_ERROR_MESSAGE = "last_error_message"
@@ -97,6 +112,14 @@ class SettingsManager(context: Context) {
 
     fun getString(key: String, defaultValue: String): String {
         return sharedPreferences.getString(key, defaultValue) ?: "null"
+    }
+
+    fun getStringSet(key: String, defaultValue: Set<String>): Set<String> {
+        return sharedPreferences.getStringSet(key, defaultValue) ?: setOf("")
+    }
+
+    fun saveStringSet(key: String, defaultValue: Set<String>) {
+        sharedPreferences.edit { putStringSet(key, defaultValue) }
     }
 
     fun registerListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {

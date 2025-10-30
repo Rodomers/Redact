@@ -58,6 +58,7 @@ import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -313,6 +314,11 @@ fun TitlesCard(
         Toast.makeText(context, toastText, Toast.LENGTH_SHORT).show()
     }
 
+    fun banNews(){
+        MewsRepository.addBannedNew(title.title)
+        Toast.makeText(context, R.string.titles_card_banned, Toast.LENGTH_SHORT).show()
+    }
+
     val pagerHeight: Dp? = remember(page0Height) {
         page0Height?.let{
             with(density) { it.toDp() }
@@ -375,7 +381,7 @@ fun TitlesCard(
                     verticalAlignment = Alignment.Top,
                     beyondViewportPageCount = 1,
                     modifier = Modifier
-                        .heightIn(max = 2048.dp)
+                        .heightIn(max = 6000.dp)
                         .fillMaxWidth()
                         .let { baseModifier ->
                             if (pagerHeight != null) baseModifier.height(pagerHeight)
@@ -463,6 +469,16 @@ fun TitlesCard(
                             modifier = Modifier.size(16.dp),
                             imageVector = Icons.Default.Share,
                             contentDescription = stringResource(R.string.share_btn_desc)
+                        )
+                    }
+                    IconButton(
+                        onClick = ::banNews,
+                        modifier = Modifier.height(24.dp).align(Alignment.CenterVertically)
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(16.dp),
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.ban_btn_desc)
                         )
                     }
                 }

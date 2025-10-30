@@ -40,6 +40,8 @@
     <string name="settings_endure_time">Enlarged timestamps</string>
     <string name="settings_filter_topics">Additional topics filter</string>
     <string name="settings_titles_auto_update">Titles auto update</string>
+    <string name="settings_banned_news">Banned news</string>
+    <string name="settings_unban_new_button">Unban news button</string>
     <string name="settings_titles_alarm_update">Update at a fixed time</string>
     <string name="settings_titles_update_time">Update time</string>
     <string name="settings_titles_update_frequency">Update interval</string>
@@ -82,6 +84,7 @@
     <string name="titles_card_text">Text</string>
     <string name="titles_card_source">Source</string>
     <string name="titles_card_copied">Article text copied to clipboard.</string>
+    <string name="titles_card_banned">Article text banned. It will no longer appear in the list.</string>
     <string name="change_dialog_source">Source name</string>
     <string name="change_dialog_add_source">Add source</string>
     <string name="change_dialog_change_source">Change source</string>
@@ -92,6 +95,7 @@
     <string name="add">Add</string>
     <string name="change">Change</string>
     <string name="share_btn_desc">Share title</string>
+    <string name="ban_btn_desc">Ban title</string>
 
     <string name="update">Update</string>
     <string name="updating">Updating…</string>

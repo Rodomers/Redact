@@ -38,6 +38,8 @@
     <string name="settings_endure_time">Увеличенные маркеры времени</string>
     <string name="settings_filter_topics">Дополнительный фильтр тем</string>
     <string name="settings_titles_auto_update">Автообновление ленты</string>
+    <string name="settings_banned_news">Забаненные заголовки</string>
+    <string name="settings_unban_new_button">Разбанить заголовок</string>
     <string name="settings_titles_alarm_update">Обновлять в фиксированное время</string>
     <string name="settings_titles_update_time">Время обновления</string>
     <string name="settings_titles_update_frequency">Интервал обновления</string>
@@ -83,6 +85,7 @@
     <string name="titles_card_text">Текст</string>
     <string name="titles_card_source">Источник</string>
     <string name="titles_card_copied">Текст новости скопирован в буфера обмена.</string>
+    <string name="titles_card_banned">Заголовок новости забанен. Он больше не появится в списке.</string>
     <string name="change_dialog_source">Название источника</string>
     <string name="change_dialog_add_source">Добавление источника</string>
     <string name="change_dialog_change_source">Изменение источника</string>
@@ -93,6 +96,7 @@
     <string name="add">Добавить</string>
     <string name="change">Изменить</string>
     <string name="share_btn_desc">Поделиться заголовком</string>
+    <string name="ban_btn_desc">Забанить заголовок (т.е. тему)</string>
 
     <string name="update">Обновить</string>
     <string name="updating">Обновление…</string>
