@@ -148,9 +148,6 @@ class TitlesUpdateService : Service() {
                         nextRunTimeMillis
                     )
                 }")
-            } else {
-                AlarmScheduler.cancel(applicationContext)
-                println("TitlesUpdateService: Автообновление отключено, запланированные задачи отменены.")
             }
 
             if (!oneTimeUpdate) sendSuccessNotification()

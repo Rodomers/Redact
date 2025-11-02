@@ -356,7 +356,6 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             )
         }
     }
-    println("bannedNewsItems: ${bannedNewsItems.size}")
 
     if (showAlarmsSheet) {
         CustomErrorBottomSheet(
@@ -787,7 +786,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                     }
                 }
             }
-            if (filterTopics && bannedNews.isNotEmpty()) {
+            if (filterTopics && bannedNewsItems.isNotEmpty()) {
                 item {
                     CustomSettingsItem(text = stringResource(R.string.settings_banned_news)) {
                         IconButton(

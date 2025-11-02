@@ -202,7 +202,7 @@ class NewsSummarizer(
             var counter = 0
             val titlesCounter = titlesToSummarize.size
             var emptyAnswer = false
-            val semaphore = Semaphore(3)
+            val semaphore = Semaphore(2)
 
             val summarizedResults = coroutineScope {
                 titlesToSummarize.map { title ->
@@ -213,6 +213,7 @@ class NewsSummarizer(
                                 if (counter > 1) delay(6000L)
                                 settingsManager.saveString(MewsRepository.UPDATING_STATE, "${counter}/${titlesCounter}")
                                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
+                                println(title.title)
 
                                 val suitableMessages = title.ids?.mapNotNull { id -> messages.find { it.id == id } } ?: emptyList()
                                 val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
