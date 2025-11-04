@@ -1,5 +1,6 @@
 package com.rds.mews
 
+import kotlinx.coroutines.delay
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -7,12 +8,14 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
+import java.net.Authenticator
+import java.net.PasswordAuthentication
+import java.util.Base64
 
 // --- Парсер RSS-потоков ---`
 class RssFetcher(
     private val db: DbHelper, // Передавать DbHelper из основной программы
 ) {
-
     // Основной запуск — парсит все RSS-каналы и сохраняет новые сообщения
     suspend fun fetchAndStoreAll(messAliveTime: Long, maxTime: Int = 168): FetchResult {
         val rssList = try {
@@ -22,60 +25,52 @@ class RssFetcher(
             return FetchResult(0, 0, 0, listOf(e.message ?: "unknown"))
         }
 
-        var feedsProcessed = 0 // Кол-во проверенных новостей
-        var itemsAdded = 0 // Кол-во добавленных новостей в БД
-        var itemsSkipped = 0 // Кол-во пропущенных новостей (старые, ошибки, т.д.)
-        val errors = mutableListOf<String>() // Список ошибок
-
-
-        for ((index, rss) in rssList.withIndex()) {
-            try {
-                var doc: Document = Jsoup.parse("", "", Parser.xmlParser())
-                val tgClient = TelegramRssClient()
-                if (rss.link.contains("t.me")) {
-                    doc = tgClient.buildRss(rss.link)
-                } else {
-                    println("not tg fetch start")
-                    doc = Jsoup.connect(rss.link).get() // Получение XML из RSS
-                    println("not tg fetch end")
-                }
-                val items = parseRssItems(doc) // Парс полученного XML
-                for (item in items) {
-                    println(item)
-                    val link = item.link ?: continue // если нет ссылки — пропускаем
-                    val desc = item.description ?: continue // Нет описания новости - пропускаем
-                    if (db.findMessage(rss.source, desc) != null) {
-                        itemsSkipped++ // Есть новость в БД - пропускаем
-                        continue
-                    }
-                    val time = item.pubDateMillis ?: System.currentTimeMillis() // Пытаемся получить время новости, иначе системное
-                    val text = buildMessageText(item) // Текст новости
-                    if (time - System.currentTimeMillis() > maxTime * 60 * 60 * 100){
-                        itemsSkipped++ // Проверка на актуальность
-                        continue
-                    }
-                    // Добавление в БД
-                    db.addMessage(messageTime = time, link = link, source = rss.source, messageText = text)
-                    itemsAdded++
-                }
-                feedsProcessed++
-
-//                if (rss.link.contains("t.me") && index != rssList.lastIndex && rssList.drop(index + 1).any { it.link.contains("t.me") }) {
-//                    println("Entered delay")
-//                    delay(40000L)
-//                }
-
+        try {
+            val rssList = try {
+                db.getRSS()
             } catch (e: Exception) {
-                val msg = "Ошибка при обработке RSS (id=${rss.id}, link=${rss.link}): ${e.message}"
-                println(msg) // Ошибка лол
-                errors.add(msg)
+                println("Ошибка при получении списка RSS из БД: ${e.message}")
+                return FetchResult(0, 0, 0, listOf(e.message ?: "unknown"))
             }
-            finally {
-                db.messageTimeKill(messAliveTime.toLong() * 3)
-            }
-        }
 
-        return FetchResult(feedsProcessed, itemsAdded, itemsSkipped, errors)
+            var feedsProcessed = 0
+            var itemsAdded = 0
+            var itemsSkipped = 0
+            val errors = mutableListOf<String>()
+
+            for ((index, rss) in rssList.withIndex()) {
+                try {
+                    var doc: Document
+                    val tgClient = TelegramRssClient()
+                    if (rss.link.contains("t.me")) {
+                        rss.link = "http://${MewsRepository.SERVER_IP}:1200/telegram/channel/${rss.link.split("/").last().trim()}?limit=100&key=${MewsRepository.RSS_HUB_KEY}"
+                        println("tg fetch start")
+                        doc = tgClient.buildRss(rss.link)
+                        println("tg fetch end")
+                    } else {
+                        println("not tg fetch start for ${rss.link}")
+                        doc = Jsoup.connect(rss.link)
+                            .get()
+                        println("not tg fetch end")
+                    }
+
+                    // ... остальная логика парсинга ...
+
+                } catch (e: Exception) {
+                    val msg = "Ошибка при обработке RSS (id=${rss.id}, link=${rss.link}): ${e.message}"
+                    println(msg)
+                    errors.add(msg)
+                } finally {
+                    db.messageTimeKill(messAliveTime.toLong() * 3)
+                }
+            }
+
+            return FetchResult(feedsProcessed, itemsAdded, itemsSkipped, errors)
+
+        } catch (e: Exception) {
+            println("A critical error occurred in fetchAndStoreAll: ${e.message}")
+            return FetchResult(0, 0, 0, listOf(e.message ?: "unknown"))
+        }
     }
 
     // --- Структура внутреннего Item'а ---
@@ -183,7 +178,8 @@ suspend fun RSSName(strLink: String): String? {
         if (strLink.contains("t.me")) {
             doc = tgClient.buildRss(strLink)
         } else {
-            doc = Jsoup.connect(strLink).get() // Получение XML из RSS
+            doc = Jsoup.connect(strLink)
+                .get() // Получение XML из RSS
         }
         return doc.select("title")[0].text()
     } catch (e: Exception){

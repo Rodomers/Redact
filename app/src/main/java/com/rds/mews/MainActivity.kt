@@ -129,6 +129,7 @@ fun MainScreen(mainActivity: MainActivity) {
         val scope = rememberCoroutineScope()
 
         MewsRepository.setCurrentLanguage(stringResource(R.string.current_language))
+        MewsRepository.setLastRssUpdate(0L)
 
         if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
             CustomErrorBottomSheet(
