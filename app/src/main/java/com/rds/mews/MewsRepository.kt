@@ -29,6 +29,8 @@ object MewsRepository {
     private var isInitialized = false
     private val _sourcesUpdateTrigger = MutableStateFlow(0)
     var DEFAULT_GEMINI_API_KEY: String = ""
+    var RSS_HUB_KEY: String = ""
+    var SERVER_IP: String = ""
 
     fun initialize(context: Context, externalScope: CoroutineScope) {
         if (isInitialized) return
@@ -37,6 +39,8 @@ object MewsRepository {
         this.settingsManager = SettingsManager(context)
         this.externalScope = externalScope
         this.DEFAULT_GEMINI_API_KEY = GeminiApiKeyProvider().getKey()
+        this.RSS_HUB_KEY = RssHubApiKeyProvider().getKey()
+        this.SERVER_IP = ServerAddressProvider().getKey()
 
         loadInitSettings()
         setContext(context)

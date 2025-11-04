@@ -43,3 +43,24 @@ Java_com_rds_mews_RssHubApiKeyProvider_getRssHubKey (
     std::string apiKey = getDecodedServerKey();
     return env->NewStringUTF(apiKey.c_str());
 }
+
+std::string getDecodedServerAddress() {
+    std::vector<char> obfuscatedKey = {0};
+
+    char xorKey = '@';
+
+    std::string address;
+    address.reserve(obfuscatedKey.size());
+    for (char c : obfuscatedKey) {
+        address += c ^ xorKey;
+    }
+    return address;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_rds_mews_ServerAddressProvider_getServerAddress (
+        JNIEnv* env,
+        jobject /* this */) {
+    std::string apiKey = getDecodedServerAddress();
+    return env->NewStringUTF(apiKey.c_str());
+}
