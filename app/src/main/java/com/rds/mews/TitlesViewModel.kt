@@ -76,6 +76,10 @@ class TitlesViewModel(
         repository.startTitlesUpdate(application)
     }
 
+    fun onBanTheme(value: String) {
+        viewModelScope.launch { repository.addBannedNew(value) }
+    }
+
     @OptIn(ExperimentalMaterial3Api::class)
     fun handleErrorAction(clipboardManager: ClipboardManager, activity: MainActivity) {
         val err = errState.value ?: return

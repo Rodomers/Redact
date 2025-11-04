@@ -1,6 +1,10 @@
 package com.rds.mews
 
 import android.app.Application
+import android.app.ComponentCaller
+import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -51,6 +55,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
+        handleIntent(intent)
+
         setContent {
             MainScreen(this)
         }
@@ -65,6 +71,27 @@ class MainActivity : ComponentActivity() {
         val notificationsAllowed = isNotificationPermissionGranted(this)
         if (notificationsAllowed != MewsRepository.notificationsGranted.value) {
             MewsRepository.setNotificationsGranted(notificationsAllowed)
+        }
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(1)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent != null && intent.hasExtra("selected_tab")) {
+            val tabIndex = intent.getIntExtra("selected_tab", 0)
+            MewsRepository.setCurrentTab(
+                when (tabIndex) {
+                    1 -> TabScreen.Titles
+                    2 -> TabScreen.Settings
+                    else -> TabScreen.Sources
+                }
+            )
         }
     }
 }
@@ -191,7 +218,8 @@ fun MainScreen(mainActivity: MainActivity) {
                         lastTitlesUpdate = lastTitlesUpdate,
                         scope = scope,
                         endureTime = endureTime,
-                        mainActivity = mainActivity
+                        mainActivity = mainActivity,
+                        onBanTheme = titlesViewModel::onBanTheme
                     )
                 }
                 else -> SettingsGrid(

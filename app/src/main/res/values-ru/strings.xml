@@ -19,6 +19,7 @@
     <string name="optimization_sheet_cancel">Позже</string>
     <string name="optimization_sheet_conf">Разрешить</string>
     <string name="no_sources">Нет источников :(</string>
+    <string name="link">Ссылка:\ </string>
 
     <string name="titles_update_text">Потяните вниз, чтобы обновить\n(Это оочень долго)</string>
     <string name="today">сегодня</string>
@@ -38,7 +39,7 @@
     <string name="settings_endure_time">Увеличенные маркеры времени</string>
     <string name="settings_filter_topics">Дополнительный фильтр тем</string>
     <string name="settings_titles_auto_update">Автообновление ленты</string>
-    <string name="settings_banned_news">Забаненные заголовки</string>
+    <string name="settings_banned_news">Заблокированные заголовки</string>
     <string name="settings_unban_new_button">Разбанить заголовок</string>
     <string name="settings_titles_alarm_update">Обновлять в фиксированное время</string>
     <string name="settings_titles_update_time">Время обновления</string>
@@ -85,7 +86,7 @@
     <string name="titles_card_text">Текст</string>
     <string name="titles_card_source">Источник</string>
     <string name="titles_card_copied">Текст новости скопирован в буфера обмена.</string>
-    <string name="titles_card_banned">Заголовок новости забанен. Он больше не появится в списке.</string>
+    <string name="titles_card_banned">Заголовок новости заблокирован. Он больше не появится в списке.</string>
     <string name="change_dialog_source">Название источника</string>
     <string name="change_dialog_add_source">Добавление источника</string>
     <string name="change_dialog_change_source">Изменение источника</string>
@@ -95,8 +96,9 @@
     <string name="cancel">Отмена</string>
     <string name="add">Добавить</string>
     <string name="change">Изменить</string>
-    <string name="share_btn_desc">Поделиться заголовком</string>
-    <string name="ban_btn_desc">Забанить заголовок (т.е. тему)</string>
+    <string name="moreVert_btn_desc">Ещё</string>
+    <string name="share_btn_desc">Поделиться</string>
+    <string name="ban_btn_desc">Заблокировать</string>
 
     <string name="update">Обновить</string>
     <string name="updating">Обновление…</string>
@@ -166,9 +168,9 @@
     <string name="rss_worker_title">Обновление новостей</string>
     <string name="rss_worker_text">Получаем данные от наших источников…</string>
     <string name="titles_service_name">Служба фонового обновления новостей</string>
-    <string name="titles_service_title">Обновление заголовков</string>
+    <string name="titles_service_title">Обновление ленты</string>
     <string name="titles_service_text">Идёт фоновая обработка новостей…</string>
     <string name="titles_updated_name">Успешное обновление</string>
-    <string name="titles_updated_title">Заголовки обновлены</string>
+    <string name="titles_updated_title">Новостная лента обновлена</string>
     <string name="titles_updated_text">Нажмите на уведомление, чтобы прочитать</string>
 </resources>

@@ -118,10 +118,11 @@ class TitlesUpdateService : Service() {
                     is SummarizationResult.Success -> {
                         settingsManager.clearLastError()
                         MewsRepository.triggerTitlesRefresh()
+
+                        if (!oneTimeUpdate) sendSuccessNotification()
                     }
                     is SummarizationResult.Failure -> settingsManager.saveLastError(res)
                 }
-                settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
             }
 
             val autoUpdateEnabled = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
@@ -149,8 +150,6 @@ class TitlesUpdateService : Service() {
                     )
                 }")
             }
-
-            if (!oneTimeUpdate) sendSuccessNotification()
         } catch (e: CancellationException) {
             println("TitlesUpdateService: Корутина отменена.")
         } catch (e: Exception) {
@@ -196,8 +195,9 @@ class TitlesUpdateService : Service() {
 
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("selected_tab", 1)
         }
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)

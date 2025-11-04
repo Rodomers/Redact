@@ -6,7 +6,9 @@ import org.json.JSONObject
 import kotlin.collections.mutableListOf
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.engine.ProxyBuilder
 import io.ktor.client.engine.cio.*
+import io.ktor.client.engine.http
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*

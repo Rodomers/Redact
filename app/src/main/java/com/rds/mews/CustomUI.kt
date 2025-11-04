@@ -85,7 +85,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -288,6 +294,7 @@ fun SourcesAddCard(
 @Composable
 fun TitlesCard(
     title: Title,
+    onBanTheme: (String) -> Unit,
     showDates: Boolean = false,
     isExpanded: Boolean,
     onToggleExpanded: () -> Unit,
@@ -310,14 +317,20 @@ fun TitlesCard(
     fun copyText() {
         val copiedText = "${title.title}\n\n${title.text}\n\n${source}: ${title.sources}"
         clipboardManager.setText(AnnotatedString(copiedText))
-
         Toast.makeText(context, toastText, Toast.LENGTH_SHORT).show()
     }
-
-    fun banNews(){
-        MewsRepository.addBannedNew(title.title)
+    fun banNew() {
+        onBanTheme(title.title)
         Toast.makeText(context, R.string.titles_card_banned, Toast.LENGTH_SHORT).show()
     }
+
+    val dropdownTransitionState = remember { MutableTransitionState(false) }
+    val toggleDropdown = { dropdownTransitionState.targetState = !dropdownTransitionState.currentState }
+    val buttons = listOf(
+        Pair(stringResource(R.string.share_btn_desc), ::copyText),
+        Pair(stringResource(R.string.ban_btn_desc), ::banNew)
+    )
+
 
     val pagerHeight: Dp? = remember(page0Height) {
         page0Height?.let{
@@ -363,7 +376,7 @@ fun TitlesCard(
                     text = title.title,
                     textAlign = TextAlign.Left,
                     modifier = Modifier
-                        .padding(8.dp)
+                        .padding(vertical = 8.dp)
                         .wrapContentHeight()
                         .align(Alignment.CenterVertically),
                     fontWeight = FontWeight.Bold
@@ -462,24 +475,26 @@ fun TitlesCard(
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     IconButton(
-                        onClick = ::copyText,
+                        onClick = toggleDropdown,
                         modifier = Modifier.height(24.dp).align(Alignment.CenterVertically)
                     ) {
                         Icon(
                             modifier = Modifier.size(16.dp),
-                            imageVector = Icons.Default.Share,
-                            contentDescription = stringResource(R.string.share_btn_desc)
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.moreVert_btn_desc)
                         )
                     }
-                    IconButton(
-                        onClick = ::banNews,
-                        modifier = Modifier.height(24.dp).align(Alignment.CenterVertically)
-                    ) {
-                        Icon(
-                            modifier = Modifier.size(16.dp),
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.ban_btn_desc)
-                        )
+
+                    if (dropdownTransitionState.currentState || dropdownTransitionState.targetState) {
+                        Popup(
+                            onDismissRequest = { dropdownTransitionState.targetState = false },
+                            alignment = Alignment.TopEnd
+                        ) {
+                            CustomDropdown(
+                                transitionState = dropdownTransitionState,
+                                buttons = buttons
+                            )
+                        }
                     }
                 }
             }
@@ -591,7 +606,8 @@ fun CustomChangeBottomSheet(
     add: Boolean = false,
     source: String = stringResource(R.string.change_dialog_source),
     scope: CoroutineScope,
-    sheetState: SheetState
+    sheetState: SheetState,
+    sourceLink: String? = null
 ) {
     val title = if (add) stringResource(R.string.change_dialog_add_source) else stringResource(R.string.change_dialog_change_source)
 
@@ -677,6 +693,29 @@ fun CustomChangeBottomSheet(
                 Text(
                     text = if (validRss) stringResource(R.string.valid_link) else stringResource(R.string.enter_correct_link),
                     modifier = Modifier.padding(16.dp)
+                )
+            }
+
+            if (!add && sourceLink != null) {
+                Text(
+                    modifier = Modifier.padding(16.dp),
+                    text = buildAnnotatedString {
+                        append(stringResource(R.string.link))
+
+                        withLink(
+                            link = LinkAnnotation.Url(
+                                url = sourceLink,
+                                styles = TextLinkStyles(
+                                    style = SpanStyle(
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        textDecoration = TextDecoration.Underline
+                                    )
+                                )
+                            )
+                        ) {
+                            append(source)
+                        }
+                    }
                 )
             }
 

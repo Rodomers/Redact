@@ -356,6 +356,9 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             )
         }
     }
+    LaunchedEffect(bannedNewsItems) {
+        if (bannedNewsItems.isEmpty()) bannedNewsScreenState.targetState = false
+    }
 
     if (showAlarmsSheet) {
         CustomErrorBottomSheet(
@@ -786,7 +789,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                     }
                 }
             }
-            if (filterTopics && bannedNewsItems.isNotEmpty()) {
+            if (bannedNewsItems.isNotEmpty()) {
                 item {
                     CustomSettingsItem(text = stringResource(R.string.settings_banned_news)) {
                         IconButton(

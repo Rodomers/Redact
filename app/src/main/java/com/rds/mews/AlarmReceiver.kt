@@ -8,6 +8,8 @@ import android.content.Intent
 import android.os.Build
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import java.util.Calendar
+import java.util.Date
 
 object AlarmScheduler {
     private const val TITLES_REQUEST_CODE = 101
@@ -83,10 +85,34 @@ class RSSAlarmReceiver: BroadcastReceiver() {
 
 class BootCompletedReceiver: BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            val nextRunTimeMills = System.currentTimeMillis() + 120000L
-            AlarmScheduler.schedule(context, nextRunTimeMills)
-            AlarmScheduler.schedule(context, nextRunTimeMills, true)
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) {
+            return
         }
+
+        val settingsManager = SettingsManager(context)
+
+        val titlesUpdatePeriodHrs = settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
+        val titlesUpdateTimeMins = settingsManager.getInt(MewsRepository.TITLES_ALARM_MINS, 540)
+
+        val nextRunTime = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, titlesUpdateTimeMins / 60)
+            set(Calendar.MINUTE, titlesUpdateTimeMins % 60)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        while (nextRunTime.before(Calendar.getInstance())) {
+            nextRunTime.add(Calendar.HOUR_OF_DAY, titlesUpdatePeriodHrs)
+        }
+
+        val nextRunTimeMillis = nextRunTime.timeInMillis
+
+        AlarmScheduler.schedule(context, nextRunTimeMillis)
+
+        println("BootCompletedReceiver: Следующее обновление запланировано на ${
+            Date(
+                nextRunTimeMillis
+            )
+        }")
     }
 }

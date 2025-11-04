@@ -1,5 +1,9 @@
 package com.rds.mews
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.icu.util.Calendar
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,7 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.BroadcastFrameClock
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,7 +73,8 @@ fun TitlesGrid(
     showDates: Boolean,
     lastTitlesUpdate: Long,
     scope: CoroutineScope,
-    endureTime: Boolean = false
+    endureTime: Boolean = false,
+    onBanTheme: (String) -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -163,14 +170,22 @@ fun TitlesGrid(
                         if (endureTime) {
                             CustomTimeMark(item.time)
                         }
-                        TitlesCard(item, isExpanded = isExpanded, pagerState = pagerState, onToggleExpanded = { onToggleExpanded(item.id) }, rememberPage = { page -> rememberCardPage(item.id, page) }, noTime = endureTime)
+                        TitlesCard(
+                            item,
+                            isExpanded = isExpanded,
+                            pagerState = pagerState,
+                            onToggleExpanded = { onToggleExpanded(item.id) },
+                            rememberPage = { page -> rememberCardPage(item.id, page) },
+                            noTime = endureTime,
+                            onBanTheme = onBanTheme
+                        )
                     }
                 }
             }
 
             if (groupedItems.isNotEmpty()) {
                 item { TitlesGridFootnote(lastTitlesUpdate) }
-                item {Spacer(modifier = Modifier.height(1.dp))}
+                item { Spacer(modifier = Modifier.height(1.dp)) }
             }
         }
     }

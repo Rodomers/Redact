@@ -105,7 +105,8 @@ fun SourcesGrid(
                 add = false,
                 source = changeDialog,
                 scope = scope,
-                sheetState = bottomSheetState
+                sheetState = bottomSheetState,
+                sourceLink = itemsList.find { it.source == changeDialog }?.link
             )
         }
     }
