@@ -28,6 +28,7 @@ object MewsRepository {
     lateinit var bannedNewsFlow: StateFlow<Set<String>>
     private var isInitialized = false
     private val _sourcesUpdateTrigger = MutableStateFlow(0)
+    var DEFAULT_GEMINI_API_KEY: String = ""
 
     fun initialize(context: Context, externalScope: CoroutineScope) {
         if (isInitialized) return
@@ -35,6 +36,7 @@ object MewsRepository {
         this.db = DbHelper(context)
         this.settingsManager = SettingsManager(context)
         this.externalScope = externalScope
+        this.DEFAULT_GEMINI_API_KEY = GeminiApiKeyProvider().getKey()
 
         loadInitSettings()
         setContext(context)
@@ -210,7 +212,6 @@ object MewsRepository {
         _titlesPeriod.value = newValue
     }
 
-    const val DEFAULT_GEMINI_API_KEY: String = "AIzaSyCNNpbcjd8lMRMtD6naikNMaRxnG-0HHkk"
     private val _userApiKey = MutableStateFlow(DEFAULT_GEMINI_API_KEY)
     val userApiKey: StateFlow<String> = _userApiKey.asStateFlow()
     fun setUserApiKey(newValue: String) {
