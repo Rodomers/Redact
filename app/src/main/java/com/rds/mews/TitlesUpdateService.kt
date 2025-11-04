@@ -144,11 +144,7 @@ class TitlesUpdateService : Service() {
                 val nextRunTimeMillis = nextRunTime.timeInMillis
                 AlarmScheduler.schedule(applicationContext, nextRunTimeMillis)
 
-                println("TitlesUpdateService: Следующее обновление запланировано на ${
-                    Date(
-                        nextRunTimeMillis
-                    )
-                }")
+                println("TitlesUpdateService: Следующее обновление запланировано на ${Date(nextRunTimeMillis)}")
             }
         } catch (e: CancellationException) {
             println("TitlesUpdateService: Корутина отменена.")

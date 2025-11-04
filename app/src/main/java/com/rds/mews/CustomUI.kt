@@ -563,10 +563,11 @@ fun CustomPullToRefreshIndicator(
                 indicatorHeight = size.height
             }
             .graphicsLayer {
+                val isHeightKnown = indicatorHeight > 0
                 scaleY = scale
-                alpha = scale
+                alpha = if (isHeightKnown) scale else 0f
 
-                translationY = state.distanceFraction * refreshThresholdPx - indicatorHeight
+                if (isHeightKnown) translationY = state.distanceFraction * refreshThresholdPx - indicatorHeight
             }
             .padding(horizontal = 20.dp, vertical = 10.dp)
             .statusBarsPadding()
