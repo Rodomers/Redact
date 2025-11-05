@@ -96,11 +96,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
-    data object Sources: TabScreen(titleResId = R.string.tabscreen_sources, Icons.Default.Favorite)
-    data object Titles: TabScreen(titleResId = R.string.tabscreen_titles, Icons.Rounded.Menu)
-    data object Settings: TabScreen(titleResId = R.string.tabscreen_settings, Icons.Default.Settings)
-}
+//sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
+//    data object Sources: TabScreen(titleResId = R.string.tabscreen_sources, Icons.Default.Favorite)
+//    data object Titles: TabScreen(titleResId = R.string.tabscreen_titles, Icons.Rounded.Menu)
+//    data object Settings: TabScreen(titleResId = R.string.tabscreen_settings, Icons.Default.Settings)
+//}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -233,43 +233,43 @@ fun MainScreen(mainActivity: MainActivity) {
     }
 }
 
-@Composable
-fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit, compact: Boolean = false) {
-    val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)
-
-    val targetHeight = if (compact) 50.dp else 70.dp
-
-    val animatedHeight by animateDpAsState(
-        targetValue = targetHeight,
-        animationSpec = tween(durationMillis = 300),
-        label = "NavigationBarHeight"
-    )
-
-    NavigationBar(
-        modifier = Modifier
-            .navigationBarsPadding()
-            .height(animatedHeight),
-        windowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        tabs.forEach { tab ->
-            val tabTitle = stringResource(id = tab.titleResId)
-
-            NavigationBarItem(
-                selected = selectedTab == tab,
-                onClick = { onTabSelected(tab) },
-                icon = {
-                    Icon(imageVector = tab.icon, contentDescription = tabTitle)
-                },
-                label = if (!compact) {
-                    { Text(text = tabTitle) }
-                } else null,
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.surface,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    indicatorColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            )
-        }
-    }
-}
+//@Composable
+//fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit, compact: Boolean = false) {
+//    val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)
+//
+//    val targetHeight = if (compact) 50.dp else 70.dp
+//
+//    val animatedHeight by animateDpAsState(
+//        targetValue = targetHeight,
+//        animationSpec = tween(durationMillis = 300),
+//        label = "NavigationBarHeight"
+//    )
+//
+//    NavigationBar(
+//        modifier = Modifier
+//            .navigationBarsPadding()
+//            .height(animatedHeight),
+//        windowInsets = WindowInsets(0, 0, 0, 0),
+//        containerColor = MaterialTheme.colorScheme.surface
+//    ) {
+//        tabs.forEach { tab ->
+//            val tabTitle = stringResource(id = tab.titleResId)
+//
+//            NavigationBarItem(
+//                selected = selectedTab == tab,
+//                onClick = { onTabSelected(tab) },
+//                icon = {
+//                    Icon(imageVector = tab.icon, contentDescription = tabTitle)
+//                },
+//                label = if (!compact) {
+//                    { Text(text = tabTitle) }
+//                } else null,
+//                colors = NavigationBarItemDefaults.colors(
+//                    selectedIconColor = MaterialTheme.colorScheme.surface,
+//                    unselectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+//                    indicatorColor = MaterialTheme.colorScheme.onSecondaryContainer
+//                )
+//            )
+//        }
+//    }
+//}
