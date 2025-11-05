@@ -670,7 +670,7 @@ fun CustomChangeBottomSheet(
                         rssText = it
                         validRss = false
                         scope.launch(Dispatchers.IO) {
-                            val res = RSSName(linkTransform(rssText))
+                            val res = RSSName(linkTransform(rssText), enableProxy = MewsRepository.proxyEnabled.value)
                             if (res != null) {
                                 sourceText = res
                                 validRss = true

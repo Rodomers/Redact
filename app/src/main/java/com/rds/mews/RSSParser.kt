@@ -173,8 +173,8 @@ class RssFetcher(
         val errors: List<String>
     )
 }
-suspend fun RSSName(strLink: String): String? {
-    val httpClient = SharedHttpClient.createInstance(MewsRepository.SERVER_IP, MewsRepository.RSS_HUB_KEY)
+suspend fun RSSName(strLink: String, enableProxy: Boolean = true): String? {
+    val httpClient = SharedHttpClient.createInstance(MewsRepository.SERVER_IP, MewsRepository.RSS_HUB_KEY, enableProxy = enableProxy)
     try {
         val doc: Document
         var link = strLink

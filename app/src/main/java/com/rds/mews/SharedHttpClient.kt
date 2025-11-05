@@ -27,11 +27,11 @@ object SharedHttpClient {
                 socketTimeoutMillis = 60000
             }
 
-            engine {
-                proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(serverIp, 80))
-            }
-
             if (enableProxy) {
+                engine {
+                    proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(serverIp, 80))
+                }
+
                 defaultRequest {
                     val credentials = "mews:$rssHubKey"
                     val encodedCredentials = Base64.getEncoder().encodeToString(credentials.toByteArray())
