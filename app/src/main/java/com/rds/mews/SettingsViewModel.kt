@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -38,6 +39,8 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     val titlesUpdateFrequency: StateFlow<Int> = repository.titlesAutoUpdateFrequency.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), 24)
     val exactAlarmsAllowed: StateFlow<Boolean> = repository.exactAlarmsAllowed.stateIn(viewModelScope,
+        SharingStarted.WhileSubscribed(5000), false)
+    val proxyEnabled: StateFlow<Boolean> = repository.proxyEnabled.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
     val defaultApiKey = repository.DEFAULT_GEMINI_API_KEY
     val bannedNews = repository.bannedNewsFlow
@@ -88,6 +91,7 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     }
     fun setAlarmsAllowed(value: Boolean) = viewModelScope.launch { repository.setExactAlarmsAllowed(value) }
     fun planTitlesAutoUpdate(context: Context) = viewModelScope.launch { repository.planTitlesUpdate(context) }
+    fun setProxyEnabled(value: Boolean) = viewModelScope.launch { repository.setProxyEnabled(value) }
 }
 
 class SettingsViewModelFactory : ViewModelProvider.Factory {

@@ -4,32 +4,20 @@ import android.annotation.SuppressLint
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.collections.mutableListOf
-import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlin.math.min
 import kotlinx.coroutines.withTimeout
 import org.json.JSONException
 import kotlinx.coroutines.sync.withPermit
 import java.io.Closeable
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.defaultRequest
-import java.net.InetSocketAddress
-import java.net.PasswordAuthentication
-import java.net.Proxy
-import java.util.Base64
 
 
 private data class SummaryResult(
@@ -43,32 +31,11 @@ private data class SummaryResult(
 class LLMClient(
     val apiKey: String = "",
     val MODEL: String = "gemini-2.0-flash-lite",
-    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/${if (MODEL != "") MODEL else "gemini-2.0-flash"}:generateContent"
+    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/${if (MODEL != "") MODEL else "gemini-2.0-flash"}:generateContent",
+    enableProxy: Boolean = false
 ) : Closeable {
-    private val jsonParser = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-    }
-
-    private val httpClient = HttpClient(CIO) {
-        install(ContentNegotiation) {
-            json(jsonParser)
-        }
-        install(HttpTimeout) {
-            requestTimeoutMillis = 60000
-            connectTimeoutMillis = 15000
-            socketTimeoutMillis = 60000
-        }
-
-        engine {
-            proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(MewsRepository.SERVER_IP, 80))
-        }
-        defaultRequest {
-            val credentials = "mews:${MewsRepository.RSS_HUB_KEY}"
-            val encodedCredentials = Base64.getEncoder().encodeToString(credentials.toByteArray())
-            header("Proxy-Authorization", "Basic $encodedCredentials")
-        }
-    }
+    private val httpClient = SharedHttpClient.createInstance(MewsRepository.SERVER_IP, MewsRepository.RSS_HUB_KEY, enableProxy = enableProxy)
+    private val jsonParser = SharedHttpClient.jsonParser
 
     suspend fun sendPrompt(prompt: String): String? {
         val requestBody = GeminiRequest(
@@ -153,7 +120,7 @@ class LLMClient(
 
 class NewsSummarizer(
     private val db: DbHelper,
-    private val llm: LLMClient
+    private val llm: LLMClient,
 ) {
     data class Topics(
         val title: String,

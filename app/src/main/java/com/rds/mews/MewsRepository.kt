@@ -181,6 +181,7 @@ object MewsRepository {
     const val NOTIFICATIONS_GRANTED = "notifications_granted"
     const val CURRENT_LANGUAGE = "current_language"
     const val BANNED_NEWS_SET = "banned_news_set"
+    const val ENABLE_PROXY = "enable_proxy"
 
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
     var selectedTab: StateFlow<TabScreen> = _selectedTab.asStateFlow()
@@ -253,6 +254,13 @@ object MewsRepository {
         _lastRssUpdate.value = newValue
     }
 
+    private val _enableProxy = MutableStateFlow(false)
+    val proxyEnabled: StateFlow<Boolean> = _enableProxy.asStateFlow()
+    fun setProxyEnabled(newValue: Boolean) {
+        settingsManager.saveBoolean(ENABLE_PROXY, newValue)
+        _enableProxy.value = newValue
+    }
+
     fun setLastTitlesUpdate(newValue: Long) {
         settingsManager.saveLong(LAST_TITLES_UPDATE, newValue)
     }
@@ -271,12 +279,10 @@ object MewsRepository {
 
     fun addBannedNew(newValue: String) {
         if (!bannedNewsFlow.value.contains(newValue)) settingsManager.saveStringSet(BANNED_NEWS_SET, bannedNewsFlow.value + newValue)
-        println(bannedNewsFlow.value)
     }
 
     fun delBannedNew(value: String) {
         if (bannedNewsFlow.value.contains(value)) settingsManager.saveStringSet(BANNED_NEWS_SET, bannedNewsFlow.value - value)
-        println(bannedNewsFlow.value)
     }
 
     private val _compactTabBar = MutableStateFlow(false)
@@ -378,6 +384,7 @@ object MewsRepository {
         _titlesAutoUpdateFrequency.value = settingsManager.getInt(TITLES_AUTO_UPDATE_FREQUENCY, 24)
         _exactAlarmsAllowed.value = settingsManager.getBoolean(ALARMS_ALLOWED, false)
         _notificationsGranted.value = settingsManager.getBoolean(NOTIFICATIONS_GRANTED, false)
+        _enableProxy.value = settingsManager.getBoolean(ENABLE_PROXY, false)
 
         _titlesNum.value = settingsManager.getInt(TITLES_NUM, 10)
         _titlesPeriod.value = settingsManager.getInt(TITLES_PERIOD, 24)

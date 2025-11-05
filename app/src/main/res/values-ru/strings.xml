@@ -29,6 +29,7 @@
     <string name="settings_chapter_appearance">Внешний вид</string>
     <string name="settings_chapter_titles">Заголовки</string>
     <string name="settings_chapter_llm">Нейросеть</string>
+    <string name="settings_chapter_additional">Дополнительные</string>
     <string name="settings_system_theme">Системная</string>
     <string name="settings_light_theme">Светлая</string>
     <string name="settings_dark_theme">Тёмная</string>
@@ -52,6 +53,7 @@
     <string name="settings_paste">Вставить</string>
     <string name="settings_ignore_optimization">Работа в фоне</string>
     <string name="settings_gemini_model">Выбор модели Gemini</string>
+    <string name="settings_enable_proxy">Встроенный прокси</string>
     <string name="settings_footnote_text">Обратная связь (Telegram): @mewsapp\nВерсия %s</string>
     <string name="settings_alarms_sheet_title">Разрешение на установку будильников</string>
     <string name="settings_alarms_sheet_text">Для корректной работы фонового обновления необходимо выдать приложению разрешение на установку будильников.

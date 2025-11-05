@@ -31,6 +31,7 @@
     <string name="settings_chapter_appearance">Appearance</string>
     <string name="settings_chapter_titles">Titles</string>
     <string name="settings_chapter_llm">LLM</string>
+    <string name="settings_chapter_additional">Additional</string>
     <string name="settings_system_theme">System</string>
     <string name="settings_light_theme">Light</string>
     <string name="settings_dark_theme">Dark</string>
@@ -54,6 +55,7 @@
     <string name="settings_paste">Paste</string>
     <string name="settings_ignore_optimization">Ignore battery optimization</string>
     <string name="settings_gemini_model">Gemini model</string>
+    <string name="settings_enable_proxy">Built-in proxy</string>
     <string name="settings_footnote_text">Feedback (Telegram): @mewsapp\nVersion %s</string>
     <string name="settings_alarms_sheet_title">Exact Alarm Permission</string>
     <string name="settings_alarms_sheet_text">To ensure timely background updates, the app requires permission to set exact alarms. Would you like to grant it?</string>

@@ -15,7 +15,8 @@ class RssUpdateWorker(
     override suspend fun doWork(): Result {
         val db = DbHelper(applicationContext)
         val settingsManager = SettingsManager(applicationContext)
-        val fetcher = RssFetcher(db)
+        val enableProxy = settingsManager.getBoolean(MewsRepository.ENABLE_PROXY, false)
+        val fetcher = RssFetcher(db, enableProxy)
 
         val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
         val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
@@ -50,9 +51,10 @@ class TitlesUpdateWorker(
         val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
         val titlesNum = settingsManager.getInt(MewsRepository.TITLES_NUM, 10)
         val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
+        val enableProxy = settingsManager.getBoolean(MewsRepository.ENABLE_PROXY, false)
 
         val fetcher = RssFetcher(db)
-        val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey)
+        val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
         val summarizer = NewsSummarizer(db, llm)
 
         settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, true)

@@ -88,31 +88,35 @@ class BootCompletedReceiver: BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) {
             return
         }
+        println(intent.action)
 
         val settingsManager = SettingsManager(context)
 
-        val titlesUpdatePeriodHrs = settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
-        val titlesUpdateTimeMins = settingsManager.getInt(MewsRepository.TITLES_ALARM_MINS, 540)
+        val autoUpdateEnabled = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
+        if (autoUpdateEnabled) {
+            val titlesUpdatePeriodHrs = settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
+            val titlesUpdateTimeMins = settingsManager.getInt(MewsRepository.TITLES_ALARM_MINS, 540)
 
-        val nextRunTime = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, titlesUpdateTimeMins / 60)
-            set(Calendar.MINUTE, titlesUpdateTimeMins % 60)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
+            val nextRunTime = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, titlesUpdateTimeMins / 60)
+                set(Calendar.MINUTE, titlesUpdateTimeMins % 60)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+
+            while (nextRunTime.before(Calendar.getInstance())) {
+                nextRunTime.add(Calendar.HOUR_OF_DAY, titlesUpdatePeriodHrs)
+            }
+
+            val nextRunTimeMillis = nextRunTime.timeInMillis
+
+            AlarmScheduler.schedule(context, nextRunTimeMillis)
+
+            println("BootCompletedReceiver: Следующее обновление запланировано на ${
+                Date(
+                    nextRunTimeMillis
+                )
+            }")
         }
-
-        while (nextRunTime.before(Calendar.getInstance())) {
-            nextRunTime.add(Calendar.HOUR_OF_DAY, titlesUpdatePeriodHrs)
-        }
-
-        val nextRunTimeMillis = nextRunTime.timeInMillis
-
-        AlarmScheduler.schedule(context, nextRunTimeMillis)
-
-        println("BootCompletedReceiver: Следующее обновление запланировано на ${
-            Date(
-                nextRunTimeMillis
-            )
-        }")
     }
 }

@@ -51,6 +51,7 @@ class TitlesUpdateService : Service() {
         val settingsManager = SettingsManager(applicationContext)
         val db = DbHelper(applicationContext)
         val updateDeltaMills = System.currentTimeMillis() - settingsManager.getLong(MewsRepository.LAST_TITLES_UPDATE, 0L)
+        val enableProxy = settingsManager.getBoolean(MewsRepository.ENABLE_PROXY, false)
 
         if (!isNetworkAvailable(applicationContext)) {
             AlarmScheduler.schedule(applicationContext, System.currentTimeMillis() + 300000L)
@@ -73,7 +74,7 @@ class TitlesUpdateService : Service() {
         val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
 
         val fetcher = RssFetcher(db)
-        val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey)
+        val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
         val summarizer = NewsSummarizer(db, llm)
 
         settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, true)

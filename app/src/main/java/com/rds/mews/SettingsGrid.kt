@@ -84,6 +84,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
     val alarmMins by settingsModel.titlesAlarmMins.collectAsStateWithLifecycle()
     val alarmFrequency by settingsModel.titlesUpdateFrequency.collectAsStateWithLifecycle()
     val bannedNews by settingsModel.bannedNews.collectAsStateWithLifecycle()
+    val proxyEnabled by settingsModel.proxyEnabled.collectAsStateWithLifecycle()
     var alarmHrsText by remember { mutableIntStateOf(alarmMins / 60) }
     var alarmMinsText by remember { mutableIntStateOf(alarmMins % 60) }
     var showAlarmsSheet by remember { mutableStateOf(false) }
@@ -802,6 +803,34 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
                         }
                     }
+                }
+            }
+
+            stickyHeader() {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CustomTextDivider(text = stringResource(R.string.settings_chapter_additional))
+                }
+            }
+            item {
+                CustomSettingsItem(text = stringResource(R.string.settings_enable_proxy)) {
+                    Switch(
+                        checked = proxyEnabled,
+                        onCheckedChange = { settingsModel.setProxyEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.background,
+                            checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+
+                            uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                            uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    )
                 }
             }
 
