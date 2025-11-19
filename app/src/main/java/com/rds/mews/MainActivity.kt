@@ -25,7 +25,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
+import com.rds.mews.ui.custom_elements.MyBottomBar
+import com.rds.mews.ui.custom_elements.TabScreen
+import com.rds.mews.ui.grids.SettingsGrid
+import com.rds.mews.ui.grids.SourcesGrid
+import com.rds.mews.ui.grids.TitlesGrid
 import com.rds.mews.ui.theme.MewsTheme
+import com.rds.mews.viewmodels.SettingsViewModel
+import com.rds.mews.viewmodels.SettingsViewModelFactory
+import com.rds.mews.viewmodels.SourcesViewModel
+import com.rds.mews.viewmodels.SourcesViewModelFactory
+import com.rds.mews.viewmodels.TitlesViewModel
+import com.rds.mews.viewmodels.TitlesViewModelFactory
 
 
 import kotlinx.coroutines.launch
@@ -77,12 +89,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-//sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
-//    data object Sources: TabScreen(titleResId = R.string.tabscreen_sources, Icons.Default.Favorite)
-//    data object Titles: TabScreen(titleResId = R.string.tabscreen_titles, Icons.Rounded.Menu)
-//    data object Settings: TabScreen(titleResId = R.string.tabscreen_settings, Icons.Default.Settings)
-//}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(mainActivity: MainActivity) {
@@ -121,7 +127,7 @@ fun MainScreen(mainActivity: MainActivity) {
                 onConfirm = {
                     requestIgnoreBatteryOptimization(context)
                     optimizationIgnore = true
-                            },
+                },
                 scope = scope,
                 sheetState = sheetState,
             )
@@ -134,15 +140,26 @@ fun MainScreen(mainActivity: MainActivity) {
                     onTabSelected = { newTab ->
                         if (selectedTab == newTab) {
                             when (selectedTab) {
-                                TabScreen.Sources -> scope.launch { sourcesGridState.animateScrollToItem(0) }
-                                TabScreen.Settings -> scope.launch { settingsGridState.animateScrollToItem(0) }
+                                TabScreen.Sources -> scope.launch {
+                                    sourcesGridState.animateScrollToItem(
+                                        0
+                                    )
+                                }
+
+                                TabScreen.Settings -> scope.launch {
+                                    settingsGridState.animateScrollToItem(
+                                        0
+                                    )
+                                }
+
                                 TabScreen.Titles -> scope.launch {
-                                    if (titlesGridState.firstVisibleItemIndex == 0) titlesViewModel.toggleTitleExpanded(null)
+                                    if (titlesGridState.firstVisibleItemIndex == 0) titlesViewModel.toggleTitleExpanded(
+                                        null
+                                    )
                                     else titlesGridState.animateScrollToItem(0)
                                 }
                             }
-                        }
-                        else MewsRepository.setCurrentTab(newTab)
+                        } else MewsRepository.setCurrentTab(newTab)
                     },
                     compact = compactTab,
                 )
@@ -163,9 +180,20 @@ fun MainScreen(mainActivity: MainActivity) {
                         gridState = sourcesGridState,
                         itemsList = sourcesList,
                         modifier = modifier,
-                        onSourceAdd = { name, link -> sourcesViewModel.addSource(context, name, link) },
+                        onSourceAdd = { name, link ->
+                            sourcesViewModel.addSource(
+                                context,
+                                name,
+                                link
+                            )
+                        },
                         onSourceDelete = { name -> sourcesViewModel.deleteSource(name) },
-                        onSourceChange = { oldName, newName -> sourcesViewModel.changeSource(oldName, newName)}
+                        onSourceChange = { oldName, newName ->
+                            sourcesViewModel.changeSource(
+                                oldName,
+                                newName
+                            )
+                        }
                     )
                 }
                 TabScreen.Titles -> {
@@ -204,53 +232,12 @@ fun MainScreen(mainActivity: MainActivity) {
                     )
                 }
                 else -> SettingsGrid(
-                        gridState = settingsGridState,
-                        modifier = modifier,
-                        settingsModel = settingsViewModel,
-                        mainActivity = mainActivity
-                    )
+                    gridState = settingsGridState,
+                    modifier = modifier,
+                    settingsModel = settingsViewModel,
+                    mainActivity = mainActivity
+                )
             }
         }
     }
 }
-
-//@Composable
-//fun MyBottomBar(selectedTab: TabScreen, onTabSelected: (TabScreen) -> Unit, compact: Boolean = false) {
-//    val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)
-//
-//    val targetHeight = if (compact) 50.dp else 70.dp
-//
-//    val animatedHeight by animateDpAsState(
-//        targetValue = targetHeight,
-//        animationSpec = tween(durationMillis = 300),
-//        label = "NavigationBarHeight"
-//    )
-//
-//    NavigationBar(
-//        modifier = Modifier
-//            .navigationBarsPadding()
-//            .height(animatedHeight),
-//        windowInsets = WindowInsets(0, 0, 0, 0),
-//        containerColor = MaterialTheme.colorScheme.surface
-//    ) {
-//        tabs.forEach { tab ->
-//            val tabTitle = stringResource(id = tab.titleResId)
-//
-//            NavigationBarItem(
-//                selected = selectedTab == tab,
-//                onClick = { onTabSelected(tab) },
-//                icon = {
-//                    Icon(imageVector = tab.icon, contentDescription = tabTitle)
-//                },
-//                label = if (!compact) {
-//                    { Text(text = tabTitle) }
-//                } else null,
-//                colors = NavigationBarItemDefaults.colors(
-//                    selectedIconColor = MaterialTheme.colorScheme.surface,
-//                    unselectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-//                    indicatorColor = MaterialTheme.colorScheme.onSecondaryContainer
-//                )
-//            )
-//        }
-//    }
-//}

@@ -1,23 +1,29 @@
-package com.rds.mews
+package com.rds.mews.viewmodels
 
 import android.app.Application
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.rds.mews.MainActivity
+import com.rds.mews.MewsRepository
+import com.rds.mews.SummarizationErrorType
+import com.rds.mews.SummarizationResult
+import com.rds.mews.Title
+import com.rds.mews.TitleCardStates
+import com.rds.mews.getFormattedTimeUnix
+import com.rds.mews.requestNotificationPermission
+import com.rds.mews.strTransform
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -58,7 +64,8 @@ class TitlesViewModel(
         .map {list ->
         list.filter { it.text != "<промежуточный текст>" }.map {
             it.copy(sources = strTransform(it.sources, ", "),
-                links = strTransform(it.links, "\n"))
+                links = strTransform(it.links, "\n")
+            )
         }.groupBy { getFormattedTimeUnix(it.time, true) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 

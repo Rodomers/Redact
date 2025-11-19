@@ -1,4 +1,4 @@
-package com.rds.mews
+package com.rds.mews.ui.grids
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +29,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
+import com.rds.mews.R
+import com.rds.mews.RSS
+import com.rds.mews.defineSourceType
+import com.rds.mews.sourcesTypeInterpreter
+import com.rds.mews.ui.custom_elements.CustomCardWithMenu
+import com.rds.mews.ui.custom_elements.CustomChangeBottomSheet
+import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
+import com.rds.mews.ui.custom_elements.CustomTextDivider
+import com.rds.mews.ui.custom_elements.SourcesAddCard
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,13 +69,13 @@ fun SourcesGrid(
     if (showAddDialog) {
         CustomChangeBottomSheet(
             onDismissRequest = { showAddDialog = false },
-            onConfirm = {pair ->
+            onConfirm = { pair ->
                 scope.launch {
                     onSourceAdd(pair.first, pair.second)
                     newSourcesPermitted = itemsList.size + 1 < 40
                 }
                 showAddDialog = false
-                        },
+            },
             add = true,
             scope = scope,
             sheetState = bottomSheetState
@@ -96,7 +105,7 @@ fun SourcesGrid(
         ) {
             CustomChangeBottomSheet(
                 onDismissRequest = { changeDialog = "" },
-                onConfirm = {pair ->
+                onConfirm = { pair ->
                     scope.launch {
                         onSourceChange(pair.first, pair.second)
                         changeDialog = ""

@@ -223,16 +223,6 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
-    fun findMessageByID(id: Long): Boolean {
-        val db = this.readableDatabase
-        val cursor = db.rawQuery("SELECT $MESS_ID FROM $MESS_NAME WHERE $MESS_ID = ?", arrayOf(id.toString()))
-
-        return cursor.use {
-            it.moveToFirst()
-        }
-    }
-
-    @Synchronized
     fun findTitleByID(id: Long): Boolean {
         val db = this.readableDatabase
         val cursor = db.rawQuery("SELECT $TITLES_ID FROM $TITLES_NAME WHERE $TITLES_ID = ?", arrayOf(id.toString()))
@@ -397,34 +387,4 @@ class DbHelper(val context: Context) :
         }
         return descriptions
     }
-
-//    @Synchronized
-//    fun getTitleLinks(id: Long): Pair<String, String>? {
-//        val db = this.readableDatabase
-//        when (findTitleByID(id)) {
-//            true -> {
-//                val cursor = db.rawQuery("SELECT $TITLES_LINKS, $TITLES_SOURCES FROM $TITLES_NAME WHERE $TITLES_ID = ?", arrayOf(id.toString()))
-//                return cursor.use {
-//                    cursor.moveToFirst()
-//                    val links = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_LINKS))
-//                    val sources = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_SOURCES))
-//
-//                    var linksStr = ""
-//                    dbUnpack(links).forEach {
-//                        linksStr = "$linksStr\n${getMessage(it.toLong())?.link ?: "Ссылка не найдена"}"
-//                    }
-//                    var sourcesStr = ""
-//                    dbUnpack(sources).forEach {
-//                        val rss = getRSS(it.toLong())
-//                        if (rss.isNotEmpty()) {sourcesStr = "$sourcesStr, ${rss[0].source}"}
-//                    }
-//                    if (sourcesStr == "") sourcesStr = "Источники не найдены"
-//
-//                    Pair(sources, links)
-//                }
-//
-//            }
-//            false -> return null
-//        }
-//    }
 }

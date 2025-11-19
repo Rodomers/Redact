@@ -1,9 +1,5 @@
-package com.rds.mews
+package com.rds.mews.ui.grids
 
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.icu.util.Calendar
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -29,9 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.BroadcastFrameClock
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +40,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rds.mews.MainActivity
+import com.rds.mews.R
+import com.rds.mews.SummarizationResult
+import com.rds.mews.Title
+import com.rds.mews.TitleCardStates
+import com.rds.mews.formatUpdateTime
+import com.rds.mews.getFormattedTimeUnix
+import com.rds.mews.mapResultToUiResources
+import com.rds.mews.ui.custom_elements.CustomBottomFootnote
+import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
+import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
+import com.rds.mews.ui.custom_elements.CustomTextDivider
+import com.rds.mews.ui.custom_elements.CustomTimeMark
+import com.rds.mews.ui.custom_elements.TitlesCard
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -119,12 +127,14 @@ fun TitlesGrid(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
         state = pullToRefreshState,
-        indicator = { CustomPullToRefreshIndicator(
-            state = pullToRefreshState,
-            modifier = Modifier
-                .align(Alignment.TopCenter),
-            isRefreshing = isRefreshing
-        ) }
+        indicator = {
+            CustomPullToRefreshIndicator(
+                state = pullToRefreshState,
+                modifier = Modifier
+                    .align(Alignment.TopCenter),
+                isRefreshing = isRefreshing
+            )
+        }
     ) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(1),

@@ -1,4 +1,4 @@
-package com.rds.mews
+package com.rds.mews.ui.grids
 
 import android.content.Intent
 import android.os.Build
@@ -61,6 +61,18 @@ import androidx.compose.ui.unit.roundToIntRect
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rds.mews.MainActivity
+import com.rds.mews.R
+import com.rds.mews.viewmodels.SettingsViewModel
+import com.rds.mews.intTimeToStr
+import com.rds.mews.requestNotificationPermission
+import com.rds.mews.ui.custom_elements.CenteredPopupPositionProvider
+import com.rds.mews.ui.custom_elements.CustomBottomFootnote
+import com.rds.mews.ui.custom_elements.CustomDropdown
+import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
+import com.rds.mews.ui.custom_elements.CustomSettingsItem
+import com.rds.mews.ui.custom_elements.CustomTextDivider
+import com.rds.mews.ui.custom_elements.DeferredUpdateTab
 import com.rds.mews.ui.theme.Shapes
 
 
@@ -197,7 +209,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             onShowNotificationsSheet = { showNotificationsSheet = true },
                             onShowAlarmsSheet = { showAlarmsSheet = true },
                             value = it
-                            )
+                        )
                     },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.background,
@@ -228,7 +240,11 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         )
                     ) {
                         Text(
-                            text = pluralStringResource(R.plurals.hours, alarmFrequency, alarmFrequency),
+                            text = pluralStringResource(
+                                R.plurals.hours,
+                                alarmFrequency,
+                                alarmFrequency
+                            ),
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
@@ -264,7 +280,10 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                                 .onGloballyPositioned {
                                     hoursAnchorBounds = it.boundsInWindow().roundToIntRect()
                                 },
-                            onClick = { alarmHoursListVisible.targetState = !alarmHoursListVisible.currentState },
+                            onClick = {
+                                alarmHoursListVisible.targetState =
+                                    !alarmHoursListVisible.currentState
+                            },
                             shape = Shapes.small,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.background
@@ -275,7 +294,11 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         }
-                        Text(text = ":", fontSize = 22.sp, modifier = Modifier.padding(horizontal = 2.dp))
+                        Text(
+                            text = ":",
+                            fontSize = 22.sp,
+                            modifier = Modifier.padding(horizontal = 2.dp)
+                        )
                         Button(
                             modifier = Modifier
                                 .width(70.dp)
@@ -283,7 +306,10 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                                 .onGloballyPositioned {
                                     minsAnchorBounds = it.boundsInWindow().roundToIntRect()
                                 },
-                            onClick = { alarmMinutesListVisible.targetState = !alarmMinutesListVisible.currentState },
+                            onClick = {
+                                alarmMinutesListVisible.targetState =
+                                    !alarmMinutesListVisible.currentState
+                            },
                             shape = Shapes.small,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.background
@@ -306,7 +332,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             ) {
                                 CustomDropdown(
                                     transitionState = alarmHoursListVisible,
-                                    buttons = alarmHrsItems.mapNotNull {(text, action) ->
+                                    buttons = alarmHrsItems.mapNotNull { (text, action) ->
                                         if (!(alarmFrequency == 12 && text.toInt() > 12)) text to { action() } else null
                                     },
                                     timeList = true
@@ -324,7 +350,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             ) {
                                 CustomDropdown(
                                     transitionState = alarmMinutesListVisible,
-                                    buttons = alarmMinsItems.map {(text, action) ->
+                                    buttons = alarmMinsItems.map { (text, action) ->
                                         text to { action() }
                                     },
                                     timeList = true
@@ -347,7 +373,8 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         IconButton(
                             onClick = { settingsModel.delBannedNews(it) }
                         ) {
-                            Icon(modifier = Modifier.size(16.dp),
+                            Icon(
+                                modifier = Modifier.size(16.dp),
                                 imageVector = Icons.Default.Close,
                                 contentDescription = stringResource(R.string.ban_btn_desc)
                             )
@@ -375,7 +402,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         mainActivity.startActivity(intent)
                     }
                 }
-                        },
+            },
             scope = scope,
             sheetState = bottomSheetState
         )
@@ -481,12 +508,14 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
 
                         if (colorSchemeDropdownVisible.currentState || colorSchemeDropdownVisible.targetState) {
                             Popup(
-                                onDismissRequest = { colorSchemeDropdownVisible.targetState = false },
+                                onDismissRequest = {
+                                    colorSchemeDropdownVisible.targetState = false
+                                },
                                 alignment = Alignment.TopEnd
                             ) {
                                 CustomDropdown(
                                     transitionState = colorSchemeDropdownVisible,
-                                    buttons = colorSchemeDropdownItems.map {(text, action) ->
+                                    buttons = colorSchemeDropdownItems.map { (text, action) ->
                                         text to { action() }
                                     }
                                 )
@@ -548,7 +577,8 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                                 .wrapContentSize()
                                 .width(150.dp),
                             onClick = {
-                                titlesDropdownVisible.targetState = !titlesDropdownVisible.currentState
+                                titlesDropdownVisible.targetState =
+                                    !titlesDropdownVisible.currentState
                             },
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
@@ -572,7 +602,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             ) {
                                 CustomDropdown(
                                     transitionState = titlesDropdownVisible,
-                                    buttons = titlesDropdownItems.map {(text, action) ->
+                                    buttons = titlesDropdownItems.map { (text, action) ->
                                         text to { action() }
                                     }
                                 )
@@ -609,12 +639,14 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
 
                         if (limitationDropdownVisible.currentState || limitationDropdownVisible.targetState) {
                             Popup(
-                                onDismissRequest = { limitationDropdownVisible.targetState = false },
+                                onDismissRequest = {
+                                    limitationDropdownVisible.targetState = false
+                                },
                                 alignment = Alignment.TopEnd
                             ) {
                                 CustomDropdown(
                                     transitionState = limitationDropdownVisible,
-                                    buttons = limitationDropdownItems.map {(text, action) ->
+                                    buttons = limitationDropdownItems.map { (text, action) ->
                                         text to { action() }
                                     }
                                 )
@@ -672,7 +704,10 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             autoUpdateScreenState.targetState = !autoUpdateScreenState.currentState
                         }
                     ) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc)
+                        )
                     }
                 }
             }
@@ -738,7 +773,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                                 ) {
                                     CustomDropdown(
                                         transitionState = geminiModelDropdownVisible,
-                                        buttons = geminiModelDropdownItems.map {(text, action) ->
+                                        buttons = geminiModelDropdownItems.map { (text, action) ->
                                             text to { action() }
                                         }
                                     )
@@ -758,7 +793,8 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             onClick = {
                                 when (geminiApiText) {
                                     defaultGeminiApiKey -> {
-                                        val clipboardText: AnnotatedString? = clipboardManager.getText()
+                                        val clipboardText: AnnotatedString? =
+                                            clipboardManager.getText()
 
                                         clipboardText?.let {
                                             text += it.text
@@ -797,10 +833,14 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             modifier = Modifier
                                 .wrapContentSize(),
                             onClick = {
-                                bannedNewsScreenState.targetState = !bannedNewsScreenState.currentState
+                                bannedNewsScreenState.targetState =
+                                    !bannedNewsScreenState.currentState
                             }
                         ) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc)
+                            )
                         }
                     }
                 }
@@ -834,7 +874,14 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 }
             }
 
-            item {CustomBottomFootnote(stringResource(R.string.settings_footnote_text, stringResource(R.string.app_version)))}
+            item {
+                CustomBottomFootnote(
+                    stringResource(
+                        R.string.settings_footnote_text,
+                        stringResource(R.string.app_version)
+                    )
+                )
+            }
         }
 
         DeferredUpdateTab(

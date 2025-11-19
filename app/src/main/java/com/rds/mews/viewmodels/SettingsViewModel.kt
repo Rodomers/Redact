@@ -1,15 +1,17 @@
-package com.rds.mews
+package com.rds.mews.viewmodels
 
-import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.rds.mews.MainActivity
+import com.rds.mews.MewsRepository
+import com.rds.mews.handleNotificationsPermissionRequest
+import com.rds.mews.isNotificationPermissionGranted
+import com.rds.mews.isScheduleExactAlarm
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -70,10 +72,12 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
         activity: MainActivity
     ) = viewModelScope.launch {
         when {
-            !isNotificationPermissionGranted(context) -> { handleNotificationsPermissionRequest(
-                activity,
-                onShouldShowDialog = onShowNotificationsSheet
-            ) }
+            !isNotificationPermissionGranted(context) -> {
+                handleNotificationsPermissionRequest(
+                    activity,
+                    onShouldShowDialog = onShowNotificationsSheet
+                )
+            }
             !isScheduleExactAlarm(context) -> onShowAlarmsSheet
             else -> {
                 repository.setTitlesAlarmUpdate(value)

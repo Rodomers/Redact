@@ -25,6 +25,13 @@ enum class SourceType {
     TELEGRAM_CHANNEL
 }
 
+enum class ArrowPosition {
+    TopLeft, TopCenter, TopRight,
+    BottomLeft, BottomCenter, BottomRight,
+    LeftTop, LeftCenter, LeftBottom,
+    RightTop, RightCenter, RightBottom
+}
+
 sealed interface SummarizationResult {
     data object Success : SummarizationResult
     data class Failure(

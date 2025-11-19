@@ -1,6 +1,7 @@
 package com.rds.mews
 
 import android.content.Context
+import com.rds.mews.ui.custom_elements.TabScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
