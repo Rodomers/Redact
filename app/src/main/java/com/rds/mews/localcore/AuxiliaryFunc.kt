@@ -1,4 +1,4 @@
-package com.rds.mews
+package com.rds.mews.localcore
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -8,15 +8,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.collection.IntList
 import androidx.collection.intListOf
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -24,6 +28,15 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.rds.mews.R
+import com.rds.mews.ScreenQuadrant
+import com.rds.mews.SourceType
+import com.rds.mews.SummarizationErrorType
+import com.rds.mews.SummarizationResult
+import com.rds.mews.core.DbHelper
+import com.rds.mews.workers.RssUpdateWorker
+import com.rds.mews.workers.TitlesUpdateService
+import com.rds.mews.workers.TitlesUpdateWorker
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -128,7 +141,7 @@ fun strTransform(original: String, separator: String): String {
 }
 
 fun setRssUpdate(context: Context, sources: Boolean = false, intervalMin: Int = 30) {
-    val constraints = androidx.work.Constraints.Builder()
+    val constraints = Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED)
         .build()
 
@@ -156,7 +169,7 @@ fun setTitlesUpdate(context: Context) {
         context.startForegroundService(serviceIntent)
     }
     else {
-        val constraints = androidx.work.Constraints.Builder()
+        val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
@@ -219,7 +232,7 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
                     intListOf(R.string.err_header_no_news, R.string.err_text_no_news, R.string.err_btn_no_news)
 
                 SummarizationErrorType.FILTER_FAILED ->
-                    intListOf(R.string.err_header_filter_failed, R.string.err_text_filter_failed,R.string.err_btn_filter_failed)
+                    intListOf(R.string.err_header_filter_failed, R.string.err_text_filter_failed, R.string.err_btn_filter_failed)
                 SummarizationErrorType.JOB_CANCELLED ->
                     intListOf(R.string.err_header_job_cancelled, R.string.err_text_job_cancelled, R.string.err_btn_job_cancelled)
                 SummarizationErrorType.RATE_LIMIT_EXCEEDED ->
@@ -306,5 +319,20 @@ fun requestNotificationPermission(activity: Activity) {
                 notificationRequestCode
             )
         }
+    }
+}
+
+fun getScreenQuadrant(config: Configuration, elementBounds: IntRect): ScreenQuadrant {
+    val screenWidthPx = config.screenWidthDp.dp.value * config.densityDpi / 160f
+    val screenHeightPx = config.screenHeightDp.dp.value * config.densityDpi / 160f
+
+    val centerX = elementBounds.center.x
+    val centerY = elementBounds.center.y
+
+    return when {
+        centerX < screenWidthPx / 2 && centerY < screenHeightPx / 2 -> ScreenQuadrant.TopLeft
+        centerX >= screenWidthPx / 2 && centerY < screenHeightPx / 2 -> ScreenQuadrant.TopRight
+        centerX < screenWidthPx / 2 && centerY >= screenHeightPx / 2 -> ScreenQuadrant.BottomLeft
+        else -> ScreenQuadrant.BottomRight
     }
 }

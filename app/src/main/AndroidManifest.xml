@@ -37,18 +37,18 @@
         </activity>
 
         <service
-            android:name=".TitlesUpdateService"
+            android:name=".workers.TitlesUpdateService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <receiver
-            android:name=".TitlesAlarmReceiver"
+            android:name=".workers.TitlesAlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 
         <receiver
-            android:name=".BootCompletedReceiver"
+            android:name=".workers.BootCompletedReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>

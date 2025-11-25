@@ -29,7 +29,12 @@ enum class ArrowPosition {
     TopLeft, TopCenter, TopRight,
     BottomLeft, BottomCenter, BottomRight,
     LeftTop, LeftCenter, LeftBottom,
-    RightTop, RightCenter, RightBottom
+    RightTop, RightCenter, RightBottom,
+    None
+}
+
+enum class ScreenQuadrant {
+    TopLeft, TopRight, BottomLeft, BottomRight
 }
 
 sealed interface SummarizationResult {

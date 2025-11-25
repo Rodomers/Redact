@@ -1,4 +1,4 @@
-package com.rds.mews
+package com.rds.mews.workers
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -13,6 +13,17 @@ import android.net.NetworkCapabilities
 import kotlinx.coroutines.currentCoroutineContext
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.rds.mews.core.DbHelper
+import com.rds.mews.core.LLMClient
+import com.rds.mews.MainActivity
+import com.rds.mews.core.NewsSummarizer
+import com.rds.mews.R
+import com.rds.mews.core.RssFetcher
+import com.rds.mews.localcore.SettingsManager
+import com.rds.mews.SummarizationErrorType
+import com.rds.mews.SummarizationResult
+import com.rds.mews.localcore.isNotificationPermissionGranted
+import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.*
 import java.util.Calendar
 import java.util.Date
@@ -168,7 +179,7 @@ class TitlesUpdateService : Service() {
             getString(R.string.titles_service_name),
             NotificationManager.IMPORTANCE_LOW
         )
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
@@ -212,7 +223,7 @@ class TitlesUpdateService : Service() {
 
     @SuppressLint("ServiceCast")
     private fun isNetworkAvailable(context: Context): Boolean {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val connectivityManager = context.getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork ?: return false
         val activeNetwork = connectivityManager.getNetworkCapabilities(network) ?: return false
         return when {

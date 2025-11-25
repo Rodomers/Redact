@@ -1,6 +1,19 @@
-package com.rds.mews
+package com.rds.mews.repositories
 
 import android.content.Context
+import com.rds.mews.workers.AlarmScheduler
+import com.rds.mews.core.DbHelper
+import com.rds.mews.GeminiApiKeyProvider
+import com.rds.mews.R
+import com.rds.mews.RSS
+import com.rds.mews.RssHubApiKeyProvider
+import com.rds.mews.ServerAddressProvider
+import com.rds.mews.localcore.SettingsManager
+import com.rds.mews.SummarizationResult
+import com.rds.mews.Title
+import com.rds.mews.localcore.delSource
+import com.rds.mews.localcore.setRssUpdate
+import com.rds.mews.localcore.setTitlesUpdate
 import com.rds.mews.ui.custom_elements.TabScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,36 +63,36 @@ object MewsRepository {
         lastError = settingsManager.lastErrorFlow
             .stateIn(
                 scope = MewsRepository.externalScope,
-                started = SharingStarted.WhileSubscribed(5000),
+                started = SharingStarted.Companion.WhileSubscribed(5000),
                 initialValue = null
             )
 
         lastTitlesUpdate = settingsManager.lastTitlesUpdateFlow
             .stateIn(
                 scope = MewsRepository.externalScope,
-                started = SharingStarted.WhileSubscribed(5000),
+                started = SharingStarted.Companion.WhileSubscribed(5000),
                 initialValue = settingsManager.getLong(LAST_TITLES_UPDATE, 0L)
             )
 
         updatingTitles = settingsManager.updatingTitlesFlow
             .stateIn(
                 scope = MewsRepository.externalScope,
-                started = SharingStarted.WhileSubscribed(5000),
+                started = SharingStarted.Companion.WhileSubscribed(5000),
                 initialValue = settingsManager.getBoolean(UPDATING_TITLES, false)
             )
 
         updatingState = settingsManager.updatingTitlesStateFlow
             .stateIn(
                 scope = MewsRepository.externalScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = settingsManager.getString(MewsRepository.UPDATING_STATE, "off")
+                started = SharingStarted.Companion.WhileSubscribed(5000),
+                initialValue = settingsManager.getString(UPDATING_STATE, "off")
             )
 
         bannedNewsFlow = settingsManager.bannedNewsFlow
             .stateIn(
                 scope = MewsRepository.externalScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = settingsManager.getStringSet(MewsRepository.BANNED_NEWS_SET, setOf(""))
+                started = SharingStarted.Companion.WhileSubscribed(5000),
+                initialValue = settingsManager.getStringSet(BANNED_NEWS_SET, setOf(""))
         )
     }
 
@@ -90,8 +103,8 @@ object MewsRepository {
 
     suspend fun addSource(context: Context, name: String, link: String) {
         withContext(Dispatchers.IO) {
-            addSource(name, link, db)
-            _sourcesUpdateTrigger.value ++
+            com.rds.mews.localcore.addSource(name, link, db)
+            _sourcesUpdateTrigger.value++
             AlarmScheduler.cancel(context, true)
             setLastRssUpdate(0L)
             setRssUpdate(context, true, rssUpdateInterval.value)
@@ -101,14 +114,14 @@ object MewsRepository {
     suspend fun deleteSource(name: String) {
         withContext(Dispatchers.IO) {
             delSource(name, db)
-            _sourcesUpdateTrigger.value ++
+            _sourcesUpdateTrigger.value++
         }
     }
 
     suspend fun changeSource(oldName: String, newName: String) {
         withContext(Dispatchers.IO) {
-            changeSource(oldName, newName, db)
-            _sourcesUpdateTrigger.value ++
+            com.rds.mews.localcore.changeSource(oldName, newName, db)
+            _sourcesUpdateTrigger.value++
         }
     }
 
@@ -367,7 +380,8 @@ object MewsRepository {
         }
     }
 
-    private val _currentLanguage = MutableStateFlow<String?>(getStringResource(R.string.current_language))
+    private val _currentLanguage =
+        MutableStateFlow<String?>(getStringResource(R.string.current_language))
     val currentLanguage = _currentLanguage.asStateFlow()
     fun setCurrentLanguage(newValue: String) {
         settingsManager.saveString(CURRENT_LANGUAGE, newValue)

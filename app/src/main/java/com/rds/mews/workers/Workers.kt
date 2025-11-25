@@ -1,8 +1,16 @@
-package com.rds.mews
+package com.rds.mews.workers
 
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.rds.mews.core.DbHelper
+import com.rds.mews.core.LLMClient
+import com.rds.mews.core.NewsSummarizer
+import com.rds.mews.core.RssFetcher
+import com.rds.mews.localcore.SettingsManager
+import com.rds.mews.SummarizationErrorType
+import com.rds.mews.SummarizationResult
+import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
@@ -82,7 +90,8 @@ class TitlesUpdateWorker(
                         db.titlesTimeKill(0)
                     }
                     var iter = 0
-                    var res: SummarizationResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
+                    var res: SummarizationResult = SummarizationResult.Failure(
+                        SummarizationErrorType.UNKNOWN_ERROR)
                     while (settingsManager.getBoolean(MewsRepository.UPDATING_TITLES, false) && iter <= 5 && !isStopped) {
                         res = summarizer.summarizeTopics(
                             maxTopics = titlesNum,

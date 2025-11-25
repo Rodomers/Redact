@@ -1,5 +1,6 @@
-package com.rds.mews
+package com.rds.mews.core
 
+import com.rds.mews.repositories.MewsRepository
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import java.text.ParseException

@@ -31,8 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import com.rds.mews.R
 import com.rds.mews.RSS
-import com.rds.mews.defineSourceType
-import com.rds.mews.sourcesTypeInterpreter
+import com.rds.mews.localcore.defineSourceType
+import com.rds.mews.localcore.sourcesTypeInterpreter
 import com.rds.mews.ui.custom_elements.CustomCardWithMenu
 import com.rds.mews.ui.custom_elements.CustomChangeBottomSheet
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet

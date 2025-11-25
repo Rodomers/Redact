@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.rds.mews.MewsRepository
+import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.R
 import com.rds.mews.ui.theme.Shapes
 import kotlin.text.split

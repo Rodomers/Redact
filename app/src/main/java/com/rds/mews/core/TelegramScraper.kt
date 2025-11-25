@@ -1,4 +1,4 @@
-package com.rds.mews
+package com.rds.mews.core
 
 import org.jsoup.nodes.Document
 import java.net.URL

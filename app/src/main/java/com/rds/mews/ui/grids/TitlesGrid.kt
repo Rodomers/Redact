@@ -45,9 +45,9 @@ import com.rds.mews.R
 import com.rds.mews.SummarizationResult
 import com.rds.mews.Title
 import com.rds.mews.TitleCardStates
-import com.rds.mews.formatUpdateTime
-import com.rds.mews.getFormattedTimeUnix
-import com.rds.mews.mapResultToUiResources
+import com.rds.mews.localcore.formatUpdateTime
+import com.rds.mews.localcore.getFormattedTimeUnix
+import com.rds.mews.localcore.mapResultToUiResources
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator

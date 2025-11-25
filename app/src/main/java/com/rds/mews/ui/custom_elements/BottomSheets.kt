@@ -35,10 +35,10 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rds.mews.MewsRepository
+import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.R
-import com.rds.mews.RSSName
-import com.rds.mews.linkTransform
+import com.rds.mews.core.RSSName
+import com.rds.mews.localcore.linkTransform
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

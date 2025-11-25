@@ -1,4 +1,4 @@
-package com.rds.mews
+package com.rds.mews.workers
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -8,6 +8,8 @@ import android.content.Intent
 import android.os.Build
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.rds.mews.localcore.SettingsManager
+import com.rds.mews.repositories.MewsRepository
 import java.util.Calendar
 import java.util.Date
 

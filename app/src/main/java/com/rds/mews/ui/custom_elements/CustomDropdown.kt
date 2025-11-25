@@ -1,67 +1,68 @@
 package com.rds.mews.ui.custom_elements
 
+import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.Popup
 import com.rds.mews.ArrowPosition
-
-class CenteredPopupPositionProvider(
-    private val inputBounds: IntRect
-) : PopupPositionProvider {
-    override fun calculatePosition(
-        anchorBounds: IntRect,
-        windowSize: IntSize,
-        layoutDirection: LayoutDirection,
-        popupContentSize: IntSize
-    ): IntOffset {
-        val anchorCenterX = inputBounds.left + inputBounds.width / 2
-        val anchorCenterY = inputBounds.top + inputBounds.height / 2
-
-        val popupX = anchorCenterX - popupContentSize.width / 2
-        val popupY = anchorCenterY - popupContentSize.height / 2
-
-        return IntOffset(popupX, popupY)
-    }
-}
+import com.rds.mews.ScreenQuadrant
+import com.rds.mews.localcore.getScreenQuadrant
+import com.rds.mews.ui.theme.Shapes
 
 class BubbleShape(
-    private val cornerRadius: Dp = 8.dp,
+    private val cornerShape: CornerBasedShape,
     private val arrowWidth: Dp = 16.dp,
     private val arrowHeight: Dp = 8.dp,
     private val arrowPosition: ArrowPosition = ArrowPosition.TopCenter,
@@ -72,7 +73,6 @@ class BubbleShape(
         layoutDirection: LayoutDirection,
         density: Density
     ): Outline {
-        val cornerRadiusPx = with(density) { cornerRadius.toPx() }
         val arrowWidthPx = with(density) { arrowWidth.toPx() }
         val arrowHeightPx = with(density) { arrowHeight.toPx() }
         val arrowOffsetPx = with(density) { arrowOffset.toPx() }
@@ -86,10 +86,24 @@ class BubbleShape(
                 Rect(arrowHeightPx, 0f, size.width, size.height)
             ArrowPosition.RightTop, ArrowPosition.RightCenter, ArrowPosition.RightBottom ->
                 Rect(0f, 0f, size.width - arrowHeightPx, size.height)
+            ArrowPosition.None -> Rect(0f, 0f, size.width, size.height)
         }
 
         val bodyPath = Path().apply {
-            addRoundRect(RoundRect(bodyRect, cornerRadiusPx, cornerRadiusPx))
+            val topStartPx = cornerShape.topStart.toPx(bodyRect.size, density)
+            val topEndPx = cornerShape.topEnd.toPx(bodyRect.size, density)
+            val bottomEndPx = cornerShape.bottomEnd.toPx(bodyRect.size, density)
+            val bottomStartPx = cornerShape.bottomStart.toPx(bodyRect.size, density)
+
+            addRoundRect(
+                RoundRect(
+                    rect = bodyRect,
+                    topLeft = CornerRadius(topStartPx),
+                    topRight = CornerRadius(topEndPx),
+                    bottomRight = CornerRadius(bottomEndPx),
+                    bottomLeft = CornerRadius(bottomStartPx)
+                )
+            )
         }
 
         val arrowPath = Path().apply {
@@ -169,6 +183,7 @@ class BubbleShape(
                     lineTo(size.width - arrowHeightPx, arrowY + arrowWidthPx / 2)
                     lineTo(size.width - arrowHeightPx, arrowY - arrowWidthPx / 2)
                 }
+                ArrowPosition.None -> {}
             }
             close()
         }
@@ -183,68 +198,199 @@ class BubbleShape(
 fun CustomDropdown(
     transitionState: MutableTransitionState<Boolean>,
     buttons: List<Pair<String, () -> Unit>>,
+    inputBounds: IntRect?,
+    config: Configuration,
+    density: Density,
+    onDismissRequest: () -> Unit,
+    animDuration: Int = 200,
+    centeredArrow: Boolean? = null,
+    noArrow: Boolean = false,
+    timeList: Boolean = false,
+    arrowPosition: ArrowPosition? = null
+) {
+    if (inputBounds != null) {
+        val arrowPosition = when {
+            arrowPosition != null -> arrowPosition
+            noArrow || timeList -> ArrowPosition.None
+            centeredArrow ?: false -> when (getScreenQuadrant(config, inputBounds)) {
+                ScreenQuadrant.TopLeft, ScreenQuadrant.TopRight -> ArrowPosition.TopCenter
+                else -> ArrowPosition.BottomCenter
+            }
+
+            else -> getArrowPosByBounds(config, inputBounds)
+        }
+
+        Popup(
+            popupPositionProvider = if (!timeList )BubblePopupPositionProvider(
+                inputBounds,
+                arrowPosition,
+                density
+            ) else CenteredPopupPositionProvider(inputBounds),
+            onDismissRequest = onDismissRequest
+        ) {
+            NPDropdown(
+                transitionState = transitionState,
+                buttons = buttons,
+                animDuration = animDuration,
+                arrowPosition = arrowPosition,
+                timeList = timeList
+            )
+        }
+    }
+}
+
+@Composable
+private fun NPDropdown(
+    transitionState: MutableTransitionState<Boolean>,
+    buttons: List<Pair<String, () -> Unit>>,
     animDuration: Int = 200,
     timeList: Boolean = false,
-    arrowPosition: ArrowPosition = ArrowPosition.BottomCenter
+    arrowPosition: ArrowPosition = ArrowPosition.None,
 ) {
     val surfaceWidth = if (timeList) 70.dp else 150.dp
     val maxHeight = if (timeList) 180.dp else 360.dp
     val arrowHeight = 8.dp
+    val arrowWidth = 16.dp
+    val arrowOffset = 16.dp
 
-    val bubbleShape = BubbleShape(
-        cornerRadius = 8.dp,
-        arrowPosition = arrowPosition,
-        arrowHeight = arrowHeight,
-        arrowWidth = 16.dp,
-        arrowOffset = 16.dp
-    )
-
-    val padding = when(arrowPosition) {
-        ArrowPosition.TopLeft, ArrowPosition.TopCenter, ArrowPosition.TopRight ->
-            PaddingValues(top = arrowHeight)
-        ArrowPosition.BottomLeft, ArrowPosition.BottomCenter, ArrowPosition.BottomRight ->
-            PaddingValues(bottom = arrowHeight)
-        ArrowPosition.LeftTop, ArrowPosition.LeftCenter, ArrowPosition.LeftBottom ->
-            PaddingValues(start = arrowHeight)
-        ArrowPosition.RightTop, ArrowPosition.RightCenter, ArrowPosition.RightBottom ->
-            PaddingValues(end = arrowHeight)
+    val bubbleShape = remember(arrowPosition) {
+        BubbleShape(
+            cornerShape = Shapes.medium,
+            arrowPosition = arrowPosition,
+            arrowHeight = arrowHeight,
+            arrowWidth = arrowWidth,
+            arrowOffset = arrowOffset
+        )
     }
 
-    Surface(
-        modifier = Modifier
-            .width(surfaceWidth)
-            .heightIn(max = maxHeight),
-        shape = bubbleShape,
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 4.dp
+    val padding = when (arrowPosition) {
+        ArrowPosition.TopLeft, ArrowPosition.TopCenter, ArrowPosition.TopRight -> PaddingValues(top = arrowHeight)
+        ArrowPosition.BottomLeft, ArrowPosition.BottomCenter, ArrowPosition.BottomRight -> PaddingValues(bottom = arrowHeight)
+        ArrowPosition.LeftTop, ArrowPosition.LeftCenter, ArrowPosition.LeftBottom -> PaddingValues(start = arrowHeight)
+        ArrowPosition.RightTop, ArrowPosition.RightCenter, ArrowPosition.RightBottom -> PaddingValues(end = arrowHeight)
+        else -> PaddingValues()
+    }
+
+    AnimatedVisibility(
+        visibleState = transitionState,
+        enter = fadeIn(animationSpec = tween(durationMillis = 50)),
+        exit = fadeOut(animationSpec = tween(durationMillis = animDuration))
     ) {
-        AnimatedVisibility(
-            visibleState = transitionState,
-            enter = expandVertically(
-                expandFrom = Alignment.CenterVertically,
-                animationSpec = tween(durationMillis = animDuration),
-                clip = false
-            ) + fadeIn(),
-            exit = shrinkVertically(
-                shrinkTowards = Alignment.Top,
-                animationSpec = tween(durationMillis = animDuration),
-                clip = false
-            ) + fadeOut()
+        val transition = this.transition
+
+        val scale by transition.animateFloat(
+            transitionSpec = {
+                if (targetState == EnterExitState.Visible) {
+                    spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                } else {
+                    spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                }
+            },
+            label = "Scale"
+        ) { state ->
+            if (state == EnterExitState.Visible) 1f else 0f
+        }
+
+        val alpha by transition.animateFloat(
+            transitionSpec = {
+                if (targetState == EnterExitState.Visible) tween(50) else tween(animDuration)
+            },
+            label = "Alpha"
+        ) { state ->
+            if (state == EnterExitState.Visible) 1f else 0f
+        }
+
+        val surfaceColor = MaterialTheme.colorScheme.surfaceContainerLow
+
+        Surface(
+            modifier = Modifier
+                .wrapContentSize()
+                .widthIn(
+                    min = if (timeList) surfaceWidth else 20.dp,
+                    max = surfaceWidth
+                )
+                .heightIn(max = maxHeight)
+                .graphicsLayer {
+                    scaleX = scale.coerceAtLeast(0f)
+                    scaleY = scale.coerceAtLeast(0f)
+                    this.alpha = alpha
+
+                    val aOffsetPx = arrowOffset.toPx()
+                    val aWidthPx = arrowWidth.toPx()
+                    val w = size.width
+                    val h = size.height
+
+                    if (w > 0 && h > 0) {
+                        val (pivotX, pivotY) = when (arrowPosition) {
+                            ArrowPosition.TopCenter -> 0.5f to 0f
+                            ArrowPosition.TopLeft -> (aOffsetPx + aWidthPx / 2) / w to 0f
+                            ArrowPosition.TopRight -> (w - aOffsetPx - aWidthPx / 2) / w to 0f
+
+                            ArrowPosition.BottomCenter -> 0.5f to 1f
+                            ArrowPosition.BottomLeft -> (aOffsetPx + aWidthPx / 2) / w to 1f
+                            ArrowPosition.BottomRight -> (w - aOffsetPx - aWidthPx / 2) / w to 1f
+
+                            ArrowPosition.LeftCenter -> 0f to 0.5f
+                            ArrowPosition.LeftTop -> 0f to (aOffsetPx + aWidthPx / 2) / h
+                            ArrowPosition.LeftBottom -> 0f to (h - aOffsetPx - aWidthPx / 2) / h
+
+                            ArrowPosition.RightCenter -> 1f to 0.5f
+                            ArrowPosition.RightTop -> 1f to (aOffsetPx + aWidthPx / 2) / h
+                            ArrowPosition.RightBottom -> 1f to (h - aOffsetPx - aWidthPx / 2) / h
+
+                            ArrowPosition.None -> 0.5f to 0.5f
+                        }
+                        transformOrigin = TransformOrigin(pivotX, pivotY)
+                    }
+                },
+            shape = bubbleShape,
+            color = if (!timeList) surfaceColor.copy(alpha = 0.98f) else surfaceColor,
+            shadowElevation = 0.dp
         ) {
             val onDismiss = remember(transitionState) { { transitionState.targetState = false } }
-            LazyColumn(
-                modifier = Modifier.padding(padding)
+
+            Column(
+                modifier = Modifier
+                    .width(IntrinsicSize.Max)
+                    .verticalScroll(rememberScrollState())
+                    .padding(padding),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 buttons.forEachIndexed { index, button ->
-                    item { CustomDropdownMenuItem(button.first, button.second, onDismiss = onDismiss) }
-                    if (index < buttons.size - 1) {
-                        item {
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                thickness = 1.dp,
-                                modifier = Modifier.padding(horizontal = 8.dp)
+                    CustomDropdownMenuItem(
+                        button.first,
+                        button.second,
+                        onDismiss = onDismiss,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateEnterExit(
+                                enter = slideInVertically(
+                                    initialOffsetY = { it / 2 },
+                                    animationSpec = tween(
+                                        durationMillis = animDuration,
+                                        delayMillis = index * 30
+                                    )
+                                ) + fadeIn(
+                                    animationSpec = tween(
+                                        durationMillis = animDuration,
+                                        delayMillis = index * 30
+                                    )
+                                ),
+                                exit = fadeOut(animationSpec = tween(50))
                             )
-                        }
+                    )
+                    if (index < buttons.size - 1) {
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            thickness = 0.15.dp,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
                     }
                 }
             }
@@ -252,18 +398,17 @@ fun CustomDropdown(
     }
 }
 
-
 @Composable
 private fun CustomDropdownMenuItem(
     text: String,
     onClick: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    modifier: Modifier
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(35.dp)
-            .padding(horizontal = 4.dp)
+        modifier = modifier
+            .wrapContentHeight()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable {
                 onClick()
                 onDismiss()
@@ -272,7 +417,20 @@ private fun CustomDropdownMenuItem(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyLarge
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            maxLines = 3
         )
+    }
+}
+
+private fun getArrowPosByBounds(config: Configuration, bounds: IntRect): ArrowPosition {
+    val screenQuadrant = getScreenQuadrant(config, bounds)
+
+    return when (screenQuadrant) {
+        ScreenQuadrant.TopLeft -> ArrowPosition.TopLeft
+        ScreenQuadrant.TopRight -> ArrowPosition.TopRight
+        ScreenQuadrant.BottomLeft -> ArrowPosition.BottomLeft
+        ScreenQuadrant.BottomRight -> ArrowPosition.BottomRight
     }
 }

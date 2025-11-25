@@ -1,6 +1,7 @@
 package com.rds.mews
 
 import android.app.Application
+import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

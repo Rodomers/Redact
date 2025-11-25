@@ -44,8 +44,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -53,11 +56,13 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
+import androidx.compose.ui.unit.roundToIntRect
+import com.rds.mews.ArrowPosition
 import com.rds.mews.R
 import com.rds.mews.Title
-import com.rds.mews.getFormattedTimeUnix
+import com.rds.mews.localcore.getFormattedTimeUnix
 import kotlinx.coroutines.launch
 
 @Composable
@@ -76,6 +81,8 @@ fun TitlesCard(
     val coroutineScope = rememberCoroutineScope()
     var page0Height by remember { mutableStateOf<Int?>(null) }
     val density = LocalDensity.current
+    val config = LocalConfiguration.current
+    var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
     val interactionSource = remember { MutableInteractionSource() }
     val textSelectionColors = TextSelectionColors(
         handleColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -245,7 +252,10 @@ fun TitlesCard(
                     Spacer(modifier = Modifier.weight(1f))
                     IconButton(
                         onClick = toggleDropdown,
-                        modifier = Modifier.height(24.dp).align(Alignment.CenterVertically)
+                        modifier = Modifier
+                            .height(24.dp)
+                            .align(Alignment.CenterVertically)
+                            .onGloballyPositioned { buttonBounds = it.boundsInWindow().roundToIntRect() }
                     ) {
                         Icon(
                             modifier = Modifier.size(16.dp),
@@ -255,15 +265,15 @@ fun TitlesCard(
                     }
 
                     if (dropdownTransitionState.currentState || dropdownTransitionState.targetState) {
-                        Popup(
+                        CustomDropdown(
+                            transitionState = dropdownTransitionState,
+                            buttons = buttons,
+                            inputBounds = buttonBounds,
+                            config = config,
+                            density = density,
                             onDismissRequest = { dropdownTransitionState.targetState = false },
-                            alignment = Alignment.TopEnd
-                        ) {
-                            CustomDropdown(
-                                transitionState = dropdownTransitionState,
-                                buttons = buttons
-                            )
-                        }
+                            arrowPosition = ArrowPosition.BottomRight
+                        )
                     }
                 }
             }

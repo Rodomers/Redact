@@ -6,10 +6,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.rds.mews.MainActivity
-import com.rds.mews.MewsRepository
-import com.rds.mews.handleNotificationsPermissionRequest
-import com.rds.mews.isNotificationPermissionGranted
-import com.rds.mews.isScheduleExactAlarm
+import com.rds.mews.repositories.MewsRepository
+import com.rds.mews.localcore.handleNotificationsPermissionRequest
+import com.rds.mews.localcore.isNotificationPermissionGranted
+import com.rds.mews.localcore.isScheduleExactAlarm
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn

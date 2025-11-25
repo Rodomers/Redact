@@ -25,6 +25,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rds.mews.localcore.isBatteryOptimizationIgnored
+import com.rds.mews.localcore.isNotificationPermissionGranted
+import com.rds.mews.localcore.isScheduleExactAlarm
+import com.rds.mews.localcore.requestIgnoreBatteryOptimization
+import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.MyBottomBar
 import com.rds.mews.ui.custom_elements.TabScreen

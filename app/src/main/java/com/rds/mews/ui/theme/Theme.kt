@@ -29,7 +29,8 @@ private val LightColorScheme = lightColorScheme(
     onSecondaryContainer = Color.Black,
     onPrimary = Color.Black,
     onBackground = Color.Black,
-    onSurface = Color.Black
+    onSurface = Color.Black,
+    surfaceContainerLow = WhiteGray
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -40,7 +41,8 @@ private val DarkColorScheme = darkColorScheme(
     surface = DarkGray, // Тёмная поверхность
     onPrimary = Color.White, // Белый текст на `primary` фоне
     onBackground = Color.White, // Белый текст на `background` фоне
-    onSurface = Color.White // Белый текст на `surface` фоне
+    onSurface = Color.White, // Белый текст на `surface` фоне,
+    surfaceContainerLow = MediumGray
 )
 
 // Добавленный объект Typography, который отсутствовал

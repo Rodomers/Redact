@@ -1,9 +1,12 @@
-package com.rds.mews
+package com.rds.mews.core
 
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import com.rds.mews.Message
+import com.rds.mews.RSS
+import com.rds.mews.Title
 
 class DbHelper(val context: Context) :
     SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
