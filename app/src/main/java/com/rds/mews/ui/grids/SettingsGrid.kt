@@ -514,9 +514,9 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(12.dp),
+                            shape = Shapes.large,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.background
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha=0.98f)
                             )
                         ) {
                             Text(

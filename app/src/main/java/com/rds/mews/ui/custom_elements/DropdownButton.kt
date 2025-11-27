@@ -4,7 +4,8 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateIntOffset
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -42,23 +42,29 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.rds.mews.ArrowPosition
 import com.rds.mews.ui.theme.Shapes
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -73,7 +79,9 @@ fun DropdownButton(
     cornerShape: CornerBasedShape = Shapes.medium
 ) {
     var isOpen by remember { mutableStateOf(false) }
+
     val transitionState = remember { MutableTransitionState(false) }
+    transitionState.targetState = isOpen
 
     var selectedIndex by remember { mutableIntStateOf(initialSelectedIndex.coerceIn(0, buttons.lastIndex)) }
 
@@ -82,7 +90,6 @@ fun DropdownButton(
     }
 
     val currentText = buttons.getOrNull(selectedIndex)?.first ?: ""
-
     val textStyle = MaterialTheme.typography.bodyLarge
     val verticalTextPadding = 12.dp
 
@@ -100,9 +107,7 @@ fun DropdownButton(
             val listContentPaddingPx = (listHeightPx - itemHeightPx) / 2
             val listContentPaddingDp = listContentPaddingPx.toDp()
 
-            val popupOffsetY = -((listHeightPx - itemHeightPx) / 2).roundToInt()
-
-            DropdownDimensions(itemHeightDp, listHeightDp, listContentPaddingDp, popupOffsetY)
+            DropdownDimensions(itemHeightDp, listHeightDp, listContentPaddingDp)
         }
     }
 
@@ -110,8 +115,7 @@ fun DropdownButton(
     val surfaceColor = MaterialTheme.colorScheme.surfaceContainerLow
     val contentColor = MaterialTheme.colorScheme.onSurface
 
-    fun startClose() { transitionState.targetState = false }
-    if (transitionState.isIdle && !transitionState.targetState) {
+    fun startClose() {
         isOpen = false
     }
 
@@ -131,7 +135,6 @@ fun DropdownButton(
                     indication = null
                 ) {
                     isOpen = true
-                    transitionState.targetState = true
                 }
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -147,78 +150,74 @@ fun DropdownButton(
             }
         }
 
-        if (isOpen) {
-            val transition = updateTransition(transitionState, label = "DropdownAnim")
 
-            val animHeight by transition.animateDp(
-                label = "Height",
-                transitionSpec = {
-                    if (targetState) {
-                        spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    } else {
-                        spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    }
-                }
-            ) { if (it) dimensions.listHeightDp else dimensions.itemHeightDp }
-
-            val animOffset by transition.animateIntOffset(
-                label = "Offset",
-                transitionSpec = {
-                    if (targetState) {
-                        spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    } else {
-                        spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    }
-                }
-            ) { if (it) IntOffset(0, dimensions.popupOffsetY) else IntOffset.Zero }
-
-            val animAlpha by transition.animateFloat(
-                label = "Alpha",
-                transitionSpec = {
-                    if (targetState) tween(50) else tween(animDuration)
-                }
-            ) { if (it) 1f else 0f }
-
+        if (isOpen || transitionState.currentState || !transitionState.isIdle) {
             val popupScope = rememberCoroutineScope()
 
             Popup(
-                alignment = Alignment.TopCenter,
-                offset = animOffset,
+                alignment = Alignment.Center,
+                properties = PopupProperties(clippingEnabled = false),
                 onDismissRequest = { startClose() }
             ) {
-                Surface(
-                    shape = shape,
-                    color = surfaceColor.copy(alpha = 0.98f),
-                    shadowElevation = 4.dp,
+                val transition = rememberTransition(transitionState, label = "DropdownTransition")
+
+                val animHeight by transition.animateDp(
+                    transitionSpec = {
+                        if (targetState) {
+                            spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        } else {
+                            spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        }
+                    },
+                    label = "Height"
+                ) { if (it) dimensions.listHeightDp else dimensions.itemHeightDp }
+
+                val animAlpha by transition.animateFloat(
+                    transitionSpec = {
+                        if (targetState) tween(50) else tween(animDuration)
+                    },
+                    label = "Alpha"
+                ) { if (it) 1f else 0f }
+
+                val revealProgress by transition.animateFloat(
+                    transitionSpec = { tween(animDuration) },
+                    label = "Reveal"
+                ) { if (it) 1f else 0f }
+
+                Box(
                     modifier = Modifier
                         .width(width)
-                        .requiredHeight(animHeight)
-                        .alpha(animAlpha)
+                        .height(dimensions.listHeightDp)
+                        .clip(remember(animHeight, cornerShape) {
+                            CenterRevealShape(animHeight, cornerShape, density)
+                        })
+                        .alpha(animAlpha),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        color = surfaceColor.copy(alpha = 0.98f),
+                        shadowElevation = 4.dp,
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        Box(modifier = Modifier.height(dimensions.listHeightDp)) {
-                            val listState = rememberLazyListState()
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            val listState = rememberLazyListState(
+                                initialFirstVisibleItemIndex = selectedIndex
+                            )
                             val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
-
                             var hasUserScrolled by remember { mutableStateOf(false) }
-                            val isDragged by listState.interactionSource.collectIsDraggedAsState()
 
-                            LaunchedEffect(isDragged) { if (isDragged) hasUserScrolled = true }
+                            val isDragged by listState.interactionSource.collectIsDraggedAsState()
+                            val isScrolling = listState.isScrollInProgress
+
+                            LaunchedEffect(isDragged, isScrolling) {
+                                if (isDragged || isScrolling) hasUserScrolled = true
+                            }
 
                             val layoutInfo by remember { derivedStateOf { listState.layoutInfo } }
                             val centerItemIndex by remember {
@@ -234,8 +233,8 @@ fun DropdownButton(
                             LaunchedEffect(listState) {
                                 snapshotFlow { listState.isScrollInProgress }
                                     .distinctUntilChanged()
-                                    .collectLatest { isScrolling ->
-                                        if (!isScrolling && hasUserScrolled) {
+                                    .collectLatest { scrollInProgress ->
+                                        if (!scrollInProgress && hasUserScrolled) {
                                             val index = centerItemIndex
                                             if (index != -1 && index != selectedIndex) {
                                                 selectedIndex = index
@@ -245,8 +244,6 @@ fun DropdownButton(
                                     }
                             }
 
-                            LaunchedEffect(Unit) { listState.scrollToItem(selectedIndex) }
-
                             LazyColumn(
                                 state = listState,
                                 contentPadding = PaddingValues(vertical = dimensions.listContentPaddingDp),
@@ -254,7 +251,16 @@ fun DropdownButton(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 itemsIndexed(buttons) { index, item ->
-                                    val isCentered = index == centerItemIndex
+                                    val isCentered = if (hasUserScrolled) index == centerItemIndex else index == selectedIndex
+
+                                    val focusScale by animateFloatAsState(
+                                        targetValue = if (isCentered) 1f else 0.85f,
+                                        label = "FocusScale"
+                                    )
+                                    val focusAlpha by animateFloatAsState(
+                                        targetValue = if (isCentered) 1f else 0.5f,
+                                        label = "FocusAlpha"
+                                    )
 
                                     Box(
                                         modifier = Modifier
@@ -268,6 +274,18 @@ fun DropdownButton(
                                                     delay(150)
                                                     startClose()
                                                 }
+                                            }
+                                            .graphicsLayer {
+                                                val startOffset = (selectedIndex - index) * 15.dp.toPx()
+                                                translationY = startOffset * (1f - revealProgress)
+
+                                                scaleX = focusScale
+                                                scaleY = focusScale
+
+                                                val distance = index - selectedIndex
+                                                val itemRevealAlpha = if (distance == 0) 1f else revealProgress
+
+                                                alpha = focusAlpha * itemRevealAlpha
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -275,7 +293,7 @@ fun DropdownButton(
                                             text = item.first,
                                             style = textStyle,
                                             textAlign = TextAlign.Center,
-                                            color = if (isCentered) contentColor else contentColor.copy(alpha = 0.4f),
+                                            color = contentColor,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(horizontal = 16.dp)
@@ -287,14 +305,16 @@ fun DropdownButton(
                             HorizontalDivider(
                                 modifier = Modifier
                                     .align(Alignment.TopCenter)
-                                    .padding(top = dimensions.listContentPaddingDp, bottom = 8.dp),
+                                    .padding(top = dimensions.listContentPaddingDp, bottom = 8.dp)
+                                    .alpha(revealProgress),
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
                                 thickness = 1.dp
                             )
                             HorizontalDivider(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
-                                    .padding(bottom = dimensions.listContentPaddingDp, top = 8.dp),
+                                    .padding(bottom = dimensions.listContentPaddingDp, top = 8.dp)
+                                    .alpha(revealProgress),
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
                                 thickness = 1.dp
                             )
@@ -306,9 +326,37 @@ fun DropdownButton(
     }
 }
 
+
+private class CenterRevealShape(
+    val currentHeight: Dp,
+    val cornerShape: CornerBasedShape,
+    val density: Density
+) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val currentHeightPx = with(density) { currentHeight.toPx() }
+
+        val verticalOffset = (size.height - currentHeightPx) / 2
+
+        if (verticalOffset >= size.height / 2) {
+            return Outline.Rounded(RoundRect(0f, size.height/2, size.width, size.height/2, CornerRadius.Zero))
+        }
+
+        val cornerRadiusPx = cornerShape.topStart.toPx(size, density)
+
+        return Outline.Rounded(
+            RoundRect(
+                left = 0f,
+                top = verticalOffset,
+                right = size.width,
+                bottom = size.height - verticalOffset,
+                cornerRadius = CornerRadius(cornerRadiusPx)
+            )
+        )
+    }
+}
+
 private data class DropdownDimensions(
     val itemHeightDp: Dp,
     val listHeightDp: Dp,
-    val listContentPaddingDp: Dp,
-    val popupOffsetY: Int
+    val listContentPaddingDp: Dp
 )
