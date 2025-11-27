@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.sp
 import com.rds.mews.ui.theme.Shapes
 
 @Composable
-fun CustomSettingsItem(text: String, item: @Composable () -> Unit) {
+fun SettingsItem(text: String, item: @Composable () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()

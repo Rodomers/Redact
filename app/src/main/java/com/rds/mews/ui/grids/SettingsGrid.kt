@@ -17,9 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -48,20 +46,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.roundToIntRect
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import com.rds.mews.MainActivity
 import com.rds.mews.R
 import com.rds.mews.viewmodels.SettingsViewModel
@@ -69,11 +63,11 @@ import com.rds.mews.localcore.intTimeToStr
 import com.rds.mews.localcore.requestNotificationPermission
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
-import com.rds.mews.ui.custom_elements.CustomSettingsItem
+import com.rds.mews.ui.custom_elements.SettingsItem
 import com.rds.mews.ui.custom_elements.CustomSwitch
 import com.rds.mews.ui.custom_elements.CustomTextDivider
 import com.rds.mews.ui.custom_elements.DeferredUpdateTab
-import com.rds.mews.ui.custom_elements.CustomDropdown
+import com.rds.mews.ui.custom_elements.DropdownButton
 import com.rds.mews.ui.theme.Shapes
 
 
@@ -81,7 +75,6 @@ import com.rds.mews.ui.theme.Shapes
 @Composable
 fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: SettingsViewModel, mainActivity: MainActivity) {
     val clipboardManager = LocalClipboardManager.current
-    val config = LocalConfiguration.current
     val density = LocalDensity.current
 
     var text by remember { mutableStateOf("") }
@@ -115,7 +108,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val colorSchemeDropdownVisible = remember { MutableTransitionState(false) }
+
     val currentTheme by settingsModel.currentTheme.collectAsStateWithLifecycle()
     val colorSchemeDropdownItems = mutableListOf(
         stringResource(R.string.settings_system_theme) to { settingsModel.setCurrentTheme("system") },
@@ -123,7 +116,6 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         stringResource(R.string.settings_dark_theme) to { settingsModel.setCurrentTheme("dark") }
     )
 
-    val titlesDropdownVisible = remember { MutableTransitionState(false) }
     val titlesDropdownItems = mutableListOf(
         pluralStringResource(R.plurals.titles, count = 10, 10) to { settingsModel.setTitlesNum(10) },
         pluralStringResource(R.plurals.titles, count = 20, 20) to { settingsModel.setTitlesNum(20) },
@@ -137,7 +129,6 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
     }
     else if (titlesNum > 20) settingsModel.setTitlesNum(20)
 
-    val limitationDropdownVisible = remember { MutableTransitionState(false) }
     val limitationDropdownItems = listOf(
         pluralStringResource(R.plurals.hours, count = 12, 12) to { settingsModel.setTitlesPeriod(12) },
         pluralStringResource(R.plurals.hours, count = 24, 24) to { settingsModel.setTitlesPeriod(24) },
@@ -147,21 +138,12 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         pluralStringResource(R.plurals.hours, count = 120, 120) to { settingsModel.setTitlesPeriod(120) }
     )
 
-    val rssUpdateDropdownVisible = remember { MutableTransitionState(false) }
     val rssUpdateDropdownItems = listOf(
         pluralStringResource(R.plurals.minutes, count = 15, 15) to { settingsModel.setRssUpdateInterval(context, 15) },
         pluralStringResource(R.plurals.minutes, count = 30, 30) to { settingsModel.setRssUpdateInterval(context, 30) },
         pluralStringResource(R.plurals.minutes, count = 60, 60) to { settingsModel.setRssUpdateInterval(context, 60) }
     )
 
-    val geminiModelDropdownVisible = remember { MutableTransitionState(false) }
-    var geminiModelText by remember { mutableStateOf("") }
-    geminiModelText = when (currentLlmModel) {
-        "gemini-2.5-flash" -> "2.5 Flash"
-        "gemini-2.0-flash" -> "2.0 Flash"
-        "gemini-2.0-flash-lite" -> "2.0 Flash Lite"
-        else -> "2.5 Flash Lite"
-    }
     val geminiModelDropdownItems = listOf(
         "2.5 Flash" to { settingsModel.setCurrentLlm("gemini-2.5-flash") },
         "2.5 Flash Lite" to { settingsModel.setCurrentLlm("gemini-2.5-flash-lite") },
@@ -169,14 +151,12 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         "2.0 Flash Lite" to { settingsModel.setCurrentLlm("gemini-2.0-flash-lite") }
     )
 
-    val alarmHoursListVisible = remember { MutableTransitionState(false) }
     val alarmHrsItems = (0..23).toList().map { num ->
         intTimeToStr(num) to {
             alarmHrsText = num
             settingsModel.setTitlesAlarmMins(context, alarmHrsText * 60 + alarmMinsText)
         }
     }
-    val alarmMinutesListVisible = remember { MutableTransitionState(false) }
     val alarmMinsItems = (0..59).toList().map {num ->
         intTimeToStr(num) to {
             alarmMinsText = num
@@ -184,7 +164,6 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         }
     }
 
-    val titlesFrequencyListVisible = remember { MutableTransitionState(false) }
     val titlesFrequencyItems = listOf (
         pluralStringResource(R.plurals.hours, count = 12, 12) to { settingsModel.setTitlesUpdFrequency(context, 12) },
         pluralStringResource(R.plurals.hours, count = 24, 24) to { settingsModel.setTitlesUpdFrequency(context, 24) },
@@ -203,7 +182,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         {
             Spacer(modifier = Modifier.height(12.dp))
 
-            CustomSettingsItem(text = stringResource(R.string.settings_titles_alarm_update)) {
+            SettingsItem(text = stringResource(R.string.settings_titles_alarm_update)) {
                 CustomSwitch(
                     checked = titlesAlarmUpdate,
                     onCheckedChange = {
@@ -219,136 +198,45 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             }
         },
         {
-            CustomSettingsItem(text = stringResource(R.string.settings_titles_update_frequency)) {
-                var frequencyAnchorBounds by remember { mutableStateOf<IntRect?>(null) }
-
-                Box {
-                    Button(
-                        modifier = Modifier
-                            .width(150.dp)
-                            .wrapContentHeight()
-                            .onGloballyPositioned { frequencyAnchorBounds = it.boundsInWindow().roundToIntRect() },
-                        onClick = {
-                            titlesFrequencyListVisible.targetState =
-                                !titlesFrequencyListVisible.currentState
-                        },
-                        shape = Shapes.small,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.background
-                        )
-                    ) {
-                        Text(
-                            text = pluralStringResource(
-                                R.plurals.hours,
-                                alarmFrequency,
-                                alarmFrequency
-                            ),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-
-                    if (titlesFrequencyListVisible.currentState || titlesFrequencyListVisible.targetState) {
-                        CustomDropdown(
-                            transitionState = titlesFrequencyListVisible,
-                            buttons = titlesFrequencyItems.map { (text, action) ->
-                                text to { action() }
-                            },
-                            inputBounds = frequencyAnchorBounds,
-                            config = config,
-                            density = density,
-                            onDismissRequest = {
-                                titlesFrequencyListVisible.targetState = false
-                            },
-                            centeredArrow = true
-                        )
-                    }
-                }
+            SettingsItem(text = stringResource(R.string.settings_titles_update_frequency)) {
+                DropdownButton(
+                    buttons = titlesFrequencyItems.map { (text, action) ->
+                        text to { action() }
+                    },
+                    density = density,
+                    cornerShape = Shapes.large,
+                    initialSelectedIndex = titlesFrequencyItems.indexOfFirst { it.first.contains(alarmFrequency.toString()) }
+                )
             }
         },
         {
-            CustomSettingsItem(text = stringResource(R.string.settings_titles_update_time)) {
-                var hoursAnchorBounds by remember { mutableStateOf<IntRect?>(null) }
-                var minsAnchorBounds by remember { mutableStateOf<IntRect?>(null) }
-
+            SettingsItem(text = stringResource(R.string.settings_titles_update_time)) {
                 Box {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Button(
-                            modifier = Modifier
-                                .width(70.dp)
-                                .wrapContentHeight()
-                                .onGloballyPositioned {
-                                    hoursAnchorBounds = it.boundsInWindow().roundToIntRect()
-                                },
-                            onClick = {
-                                alarmHoursListVisible.targetState =
-                                    !alarmHoursListVisible.currentState
+                        DropdownButton(
+                            buttons = alarmHrsItems.mapNotNull { (text, action) ->
+                                if (!(alarmFrequency == 12 && text.toInt() > 12)) text to { action() } else null
                             },
-                            shape = Shapes.small,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.background
-                            )
-                        ) {
-                            Text(
-                                text = intTimeToStr(alarmHrsText),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
+                            density = density,
+                            cornerShape = Shapes.large,
+                            width = 75.dp,
+                            initialSelectedIndex = alarmHrsItems.mapNotNull { (text, action) ->
+                                if (!(alarmFrequency == 12 && text.toInt() > 12)) text to { action() } else null
+                            }.indexOfFirst { it.first.contains(intTimeToStr(alarmHrsText)) }
+                        )
                         Text(
                             text = ":",
                             fontSize = 22.sp,
                             modifier = Modifier.padding(horizontal = 2.dp)
                         )
-                        Button(
-                            modifier = Modifier
-                                .width(70.dp)
-                                .wrapContentHeight()
-                                .onGloballyPositioned {
-                                    minsAnchorBounds = it.boundsInWindow().roundToIntRect()
-                                },
-                            onClick = {
-                                alarmMinutesListVisible.targetState =
-                                    !alarmMinutesListVisible.currentState
-                            },
-                            shape = Shapes.small,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.background
-                            )
-                        ) {
-                            Text(
-                                text = intTimeToStr(alarmMinsText),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                    }
-
-                    if (alarmHoursListVisible.currentState || alarmHoursListVisible.targetState) {
-                        CustomDropdown(
-                            transitionState = alarmHoursListVisible,
-                            buttons = alarmHrsItems.mapNotNull { (text, action) ->
-                                if (!(alarmFrequency == 12 && text.toInt() > 12)) text to { action() } else null
-                            },
-                            inputBounds = hoursAnchorBounds,
-                            config = config,
-                            density = density,
-                            onDismissRequest = {
-                                alarmHoursListVisible.targetState = false
-                            },
-                            timeList = true
-                        )
-                    }
-                    if (alarmMinutesListVisible.currentState || alarmMinutesListVisible.targetState) {
-                        CustomDropdown(
-                            transitionState = alarmMinutesListVisible,
+                        DropdownButton(
                             buttons = alarmMinsItems.map { (text, action) ->
                                 text to { action() }
                             },
-                            inputBounds = minsAnchorBounds,
-                            config = config,
                             density = density,
-                            onDismissRequest = {
-                                alarmMinutesListVisible.targetState = false
-                            },
-                            timeList = true
+                            cornerShape = Shapes.large,
+                            width = 75.dp,
+                            initialSelectedIndex = alarmHrsItems.indexOfFirst { it.first.contains(intTimeToStr(alarmMinsText)) }
                         )
                     }
                 }
@@ -358,11 +246,11 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
 
     val bannedNewsScreenState = remember { MutableTransitionState(false) }
     val bannedNewsItems: MutableList<@Composable () -> Unit> = mutableListOf()
-    bannedNews.forEach { it ->
+    bannedNews.forEach {
         if (it != ""){
             bannedNewsItems.add(
                 {
-                    CustomSettingsItem(it) {
+                    SettingsItem(it) {
                         IconButton(
                             onClick = { settingsModel.delBannedNews(it) }
                         ) {
@@ -439,7 +327,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_compact_tab)) {
+                SettingsItem(text = stringResource(R.string.settings_compact_tab)) {
                     Switch(
                         checked = compactTab,
                         onCheckedChange = { settingsModel.setCompactTab(it) },
@@ -457,7 +345,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 item {
-                    CustomSettingsItem(text = stringResource(R.string.settings_monet_colors)) {
+                    SettingsItem(text = stringResource(R.string.settings_monet_colors)) {
                         CustomSwitch(
                             checked = monetColors,
                             onCheckedChange = { settingsModel.setMonetColors(it) }
@@ -466,49 +354,19 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_color_scheme)) {
-                    var colorSchemeBounds by remember { mutableStateOf<IntRect?>(null) }
-
-                    Box {
-                        Button(
-                            modifier = Modifier
-                                .wrapContentSize()
-                                .width(150.dp)
-                                .onGloballyPositioned { colorSchemeBounds = it.boundsInWindow().roundToIntRect() },
-                            onClick = {
-                                colorSchemeDropdownVisible.targetState =
-                                    !colorSchemeDropdownVisible.currentState
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.background
-                            )
-                        ) {
-                            Text(
-                                text = when (currentTheme) {
-                                    "light" -> stringResource(R.string.settings_light_theme)
-                                    "dark" -> stringResource(R.string.settings_dark_theme)
-                                    else -> stringResource(R.string.settings_system_theme)
-                                }, color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+                SettingsItem(text = stringResource(R.string.settings_color_scheme)) {
+                    DropdownButton(
+                        buttons = colorSchemeDropdownItems.map { (text, action) ->
+                            text to { action() }
+                        },
+                        density = density,
+                        cornerShape = Shapes.large,
+                        initialSelectedIndex = when (currentTheme) {
+                            "light" -> 1
+                            "dark" -> 2
+                            else -> 0
                         }
-
-                        if (colorSchemeDropdownVisible.currentState || colorSchemeDropdownVisible.targetState) {
-                            CustomDropdown(
-                                transitionState = colorSchemeDropdownVisible,
-                                buttons = colorSchemeDropdownItems.map { (text, action) ->
-                                    text to { action() }
-                                },
-                                inputBounds = colorSchemeBounds,
-                                config = config,
-                                density = density,
-                                onDismissRequest = {
-                                    colorSchemeDropdownVisible.targetState = false
-                                },
-                                centeredArrow = true
-                            )
-                        }
-                    }
+                    )
                 }
             }
 
@@ -523,7 +381,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_show_dates)) {
+                SettingsItem(text = stringResource(R.string.settings_show_dates)) {
                     CustomSwitch(
                         checked = showDates,
                         onCheckedChange = { settingsModel.setShowDates(it) }
@@ -531,7 +389,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_endure_time)) {
+                SettingsItem(text = stringResource(R.string.settings_endure_time)) {
                     CustomSwitch(
                         checked = endureTime,
                         onCheckedChange = { settingsModel.setEndureTime(it) }
@@ -539,140 +397,41 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_maximum_headers)) {
-                    var maximumHeadersBounds by remember { mutableStateOf<IntRect?>(null) }
-
-                    Box {
-                        Button(
-                            modifier = Modifier
-                                .wrapContentSize()
-                                .width(150.dp)
-                                .onGloballyPositioned { maximumHeadersBounds = it.boundsInWindow().roundToIntRect() },
-                            onClick = {
-                                titlesDropdownVisible.targetState =
-                                    !titlesDropdownVisible.currentState
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.background
-                            )
-                        ) {
-                            Text(
-                                text = pluralStringResource(
-                                    R.plurals.titles,
-                                    count = titlesNum,
-                                    titlesNum
-                                ),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-
-                        if (titlesDropdownVisible.currentState || titlesDropdownVisible.targetState) {
-                            CustomDropdown(
-                                transitionState = titlesDropdownVisible,
-                                buttons = titlesDropdownItems.map { (text, action) ->
-                                    text to { action() }
-                                },
-                                inputBounds = maximumHeadersBounds,
-                                config = config,
-                                density = density,
-                                onDismissRequest = { titlesDropdownVisible.targetState = false },
-                                centeredArrow = true
-                            )
-                        }
-                    }
+                SettingsItem(text = stringResource(R.string.settings_maximum_headers)) {
+                    DropdownButton(
+                        buttons = titlesDropdownItems.map { (text, action) ->
+                            text to { action() }
+                        },
+                        density = density,
+                        cornerShape = Shapes.large,
+                        initialSelectedIndex = titlesDropdownItems.indexOfFirst { it.first.contains(titlesNum.toString()) }
+                    )
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_news_period)) {
-                    var newsPeriodBounds by remember { mutableStateOf<IntRect?>(null) }
-
-                    Box {
-                        Button(
-                            modifier = Modifier
-                                .wrapContentSize()
-                                .width(150.dp)
-                                .onGloballyPositioned{ newsPeriodBounds = it.boundsInWindow().roundToIntRect() },
-                            onClick = {
-                                limitationDropdownVisible.targetState =
-                                    !limitationDropdownVisible.currentState
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.background
-                            )
-                        ) {
-                            Text(
-                                text = pluralStringResource(
-                                    R.plurals.hours,
-                                    count = titlesPeriod,
-                                    titlesPeriod
-                                ),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-
-                        if (limitationDropdownVisible.currentState || limitationDropdownVisible.targetState) {
-                            CustomDropdown(
-                                transitionState = limitationDropdownVisible,
-                                buttons = limitationDropdownItems.map { (text, action) ->
-                                    text to { action() }
-                                },
-                                inputBounds = newsPeriodBounds,
-                                config = config,
-                                density = density,
-                                onDismissRequest = { limitationDropdownVisible.targetState = false },
-                                centeredArrow = true
-                            )
-                        }
-                    }
+                SettingsItem(text = stringResource(R.string.settings_news_period)) {
+                    DropdownButton(
+                        buttons = limitationDropdownItems.map { (text, action) ->
+                            text to { action() }
+                        },
+                        density = density,
+                        cornerShape = Shapes.large,
+                        initialSelectedIndex = limitationDropdownItems.indexOfFirst { it.first.contains(titlesPeriod.toString()) }
+                    )
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_news_update_frequency)) {
-                    var newsUpdateFreqBounds by remember { mutableStateOf<IntRect?>(null) }
-
-                    Box {
-                        Button(
-                            modifier = Modifier
-                                .wrapContentSize()
-                                .width(150.dp)
-                                .onGloballyPositioned{ newsUpdateFreqBounds = it.boundsInWindow().roundToIntRect() },
-                            onClick = {
-                                rssUpdateDropdownVisible.targetState =
-                                    !rssUpdateDropdownVisible.currentState
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.background
-                            )
-                        ) {
-                            Text(
-                                text = pluralStringResource(
-                                    R.plurals.minutes,
-                                    count = rssUpdateInterval,
-                                    rssUpdateInterval
-                                ),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-
-                        if (rssUpdateDropdownVisible.currentState || rssUpdateDropdownVisible.targetState) {
-                            CustomDropdown(
-                                transitionState = rssUpdateDropdownVisible,
-                                buttons = rssUpdateDropdownItems,
-                                inputBounds = newsUpdateFreqBounds,
-                                config = config,
-                                density = density,
-                                onDismissRequest = { rssUpdateDropdownVisible.targetState = false },
-                                centeredArrow = true
-                            )
-                        }
-                    }
+                SettingsItem(text = stringResource(R.string.settings_news_update_frequency)) {
+                    DropdownButton(
+                        buttons = rssUpdateDropdownItems,
+                        density = density,
+                        cornerShape = Shapes.large,
+                        initialSelectedIndex = rssUpdateDropdownItems.indexOfFirst { it.first.contains(rssUpdateInterval.toString()) }
+                    )
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_titles_auto_update)) {
+                SettingsItem(text = stringResource(R.string.settings_titles_auto_update)) {
                     IconButton(
                         modifier = Modifier
                             .wrapContentSize(),
@@ -700,7 +459,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             }
             if (geminiApiText != defaultGeminiApiKey) {
                 item {
-                    CustomSettingsItem(text = stringResource(R.string.settings_filter_topics)) {
+                    SettingsItem(text = stringResource(R.string.settings_filter_topics)) {
                         CustomSwitch(
                             checked = filterTopics,
                             onCheckedChange = { settingsModel.setFilterTopics(it) }
@@ -710,51 +469,25 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             }
             if (geminiApiText != defaultGeminiApiKey) {
                 item {
-                    var geminiModelBounds by remember { mutableStateOf<IntRect?>(null) }
-
-                    CustomSettingsItem(text = stringResource(R.string.settings_gemini_model)) {
-                        Box {
-                            Button(
-                                modifier = Modifier
-                                    .wrapContentSize()
-                                    .width(150.dp)
-                                    .onGloballyPositioned{ geminiModelBounds = it.boundsInWindow().roundToIntRect() },
-                                onClick = {
-                                    geminiModelDropdownVisible.targetState =
-                                        !geminiModelDropdownVisible.currentState
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.background
-                                )
-                            ) {
-                                Text(
-                                    text = geminiModelText,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
+                    SettingsItem(text = stringResource(R.string.settings_gemini_model)) {
+                        DropdownButton(
+                            buttons = geminiModelDropdownItems.map { (text, action) ->
+                                text to { action() }
+                            },
+                            density = density,
+                            cornerShape = Shapes.large,
+                            initialSelectedIndex = geminiModelDropdownItems.indexOfFirst {
+                                "gemini-${
+                                    it.first.split(" ")
+                                        .joinToString("-") { item -> item.lowercase() }
+                                }" == currentLlmModel
                             }
-
-                            if (geminiModelDropdownVisible.currentState || geminiModelDropdownVisible.targetState) {
-                                CustomDropdown(
-                                    transitionState = geminiModelDropdownVisible,
-                                    buttons = geminiModelDropdownItems.map { (text, action) ->
-                                        text to { action() }
-                                    },
-                                    inputBounds = geminiModelBounds,
-                                    config = config,
-                                    density = density,
-                                    onDismissRequest = {
-                                        geminiModelDropdownVisible.targetState = false
-                                    },
-                                    centeredArrow = true
-                                )
-                            }
-                        }
+                        )
                     }
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_gemini_api_key)) {
+                SettingsItem(text = stringResource(R.string.settings_gemini_api_key)) {
                     Box {
                         Button(
                             modifier = Modifier
@@ -798,7 +531,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             }
             if (bannedNewsItems.isNotEmpty()) {
                 item {
-                    CustomSettingsItem(text = stringResource(R.string.settings_banned_news)) {
+                    SettingsItem(text = stringResource(R.string.settings_banned_news)) {
                         IconButton(
                             modifier = Modifier
                                 .wrapContentSize(),
@@ -827,7 +560,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 }
             }
             item {
-                CustomSettingsItem(text = stringResource(R.string.settings_enable_proxy)) {
+                SettingsItem(text = stringResource(R.string.settings_enable_proxy)) {
                     CustomSwitch(
                         checked = proxyEnabled,
                         onCheckedChange = { settingsModel.setProxyEnabled(it) }
