@@ -174,7 +174,7 @@ fun SourcesGrid(
             item { Spacer(modifier = Modifier.height(1.dp)) }
 
             item {
-                SourcesAddCard(addDialogTrue)
+                SourcesAddCard(addDialogTrue, transitionState = showAddDialog)
             }
         }
     }

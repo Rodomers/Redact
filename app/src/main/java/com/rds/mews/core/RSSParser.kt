@@ -1,5 +1,6 @@
 package com.rds.mews.core
 
+import com.rds.mews.localcore.SettingsManager
 import com.rds.mews.repositories.MewsRepository
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -14,6 +15,7 @@ import org.jsoup.parser.Parser
 // --- Парсер RSS-потоков ---`
 class RssFetcher(
     private val db: DbHelper,
+    private val settingsManager: SettingsManager,
     enableProxy: Boolean = false
 ) {
     // Получаем экземпляр общего HTTP-клиента
@@ -28,6 +30,12 @@ class RssFetcher(
             return FetchResult(0, 0, 0, listOf(e.message ?: "unknown"))
         }
 
+        val lastUpdated = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
+        val newsUpdateDelta: Long? = when (lastUpdated) {
+            0L -> null
+            else -> (System.currentTimeMillis() - lastUpdated) / 1000
+        }
+
         var feedsProcessed = 0
         var itemsAdded = 0
         var itemsSkipped = 0
@@ -38,6 +46,7 @@ class RssFetcher(
                 var fetchUrl = rss.link
                 if (fetchUrl.contains("t.me")) {
                     fetchUrl = "http://${MewsRepository.SERVER_IP}:1200/telegram/channel/${fetchUrl.split("/").last().trim()}?limit=100&key=${MewsRepository.RSS_HUB_KEY}"
+                    if (newsUpdateDelta != null) fetchUrl = "$fetchUrl&filter_time=${newsUpdateDelta}"
                 }
                 println("Fetching RSS: $fetchUrl")
 

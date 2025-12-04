@@ -84,7 +84,7 @@ class TitlesUpdateService : Service() {
         val titlesNum = settingsManager.getInt(MewsRepository.TITLES_NUM, 10)
         val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
 
-        val fetcher = RssFetcher(db)
+        val fetcher = RssFetcher(db, settingsManager)
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
         val summarizer = NewsSummarizer(db, llm)
 

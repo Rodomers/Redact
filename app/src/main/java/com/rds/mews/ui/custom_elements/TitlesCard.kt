@@ -28,8 +28,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -250,19 +248,15 @@ fun TitlesCard(
                         fontWeight = if (pagerState.targetPage == 1 ) FontWeight.Bold else FontWeight.Normal
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    IconButton(
+                    CustomIconButton(
+                        icon = Icons.Default.MoreVert,
                         onClick = toggleDropdown,
-                        modifier = Modifier
+                        buttonModifier = Modifier
                             .height(24.dp)
                             .align(Alignment.CenterVertically)
-                            .onGloballyPositioned { buttonBounds = it.boundsInWindow().roundToIntRect() }
-                    ) {
-                        Icon(
-                            modifier = Modifier.size(16.dp),
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = stringResource(R.string.moreVert_btn_desc)
-                        )
-                    }
+                            .onGloballyPositioned { buttonBounds = it.boundsInWindow().roundToIntRect() },
+                        iconModifier = Modifier.size(16.dp)
+                    )
 
                     if (dropdownTransitionState.currentState || dropdownTransitionState.targetState) {
                         CustomDropdown(

@@ -1,13 +1,17 @@
 package com.rds.mews.ui.custom_elements
 
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -36,6 +41,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
 import com.rds.mews.R
+import com.rds.mews.ui.theme.Shapes
 
 @Composable
 fun CustomCardWithMenu(
@@ -46,38 +52,51 @@ fun CustomCardWithMenu(
     val toggleDropdown = { transitionState.targetState = !transitionState.currentState }
     var bounds by remember { mutableStateOf<IntRect?>(null) }
 
+    val primaryColor = MaterialTheme.colorScheme.secondaryContainer
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .wrapContentHeight(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.onSecondary,
+            .height(50.dp),
+        shape = Shapes.large,
+        color = Color.Transparent,
+        border = BorderStroke(4.dp, primaryColor),
         shadowElevation = 0.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .wrapContentHeight()
                 .height(IntrinsicSize.Min),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = text,
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 10.dp),
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Bold
-            )
-            IconButton(
-                onClick = {toggleDropdown()},
-                modifier = Modifier
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                    .onGloballyPositioned { bounds = it.boundsInWindow().roundToIntRect() }
+                    .background(primaryColor)
+                    .padding(horizontal = 10.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(imageVector = Icons.Default.MoreVert, contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc))
+                Text(
+                    text = text,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
             }
+            CustomIconButton(
+                icon = Icons.Default.MoreVert,
+                onClick = { toggleDropdown() },
+                buttonModifier = Modifier
+                    .fillMaxHeight()
+                    .padding(bottom = 4.dp, top = 4.dp, end = 4.dp)
+                    .width(50.dp)
+                    .aspectRatio(1f)
+                    .onGloballyPositioned { bounds = it.boundsInWindow().roundToIntRect() },
+                transitionState = transitionState,
+                transitionBackgroundColor = primaryColor
+            )
 
             if (transitionState.currentState || transitionState.targetState) {
                 CustomDropdown(
@@ -95,37 +114,56 @@ fun CustomCardWithMenu(
 
 @Composable
 fun SourcesAddCard(
-    action: () -> Unit
-) { Surface(
-    modifier = Modifier
-        .fillMaxWidth()
-        .wrapContentHeight(),
-    shape = RoundedCornerShape(12.dp),
-    color = MaterialTheme.colorScheme.onSecondary,
-    shadowElevation = 0.dp
+    action: () -> Unit,
+    transitionState: Boolean? = null
 ) {
+    val buttonTransitionState = remember { MutableTransitionState(transitionState == true) }
+    buttonTransitionState.targetState = transitionState == true
+
+    val primaryColor = MaterialTheme.colorScheme.secondaryContainer
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp),
+        shape = Shapes.large,
+        color = Color.Transparent,
+        border = BorderStroke(4.dp, primaryColor),
+        shadowElevation = 0.dp
+    ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentHeight(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = stringResource(R.string.sources_add_text),
+        Box(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 10.dp),
-            textAlign = TextAlign.Center,
-            fontWeight = FontWeight.Bold
-        )
-        IconButton(
-            onClick = action,
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.secondaryContainer)
                 .fillMaxHeight()
+                .background(primaryColor)
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(R.string.sources_add_icon_desc))
+            Text(
+                text = stringResource(R.string.sources_add_text),
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
         }
+        CustomIconButton(
+            icon = Icons.Default.Add,
+            onClick = action,
+            buttonModifier = Modifier
+                .fillMaxHeight()
+                .padding(bottom = 4.dp, top = 4.dp, end = 4.dp)
+                .width(50.dp)
+                .aspectRatio(1f),
+            transitionState = buttonTransitionState,
+            transitionBackgroundColor = primaryColor
+        )
     }
 }
 }

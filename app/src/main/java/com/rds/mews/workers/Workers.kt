@@ -24,7 +24,7 @@ class RssUpdateWorker(
         val db = DbHelper(applicationContext)
         val settingsManager = SettingsManager(applicationContext)
         val enableProxy = settingsManager.getBoolean(MewsRepository.ENABLE_PROXY, false)
-        val fetcher = RssFetcher(db, enableProxy)
+        val fetcher = RssFetcher(db, settingsManager, enableProxy)
 
         val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
         val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
@@ -61,7 +61,7 @@ class TitlesUpdateWorker(
         val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
         val enableProxy = settingsManager.getBoolean(MewsRepository.ENABLE_PROXY, false)
 
-        val fetcher = RssFetcher(db)
+        val fetcher = RssFetcher(db, settingsManager)
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
         val summarizer = NewsSummarizer(db, llm)
 

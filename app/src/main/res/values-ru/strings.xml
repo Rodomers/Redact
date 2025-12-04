@@ -52,7 +52,7 @@
     <string name="settings_reset">Сброс</string>
     <string name="settings_paste">Вставить</string>
     <string name="settings_ignore_optimization">Работа в фоне</string>
-    <string name="settings_gemini_model">Выбор модели Gemini</string>
+    <string name="settings_gemini_model">Модель Gemini</string>
     <string name="settings_enable_proxy">Встроенный прокси</string>
     <string name="settings_footnote_text">Обратная связь (Telegram): @mewsapp\nВерсия %s</string>
     <string name="settings_alarms_sheet_title">Разрешение на установку будильников</string>
@@ -67,9 +67,9 @@
     <string name="settings_notification_sheet_conf">Выдать</string>
 
     <plurals name="titles" tools:ignore="MissingQuantity">
-        <item quantity="one">%d заголовок</item>
-        <item quantity="few">%d заголовка</item>
-        <item quantity="many">%d заголовков</item>
+        <item quantity="one">%d штука</item>
+        <item quantity="few">%d штук</item>
+        <item quantity="many">%d штук</item>
     </plurals>
     <plurals name="hours">
         <item quantity="one">%d час</item>

@@ -22,18 +22,13 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -55,7 +50,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
 import com.rds.mews.MainActivity
 import com.rds.mews.R
 import com.rds.mews.viewmodels.SettingsViewModel
@@ -63,8 +57,10 @@ import com.rds.mews.localcore.intTimeToStr
 import com.rds.mews.localcore.requestNotificationPermission
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
+import com.rds.mews.ui.custom_elements.CustomIconButton
 import com.rds.mews.ui.custom_elements.SettingsItem
 import com.rds.mews.ui.custom_elements.CustomSwitch
+import com.rds.mews.ui.custom_elements.CustomTextButton
 import com.rds.mews.ui.custom_elements.CustomTextDivider
 import com.rds.mews.ui.custom_elements.DeferredUpdateTab
 import com.rds.mews.ui.custom_elements.DropdownButton
@@ -205,7 +201,8 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                     },
                     density = density,
                     cornerShape = Shapes.large,
-                    initialSelectedIndex = titlesFrequencyItems.indexOfFirst { it.first.contains(alarmFrequency.toString()) }
+                    initialSelectedIndex = titlesFrequencyItems.indexOfFirst { it.first.contains(alarmFrequency.toString()) },
+                    width = 160.dp
                 )
             }
         },
@@ -251,15 +248,14 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             bannedNewsItems.add(
                 {
                     SettingsItem(it) {
-                        IconButton(
-                            onClick = { settingsModel.delBannedNews(it) }
-                        ) {
-                            Icon(
-                                modifier = Modifier.size(16.dp),
-                                imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(R.string.ban_btn_desc)
-                            )
-                        }
+                        CustomIconButton(
+                            icon = Icons.Default.Close,
+                            onClick = { settingsModel.delBannedNews(it) },
+                            buttonModifier = Modifier
+                                .padding(8.dp)
+                                .size(16.dp)
+                                .background(MaterialTheme.colorScheme.secondaryContainer)
+                        )
                     }
                 }
             )
@@ -328,18 +324,9 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             }
             item {
                 SettingsItem(text = stringResource(R.string.settings_compact_tab)) {
-                    Switch(
+                    CustomSwitch(
                         checked = compactTab,
-                        onCheckedChange = { settingsModel.setCompactTab(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.background,
-                            checkedTrackColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            checkedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
-
-                            uncheckedThumbColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.background,
-                            uncheckedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
+                        onCheckedChange = { settingsModel.setCompactTab(it) }
                     )
                 }
             }
@@ -432,18 +419,13 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             }
             item {
                 SettingsItem(text = stringResource(R.string.settings_titles_auto_update)) {
-                    IconButton(
-                        modifier = Modifier
-                            .wrapContentSize(),
+                    CustomIconButton(
+                        icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         onClick = {
                             autoUpdateScreenState.targetState = !autoUpdateScreenState.currentState
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc)
-                        )
-                    }
+                        },
+                        buttonModifier = Modifier.wrapContentSize()
+                    )
                 }
             }
 
@@ -488,45 +470,76 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             }
             item {
                 SettingsItem(text = stringResource(R.string.settings_gemini_api_key)) {
-                    Box {
-                        Button(
-                            modifier = Modifier
-                                .wrapContentSize()
-                                .widthIn(min = 150.dp, max = 250.dp),
-                            onClick = {
-                                when (geminiApiText) {
-                                    defaultGeminiApiKey -> {
-                                        val clipboardText: AnnotatedString? =
-                                            clipboardManager.getText()
+                    CustomTextButton(
+                        text = if (geminiApiText != defaultGeminiApiKey) stringResource(R.string.settings_reset) else stringResource(
+                            R.string.settings_paste
+                        ),
+                        onClick = {
+                            when (geminiApiText) {
+                                defaultGeminiApiKey -> {
+                                    val clipboardText: AnnotatedString? =
+                                        clipboardManager.getText()
 
-                                        clipboardText?.let {
-                                            text += it.text
-                                        }
-
-                                        settingsModel.setUserGeminiApi(text)
-                                        text = ""
+                                    clipboardText?.let {
+                                        text += it.text
                                     }
 
-                                    else -> {
-                                        settingsModel.setUserGeminiApi(defaultGeminiApiKey)
-                                        settingsModel.setCurrentLlm("gemini-2.0-flash")
-                                        settingsModel.setFilterTopics(false)
-                                    }
+                                    settingsModel.setUserGeminiApi(text)
+                                    text = ""
                                 }
-                            },
-                            shape = Shapes.large,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha=0.98f)
-                            )
-                        ) {
-                            Text(
-                                text = if (geminiApiText != defaultGeminiApiKey) stringResource(R.string.settings_reset) else stringResource(
-                                    R.string.settings_paste
-                                ),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                    }
+
+                                else -> {
+                                    settingsModel.setUserGeminiApi(defaultGeminiApiKey)
+                                    settingsModel.setCurrentLlm("gemini-2.0-flash")
+                                    settingsModel.setFilterTopics(false)
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .wrapContentSize()
+                            .widthIn(min = 150.dp, max = 250.dp),
+                        shape = Shapes.large,
+                        defaultColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha=0.98f)
+                    )
+//                    Box {
+//                        Button(
+//                            modifier = Modifier
+//                                .wrapContentSize()
+//                                .widthIn(min = 150.dp, max = 250.dp),
+//                            onClick = {
+//                                when (geminiApiText) {
+//                                    defaultGeminiApiKey -> {
+//                                        val clipboardText: AnnotatedString? =
+//                                            clipboardManager.getText()
+//
+//                                        clipboardText?.let {
+//                                            text += it.text
+//                                        }
+//
+//                                        settingsModel.setUserGeminiApi(text)
+//                                        text = ""
+//                                    }
+//
+//                                    else -> {
+//                                        settingsModel.setUserGeminiApi(defaultGeminiApiKey)
+//                                        settingsModel.setCurrentLlm("gemini-2.0-flash")
+//                                        settingsModel.setFilterTopics(false)
+//                                    }
+//                                }
+//                            },
+//                            shape = Shapes.large,
+//                            colors = ButtonDefaults.buttonColors(
+//                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha=0.98f)
+//                            )
+//                        ) {
+//                            Text(
+//                                text = if (geminiApiText != defaultGeminiApiKey) stringResource(R.string.settings_reset) else stringResource(
+//                                    R.string.settings_paste
+//                                ),
+//                                color = MaterialTheme.colorScheme.onSecondaryContainer
+//                            )
+//                        }
+//                    }
                 }
             }
             if (bannedNewsItems.isNotEmpty()) {

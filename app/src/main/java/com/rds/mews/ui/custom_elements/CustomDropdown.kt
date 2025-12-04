@@ -17,15 +17,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.verticalScroll
@@ -42,7 +39,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
@@ -363,7 +359,7 @@ private fun NPDropdown(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 buttons.forEachIndexed { index, button ->
-                    CustomDropdownMenuItem(
+                    NPDropdownMenuItem(
                         button.first,
                         button.second,
                         onDismiss = onDismiss,
@@ -399,7 +395,7 @@ private fun NPDropdown(
 }
 
 @Composable
-private fun CustomDropdownMenuItem(
+private fun NPDropdownMenuItem(
     text: String,
     onClick: () -> Unit,
     onDismiss: () -> Unit,
@@ -408,7 +404,6 @@ private fun CustomDropdownMenuItem(
     Box(
         modifier = modifier
             .wrapContentHeight()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable {
                 onClick()
                 onDismiss()
@@ -416,6 +411,7 @@ private fun CustomDropdownMenuItem(
         contentAlignment = Alignment.Center
     ) {
         Text(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             text = text,
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
