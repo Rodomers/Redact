@@ -65,6 +65,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -88,27 +89,35 @@ fun TitlesCard(
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
 
-    val transitionState = remember { MutableTransitionState(false) }
-    transitionState.targetState = isExpanded
+    val expansionAnim = remember { Animatable(0f) }
 
-    // Анимация идет, если текущее состояние не равно целевому
-    // или если мы находимся в процессе показа (true)
-    val isAnimating = transitionState.currentState != transitionState.targetState || transitionState.targetState
+    LaunchedEffect(isExpanded) {
+        if (isExpanded) {
+            expansionAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
+            )
+        } else {
+            expansionAnim.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)
+            )
+        }
+    }
 
-    // --- Свернутая карточка ---
+    val showPopup = expansionAnim.value > 0.001f || isExpanded
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentHeight()
             .padding(vertical = 4.dp)
             .onGloballyPositioned { coordinates ->
-                if (!isAnimating) {
+                if (expansionAnim.value < 0.001f && !isExpanded) {
                     collapsedBounds = coordinates.boundsInWindow()
                 }
             }
-            // Делаем карточку прозрачной, когда она развернута.
-            // Она продолжает занимать место в списке.
-            .alpha(if (isExpanded) 0f else 1f),
+            .alpha((1f - expansionAnim.value).coerceIn(0f, 1f)),
         shape = RoundedCornerShape(25.dp),
         color = MaterialTheme.colorScheme.secondaryContainer
     ) {
@@ -117,16 +126,13 @@ fun TitlesCard(
             showDates = showDates,
             noTime = noTime,
             onClicked = onToggleExpanded,
-            // Блокируем клик по свернутой, пока идет анимация открытия,
-            // чтобы не запустить процесс дважды, но сама карточка скрыта альфой
-            clickableEnabled = !isAnimating
+            clickableEnabled = true
         )
     }
 
-    // --- Развернутая карточка (Popup) ---
-    if (isAnimating && collapsedBounds != null) {
+    if (showPopup && collapsedBounds != null) {
         HeroExpansionPopup(
-            transitionState = transitionState,
+            progress = expansionAnim.value,
             collapsedBounds = collapsedBounds!!,
             onDismissRequest = onToggleExpanded,
             content = { maxHeight, contentAlpha, targetWidth ->
@@ -145,22 +151,23 @@ fun TitlesCard(
     }
 }
 
-@SuppressLint("ConfigurationScreenWidthHeight")
+@SuppressLint("LocalContextResourcesRead")
 @Composable
 private fun HeroExpansionPopup(
-    transitionState: MutableTransitionState<Boolean>,
+    progress: Float,
     collapsedBounds: Rect,
     onDismissRequest: () -> Unit,
     content: @Composable (maxHeight: Dp, contentAlpha: Float, targetWidth: Dp) -> Unit
 ) {
-    val configuration = LocalConfiguration.current
+    val context = LocalContext.current
     val density = LocalDensity.current
+    val displayMetrics = context.resources.displayMetrics
 
-    val screenWidthDp = configuration.screenWidthDp.dp
-    val screenHeightDp = configuration.screenHeightDp.dp
+    val screenWidthPx = displayMetrics.widthPixels
+    val screenHeightPx = displayMetrics.heightPixels
 
-    val screenWidthPx = with(density) { screenWidthDp.toPx() }
-    val screenHeightPx = with(density) { screenHeightDp.toPx() }
+    val screenWidthDp = with(density) { screenWidthPx.toDp() }
+    val screenHeightDp = with(density) { screenHeightPx.toDp() }
 
     val verticalMarginDp = 50.dp
     val horizontalMarginDp = 16.dp
@@ -171,12 +178,12 @@ private fun HeroExpansionPopup(
     val maxAvailableWidth = screenWidthPx - (horizontalMarginPx * 2)
     val maxAvailableHeight = screenHeightPx - (verticalMarginPx * 2)
 
-    val targetLeft = horizontalMarginPx
-
     var contentHeight by remember { mutableStateOf<Float?>(null) }
 
     val maxAvailableHeightDp = with(density) { maxAvailableHeight.toDp() }
     val targetWidthDp = with(density) { maxAvailableWidth.toDp() }
+
+    val clampedProgress = progress.coerceIn(0f, 1f)
 
     Popup(
         popupPositionProvider = WindowOriginProvider,
@@ -184,31 +191,11 @@ private fun HeroExpansionPopup(
             focusable = true,
             clippingEnabled = false
         ),
-        onDismissRequest = {
-            // Разрешаем закрытие в любой момент анимации
-            transitionState.targetState = false
-            onDismissRequest()
-        }
+        onDismissRequest = onDismissRequest
     ) {
-        val transition = rememberTransition(transitionState, label = "HeroTransition")
+        val scrimAlpha = clampedProgress * 0.6f
 
-        val isAnimationRunning = transition.currentState != transition.targetState
-
-        val scrimAlpha by transition.animateFloat(
-            label = "ScrimAlpha",
-            transitionSpec = { tween(300) }
-        ) { if (it) 0.6f else 0f }
-
-        val contentAlpha by transition.animateFloat(
-            label = "ContentAlpha",
-            transitionSpec = {
-                if (targetState) {
-                    tween(durationMillis = 300, delayMillis = 50, easing = LinearOutSlowInEasing)
-                } else {
-                    tween(durationMillis = 150)
-                }
-            }
-        ) { if (it) 1f else 0f }
+        val contentAlpha = ((clampedProgress - 0.1f) / 0.9f).coerceIn(0f, 1f)
 
         Box(
             modifier = Modifier
@@ -220,15 +207,13 @@ private fun HeroExpansionPopup(
                     indication = null,
                     enabled = true
                 ) {
-                    transitionState.targetState = false
                     onDismissRequest()
                 }
         ) {
-            // Shadow Measure
             if (contentHeight == null) {
                 Box(
                     modifier = Modifier
-                        .offset { IntOffset(targetLeft.roundToInt(), verticalMarginPx.roundToInt()) }
+                        .offset { IntOffset(horizontalMarginPx.roundToInt(), verticalMarginPx.roundToInt()) }
                         .width(targetWidthDp)
                         .alpha(0f)
                         .onGloballyPositioned { coordinates ->
@@ -244,48 +229,34 @@ private fun HeroExpansionPopup(
                 val centeredTop = (screenHeightPx - targetHeight) / 2
 
                 val expandedBounds = Rect(
-                    left = targetLeft,
+                    left = horizontalMarginPx,
                     top = centeredTop,
-                    right = targetLeft + maxAvailableWidth,
+                    right = horizontalMarginPx + maxAvailableWidth,
                     bottom = centeredTop + targetHeight
                 )
 
-                // Анимация границ (Размер и позиция) с физикой как у DropdownButton
-                val rectAnim by transition.animateRect(
-                    label = "RectAnim",
-                    transitionSpec = {
-                        if (targetState) {
-                            // Открытие: С отскоком (Bouncy)
-                            spring(
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
-                        } else {
-                            // Закрытие: Без отскока, быстрее (NoBouncy)
-                            spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        }
-                    }
-                ) { state ->
-                    if (state) expandedBounds else collapsedBounds
-                }
+                val currentRect: Rect = lerp(collapsedBounds, expandedBounds, progress)
 
-                val cornerAnim by transition.animateInt(label = "Corner") { if (it) 25 else 25 }
+                val currentCorner = 25.dp
 
                 Surface(
                     modifier = Modifier
-                        .offset { IntOffset(rectAnim.left.roundToInt(), rectAnim.top.roundToInt()) }
-                        .width(with(density) { rectAnim.width.toDp() })
-                        .height(with(density) { rectAnim.height.toDp() })
+                        .width(with(density) { currentRect.width.toDp() })
+                        .height(with(density) { currentRect.height.toDp() })
                         .graphicsLayer {
-                            shape = RoundedCornerShape(cornerAnim.dp)
+                            translationX = currentRect.left
+                            translationY = currentRect.top
+
+                            shape = RoundedCornerShape(currentCorner)
                             clip = true
-                            shadowElevation = if (isAnimationRunning) 0f else 8.dp.toPx()
+                            shadowElevation = 8.dp.toPx() * clampedProgress
                         }
-                        .clickable(enabled = false) {},
-                    shape = RoundedCornerShape(cornerAnim.dp),
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            enabled = true
+                        ) {},
+                    shape = RoundedCornerShape(currentCorner),
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     shadowElevation = 0.dp
                 ) {
@@ -304,12 +275,12 @@ private fun HeroExpansionPopup(
 
 @Composable
 private fun TitlesHeaderContent(
+    modifier: Modifier = Modifier,
     title: Title,
     showDates: Boolean,
     noTime: Boolean,
     onClicked: () -> Unit,
-    clickableEnabled: Boolean = true,
-    modifier: Modifier = Modifier
+    clickableEnabled: Boolean = true
 ) {
     Row(
         modifier = modifier
