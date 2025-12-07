@@ -109,7 +109,6 @@ fun MainScreen(mainActivity: MainActivity) {
 
     MewsTheme(settingsTheme = currentTheme, monetTheme = isMonetColors) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
-
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
         val context = LocalContext.current
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)

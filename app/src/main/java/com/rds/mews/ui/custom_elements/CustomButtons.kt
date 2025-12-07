@@ -23,10 +23,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CornerBasedShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -104,7 +101,7 @@ fun CustomTextButton(
 fun CustomIconButton(
     icon: ImageVector,
     onClick: () -> Unit,
-    buttonModifier: Modifier = Modifier,
+    modifier: Modifier = Modifier,
     iconModifier: Modifier = Modifier,
     enabled: Boolean = true,
     defaultBackgroundColor: Color = Color.Transparent,
@@ -144,7 +141,7 @@ fun CustomIconButton(
 
     Box(
         contentAlignment = Alignment.Center,
-        modifier = buttonModifier
+        modifier = modifier
             .size(48.dp)
             .graphicsLayer {
                 scaleX = scale

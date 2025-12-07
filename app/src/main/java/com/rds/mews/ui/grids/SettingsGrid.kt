@@ -251,7 +251,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         CustomIconButton(
                             icon = Icons.Default.Close,
                             onClick = { settingsModel.delBannedNews(it) },
-                            buttonModifier = Modifier
+                            modifier = Modifier
                                 .padding(8.dp)
                                 .size(16.dp)
                                 .background(MaterialTheme.colorScheme.secondaryContainer)
@@ -424,7 +424,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         onClick = {
                             autoUpdateScreenState.targetState = !autoUpdateScreenState.currentState
                         },
-                        buttonModifier = Modifier.wrapContentSize()
+                        modifier = Modifier.wrapContentSize().height(40.dp)
                     )
                 }
             }

@@ -13,12 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -88,7 +85,7 @@ fun CustomCardWithMenu(
             CustomIconButton(
                 icon = Icons.Default.MoreVert,
                 onClick = { toggleDropdown() },
-                buttonModifier = Modifier
+                modifier = Modifier
                     .fillMaxHeight()
                     .padding(bottom = 4.dp, top = 4.dp, end = 4.dp)
                     .width(50.dp)
@@ -156,7 +153,7 @@ fun SourcesAddCard(
         CustomIconButton(
             icon = Icons.Default.Add,
             onClick = action,
-            buttonModifier = Modifier
+            modifier = Modifier
                 .fillMaxHeight()
                 .padding(bottom = 4.dp, top = 4.dp, end = 4.dp)
                 .width(50.dp)

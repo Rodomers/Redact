@@ -26,7 +26,7 @@ fun SettingsItem(text: String, item: @Composable () -> Unit) {
         color = MaterialTheme.colorScheme.secondaryContainer
     ) {
         Row(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
