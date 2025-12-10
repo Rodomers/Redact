@@ -33,7 +33,7 @@ import com.rds.mews.R
 import com.rds.mews.RSS
 import com.rds.mews.localcore.defineSourceType
 import com.rds.mews.localcore.sourcesTypeInterpreter
-import com.rds.mews.ui.custom_elements.CustomCardWithMenu
+import com.rds.mews.ui.custom_elements.SourcesCard
 import com.rds.mews.ui.custom_elements.CustomChangeBottomSheet
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomTextDivider
@@ -156,7 +156,7 @@ fun SourcesGrid(
             }
 
             items(items = itemsForSource, key = { item -> item.id }) { item ->
-                CustomCardWithMenu(
+                SourcesCard(
                     text = item.source,
                     listOf(
                         Pair(stringResource(R.string.source_change)) { changeDialog = item.source },

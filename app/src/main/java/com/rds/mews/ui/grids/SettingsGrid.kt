@@ -219,7 +219,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             width = 75.dp,
                             initialSelectedIndex = alarmHrsItems.mapNotNull { (text, action) ->
                                 if (!(alarmFrequency == 12 && text.toInt() > 12)) text to { action() } else null
-                            }.indexOfFirst { it.first.contains(intTimeToStr(alarmHrsText)) }
+                            }.indexOfFirst { it.first.contains(alarmHrsText.toString()) }
                         )
                         Text(
                             text = ":",
@@ -233,7 +233,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             density = density,
                             cornerShape = Shapes.large,
                             width = 75.dp,
-                            initialSelectedIndex = alarmHrsItems.indexOfFirst { it.first.contains(intTimeToStr(alarmMinsText)) }
+                            initialSelectedIndex = alarmMinsItems.indexOfFirst { it.first.contains(alarmMinsText.toString()) }
                         )
                     }
                 }
@@ -499,7 +499,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                             .wrapContentSize()
                             .widthIn(min = 150.dp, max = 250.dp),
                         shape = Shapes.large,
-                        defaultColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha=0.98f)
+                        defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha=0.98f)
                     )
 //                    Box {
 //                        Button(

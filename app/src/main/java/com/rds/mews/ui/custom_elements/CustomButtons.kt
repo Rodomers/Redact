@@ -18,21 +18,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import com.rds.mews.ui.theme.Shapes
+import kotlin.math.pow
 import kotlin.math.sqrt
 
 @Composable
@@ -41,10 +43,16 @@ fun CustomTextButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     textModifier: Modifier = Modifier,
+    fontSize: TextUnit = TextUnit.Unspecified,
+    fontWeight: FontWeight? = null,
+    textAlign: TextAlign? = null,
     shape: CornerBasedShape = Shapes.medium,
-    transitionState: MutableTransitionState<Boolean>? = null,
-    transitionColor: Color? = null,
-    defaultColor: Color? = null
+    enabled: Boolean = true,
+    defaultBackgroundColor: Color = Color.Transparent,
+    transitionBackgroundColor: Color? = null,
+    defaultContentColor: Color = LocalContentColor.current,
+    transitionContentColor: Color? = null,
+    transitionState: MutableTransitionState<Boolean>? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -58,41 +66,61 @@ fun CustomTextButton(
         label = "scaleAnimation"
     )
 
-    val safeDefaultColor = defaultColor ?: Color.Transparent
+    val currentState = transitionState ?: remember { MutableTransitionState(false) }
+    val transition = rememberTransition(currentState, label = "ButtonTransition")
 
-    val backgroundColorState = if (transitionState != null && transitionColor != null) {
-        val transition = rememberTransition(transitionState, label = "ColorTransition")
+    val contentColor by transition.animateColor(
+        transitionSpec = { tween(durationMillis = 500) },
+        label = "ContentColor"
+    ) { isActive ->
+        if (isActive && transitionContentColor != null) transitionContentColor else defaultContentColor
+    }
 
-        transition.animateColor(
-            transitionSpec = { tween(durationMillis = 500) },
-            label = "Color"
-        ) { isActive ->
-            if (isActive) transitionColor else safeDefaultColor
-        }
-    } else {
-        rememberUpdatedState(safeDefaultColor)
+    val radialProgress by transition.animateFloat(
+        transitionSpec = { tween(durationMillis = 300) },
+        label = "RadialProgress"
+    ) { isActive ->
+        if (isActive && transitionBackgroundColor != null) 1f else 0f
     }
 
     Box(
-        modifier = Modifier
-            .then(modifier)
+        contentAlignment = Alignment.Center,
+        modifier = modifier
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                alpha = if (enabled) 1f else 0.5f
             }
             .clip(shape)
+            .drawBehind {
+                drawRect(color = defaultBackgroundColor)
+
+                if (transitionBackgroundColor != null && radialProgress > 0f) {
+                    val maxRadius = sqrt(size.width.pow(2) + size.height.pow(2))
+
+                    drawCircle(
+                        color = transitionBackgroundColor,
+                        radius = maxRadius * radialProgress,
+                        center = center
+                    )
+                }
+            }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                enabled = enabled,
+                onClick = onClick,
+                role = Role.Button
             )
-            .background(backgroundColorState.value)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text(
             text = text,
-            modifier = textModifier
+            modifier = textModifier,
+            color = contentColor,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
+            textAlign = textAlign
         )
     }
 }

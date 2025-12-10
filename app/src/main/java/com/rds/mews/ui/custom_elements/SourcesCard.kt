@@ -8,13 +8,12 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -41,7 +40,7 @@ import com.rds.mews.R
 import com.rds.mews.ui.theme.Shapes
 
 @Composable
-fun CustomCardWithMenu(
+fun SourcesCard(
     text: String,
     buttons: List<Pair<String, () -> Unit>>
 ) {
@@ -128,39 +127,15 @@ fun SourcesAddCard(
         border = BorderStroke(4.dp, primaryColor),
         shadowElevation = 0.dp
     ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .wrapContentHeight(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .background(primaryColor)
-                .padding(horizontal = 10.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = stringResource(R.string.sources_add_text),
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-        }
-        CustomIconButton(
-            icon = Icons.Default.Add,
+        CustomTextButton(
+            text = stringResource(R.string.sources_add_text),
             onClick = action,
-            modifier = Modifier
-                .fillMaxHeight()
-                .padding(bottom = 4.dp, top = 4.dp, end = 4.dp)
-                .width(50.dp)
-                .aspectRatio(1f),
+            modifier = Modifier.fillMaxSize(),
             transitionState = buttonTransitionState,
-            transitionBackgroundColor = primaryColor
+            transitionBackgroundColor = primaryColor,
+            defaultBackgroundColor = Color.Transparent,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Bold
         )
     }
-}
 }

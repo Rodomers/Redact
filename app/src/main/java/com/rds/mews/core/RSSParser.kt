@@ -44,11 +44,11 @@ class RssFetcher(
         for (rss in rssList) {
             try {
                 var fetchUrl = rss.link
+                println("Fetching RSS: $fetchUrl")
                 if (fetchUrl.contains("t.me")) {
                     fetchUrl = "http://${MewsRepository.SERVER_IP}:1200/telegram/channel/${fetchUrl.split("/").last().trim()}?limit=100&key=${MewsRepository.RSS_HUB_KEY}"
                     if (newsUpdateDelta != null) fetchUrl = "$fetchUrl&filter_time=${newsUpdateDelta}"
                 }
-                println("Fetching RSS: $fetchUrl")
 
                 val xmlContent: String = httpClient.get(fetchUrl).body()
                 val doc = Jsoup.parse(xmlContent, fetchUrl, Parser.xmlParser())
