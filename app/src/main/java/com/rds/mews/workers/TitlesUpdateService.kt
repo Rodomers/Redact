@@ -88,6 +88,8 @@ class TitlesUpdateService : Service() {
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
         val summarizer = NewsSummarizer(db, llm)
 
+        val startTitlesNum = db.getTitles().size
+
         settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, true)
         settingsManager.saveString(MewsRepository.UPDATING_STATE, "updating")
 
@@ -112,7 +114,7 @@ class TitlesUpdateService : Service() {
                 }
                 var iter = 0
                 var res: SummarizationResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
-                while (settingsManager.getBoolean(MewsRepository.UPDATING_TITLES, false) && iter <= 5 && currentCoroutineContext().isActive) {
+                while (settingsManager.getBoolean(MewsRepository.UPDATING_TITLES, false) && iter <= 3 && currentCoroutineContext().isActive) {
                     res = summarizer.summarizeTopics(
                         maxTopics = titlesNum,
                         messageSeconds = titlesPeriod.toLong() * 3600,
@@ -126,10 +128,12 @@ class TitlesUpdateService : Service() {
                     iter++
                 }
 
+                val currentTitlesNum = db.getTitles().size
+                if (startTitlesNum != currentTitlesNum && currentTitlesNum != 0) MewsRepository.triggerTitlesRefresh()
+
                 when (res) {
                     is SummarizationResult.Success -> {
                         settingsManager.clearLastError()
-                        MewsRepository.triggerTitlesRefresh()
 
                         if (!oneTimeUpdate) sendSuccessNotification()
                     }

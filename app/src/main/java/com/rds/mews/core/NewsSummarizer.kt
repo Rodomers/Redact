@@ -189,7 +189,7 @@ class NewsSummarizer(
             var counter = 0
             val titlesCounter = titlesToSummarize.size
             var emptyAnswer = false
-            val semaphore = Semaphore(1)
+            val semaphore = Semaphore(2)
 
             val summarizedResults = coroutineScope {
                 titlesToSummarize.map { title ->
@@ -229,7 +229,6 @@ class NewsSummarizer(
                                 val sources = suitableMessages.map { it.source }
 
                                 SummaryResult(title.title, summary, time, sources.distinct(), links.distinct())
-
                             } catch (e: Exception) {
                                 println("Ошибка при обработке темы '${title.title}': ${e.message}")
                                 e.printStackTrace()

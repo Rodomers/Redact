@@ -20,9 +20,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.LocalTextSelectionColors
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -31,7 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,11 +58,13 @@ import com.rds.mews.localcore.getFormattedTimeUnix
 import kotlinx.coroutines.launch
 
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -88,7 +86,6 @@ fun TitlesCard(
     noTime: Boolean = false
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
-
     val expansionAnim = remember { Animatable(0f) }
 
     LaunchedEffect(isExpanded) {
@@ -117,7 +114,10 @@ fun TitlesCard(
                     collapsedBounds = coordinates.boundsInWindow()
                 }
             }
-            .alpha((1f - expansionAnim.value).coerceIn(0f, 1f)),
+            // Оптимизация: используем graphicsLayer вместо alpha(), чтобы избежать рекомпозиции
+            .graphicsLayer {
+                alpha = (1f - expansionAnim.value).coerceIn(0f, 1f)
+            },
         shape = RoundedCornerShape(25.dp),
         color = MaterialTheme.colorScheme.secondaryContainer
     ) {
@@ -132,10 +132,10 @@ fun TitlesCard(
 
     if (showPopup && collapsedBounds != null) {
         HeroExpansionPopup(
-            progress = expansionAnim.value,
+            expansionAnim = expansionAnim, // Передаем сам объект Animatable
             collapsedBounds = collapsedBounds!!,
             onDismissRequest = onToggleExpanded,
-            content = { maxHeight, contentAlpha, targetWidth ->
+            content = { maxHeight, targetWidth ->
                 ExpandedCardContent(
                     title = title,
                     onBanTheme = onBanTheme,
@@ -143,7 +143,7 @@ fun TitlesCard(
                     rememberPage = rememberPage,
                     onCollapse = onToggleExpanded,
                     maxHeight = maxHeight,
-                    contentAlpha = contentAlpha,
+                    expansionAnim = expansionAnim, // Передаем анимацию внутрь
                     targetWidth = targetWidth
                 )
             }
@@ -154,10 +154,10 @@ fun TitlesCard(
 @SuppressLint("LocalContextResourcesRead")
 @Composable
 private fun HeroExpansionPopup(
-    progress: Float,
+    expansionAnim: Animatable<Float, AnimationVector1D>,
     collapsedBounds: Rect,
     onDismissRequest: () -> Unit,
-    content: @Composable (maxHeight: Dp, contentAlpha: Float, targetWidth: Dp) -> Unit
+    content: @Composable (maxHeight: Dp, targetWidth: Dp) -> Unit
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -170,7 +170,7 @@ private fun HeroExpansionPopup(
     val screenHeightDp = with(density) { screenHeightPx.toDp() }
 
     val verticalMarginDp = 50.dp
-    val horizontalMarginDp = 16.dp
+    val horizontalMarginDp = 8.dp
 
     val verticalMarginPx = with(density) { verticalMarginDp.toPx() }
     val horizontalMarginPx = with(density) { horizontalMarginDp.toPx() }
@@ -183,25 +183,27 @@ private fun HeroExpansionPopup(
     val maxAvailableHeightDp = with(density) { maxAvailableHeight.toDp() }
     val targetWidthDp = with(density) { maxAvailableWidth.toDp() }
 
-    val clampedProgress = progress.coerceIn(0f, 1f)
+    // Используем цвет scrim из темы для drawBehind
+    val scrimColor = MaterialTheme.colorScheme.scrim
 
     Popup(
         popupPositionProvider = WindowOriginProvider,
         properties = PopupProperties(
-            focusable = true,
+            focusable = true, // Оставляем true, как было изначально
             clippingEnabled = false
         ),
         onDismissRequest = onDismissRequest
     ) {
-        val scrimAlpha = clampedProgress * 0.6f
-
-        val contentAlpha = ((clampedProgress - 0.1f) / 0.9f).coerceIn(0f, 1f)
-
         Box(
             modifier = Modifier
                 .width(screenWidthDp)
                 .height(screenHeightDp)
-                .background(MaterialTheme.colorScheme.scrim.copy(alpha = scrimAlpha))
+                // Оптимизация: drawBehind читает анимацию только на этапе отрисовки
+                .drawBehind {
+                    val progress = expansionAnim.value.coerceIn(0f, 1f)
+                    val scrimAlpha = progress * 0.6f
+                    drawRect(scrimColor, alpha = scrimAlpha)
+                }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -213,14 +215,19 @@ private fun HeroExpansionPopup(
             if (contentHeight == null) {
                 Box(
                     modifier = Modifier
-                        .offset { IntOffset(horizontalMarginPx.roundToInt(), verticalMarginPx.roundToInt()) }
+                        .offset {
+                            IntOffset(
+                                horizontalMarginPx.roundToInt(),
+                                verticalMarginPx.roundToInt()
+                            )
+                        }
                         .width(targetWidthDp)
                         .alpha(0f)
                         .onGloballyPositioned { coordinates ->
                             contentHeight = coordinates.size.height.toFloat()
                         }
                 ) {
-                    content(maxAvailableHeightDp, 0f, targetWidthDp)
+                    content(maxAvailableHeightDp, targetWidthDp)
                 }
             }
 
@@ -235,21 +242,33 @@ private fun HeroExpansionPopup(
                     bottom = centeredTop + targetHeight
                 )
 
-                val currentRect: Rect = lerp(collapsedBounds, expandedBounds, progress)
-
+                // ВАЖНО: lerp вычисляем внутри layout, чтобы не рекомпозировать Surface
                 val currentCorner = 25.dp
 
                 Surface(
                     modifier = Modifier
-                        .width(with(density) { currentRect.width.toDp() })
-                        .height(with(density) { currentRect.height.toDp() })
-                        .graphicsLayer {
-                            translationX = currentRect.left
-                            translationY = currentRect.top
+                        .layout { measurable, constraints ->
+                            // Читаем значение анимации здесь (Layout Phase)
+                            val progress = expansionAnim.value.coerceIn(0f, 1f)
+                            val currentRect = lerp(collapsedBounds, expandedBounds, progress)
 
+                            val w = currentRect.width.roundToInt()
+                            val h = currentRect.height.roundToInt()
+
+                            val placeable = measurable.measure(
+                                Constraints.fixed(w, h)
+                            )
+
+                            layout(placeable.width, placeable.height) {
+                                placeable.place(
+                                    x = currentRect.left.roundToInt(),
+                                    y = currentRect.top.roundToInt()
+                                )
+                            }
+                        }
+                        .graphicsLayer {
                             shape = RoundedCornerShape(currentCorner)
                             clip = true
-                            shadowElevation = 8.dp.toPx() * clampedProgress
                         }
                         .clickable(
                             indication = null,
@@ -265,7 +284,7 @@ private fun HeroExpansionPopup(
                             .width(targetWidthDp)
                             .fillMaxHeight()
                     ) {
-                        content(maxAvailableHeightDp, contentAlpha, targetWidthDp)
+                        content(maxAvailableHeightDp, targetWidthDp)
                     }
                 }
             }
@@ -330,7 +349,7 @@ private fun ExpandedCardContent(
     rememberPage: (Int) -> Unit,
     onCollapse: () -> Unit,
     maxHeight: Dp,
-    contentAlpha: Float,
+    expansionAnim: Animatable<Float, AnimationVector1D>,
     targetWidth: Dp
 ) {
     val context = LocalContext.current
@@ -341,11 +360,6 @@ private fun ExpandedCardContent(
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
-
-    val textSelectionColors = TextSelectionColors(
-        handleColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        backgroundColor = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f)
-    )
 
     val source = stringResource(R.string.titles_card_source)
     val toastText = stringResource(R.string.titles_card_copied)
@@ -392,9 +406,14 @@ private fun ExpandedCardContent(
             verticalAlignment = Alignment.Top,
             beyondViewportPageCount = 1,
             modifier = Modifier
-                .fillMaxWidth()
+                .requiredWidth(targetWidth)
                 .weight(1f, fill = false)
-                .graphicsLayer { alpha = contentAlpha }
+                // Оптимизация: graphicsLayer читает анимацию только при отрисовке
+                .graphicsLayer {
+                    val progress = expansionAnim.value.coerceIn(0f, 1f)
+                    val contentAlpha = ((progress - 0.1f) / 0.9f).coerceIn(0f, 1f)
+                    alpha = contentAlpha
+                }
         ) { page ->
             when (page) {
                 0 -> {
@@ -403,16 +422,13 @@ private fun ExpandedCardContent(
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
                     ) {
-                        CompositionLocalProvider(LocalTextSelectionColors provides textSelectionColors) {
-                            SelectionContainer {
-                                Text(
-                                    text = title.text,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
-                                )
-                            }
-                        }
+                        Text(
+                            text = title.text,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
                     }
                 }
+
                 1 -> {
                     Column(
                         modifier = Modifier
@@ -426,16 +442,12 @@ private fun ExpandedCardContent(
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             fontWeight = FontWeight.Bold
                         )
-                        CompositionLocalProvider(LocalTextSelectionColors provides textSelectionColors) {
-                            SelectionContainer {
-                                Text(
-                                    text = title.links,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp)
-                                )
-                            }
-                        }
+                        Text(
+                            text = title.links,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                        )
                     }
                 }
             }
@@ -452,7 +464,12 @@ private fun ExpandedCardContent(
                 .fillMaxWidth()
                 .wrapContentHeight()
                 .padding(horizontal = 16.dp)
-                .graphicsLayer { alpha = contentAlpha }
+                // Оптимизация: graphicsLayer
+                .graphicsLayer {
+                    val progress = expansionAnim.value.coerceIn(0f, 1f)
+                    val contentAlpha = ((progress - 0.1f) / 0.9f).coerceIn(0f, 1f)
+                    alpha = contentAlpha
+                }
         ) {
             Text(
                 text = stringResource(R.string.titles_card_text),
@@ -461,7 +478,9 @@ private fun ExpandedCardContent(
                     .wrapContentSize()
                     .align(Alignment.CenterVertically)
                     .padding(top = 6.dp, bottom = 6.dp)
-                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }) {
                         coroutineScope.launch { pagerState.animateScrollToPage(0) }
                     },
                 fontWeight = if (pagerState.targetPage == 0) FontWeight.Bold else FontWeight.Normal
@@ -473,7 +492,9 @@ private fun ExpandedCardContent(
                     .wrapContentHeight()
                     .align(Alignment.CenterVertically)
                     .padding(start = 6.dp, top = 6.dp, bottom = 6.dp)
-                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }) {
                         coroutineScope.launch { pagerState.animateScrollToPage(1) }
                     },
                 fontWeight = if (pagerState.targetPage == 1) FontWeight.Bold else FontWeight.Normal
