@@ -9,10 +9,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +43,7 @@ import com.rds.mews.viewmodels.SettingsViewModel
 import com.rds.mews.viewmodels.SettingsViewModelFactory
 import com.rds.mews.viewmodels.SourcesViewModel
 import com.rds.mews.viewmodels.SourcesViewModelFactory
+import com.rds.mews.viewmodels.TitlesScrollEvent
 import com.rds.mews.viewmodels.TitlesViewModel
 import com.rds.mews.viewmodels.TitlesViewModelFactory
 
@@ -104,8 +107,10 @@ fun MainScreen(mainActivity: MainActivity) {
     val currentTheme by settingsViewModel.currentTheme.collectAsStateWithLifecycle()
     val isMonetColors by settingsViewModel.isMonetColors.collectAsStateWithLifecycle()
 
-    // отладочное
-//    settingsViewModel.setTitlesNum(3)
+    val currentLangResource = stringResource(R.string.current_language)
+    LaunchedEffect(currentLangResource) {
+        MewsRepository.setCurrentLanguage(currentLangResource)
+    }
 
     MewsTheme(settingsTheme = currentTheme, monetTheme = isMonetColors) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
@@ -113,13 +118,27 @@ fun MainScreen(mainActivity: MainActivity) {
         val context = LocalContext.current
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         var optimizationIgnore by remember { mutableStateOf(false) }
-
-        val sourcesGridState = sourcesViewModel.gridState
-        val titlesGridState = titlesViewModel.gridState
-        val settingsGridState = settingsViewModel.gridState
         val scope = rememberCoroutineScope()
 
-        MewsRepository.setCurrentLanguage(stringResource(R.string.current_language))
+        val titlesGridState = rememberLazyGridState()
+
+        val sourcesGridState = sourcesViewModel.gridState
+        val settingsGridState = settingsViewModel.gridState
+
+        LaunchedEffect(Unit) {
+            titlesViewModel.scrollEvents.collect { event ->
+                when (event) {
+                    TitlesScrollEvent.ScrollToTop -> {
+                        // Логика скролла теперь живет в UI
+                        if (titlesGridState.firstVisibleItemIndex == 0) {
+                            titlesViewModel.toggleTitleExpanded(null)
+                        } else {
+                            titlesGridState.animateScrollToItem(0)
+                        }
+                    }
+                }
+            }
+        }
 
         if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
             CustomErrorBottomSheet(
@@ -145,22 +164,15 @@ fun MainScreen(mainActivity: MainActivity) {
                         if (selectedTab == newTab) {
                             when (selectedTab) {
                                 TabScreen.Sources -> scope.launch {
-                                    sourcesGridState.animateScrollToItem(
-                                        0
-                                    )
+                                    sourcesGridState.animateScrollToItem(0)
                                 }
 
                                 TabScreen.Settings -> scope.launch {
-                                    settingsGridState.animateScrollToItem(
-                                        0
-                                    )
+                                    settingsGridState.animateScrollToItem(0)
                                 }
 
-                                TabScreen.Titles -> scope.launch {
-                                    if (titlesGridState.firstVisibleItemIndex == 0) titlesViewModel.toggleTitleExpanded(
-                                        null
-                                    )
-                                    else titlesGridState.animateScrollToItem(0)
+                                TabScreen.Titles -> {
+                                    titlesViewModel.scrollToTop()
                                 }
                             }
                         } else MewsRepository.setCurrentTab(newTab)
@@ -178,32 +190,25 @@ fun MainScreen(mainActivity: MainActivity) {
             when (selectedTab) {
                 TabScreen.Sources -> {
                     val sourcesList by sourcesViewModel.sources.collectAsState()
-                    val context = context
+                    val onAddSource = remember(sourcesViewModel, context) {
+                        { name: String, link: String -> sourcesViewModel.addSource(context, name, link) }
+                    }
 
                     SourcesGrid(
                         gridState = sourcesGridState,
                         itemsList = sourcesList,
                         modifier = modifier,
-                        onSourceAdd = { name, link ->
-                            sourcesViewModel.addSource(
-                                context,
-                                name,
-                                link
-                            )
-                        },
-                        onSourceDelete = { name -> sourcesViewModel.deleteSource(name) },
+                        onSourceAdd = onAddSource,
+                        onSourceDelete = sourcesViewModel::deleteSource,
                         onSourceChange = { oldName, newName ->
-                            sourcesViewModel.changeSource(
-                                oldName,
-                                newName
-                            )
+                            sourcesViewModel.changeSource(oldName, newName)
                         }
                     )
                 }
                 TabScreen.Titles -> {
                     val groupedTitles by titlesViewModel.groupedTitles.collectAsStateWithLifecycle()
-                    val isRefreshing by titlesViewModel.isRefreshing.collectAsState()
-                    val err by titlesViewModel.errState.collectAsState()
+                    val isRefreshing by titlesViewModel.isRefreshing.collectAsStateWithLifecycle()
+                    val err by titlesViewModel.errState.collectAsStateWithLifecycle()
                     val showEmptyMess by titlesViewModel.showEmptyMess.collectAsStateWithLifecycle()
                     val titlesCardStates by titlesViewModel.titleCardStates.collectAsStateWithLifecycle()
 
@@ -211,7 +216,8 @@ fun MainScreen(mainActivity: MainActivity) {
                     val endureTime by titlesViewModel.enlargedTimestamps.collectAsStateWithLifecycle()
                     val lastTitlesUpdate by titlesViewModel.lastUpdated.collectAsStateWithLifecycle()
 
-                    val scope = rememberCoroutineScope()
+                    val onRefreshTitle = remember(titlesViewModel) { { titlesViewModel.refreshTitles() } }
+                    val onClearError = remember(titlesViewModel) { { titlesViewModel.clearErr() } }
 
                     TitlesGrid(
                         lazyGridState = titlesGridState,
@@ -222,8 +228,8 @@ fun MainScreen(mainActivity: MainActivity) {
                         toggleEmptyMess = titlesViewModel::toggleEmptyMess,
                         errState = err,
                         titlesCardStates = titlesCardStates,
-                        onRefresh = { titlesViewModel.refreshTitles() },
-                        onClearErr = { titlesViewModel.clearErr() },
+                        onRefresh = onRefreshTitle,
+                        onClearErr = onClearError,
                         onErrAction = titlesViewModel::handleErrorAction,
                         onToggleExpanded = titlesViewModel::toggleTitleExpanded,
                         rememberCardPage = titlesViewModel::changeTitleCurrentPage,

@@ -20,12 +20,17 @@ import com.rds.mews.TitleCardStates
 import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.localcore.requestNotificationPermission
 import com.rds.mews.localcore.strTransform
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -34,40 +39,58 @@ class TitlesViewModel(
     private val application: Application,
     private val repository: MewsRepository
 ): AndroidViewModel(application) {
-    val gridState = LazyGridState(
-        firstVisibleItemIndex = 0,
-        firstVisibleItemScrollOffset = 0
-    )
+
+    // Канал для отправки событий в UI (например, скролл вверх)
+    private val _scrollEvents = Channel<TitlesScrollEvent>(Channel.CONFLATED)
+    val scrollEvents = _scrollEvents.receiveAsFlow()
 
     private val workManager = WorkManager.getInstance(application)
     val workInfo: StateFlow<WorkInfo?> = workManager
         .getWorkInfosForUniqueWorkFlow("titles_update_work")
         .map { it.firstOrNull() }
+        // WorkInfo обновляется часто (progress, state).
+        // distinctUntilChanged() здесь важен, чтобы не триггерить UI без реальных изменений.
+        .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _titles = MutableStateFlow<List<Title>>(emptyList())
     val titles = _titles.asStateFlow()
-
 
     val isRefreshing: StateFlow<Boolean> = repository.updatingTitles
 
     val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val enlargedTimestamps: StateFlow<Boolean> = repository.enlargedTimestamps.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
-    val lastUpdated: StateFlow<Long> = repository.lastTitlesUpdate.stateIn(viewModelScope,
-        SharingStarted.WhileSubscribed(5000), 0)
+
+    // Если lastTitlesUpdate меняется часто (таймер?), это вызовет рекомпозицию родителя.
+    val lastUpdated: StateFlow<Long> = repository.lastTitlesUpdate
+        .stateIn(viewModelScope,
+            SharingStarted.WhileSubscribed(5000), 0)
+
     private val _errState = MutableStateFlow<SummarizationResult.Failure?>(null)
     val errState = _errState.asStateFlow()
 
     val groupedTitles: StateFlow<Map<String, List<Title>>> = titles
         .filter { it.isNotEmpty() }
-        .map {list ->
-        list.filter { it.text != "<промежуточный текст>" }.map {
-            it.copy(sources = strTransform(it.sources, ", "),
-                links = strTransform(it.links, "\n")
-            )
-        }.groupBy { getFormattedTimeUnix(it.time, true) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+        // 1. Отсекаем, если пришел тот же самый список объектов из репозитория
+        .distinctUntilChanged()
+        .map { list ->
+            // Тяжелая трансформация
+            list.filter { it.text != "<промежуточный текст>" }.map {
+                // it.copy создает НОВЫЙ объект. Ссылка меняется.
+                it.copy(
+                    sources = strTransform(it.sources, ", "),
+                    links = strTransform(it.links, "\n")
+                )
+            }.groupBy { getFormattedTimeUnix(it.time, true) }
+        }
+        .flowOn(Dispatchers.Default)
+        // 2. КРИТИЧЕСКИ ВАЖНО:
+        // map выше создал новые объекты (Map и List), даже если данные те же.
+        // distinctUntilChanged сравнит их через equals() (по содержимому).
+        // Если содержимое идентично, Flow НЕ эмитит новый стейт, и StateFlow остается старым.
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private val _showEmptyMessage = MutableStateFlow(false)
     val showEmptyMess: StateFlow<Boolean> = _showEmptyMessage
@@ -81,6 +104,11 @@ class TitlesViewModel(
 
     fun refreshTitles() {
         repository.startTitlesUpdate(application)
+    }
+
+    // Метод для вызова из UI при нажатии на таб
+    fun scrollToTop() {
+        _scrollEvents.trySend(TitlesScrollEvent.ScrollToTop)
     }
 
     fun onBanTheme(value: String) {
@@ -138,17 +166,27 @@ class TitlesViewModel(
 
     init {
         viewModelScope.launch {
-            repository.titles.collect { titleListFromDb ->
-                val actualTitles = titleListFromDb.filter { it.text != "<промежуточный текст>" }
+            repository.titles
+                .distinctUntilChanged() // Не обрабатываем, если Room вернул то же самое
+                .collect { titleListFromDb ->
+                    val actualTitles = titleListFromDb.filter { it.text != "<промежуточный текст>" }
 
-                _titles.value = actualTitles
+                    _titles.value = actualTitles
 
-                if (_titleCardStates.value.map { it.id }.toSet() != actualTitles.map { it.id }.toSet()) {
-                    _titleCardStates.value = actualTitles
-                        .map { title -> TitleCardStates(id = title.id) }
-                        .toSet()
+                    // Синхронизируем стейты карточек (expanded/pages) с новым списком
+                    _titleCardStates.update { currentStates ->
+                        val currentIds = currentStates.map { it.id }.toSet()
+                        val newIds = actualTitles.map { it.id }.toSet()
+
+                        if (currentIds != newIds) {
+                            actualTitles
+                                .map { title -> TitleCardStates(id = title.id) }
+                                .toSet()
+                        } else {
+                            currentStates
+                        }
+                    }
                 }
-            }
         }
 
         viewModelScope.launch {
@@ -159,8 +197,12 @@ class TitlesViewModel(
     }
 }
 
+sealed interface TitlesScrollEvent {
+    data object ScrollToTop : TitlesScrollEvent
+}
+
 class TitlesViewModelFactory(private val application: Application) :
-        ViewModelProvider.Factory {
+    ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(TitlesViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")

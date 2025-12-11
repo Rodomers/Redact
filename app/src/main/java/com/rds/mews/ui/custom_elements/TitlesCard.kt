@@ -58,10 +58,11 @@ import com.rds.mews.localcore.getFormattedTimeUnix
 import kotlinx.coroutines.launch
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.lerp
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
@@ -86,6 +87,7 @@ fun TitlesCard(
     noTime: Boolean = false
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
+
     val expansionAnim = remember { Animatable(0f) }
 
     LaunchedEffect(isExpanded) {
@@ -114,10 +116,7 @@ fun TitlesCard(
                     collapsedBounds = coordinates.boundsInWindow()
                 }
             }
-            // Оптимизация: используем graphicsLayer вместо alpha(), чтобы избежать рекомпозиции
-            .graphicsLayer {
-                alpha = (1f - expansionAnim.value).coerceIn(0f, 1f)
-            },
+            .alpha((1f - expansionAnim.value).coerceIn(0f, 1f)),
         shape = RoundedCornerShape(25.dp),
         color = MaterialTheme.colorScheme.secondaryContainer
     ) {
@@ -132,10 +131,10 @@ fun TitlesCard(
 
     if (showPopup && collapsedBounds != null) {
         HeroExpansionPopup(
-            expansionAnim = expansionAnim, // Передаем сам объект Animatable
+            progress = expansionAnim.value,
             collapsedBounds = collapsedBounds!!,
             onDismissRequest = onToggleExpanded,
-            content = { maxHeight, targetWidth ->
+            content = { maxHeight, contentAlpha, targetWidth ->
                 ExpandedCardContent(
                     title = title,
                     onBanTheme = onBanTheme,
@@ -143,7 +142,8 @@ fun TitlesCard(
                     rememberPage = rememberPage,
                     onCollapse = onToggleExpanded,
                     maxHeight = maxHeight,
-                    expansionAnim = expansionAnim, // Передаем анимацию внутрь
+                    // лагучая шлюха
+                    contentAlpha = contentAlpha,
                     targetWidth = targetWidth
                 )
             }
@@ -154,10 +154,10 @@ fun TitlesCard(
 @SuppressLint("LocalContextResourcesRead")
 @Composable
 private fun HeroExpansionPopup(
-    expansionAnim: Animatable<Float, AnimationVector1D>,
+    progress: Float,
     collapsedBounds: Rect,
     onDismissRequest: () -> Unit,
-    content: @Composable (maxHeight: Dp, targetWidth: Dp) -> Unit
+    content: @Composable (maxHeight: Dp, contentAlpha: Float, targetWidth: Dp) -> Unit
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -183,27 +183,24 @@ private fun HeroExpansionPopup(
     val maxAvailableHeightDp = with(density) { maxAvailableHeight.toDp() }
     val targetWidthDp = with(density) { maxAvailableWidth.toDp() }
 
-    // Используем цвет scrim из темы для drawBehind
-    val scrimColor = MaterialTheme.colorScheme.scrim
+    val clampedProgress = progress.coerceIn(0f, 1f)
 
     Popup(
         popupPositionProvider = WindowOriginProvider,
         properties = PopupProperties(
-            focusable = true, // Оставляем true, как было изначально
+            focusable = true,
             clippingEnabled = false
         ),
         onDismissRequest = onDismissRequest
     ) {
+        val scrimAlpha = clampedProgress * 0.6f
+        val contentAlpha = ((clampedProgress - 0.1f) / 0.9f).coerceIn(0f, 1f)
+
         Box(
             modifier = Modifier
                 .width(screenWidthDp)
                 .height(screenHeightDp)
-                // Оптимизация: drawBehind читает анимацию только на этапе отрисовки
-                .drawBehind {
-                    val progress = expansionAnim.value.coerceIn(0f, 1f)
-                    val scrimAlpha = progress * 0.6f
-                    drawRect(scrimColor, alpha = scrimAlpha)
-                }
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = scrimAlpha))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -227,7 +224,7 @@ private fun HeroExpansionPopup(
                             contentHeight = coordinates.size.height.toFloat()
                         }
                 ) {
-                    content(maxAvailableHeightDp, targetWidthDp)
+                    content(maxAvailableHeightDp, 0f, targetWidthDp)
                 }
             }
 
@@ -242,33 +239,35 @@ private fun HeroExpansionPopup(
                     bottom = centeredTop + targetHeight
                 )
 
-                // ВАЖНО: lerp вычисляем внутри layout, чтобы не рекомпозировать Surface
+                val currentRect: Rect = lerp(collapsedBounds, expandedBounds, progress)
+
                 val currentCorner = 25.dp
 
                 Surface(
                     modifier = Modifier
-                        .layout { measurable, constraints ->
-                            // Читаем значение анимации здесь (Layout Phase)
-                            val progress = expansionAnim.value.coerceIn(0f, 1f)
-                            val currentRect = lerp(collapsedBounds, expandedBounds, progress)
-
-                            val w = currentRect.width.roundToInt()
-                            val h = currentRect.height.roundToInt()
-
-                            val placeable = measurable.measure(
-                                Constraints.fixed(w, h)
-                            )
-
-                            layout(placeable.width, placeable.height) {
-                                placeable.place(
-                                    x = currentRect.left.roundToInt(),
-                                    y = currentRect.top.roundToInt()
-                                )
-                            }
-                        }
                         .graphicsLayer {
+                            translationX = currentRect.left
+                            translationY = currentRect.top
+
                             shape = RoundedCornerShape(currentCorner)
                             clip = true
+
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                        .layout { measurable, constraints ->
+                            val currentW = currentRect.width.roundToInt()
+                            val currentH = currentRect.height.roundToInt()
+
+                            val targetW = expandedBounds.width.roundToInt()
+                            val targetH = expandedBounds.height.roundToInt()
+
+                            val placeable = measurable.measure(
+                                Constraints.fixed(targetW, targetH)
+                            )
+
+                            layout(currentW, currentH) {
+                                placeable.place(0, 0)
+                            }
                         }
                         .clickable(
                             indication = null,
@@ -283,8 +282,11 @@ private fun HeroExpansionPopup(
                         modifier = Modifier
                             .width(targetWidthDp)
                             .fillMaxHeight()
+                            .graphicsLayer {
+                                this.alpha = contentAlpha
+                            }
                     ) {
-                        content(maxAvailableHeightDp, targetWidthDp)
+                        content(maxAvailableHeightDp, 1f, targetWidthDp)
                     }
                 }
             }
@@ -349,7 +351,7 @@ private fun ExpandedCardContent(
     rememberPage: (Int) -> Unit,
     onCollapse: () -> Unit,
     maxHeight: Dp,
-    expansionAnim: Animatable<Float, AnimationVector1D>,
+    contentAlpha: Float,
     targetWidth: Dp
 ) {
     val context = LocalContext.current
@@ -408,12 +410,7 @@ private fun ExpandedCardContent(
             modifier = Modifier
                 .requiredWidth(targetWidth)
                 .weight(1f, fill = false)
-                // Оптимизация: graphicsLayer читает анимацию только при отрисовке
-                .graphicsLayer {
-                    val progress = expansionAnim.value.coerceIn(0f, 1f)
-                    val contentAlpha = ((progress - 0.1f) / 0.9f).coerceIn(0f, 1f)
-                    alpha = contentAlpha
-                }
+                .graphicsLayer { alpha = contentAlpha }
         ) { page ->
             when (page) {
                 0 -> {
@@ -464,12 +461,7 @@ private fun ExpandedCardContent(
                 .fillMaxWidth()
                 .wrapContentHeight()
                 .padding(horizontal = 16.dp)
-                // Оптимизация: graphicsLayer
-                .graphicsLayer {
-                    val progress = expansionAnim.value.coerceIn(0f, 1f)
-                    val contentAlpha = ((progress - 0.1f) / 0.9f).coerceIn(0f, 1f)
-                    alpha = contentAlpha
-                }
+                .graphicsLayer { alpha = contentAlpha }
         ) {
             Text(
                 text = stringResource(R.string.titles_card_text),
