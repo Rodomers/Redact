@@ -14,3 +14,5 @@ find_library(
 target_link_libraries(
         mews-lib
         ${log-lib})
+
+target_link_options(mews-lib PRIVATE "-Wl,-z,max-page-size=16384")

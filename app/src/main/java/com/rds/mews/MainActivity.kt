@@ -129,7 +129,6 @@ fun MainScreen(mainActivity: MainActivity) {
             titlesViewModel.scrollEvents.collect { event ->
                 when (event) {
                     TitlesScrollEvent.ScrollToTop -> {
-                        // Логика скролла теперь живет в UI
                         if (titlesGridState.firstVisibleItemIndex == 0) {
                             titlesViewModel.toggleTitleExpanded(null)
                         } else {

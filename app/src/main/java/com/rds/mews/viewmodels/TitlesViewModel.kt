@@ -40,7 +40,6 @@ class TitlesViewModel(
     private val repository: MewsRepository
 ): AndroidViewModel(application) {
 
-    // Канал для отправки событий в UI (например, скролл вверх)
     private val _scrollEvents = Channel<TitlesScrollEvent>(Channel.CONFLATED)
     val scrollEvents = _scrollEvents.receiveAsFlow()
 
@@ -48,8 +47,6 @@ class TitlesViewModel(
     val workInfo: StateFlow<WorkInfo?> = workManager
         .getWorkInfosForUniqueWorkFlow("titles_update_work")
         .map { it.firstOrNull() }
-        // WorkInfo обновляется часто (progress, state).
-        // distinctUntilChanged() здесь важен, чтобы не триггерить UI без реальных изменений.
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -62,7 +59,6 @@ class TitlesViewModel(
     val enlargedTimestamps: StateFlow<Boolean> = repository.enlargedTimestamps.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
 
-    // Если lastTitlesUpdate меняется часто (таймер?), это вызовет рекомпозицию родителя.
     val lastUpdated: StateFlow<Long> = repository.lastTitlesUpdate
         .stateIn(viewModelScope,
             SharingStarted.WhileSubscribed(5000), 0)
@@ -72,12 +68,10 @@ class TitlesViewModel(
 
     val groupedTitles: StateFlow<Map<String, List<Title>>> = titles
         .filter { it.isNotEmpty() }
-        // 1. Отсекаем, если пришел тот же самый список объектов из репозитория
         .distinctUntilChanged()
         .map { list ->
             // Тяжелая трансформация
             list.filter { it.text != "<промежуточный текст>" }.map {
-                // it.copy создает НОВЫЙ объект. Ссылка меняется.
                 it.copy(
                     sources = strTransform(it.sources, ", "),
                     links = strTransform(it.links, "\n")
@@ -85,10 +79,6 @@ class TitlesViewModel(
             }.groupBy { getFormattedTimeUnix(it.time, true) }
         }
         .flowOn(Dispatchers.Default)
-        // 2. КРИТИЧЕСКИ ВАЖНО:
-        // map выше создал новые объекты (Map и List), даже если данные те же.
-        // distinctUntilChanged сравнит их через equals() (по содержимому).
-        // Если содержимое идентично, Flow НЕ эмитит новый стейт, и StateFlow остается старым.
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
@@ -106,7 +96,6 @@ class TitlesViewModel(
         repository.startTitlesUpdate(application)
     }
 
-    // Метод для вызова из UI при нажатии на таб
     fun scrollToTop() {
         _scrollEvents.trySend(TitlesScrollEvent.ScrollToTop)
     }
@@ -167,13 +156,12 @@ class TitlesViewModel(
     init {
         viewModelScope.launch {
             repository.titles
-                .distinctUntilChanged() // Не обрабатываем, если Room вернул то же самое
+                .distinctUntilChanged()
                 .collect { titleListFromDb ->
                     val actualTitles = titleListFromDb.filter { it.text != "<промежуточный текст>" }
 
                     _titles.value = actualTitles
 
-                    // Синхронизируем стейты карточек (expanded/pages) с новым списком
                     _titleCardStates.update { currentStates ->
                         val currentIds = currentStates.map { it.id }.toSet()
                         val newIds = actualTitles.map { it.id }.toSet()

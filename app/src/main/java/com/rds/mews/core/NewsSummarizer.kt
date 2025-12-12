@@ -45,9 +45,7 @@ class LLMClient(
     suspend fun sendPrompt(prompt: String): String? {
         val requestBody = GeminiRequest(
             contents = listOf(
-                ContentInput(
-                    parts = listOf(PartInput(prompt))
-                )
+                ContentInput(parts = listOf(PartInput(prompt)))
             ),
             generationConfig = GenerationConfig(
                 temperature = 0.5,
@@ -56,21 +54,38 @@ class LLMClient(
         )
 
         try {
-            val responseString: String = httpClient.post(URL) {
+            val response = httpClient.post(URL) {
                 header("x-goog-api-key", apiKey)
                 contentType(ContentType.Application.Json)
                 setBody(requestBody)
-            }.body()
+            }
+
+            val responseString = response.body<String>()
+
+            println("--- RAW GEMINI RESPONSE ---")
+            println("Status Code: ${response.status}")
+            println("Body: $responseString")
+            println("---------------------------")
 
             val geminiResponse = jsonParser.decodeFromString<GeminiResponse>(responseString)
 
+            if (geminiResponse.error != null) {
+                println("API ERROR: ${geminiResponse.error.message} (Code: ${geminiResponse.error.code})")
+                return null
+            }
+
+            if (geminiResponse.promptFeedback?.blockReason != null) {
+                println("PROMPT BLOCKED: ${geminiResponse.promptFeedback.blockReason}")
+                return null
+            }
+
             return geminiResponse.candidates
                 ?.takeIf { it.isNotEmpty() }
-                ?.flatMap { candidate -> candidate.content.parts }
+                ?.flatMap { candidate -> candidate.content?.parts ?: emptyList() }
                 ?.joinToString("\n") { part -> part.text }
 
         } catch (e: Exception) {
-            println("Error during API call: ${e.message}")
+            println("Error inside sendPrompt logic: ${e.message}")
             e.printStackTrace()
             return null
         }
@@ -79,6 +94,12 @@ class LLMClient(
     override fun close() {
         httpClient.close()
     }
+
+    @Serializable
+    data class SafetySetting(
+        val category: String,
+        val threshold: String
+    )
 
     @Serializable
     data class GeminiRequest(
@@ -104,12 +125,27 @@ class LLMClient(
 
     @Serializable
     data class GeminiResponse(
-        val candidates: List<Candidate>?
+        val candidates: List<Candidate>? = null,
+        val error: GeminiError? = null,
+        val promptFeedback: PromptFeedback? = null
+    )
+
+    @Serializable
+    data class GeminiError(
+        val code: Int? = null,
+        val message: String? = null,
+        val status: String? = null
+    )
+
+    @Serializable
+    data class PromptFeedback(
+        val blockReason: String? = null
     )
 
     @Serializable
     data class Candidate(
-        val content: Content
+        val content: Content?,
+        val finishReason: String? = null
     )
 
     @Serializable
@@ -189,7 +225,7 @@ class NewsSummarizer(
             var counter = 0
             val titlesCounter = titlesToSummarize.size
             var emptyAnswer = false
-            val semaphore = Semaphore(2)
+            val semaphore = Semaphore(1)
 
             val summarizedResults = coroutineScope {
                 titlesToSummarize.map { title ->
