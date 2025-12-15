@@ -240,7 +240,7 @@ class NewsSummarizer(
                                 processedBatches++
                                 if (processedBatches > 1) delay(2000L)
 
-                                settingsManager.saveString(MewsRepository.UPDATING_STATE, "batch ${processedBatches}/${totalBatches}")
+                                settingsManager.saveString(MewsRepository.UPDATING_STATE, "${processedBatches}/${totalBatches}")
                                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
 
                                 println("Обработка пачки из ${batch.size} тем...")
