@@ -96,11 +96,13 @@ class TitlesUpdateService : Service() {
         try {
             if (!currentCoroutineContext().isActive) return
 
+            // надо вызывать ошибку парсинга, но не прекращать обновление
+
             val needToFetchRss = (System.currentTimeMillis() - rssLastUpdate) / 60000L > rssUpdateInterval
             val noFetchErrors = if (needToFetchRss) {
                 val result = fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600).errors.isEmpty()
                 settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
-                result
+                true
             } else {
                 true
             }

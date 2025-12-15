@@ -14,6 +14,7 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
@@ -176,6 +177,8 @@ class NewsSummarizer(
         val links: List<String>
     )
 
+    private val SUMMARY_BATCH_SIZE = 5
+
     private val NEWS_BATCH_SIZE = 70
 
     suspend fun summarizeTopics(
@@ -222,57 +225,88 @@ class NewsSummarizer(
                 return SummarizationResult.Success
             }
 
-            var counter = 0
-            val titlesCounter = titlesToSummarize.size
+            val titleBatches = titlesToSummarize.chunked(SUMMARY_BATCH_SIZE)
+
+            var processedBatches = 0
+            val totalBatches = titleBatches.size
             var emptyAnswer = false
             val semaphore = Semaphore(1)
 
             val summarizedResults = coroutineScope {
-                titlesToSummarize.map { title ->
+                titleBatches.map { batch ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
                             try {
-                                counter++
-                                if (counter > 1) delay(6000L)
-                                settingsManager.saveString(MewsRepository.UPDATING_STATE, "${counter}/${titlesCounter}")
+                                processedBatches++
+                                if (processedBatches > 1) delay(2000L)
+
+                                settingsManager.saveString(MewsRepository.UPDATING_STATE, "batch ${processedBatches}/${totalBatches}")
                                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
-                                println(title.title)
 
-                                val suitableMessages = title.ids?.mapNotNull { id -> messages.find { it.id == id } } ?: emptyList()
-                                val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
+                                println("Обработка пачки из ${batch.size} тем...")
 
-                                if (newsText.isBlank()) return@withPermit null
+                                val topicsData = batch.mapNotNull { topic ->
+                                    val suitableMessages = topic.ids?.mapNotNull { id -> messages.find { it.id == id } } ?: emptyList()
+                                    val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
+
+                                    if (newsText.isBlank()) null
+                                    else Triple(topic, suitableMessages, newsText)
+                                }
+
+                                if (topicsData.isEmpty()) return@withPermit emptyList<SummaryResult>()
 
                                 val bannedNews = MewsRepository.bannedNewsFlow.value.joinToString("'; '")
 
-                                val response = withTimeout(40000L) {
-                                    sumTopic(llm, title.title, bannedNews, newsText, currentLanguage)
+                                val response = withTimeout(90000L) {
+                                    sumTopicsBatch(llm, topicsData, bannedNews, currentLanguage)
                                 }
 
                                 if (response.isBlank()) {
-                                    println("Пустой ответ от LLM для темы: ${title.title}")
+                                    println("Пустой ответ от LLM для пачки тем")
                                     emptyAnswer = true
-                                    return@withPermit null
+                                    return@withPermit emptyList<SummaryResult>()
                                 }
 
                                 val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
-                                val obj = JSONObject(cleanResponse)
-                                val summary = obj.getString("summary")
+                                val jsonArray = JSONArray(cleanResponse)
+                                val results = mutableListOf<SummaryResult>()
 
-                                val ids = title.ids ?: return@withPermit null
-                                val time = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
-                                val links = suitableMessages.map { it.link }
-                                val sources = suitableMessages.map { it.source }
+                                for (i in 0 until jsonArray.length()) {
+                                    try {
+                                        val obj = jsonArray.getJSONObject(i)
+                                        val topicTitle = obj.getString("title")
+                                        val summary = obj.getString("summary")
 
-                                SummaryResult(title.title, summary, time, sources.distinct(), links.distinct())
+                                        val originalData = topicsData.find { it.first.title == topicTitle }
+
+                                        if (originalData != null) {
+                                            val (topic, suitableMessages, _) = originalData
+                                            val time = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
+                                            val links = suitableMessages.map { it.link }
+                                            val sources = suitableMessages.map { it.source }
+
+                                            results.add(SummaryResult(
+                                                originalTitle = topic.title,
+                                                summary = summary,
+                                                time = time,
+                                                sources = sources.distinct(),
+                                                links = links.distinct()
+                                            ))
+                                        }
+                                    } catch (e: Exception) {
+                                        println("Ошибка парсинга одного элемента из пачки: ${e.message}")
+                                    }
+                                }
+                                return@withPermit results
+
                             } catch (e: Exception) {
-                                println("Ошибка при обработке темы '${title.title}': ${e.message}")
+                                println("Ошибка при обработке пачки тем: ${e.message}")
                                 e.printStackTrace()
-                                return@withPermit null
+                                return@withPermit emptyList<SummaryResult>()
                             }
                         }
                     }
-                }.mapNotNull { it.await() }
+                }.awaitAll().flatten()
             }
 
             if (summarizedResults.isNotEmpty()) {
@@ -288,7 +322,7 @@ class NewsSummarizer(
                 }
             }
 
-            if (summarizedResults.size != titlesToSummarize.size) {
+            if (summarizedResults.isEmpty() && titlesToSummarize.isNotEmpty()) {
                 return if (emptyAnswer) {
                     SummarizationResult.Failure(SummarizationErrorType.EMPTY_ANSWER)
                 } else {
@@ -363,9 +397,9 @@ class NewsSummarizer(
     1.  **Выдели от 1 до $max главных событий.** Группируй новости, описывающие одно и то же событие или тесно связанные происшествия.
     2.  **Сортируй темы по важности.** Важность определяется влиянием события на большое количество людей, его масштабом и значимостью.
     3.  **Формулируй заголовки тем.** Каждый заголовок должен быть информативным и состоять из 5-7 слов.
-    4.  **Обработка мелких новостей:** Новости, которые не относятся ни к одному крупному событию (мелкие происшествия, локальные анонсы), сгруппируй в одну общую тему под названием "Другие новости и короткие события". Эта тема должна содержать примерно столько же новостей, сколько и другие важные темы, и быть одной из многих, а не собирать всё подряд.
-    5.  **Уникальность:** Каждая новость (id) может относиться только к ОДНОЙ теме. Если новость подходит к двум темам, выбери наиболее подходящую.
-    6.  **Запрещённые темы:** Тебе дан список заголовков, темы которых нельзя поднимать. ВЫДЕЛИ ИЗ КАЖДОГО ЗАГОЛОВКА ТЕМУ И, ЕСЛИ НОВОСТЬ СОВПАДАЕТ С ОДНОЙ ИЗ ТЕМ ЗАГОЛОВКА - НЕ ПИШИ ЕЁ. Список запрещённых тем (заголовков): '$bannedNews'.
+    4.  **Обработка мелких новостей:** Новости, которые не относятся ни к одному крупному событию (мелкие происшествия, локальные анонсы), сгруппируй в одну общую тему под названием "Другие новости и короткие события". Эта тема должна содержать примерно столько же новостей, сколько и другие важные темы.
+    5.  **Уникальность:** Каждая новость (id) может относиться только к ОДНОЙ теме.
+    6.  **Запрещённые темы:** Если группа новостей целиком посвящена теме из списка запрещенных, НЕ включай её в ответ. Список запрещённых тем: '$bannedNews'.
     7.  **Контекст:** Текущее время (Unix millis) - ${System.currentTimeMillis()}.
     8.  **Ограничения:** Запрещено группировать в одну тему более 75 новостей.
 
@@ -373,7 +407,7 @@ class NewsSummarizer(
     -   Верни ответ СТРОГО в виде JSON-массива. Никакого текста до или после.
     -   Язык заголовков: ${currentLanguage}.
 
-    Пример: [{"title": "Введены новые экономические санкции против банков", "id": [101, 105]}, {"title": "Запуск новой линии метро в столице", "id": [102, 108]}, {"title": "Другие новости и короткие события", "id": [103, 104, 109]}]
+    Пример: [{"title": "Введены новые экономические санкции против банков", "id": [101, 105]}, {"title": "Запуск новой линии метро в столице", "id": [102, 108]}]
 
     Новости для анализа:
     $combinedNews
@@ -402,9 +436,6 @@ class NewsSummarizer(
         }
     }
 
-    /**
-     * Этап 2: Объединяет, фильтрует и ранжирует темы, полученные со всех пакетов.
-     */
     private suspend fun mergeAndFilterTopics(topics: List<Topics>, maxTopics: Int, currentLanguage: String): Boolean {
         val titlesJsonForPrompt = JSONArray(
             topics.map { topic ->
@@ -421,15 +452,15 @@ class NewsSummarizer(
     Ты — главный редактор, твоя задача — проанализировать предложенный список новостных тем, объединить дубликаты, отфильтровать маловажные и привести заголовки к единому стандарту.
 
     Инструкции:
-    1.  **Объедини схожие темы.** Например, "Атаки дронов на РФ" и "Налеты БПЛА на регионы России" должны стать одной темой. При объединении сохрани все уникальные ID сообщений из обеих тем. При выборе итогового названия отдавай предпочтение более полному и информативному варианту.
-    2.  **Запрещённые темы**: ебе дан список заголовков, темы которых нельзя поднимать. ВЫДЕЛИ ИЗ КАЖДОГО ЗАГОЛОВКА ТЕМУ И, ЕСЛИ НОВОСТЬ СОВПАДАЕТ С ОДНОЙ ИЗ ТЕМ ЗАГОЛОВКА - НЕ ПИШИ ЕЁ. Список запрещённых тем (заголовков): '$bannedNews'.
-    3.  **Отфильтруй и оставь ровно $maxTopics самых важных тем.** Если тем изначально меньше, оставь все. Приоритет отдавай темам с наибольшим количеством новостей и наибольшим общественным резонансом.
-    4.  **Отформатируй заголовки:** Убедись, что все итоговые заголовки состоят из 5-7 слов, являются ёмкими и точно отражают суть события.
-    5.  **Отсортируй финальный список** по убыванию важности.
+    1.  **Объедини схожие темы.** Например, "Атаки дронов на РФ" и "Налеты БПЛА на регионы России" должны стать одной темой. При объединении сохрани все уникальные ID сообщений из обеих тем.
+    2.  **Запрещённые темы**: Если тема совпадает со списком, исключи её. Список: '$bannedNews'.
+    3.  **Отфильтруй и оставь ровно $maxTopics самых важных тем.** Приоритет темам с большим количеством новостей.
+    4.  **Отформатируй заголовки:** 5-7 слов, ёмко.
+    5.  **Отсортируй по убыванию важности.**
 
     Формат ответа:
-    -   Верни результат в виде JSON-массива в ТОМ ЖЕ ФОРМАТЕ, что и на входе.
-    -   Ответ должен быть только валидным JSON, без лишних слов.
+    -   Верни результат в виде JSON-массива в ТОМ ЖЕ ФОРМАТЕ (title, ids), что и на входе.
+    -   Ответ должен быть только валидным JSON.
     -   Язык заголовков: ${currentLanguage}.
 
     Массив тем для обработки:
@@ -463,7 +494,6 @@ class NewsSummarizer(
             return true
         } catch (e: JSONException) {
             println("Ошибка парсинга JSON при финальном объединении тем: ${e.message}")
-            println("Невалидный ответ от LLM")
             return false
         } catch (e: Exception) {
             println("Общая ошибка при финальном объединении тем: ${e.message}")
@@ -472,37 +502,47 @@ class NewsSummarizer(
     }
 
     /**
-     * Этап 3: Создает детальное резюме для одной конкретной темы.
+     * Этап 3 (Новый): Создает резюме для ПАКЕТА (batch) тем.
      */
     @SuppressLint("SuspiciousIndentation")
-    private suspend fun sumTopic(llm: LLMClient, title: String, bannedNews: String, newsText: String, currentLanguage: String = "russian"): String {
+    private suspend fun sumTopicsBatch(
+        llm: LLMClient,
+        batchData: List<Triple<Topics, List<Message>, String>>,
+        bannedNews: String,
+        currentLanguage: String
+    ): String {
+
+        // Формируем JSON структуру для промпта
+        val jsonInput = JSONArray()
+        batchData.forEach { (topic, _, text) ->
+            val item = JSONObject()
+            item.put("title", topic.title)
+            item.put("news_content", text)
+            jsonInput.put(item)
+        }
+
         val prompt = """
-    Ты — беспристрастный новостной аналитик. Твоя задача — составить структурированное и информативное резюме по заданной новостной теме на основе предоставленных материалов.
+    Ты — беспристрастный новостной аналитик. Твоя задача — составить структурированные резюме для списка новостных тем.
 
-    **Тема:** "$title"
+    Вот список тем и материалов к ним в формате JSON. Для КАЖДОГО элемента списка напиши отдельное резюме.
 
-    **Инструкции:**
-    1.  **Напиши подробное резюме объемом до 300 слов.** Изложи суть события, его причины и возможные последствия. Избегай "воды" и общих фраз, используй только факты из новостей.
-    2.  **Структурируй текст.** Если в рамках темы есть несколько ключевых подсобытий, раздели их абзацами (переносом строки `\n`).
-    3.  **Отражай разные точки зрения.** Если источники предоставляют противоречивую информацию, упомяни это явно. Например: "По данным одного источника..., однако другой источник сообщает, что...".
-    4.  **Недостаток информации:** Если предоставленных новостей недостаточно для полного резюме, напиши краткий обзор на основе имеющихся данных и в конце добавь фразу: "Для полного анализа требуется больше информации."
-    5.  **Запрещённые темы:** Тебе дан список заголовков, темы которых нельзя поднимать. ВЫДЕЛИ ИЗ КАЖДОГО ЗАГОЛОВКА ТЕМУ И, ЕСЛИ НОВОСТЬ СОВПАДАЕТ С ОДНОЙ ИЗ ТЕМ ЗАГОЛОВКА - НЕ ПИШИ ЕЁ. Список запрещённых тем (заголовков): '$bannedNews'. 
+    **Инструкции для каждого резюме:**
+    1.  **Объем:** до 250 слов на тему.
+    2.  **Суть:** Опиши событие, причины и последствия. Избегай воды.
+    3.  **Структура:** Используй абзацы (`\n`) для разделения подсобытий внутри темы.
+    4.  **Разные точки зрения:** Если есть противоречия, укажи их.
+    5.  **Запрещенные темы:** Проверь каждую тему по списку заголовков: '$bannedNews'. Если тема попадает под запрет, верни пустую строку в поле summary или текст "Тема пропущена".
     6.  **Контекст:** Текущее время (Unix millis) - ${System.currentTimeMillis()}.
 
     **Формат ответа:**
-    -   Верни СТРОГО один JSON-объект.
-    -   Ответ должен начинаться с `{` и заканчиваться `}`. Никаких пояснений или другого текста вне JSON.
-    -   Не используй Markdown-форматирование (жирный шрифт, курсив и т.д.).
+    -   Верни СТРОГО JSON-массив объектов.
+    -   Структура объекта: `{"title": "Исходный заголовок темы", "summary": "Текст резюме..."}`.
+    -   Ключ `title` должен В ТОЧНОСТИ совпадать с тем, что был в запросе, чтобы я мог сопоставить ответ.
     -   Язык ответа: ${currentLanguage}.
+    -   Не используй Markdown форматирование внутри JSON, только простой текст.
 
-    **Пример формата ответа:**
-    {
-      "title": "$title",
-      "summary": "Резюме новостного события. Описание ключевых деталей, действующих лиц и последствий. Объем текста — до 300 слов.\nВторое подсобытие в рамках этой же темы, изложенное в новом абзаце."
-    }
-    
-    **Новости для составления резюме:**
-    $newsText
+    **Входные данные:**
+    $jsonInput
 """.trimIndent()
 
         try {
@@ -513,7 +553,3 @@ class NewsSummarizer(
         }
     }
 }
-
-
-
-

@@ -87,15 +87,23 @@ fun TitlesCard(
     noTime: Boolean = false
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
-
+    var isPopupReady by remember { mutableStateOf(false) }
     val expansionAnim = remember { Animatable(0f) }
+
+    LaunchedEffect(isExpanded, expansionAnim.value == 0f) {
+        if (!isExpanded && expansionAnim.value == 0f) {
+            isPopupReady = false
+        }
+    }
 
     LaunchedEffect(isExpanded) {
         if (isExpanded) {
-            expansionAnim.animateTo(
-                targetValue = 1f,
-                animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
-            )
+            if (isPopupReady) {
+                expansionAnim.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
+                )
+            }
         } else {
             expansionAnim.animateTo(
                 targetValue = 0f,
@@ -116,7 +124,7 @@ fun TitlesCard(
                     collapsedBounds = coordinates.boundsInWindow()
                 }
             }
-            .alpha((1f - expansionAnim.value).coerceIn(0f, 1f)),
+            .alpha(if ((isExpanded && isPopupReady) || expansionAnim.value > 0.001f) 0f else 1f),
         shape = RoundedCornerShape(25.dp),
         color = MaterialTheme.colorScheme.secondaryContainer
     ) {
@@ -134,6 +142,7 @@ fun TitlesCard(
             progress = expansionAnim.value,
             collapsedBounds = collapsedBounds!!,
             onDismissRequest = onToggleExpanded,
+            onReady = { isPopupReady = true },
             content = { maxHeight, contentAlpha, targetWidth ->
                 ExpandedCardContent(
                     title = title,
@@ -157,6 +166,7 @@ private fun HeroExpansionPopup(
     progress: Float,
     collapsedBounds: Rect,
     onDismissRequest: () -> Unit,
+    onReady: () -> Unit,
     content: @Composable (maxHeight: Dp, contentAlpha: Float, targetWidth: Dp) -> Unit
 ) {
     val context = LocalContext.current
@@ -222,72 +232,73 @@ private fun HeroExpansionPopup(
                         .alpha(0f)
                         .onGloballyPositioned { coordinates ->
                             contentHeight = coordinates.size.height.toFloat()
+                            onReady()
                         }
                 ) {
                     content(maxAvailableHeightDp, 0f, targetWidthDp)
                 }
             }
 
-            if (contentHeight != null) {
-                val targetHeight = min(contentHeight!!, maxAvailableHeight)
-                val centeredTop = (screenHeightPx - targetHeight) / 2
+            val currentContentHeight = contentHeight ?: collapsedBounds.height
+            val targetHeight = min(currentContentHeight, maxAvailableHeight)
 
-                val expandedBounds = Rect(
-                    left = horizontalMarginPx,
-                    top = centeredTop,
-                    right = horizontalMarginPx + maxAvailableWidth,
-                    bottom = centeredTop + targetHeight
-                )
+            val centeredTop = (screenHeightPx - targetHeight) / 2
 
-                val currentRect: Rect = lerp(collapsedBounds, expandedBounds, progress)
+            val expandedBounds = Rect(
+                left = horizontalMarginPx,
+                top = centeredTop,
+                right = horizontalMarginPx + maxAvailableWidth,
+                bottom = centeredTop + targetHeight
+            )
 
-                val currentCorner = 25.dp
+            val currentRect: Rect = lerp(collapsedBounds, expandedBounds, progress)
 
-                Surface(
-                    modifier = Modifier
-                        .graphicsLayer {
-                            translationX = currentRect.left
-                            translationY = currentRect.top
+            val currentCorner = 25.dp
 
-                            shape = RoundedCornerShape(currentCorner)
-                            clip = true
+            Surface(
+                modifier = Modifier
+                    .graphicsLayer {
+                        translationX = currentRect.left
+                        translationY = currentRect.top
 
-                            compositingStrategy = CompositingStrategy.Offscreen
-                        }
-                        .layout { measurable, constraints ->
-                            val currentW = currentRect.width.roundToInt()
-                            val currentH = currentRect.height.roundToInt()
+                        shape = RoundedCornerShape(currentCorner)
+                        clip = true
 
-                            val targetW = expandedBounds.width.roundToInt()
-                            val targetH = expandedBounds.height.roundToInt()
-
-                            val placeable = measurable.measure(
-                                Constraints.fixed(targetW, targetH)
-                            )
-
-                            layout(currentW, currentH) {
-                                placeable.place(0, 0)
-                            }
-                        }
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                            enabled = true
-                        ) {},
-                    shape = RoundedCornerShape(currentCorner),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shadowElevation = 0.dp
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(targetWidthDp)
-                            .fillMaxHeight()
-                            .graphicsLayer {
-                                this.alpha = contentAlpha
-                            }
-                    ) {
-                        content(maxAvailableHeightDp, 1f, targetWidthDp)
+                        compositingStrategy = CompositingStrategy.Offscreen
                     }
+                    .layout { measurable, constraints ->
+                        val currentW = currentRect.width.roundToInt()
+                        val currentH = currentRect.height.roundToInt()
+
+                        val targetW = expandedBounds.width.roundToInt()
+                        val targetH = expandedBounds.height.roundToInt()
+
+                        val placeable = measurable.measure(
+                            Constraints.fixed(targetW, targetH)
+                        )
+
+                        layout(currentW, currentH) {
+                            placeable.place(0, 0)
+                        }
+                    }
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        enabled = true
+                    ) {},
+                shape = RoundedCornerShape(currentCorner),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shadowElevation = 0.dp
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(targetWidthDp)
+                        .fillMaxHeight()
+                        .graphicsLayer {
+                            this.alpha = contentAlpha
+                        }
+                ) {
+                    content(maxAvailableHeightDp, 1f, targetWidthDp)
                 }
             }
         }
