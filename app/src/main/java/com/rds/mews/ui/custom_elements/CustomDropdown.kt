@@ -39,6 +39,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
@@ -202,7 +203,8 @@ fun CustomDropdown(
     centeredArrow: Boolean? = null,
     noArrow: Boolean = false,
     timeList: Boolean = false,
-    arrowPosition: ArrowPosition? = null
+    arrowPosition: ArrowPosition? = null,
+    backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainerLow
 ) {
     if (inputBounds != null) {
         val arrowPosition = when {
@@ -229,7 +231,8 @@ fun CustomDropdown(
                 buttons = buttons,
                 animDuration = animDuration,
                 arrowPosition = arrowPosition,
-                timeList = timeList
+                timeList = timeList,
+                surfaceColor = backgroundColor
             )
         }
     }
@@ -242,6 +245,7 @@ private fun NPDropdown(
     animDuration: Int = 200,
     timeList: Boolean = false,
     arrowPosition: ArrowPosition = ArrowPosition.None,
+    surfaceColor: Color = MaterialTheme.colorScheme.surfaceContainerLow
 ) {
     val surfaceWidth = if (timeList) 70.dp else 150.dp
     val maxHeight = if (timeList) 180.dp else 360.dp
@@ -274,35 +278,19 @@ private fun NPDropdown(
     ) {
         val transition = this.transition
 
-        val scale by transition.animateFloat(
+        val progress by transition.animateFloat(
             transitionSpec = {
-                if (targetState == EnterExitState.Visible) {
-                    spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                } else {
-                    spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                }
+                spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
             },
-            label = "Scale"
+            label = "Progress"
         ) { state ->
             if (state == EnterExitState.Visible) 1f else 0f
         }
 
-        val alpha by transition.animateFloat(
-            transitionSpec = {
-                if (targetState == EnterExitState.Visible) tween(50) else tween(animDuration)
-            },
-            label = "Alpha"
-        ) { state ->
-            if (state == EnterExitState.Visible) 1f else 0f
-        }
-
-        val surfaceColor = MaterialTheme.colorScheme.surfaceContainerLow
+        val surfaceColor = surfaceColor
 
         Surface(
             modifier = Modifier
@@ -313,9 +301,11 @@ private fun NPDropdown(
                 )
                 .heightIn(max = maxHeight)
                 .graphicsLayer {
-                    scaleX = scale.coerceAtLeast(0f)
-                    scaleY = scale.coerceAtLeast(0f)
-                    this.alpha = alpha
+                    val currentProgress = progress.coerceAtLeast(0f)
+
+                    scaleX = currentProgress
+                    scaleY = currentProgress
+                    this.alpha = progress.coerceIn(0f, 1f)
 
                     val aOffsetPx = arrowOffset.toPx()
                     val aWidthPx = arrowWidth.toPx()
@@ -346,7 +336,7 @@ private fun NPDropdown(
                     }
                 },
             shape = bubbleShape,
-            color = if (!timeList) surfaceColor.copy(alpha = 0.98f) else surfaceColor,
+            color = if (!timeList) surfaceColor.copy(alpha = 0.97f) else surfaceColor,
             shadowElevation = 0.dp
         ) {
             val onDismiss = remember(transitionState) { { transitionState.targetState = false } }

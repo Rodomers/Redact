@@ -126,7 +126,7 @@ fun DropdownButton(
     ) {
         Surface(
             shape = shape,
-            color = surfaceColor.copy(alpha = 0.98f),
+            color = surfaceColor.copy(alpha = 0.97f),
             modifier = Modifier
                 .fillMaxSize()
                 .clickable(

@@ -57,9 +57,7 @@ import com.rds.mews.Title
 import com.rds.mews.localcore.getFormattedTimeUnix
 import kotlinx.coroutines.launch
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -75,6 +73,16 @@ import androidx.compose.ui.window.PopupProperties
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.lerp
+
 @Composable
 fun TitlesCard(
     title: Title,
@@ -88,7 +96,7 @@ fun TitlesCard(
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
     var isPopupReady by remember { mutableStateOf(false) }
-    val expansionAnim = remember { Animatable(0f) }
+    val expansionAnim = remember { Animatable(if (isExpanded) 1f else 0f) }
 
     LaunchedEffect(isExpanded, expansionAnim.value == 0f) {
         if (!isExpanded && expansionAnim.value == 0f) {
@@ -96,7 +104,7 @@ fun TitlesCard(
         }
     }
 
-    LaunchedEffect(isExpanded) {
+    LaunchedEffect(isExpanded, isPopupReady) {
         if (isExpanded) {
             if (isPopupReady) {
                 expansionAnim.animateTo(
@@ -120,13 +128,12 @@ fun TitlesCard(
             .wrapContentHeight()
             .padding(vertical = 4.dp)
             .onGloballyPositioned { coordinates ->
-                if (expansionAnim.value < 0.001f && !isExpanded) {
-                    collapsedBounds = coordinates.boundsInWindow()
-                }
+                collapsedBounds = coordinates.boundsInWindow()
             }
-            .alpha(if ((isExpanded && isPopupReady) || expansionAnim.value > 0.001f) 0f else 1f),
+            .alpha(if (isPopupReady && expansionAnim.value > 0.02f) 0f else 1f),
         shape = RoundedCornerShape(25.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shadowElevation = 0.dp
     ) {
         TitlesHeaderContent(
             title = title,
@@ -253,6 +260,12 @@ private fun HeroExpansionPopup(
 
             val currentRect: Rect = lerp(collapsedBounds, expandedBounds, progress)
 
+            val currentContainerColor = lerp(
+                MaterialTheme.colorScheme.secondaryContainer,
+                MaterialTheme.colorScheme.surfaceContainerLow,
+                progress
+            )
+
             val currentCorner = 25.dp
 
             Surface(
@@ -287,7 +300,7 @@ private fun HeroExpansionPopup(
                         enabled = true
                     ) {},
                 shape = RoundedCornerShape(currentCorner),
-                color = MaterialTheme.colorScheme.secondaryContainer,
+                color = currentContainerColor,
                 shadowElevation = 0.dp
             ) {
                 Box(
@@ -401,18 +414,18 @@ private fun ExpandedCardContent(
             .heightIn(max = maxHeight)
             .wrapContentHeight()
     ) {
-        TitlesHeaderContent(
-            title = title,
-            showDates = false,
-            noTime = false,
-            onClicked = onCollapse
-        )
-
-        HorizontalDivider(
-            thickness = 1.dp,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
+        Surface(
+            shape = RoundedCornerShape(25.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            TitlesHeaderContent(
+                title = title,
+                showDates = false,
+                noTime = false,
+                onClicked = onCollapse
+            )
+        }
 
         HorizontalPager(
             state = pagerState,
@@ -430,6 +443,7 @@ private fun ExpandedCardContent(
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
                     ) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = title.text,
                             modifier = Modifier.padding(horizontal = 16.dp)
@@ -443,6 +457,7 @@ private fun ExpandedCardContent(
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
                     ) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = title.sources,
                             modifier = Modifier
@@ -521,7 +536,8 @@ private fun ExpandedCardContent(
                     config = config,
                     density = density,
                     onDismissRequest = { dropdownTransitionState.targetState = false },
-                    arrowPosition = ArrowPosition.BottomRight
+                    arrowPosition = ArrowPosition.BottomRight,
+                    backgroundColor = MaterialTheme.colorScheme.secondaryContainer
                 )
             }
         }
