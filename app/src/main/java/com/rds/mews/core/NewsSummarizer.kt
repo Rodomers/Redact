@@ -246,7 +246,11 @@ class NewsSummarizer(
                                 println("Обработка пачки из ${batch.size} тем...")
 
                                 val topicsData = batch.mapNotNull { topic ->
-                                    val suitableMessages = topic.ids?.mapNotNull { id -> messages.find { it.id == id } } ?: emptyList()
+                                    val suitableMessages = topic.ids?.mapNotNull { id ->
+                                        var msg = messages.find { it.id == id }
+                                        if (msg == null) msg = db.getMessage(id)
+                                        msg
+                                    } ?: emptyList()
                                     val newsText = suitableMessages.joinToString("\n") { "— ${it.mess}" }
 
                                     if (newsText.isBlank()) null
