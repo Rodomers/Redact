@@ -67,9 +67,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -78,16 +76,18 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 @Composable
 fun TitlesCard(
     title: Title,
     onBanTheme: (String) -> Unit,
-    showDates: Boolean = false,
     isExpanded: Boolean,
     onToggleExpanded: () -> Unit,
     pagerState: PagerState,
@@ -137,7 +137,6 @@ fun TitlesCard(
     ) {
         TitlesHeaderContent(
             title = title,
-            showDates = showDates,
             noTime = noTime,
             onClicked = onToggleExpanded,
             clickableEnabled = true
@@ -176,15 +175,14 @@ private fun HeroExpansionPopup(
     onReady: () -> Unit,
     content: @Composable (maxHeight: Dp, contentAlpha: Float, targetWidth: Dp) -> Unit
 ) {
-    val context = LocalContext.current
     val density = LocalDensity.current
-    val displayMetrics = context.resources.displayMetrics
+    val configuration = LocalConfiguration.current
 
-    val screenWidthPx = displayMetrics.widthPixels
-    val screenHeightPx = displayMetrics.heightPixels
+    val screenWidthDp = configuration.screenWidthDp.dp
+    val screenHeightDp = configuration.screenHeightDp.dp
 
-    val screenWidthDp = with(density) { screenWidthPx.toDp() }
-    val screenHeightDp = with(density) { screenHeightPx.toDp() }
+    val screenWidthPx = with(density) { screenWidthDp.toPx() }
+    val screenHeightPx = with(density) { screenHeightDp.toPx() }
 
     val verticalMarginDp = 50.dp
     val horizontalMarginDp = 8.dp
@@ -202,21 +200,21 @@ private fun HeroExpansionPopup(
 
     val clampedProgress = progress.coerceIn(0f, 1f)
 
-    Popup(
-        popupPositionProvider = WindowOriginProvider,
-        properties = PopupProperties(
-            focusable = true,
-            clippingEnabled = false
-        ),
-        onDismissRequest = onDismissRequest
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
     ) {
         val scrimAlpha = clampedProgress * 0.6f
         val contentAlpha = ((clampedProgress - 0.1f) / 0.9f).coerceIn(0f, 1f)
 
         Box(
             modifier = Modifier
-                .width(screenWidthDp)
-                .height(screenHeightDp)
+                .fillMaxSize()
                 .background(MaterialTheme.colorScheme.scrim.copy(alpha = scrimAlpha))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -322,7 +320,6 @@ private fun HeroExpansionPopup(
 private fun TitlesHeaderContent(
     modifier: Modifier = Modifier,
     title: Title,
-    showDates: Boolean,
     noTime: Boolean,
     onClicked: () -> Unit,
     clickableEnabled: Boolean = true
@@ -340,7 +337,7 @@ private fun TitlesHeaderContent(
     ) {
         if (!noTime) {
             Text(
-                text = getFormattedTimeUnix(title.time, showDates),
+                text = getFormattedTimeUnix(title.time),
                 textAlign = TextAlign.Left,
                 modifier = Modifier
                     .padding(end = 8.dp, top = 8.dp, bottom = 8.dp)
@@ -356,15 +353,6 @@ private fun TitlesHeaderContent(
             fontWeight = FontWeight.Bold
         )
     }
-}
-
-private object WindowOriginProvider : PopupPositionProvider {
-    override fun calculatePosition(
-        anchorBounds: IntRect,
-        windowSize: IntSize,
-        layoutDirection: LayoutDirection,
-        popupContentSize: IntSize
-    ): IntOffset = IntOffset.Zero
 }
 
 @Composable
@@ -421,7 +409,6 @@ private fun ExpandedCardContent(
         ) {
             TitlesHeaderContent(
                 title = title,
-                showDates = false,
                 noTime = false,
                 onClicked = onCollapse
             )

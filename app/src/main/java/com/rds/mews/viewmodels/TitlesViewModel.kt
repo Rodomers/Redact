@@ -70,7 +70,6 @@ class TitlesViewModel(
         .filter { it.isNotEmpty() }
         .distinctUntilChanged()
         .map { list ->
-            // Тяжелая трансформация
             list.filter { it.text != "<промежуточный текст>" }.map {
                 it.copy(
                     sources = strTransform(it.sources, ", "),
@@ -98,6 +97,11 @@ class TitlesViewModel(
 
     fun scrollToTop() {
         _scrollEvents.trySend(TitlesScrollEvent.ScrollToTop)
+    }
+
+    fun scrollToItem(id: Int) {
+        val id = (id - 2).coerceIn(0, Int.MAX_VALUE)
+        _scrollEvents.trySend(TitlesScrollEvent.ScrollToItem(id))
     }
 
     fun onBanTheme(value: String) {
@@ -187,6 +191,7 @@ class TitlesViewModel(
 
 sealed interface TitlesScrollEvent {
     data object ScrollToTop : TitlesScrollEvent
+    data class ScrollToItem(val id: Int) : TitlesScrollEvent
 }
 
 class TitlesViewModelFactory(private val application: Application) :

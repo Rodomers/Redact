@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -57,7 +58,10 @@ import com.rds.mews.ui.custom_elements.TitlesCard
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.collections.component1
+import kotlin.collections.component2
 import kotlin.collections.first
+import kotlin.collections.iterator
 import kotlin.collections.last
 import kotlin.text.toInt
 
@@ -82,11 +86,28 @@ fun TitlesGrid(
     lastTitlesUpdate: Long,
     scope: CoroutineScope,
     endureTime: Boolean = false,
-    onBanTheme: (String) -> Unit
+    onBanTheme: (String) -> Unit,
+    onConfigChange: (Int) -> Unit
 ) {
+   val config = LocalConfiguration.current
     val clipboardManager = LocalClipboardManager.current
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val pullToRefreshState = rememberPullToRefreshState()
+
+    LaunchedEffect(config) {
+        val cardId = titlesCardStates.firstOrNull { it.expanded }?.id ?: -1
+        if (cardId != -1L) {
+            var globIndex = 0
+            var item = 0
+            for ((_, items) in groupedItems) {
+                globIndex++
+                val itIndex = items.indexOfFirst { it.id == cardId }
+                if (itIndex != -1) item = itIndex + globIndex
+                globIndex += items.size
+            }
+            onConfigChange(item)
+        }
+    }
 
     LaunchedEffect(groupedItems.isEmpty(), isRefreshing) {
         if (groupedItems.isEmpty() && !isRefreshing) {
