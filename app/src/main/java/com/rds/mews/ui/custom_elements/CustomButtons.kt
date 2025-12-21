@@ -22,6 +22,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.Alignment
@@ -136,7 +137,8 @@ fun CustomIconButton(
     transitionBackgroundColor: Color? = null,
     defaultContentColor: Color = LocalContentColor.current,
     transitionContentColor: Color? = null,
-    transitionState: MutableTransitionState<Boolean>? = null
+    transitionState: MutableTransitionState<Boolean>? = null,
+    shape: CornerBasedShape? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -171,6 +173,7 @@ fun CustomIconButton(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(48.dp)
+            .clip(shape = shape ?: RoundedCornerShape(0.dp))
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale

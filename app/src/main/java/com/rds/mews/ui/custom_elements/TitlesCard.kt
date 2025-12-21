@@ -57,6 +57,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.lerp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -89,6 +91,7 @@ import com.rds.mews.ArrowPosition
 import com.rds.mews.R
 import com.rds.mews.Title
 import com.rds.mews.localcore.getFormattedTimeUnix
+import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.min
@@ -381,7 +384,9 @@ private fun MeasureCardCompleteStructure(
     title: Title,
     onBanTheme: (String) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().wrapContentHeight()) {
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .wrapContentHeight()) {
         TitlesHeaderContent(
             title = title,
             noTime = false,
@@ -397,43 +402,7 @@ private fun MeasureCardCompleteStructure(
             )
         }
 
-        HorizontalDivider(
-            thickness = 1.dp,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(top = 10.dp, start = 16.dp, end = 16.dp)
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight()
-                .padding(horizontal = 16.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.titles_card_text),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .wrapContentSize()
-                    .align(Alignment.CenterVertically)
-                    .padding(top = 6.dp, bottom = 6.dp),
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = stringResource(R.string.titles_card_source),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .wrapContentHeight()
-                    .align(Alignment.CenterVertically)
-                    .padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
-                fontWeight = FontWeight.Normal
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Box(
-                modifier = Modifier
-                    .height(24.dp)
-                    .align(Alignment.CenterVertically)
-            )
-        }
+        Spacer(modifier = Modifier.height(54.dp))
     }
 }
 
@@ -512,6 +481,9 @@ private fun ExpandedCardContent(
     val source = stringResource(R.string.titles_card_source)
     val toastText = stringResource(R.string.titles_card_copied)
 
+    val bottomPanelHeight = 50.dp
+    val bottomPanelItemsColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f)
+
     fun copyText() {
         val copiedText = "${title.title}\n\n${title.text}\n\n${source}: ${title.sources}"
         clipboardManager.setText(AnnotatedString(copiedText))
@@ -555,120 +527,126 @@ private fun ExpandedCardContent(
             )
         }
 
-        HorizontalPager(
-            state = pagerState,
-            verticalAlignment = Alignment.Top,
-            beyondViewportPageCount = 1,
+        Box(
             modifier = Modifier
-                .requiredWidth(targetWidth)
+                .fillMaxWidth()
                 .weight(1f, fill = false)
-                .graphicsLayer { alpha = contentAlpha }
-        ) { page ->
-            when (page) {
-                0 -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = title.text,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                verticalAlignment = Alignment.Top,
+                beyondViewportPageCount = 1,
+                modifier = Modifier
+                    .requiredWidth(targetWidth)
+                    .fillMaxHeight()
+                    .graphicsLayer { alpha = contentAlpha }
+            ) { page ->
+                when (page) {
+                    0 -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = title.text,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
+                        }
                     }
-                }
 
-                1 -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = title.sources,
+                    1 -> {
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = title.links,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                        )
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = title.sources,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = title.links,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                            )
+                            Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
+                        }
                     }
                 }
             }
-        }
 
-        HorizontalDivider(
-            thickness = 1.dp,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier
-                .padding(top = 10.dp, start = 16.dp, end = 16.dp)
-                .graphicsLayer { alpha = contentAlpha }
-        )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.surfaceContainerLow.copy(0.7f),
+                                MaterialTheme.colorScheme.surfaceContainerLow
+                            )
+                        )
+                    )
+//                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                    .graphicsLayer { alpha = contentAlpha }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AnimatedSegmentedControl(
+                        items = listOf(
+                            stringResource(R.string.titles_card_text) to { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                            stringResource(R.string.titles_card_source) to { coroutineScope.launch { pagerState.animateScrollToPage(1) } }
+                        ),
+                        selectedIndex = pagerState.currentPage,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        backgroundColor = bottomPanelItemsColor,
+                        indicatorColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    CustomIconButton(
+                        icon = Icons.Default.MoreVert,
+                        onClick = { dropdownTransitionState.targetState = !dropdownTransitionState.currentState },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .padding(bottom = 6.dp)
+                            .align(Alignment.CenterVertically)
+                            .onGloballyPositioned {
+                                buttonBounds = it.boundsInWindow().roundToIntRect()
+                            },
+                        iconModifier = Modifier.size(18.dp),
+                        defaultBackgroundColor = bottomPanelItemsColor,
+                        transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.7f),
+                        transitionState = dropdownTransitionState,
+                        shape = Shapes.large
+                    )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight()
-                .padding(horizontal = 16.dp)
-                .graphicsLayer { alpha = contentAlpha }
-        ) {
-            Text(
-                text = stringResource(R.string.titles_card_text),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .wrapContentSize()
-                    .align(Alignment.CenterVertically)
-                    .padding(top = 6.dp, bottom = 6.dp)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }) {
-                        coroutineScope.launch { pagerState.animateScrollToPage(0) }
-                    },
-                fontWeight = if (pagerState.targetPage == 0) FontWeight.Bold else FontWeight.Normal
-            )
-            Text(
-                text = stringResource(R.string.titles_card_source),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .wrapContentHeight()
-                    .align(Alignment.CenterVertically)
-                    .padding(start = 6.dp, top = 6.dp, bottom = 6.dp)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }) {
-                        coroutineScope.launch { pagerState.animateScrollToPage(1) }
-                    },
-                fontWeight = if (pagerState.targetPage == 1) FontWeight.Bold else FontWeight.Normal
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            CustomIconButton(
-                icon = Icons.Default.MoreVert,
-                onClick = { dropdownTransitionState.targetState = !dropdownTransitionState.currentState },
-                modifier = Modifier
-                    .height(24.dp)
-                    .align(Alignment.CenterVertically)
-                    .onGloballyPositioned { buttonBounds = it.boundsInWindow().roundToIntRect() },
-                iconModifier = Modifier.size(16.dp)
-            )
-
-            if (dropdownTransitionState.currentState || dropdownTransitionState.targetState) {
-                CustomDropdown(
-                    transitionState = dropdownTransitionState,
-                    buttons = buttons,
-                    inputBounds = buttonBounds,
-                    config = config,
-                    density = density,
-                    onDismissRequest = { dropdownTransitionState.targetState = false },
-                    arrowPosition = ArrowPosition.BottomRight,
-                    backgroundColor = MaterialTheme.colorScheme.secondaryContainer
-                )
+                    if (dropdownTransitionState.currentState || dropdownTransitionState.targetState) {
+                        CustomDropdown(
+                            transitionState = dropdownTransitionState,
+                            buttons = buttons,
+                            inputBounds = buttonBounds,
+                            config = config,
+                            density = density,
+                            onDismissRequest = { dropdownTransitionState.targetState = false },
+                            arrowPosition = ArrowPosition.BottomRight,
+                            backgroundColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    }
+                }
             }
         }
     }
