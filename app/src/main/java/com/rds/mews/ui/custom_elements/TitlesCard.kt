@@ -1,18 +1,33 @@
 package com.rds.mews.ui.custom_elements
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -28,61 +43,56 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.lerp
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.findViewTreeSavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.rds.mews.ArrowPosition
 import com.rds.mews.R
 import com.rds.mews.Title
 import com.rds.mews.localcore.getFormattedTimeUnix
 import kotlinx.coroutines.launch
-
-import androidx.compose.foundation.background
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.lerp
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.window.PopupPositionProvider
+import java.util.UUID
 import kotlin.math.min
 import kotlin.math.roundToInt
-
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.requiredWidth
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 
 @Composable
 fun TitlesCard(
@@ -109,7 +119,7 @@ fun TitlesCard(
             if (isPopupReady) {
                 expansionAnim.animateTo(
                     targetValue = 1f,
-                    animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
+                    animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)
                 )
             }
         } else {
@@ -144,174 +154,285 @@ fun TitlesCard(
     }
 
     if (showPopup && collapsedBounds != null) {
-        HeroExpansionPopup(
-            progress = expansionAnim.value,
-            collapsedBounds = collapsedBounds!!,
-            onDismissRequest = onToggleExpanded,
-            onReady = { isPopupReady = true },
-            content = { maxHeight, contentAlpha, targetWidth ->
+        RootViewOverlay(
+            onDismissRequest = onToggleExpanded
+        ) {
+            HeroExpansionContent(
+                title = title,
+                progress = expansionAnim.value,
+                collapsedBounds = collapsedBounds!!,
+                onDismissRequest = onToggleExpanded,
+                onReady = { isPopupReady = true },
+                onBanTheme = onBanTheme,
+                pagerState = pagerState,
+                rememberPage = rememberPage,
+                originalNoTime = noTime
+            )
+        }
+    }
+}
+
+@Composable
+fun RootViewOverlay(
+    onDismissRequest: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val view = LocalView.current
+    val context = LocalContext.current
+    val parentComposition = rememberCompositionContext()
+    val overlayId = rememberSaveable { UUID.randomUUID() }
+
+    DisposableEffect(overlayId) {
+        val activity = context.findActivity() ?: return@DisposableEffect onDispose {}
+        val rootViewGroup = activity.window.decorView as ViewGroup
+
+        val composeView = ComposeView(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+
+            setParentCompositionContext(parentComposition)
+
+            setViewTreeLifecycleOwner(view.findViewTreeLifecycleOwner())
+            setViewTreeViewModelStoreOwner(view.findViewTreeViewModelStoreOwner())
+            setViewTreeSavedStateRegistryOwner(view.findViewTreeSavedStateRegistryOwner())
+
+            setContent {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { }
+                ) {
+                    content()
+                }
+            }
+        }
+
+        rootViewGroup.addView(composeView)
+
+        onDispose {
+            rootViewGroup.removeView(composeView)
+        }
+    }
+}
+
+private fun Context.findActivity(): Activity? {
+    var context = this
+    while (context is ContextWrapper) {
+        if (context is Activity) return context
+        context = context.baseContext
+    }
+    return null
+}
+
+@SuppressLint("LocalContextResourcesRead")
+@Composable
+private fun HeroExpansionContent(
+    title: Title,
+    progress: Float,
+    collapsedBounds: Rect,
+    onDismissRequest: () -> Unit,
+    onReady: () -> Unit,
+    onBanTheme: (String) -> Unit,
+    pagerState: PagerState,
+    rememberPage: (Int) -> Unit,
+    originalNoTime: Boolean
+) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+
+    val verticalMarginDp = 50.dp
+    val horizontalMarginDp = 8.dp
+    val horizontalMarginPx = with(density) { horizontalMarginDp.toPx() }
+    val verticalMarginPx = with(density) { verticalMarginDp.toPx() }
+
+    val clampedProgress = progress.coerceIn(0f, 1f)
+
+    BackHandler {
+        onDismissRequest()
+    }
+
+    val displayMetrics = context.resources.displayMetrics
+    val screenWidthPx = displayMetrics.widthPixels.toFloat()
+    val screenHeightPx = displayMetrics.heightPixels.toFloat()
+
+    val maxAvailableWidth = screenWidthPx - (horizontalMarginPx * 2)
+    val maxAvailableHeight = screenHeightPx - (verticalMarginPx * 2)
+
+    val maxAvailableHeightDp = with(density) { maxAvailableHeight.toDp() }
+    val targetWidthDp = with(density) { maxAvailableWidth.toDp() }
+
+    var contentHeight by remember { mutableStateOf<Float?>(null) }
+
+    val scrimAlpha = clampedProgress * 0.6f
+    val contentAlpha = ((clampedProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = scrimAlpha))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = true
+            ) {
+                onDismissRequest()
+            }
+    ) {
+        if (contentHeight == null) {
+            Box(
+                modifier = Modifier
+                    .offset {
+                        IntOffset(
+                            horizontalMarginPx.roundToInt(),
+                            verticalMarginPx.roundToInt()
+                        )
+                    }
+                    .width(targetWidthDp)
+                    .alpha(0f)
+                    .onGloballyPositioned { coordinates ->
+                        contentHeight = coordinates.size.height.toFloat()
+                        onReady()
+                    }
+            ) {
+                MeasureCardCompleteStructure(title, onBanTheme)
+            }
+        }
+
+        val currentContentHeight = contentHeight ?: collapsedBounds.height
+        val targetHeight = min(currentContentHeight, maxAvailableHeight)
+
+        val centeredTop = (screenHeightPx - targetHeight) / 2
+
+        val expandedBounds = Rect(
+            left = horizontalMarginPx,
+            top = centeredTop,
+            right = horizontalMarginPx + maxAvailableWidth,
+            bottom = centeredTop + targetHeight
+        )
+
+        val currentRect: Rect = lerp(collapsedBounds, expandedBounds, progress)
+
+        val currentContainerColor = lerp(
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.surface,
+            progress
+        )
+        val currentCorner = 25.dp
+
+        Surface(
+            modifier = Modifier
+                .graphicsLayer {
+                    translationX = currentRect.left
+                    translationY = currentRect.top
+                    shape = RoundedCornerShape(currentCorner)
+                    clip = true
+                    compositingStrategy = CompositingStrategy.Offscreen
+                }
+                .layout { measurable, constraints ->
+                    val currentW = currentRect.width.roundToInt()
+                    val currentH = currentRect.height.roundToInt()
+
+                    val placeable = measurable.measure(
+                        Constraints.fixed(currentW, currentH)
+                    )
+
+                    layout(currentW, currentH) {
+                        placeable.place(0, 0)
+                    }
+                }
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    enabled = true
+                ) {},
+            shape = RoundedCornerShape(currentCorner),
+            color = currentContainerColor,
+            shadowElevation = 0.dp
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(targetWidthDp)
+                    .fillMaxHeight()
+            ) {
                 ExpandedCardContent(
                     title = title,
                     onBanTheme = onBanTheme,
                     pagerState = pagerState,
                     rememberPage = rememberPage,
-                    onCollapse = onToggleExpanded,
-                    maxHeight = maxHeight,
-                    // лагучая шлюха
+                    onCollapse = onDismissRequest,
+                    maxHeight = maxAvailableHeightDp,
                     contentAlpha = contentAlpha,
-                    targetWidth = targetWidth
+                    targetWidth = targetWidthDp,
+                    expansionProgress = clampedProgress,
+                    originalNoTime = originalNoTime
                 )
             }
-        )
+        }
     }
 }
 
-@SuppressLint("LocalContextResourcesRead")
 @Composable
-private fun HeroExpansionPopup(
-    progress: Float,
-    collapsedBounds: Rect,
-    onDismissRequest: () -> Unit,
-    onReady: () -> Unit,
-    content: @Composable (maxHeight: Dp, contentAlpha: Float, targetWidth: Dp) -> Unit
+private fun MeasureCardCompleteStructure(
+    title: Title,
+    onBanTheme: (String) -> Unit
 ) {
-    val density = LocalDensity.current
-    val configuration = LocalConfiguration.current
-
-    val screenWidthDp = configuration.screenWidthDp.dp
-    val screenHeightDp = configuration.screenHeightDp.dp
-
-    val screenWidthPx = with(density) { screenWidthDp.toPx() }
-    val screenHeightPx = with(density) { screenHeightDp.toPx() }
-
-    val verticalMarginDp = 50.dp
-    val horizontalMarginDp = 8.dp
-
-    val verticalMarginPx = with(density) { verticalMarginDp.toPx() }
-    val horizontalMarginPx = with(density) { horizontalMarginDp.toPx() }
-
-    val maxAvailableWidth = screenWidthPx - (horizontalMarginPx * 2)
-    val maxAvailableHeight = screenHeightPx - (verticalMarginPx * 2)
-
-    var contentHeight by remember { mutableStateOf<Float?>(null) }
-
-    val maxAvailableHeightDp = with(density) { maxAvailableHeight.toDp() }
-    val targetWidthDp = with(density) { maxAvailableWidth.toDp() }
-
-    val clampedProgress = progress.coerceIn(0f, 1f)
-
-    Dialog(
-        onDismissRequest = onDismissRequest,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true
+    Column(modifier = Modifier.fillMaxWidth().wrapContentHeight()) {
+        TitlesHeaderContent(
+            title = title,
+            noTime = false,
+            onClicked = {},
+            animationProgress = 1f
         )
-    ) {
-        val scrimAlpha = clampedProgress * 0.6f
-        val contentAlpha = ((clampedProgress - 0.1f) / 0.9f).coerceIn(0f, 1f)
 
-        Box(
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = title.text,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(top = 10.dp, start = 16.dp, end = 16.dp)
+        )
+
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.scrim.copy(alpha = scrimAlpha))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    enabled = true
-                ) {
-                    onDismissRequest()
-                }
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .padding(horizontal = 16.dp)
         ) {
-            if (contentHeight == null) {
-                Box(
-                    modifier = Modifier
-                        .offset {
-                            IntOffset(
-                                horizontalMarginPx.roundToInt(),
-                                verticalMarginPx.roundToInt()
-                            )
-                        }
-                        .width(targetWidthDp)
-                        .alpha(0f)
-                        .onGloballyPositioned { coordinates ->
-                            contentHeight = coordinates.size.height.toFloat()
-                            onReady()
-                        }
-                ) {
-                    content(maxAvailableHeightDp, 0f, targetWidthDp)
-                }
-            }
-
-            val currentContentHeight = contentHeight ?: collapsedBounds.height
-            val targetHeight = min(currentContentHeight, maxAvailableHeight)
-
-            val centeredTop = (screenHeightPx - targetHeight) / 2
-
-            val expandedBounds = Rect(
-                left = horizontalMarginPx,
-                top = centeredTop,
-                right = horizontalMarginPx + maxAvailableWidth,
-                bottom = centeredTop + targetHeight
-            )
-
-            val currentRect: Rect = lerp(collapsedBounds, expandedBounds, progress)
-
-            val currentContainerColor = lerp(
-                MaterialTheme.colorScheme.secondaryContainer,
-                MaterialTheme.colorScheme.surfaceContainerLow,
-                progress
-            )
-
-            val currentCorner = 25.dp
-
-            Surface(
+            Text(
+                text = stringResource(R.string.titles_card_text),
+                textAlign = TextAlign.Center,
                 modifier = Modifier
-                    .graphicsLayer {
-                        translationX = currentRect.left
-                        translationY = currentRect.top
-
-                        shape = RoundedCornerShape(currentCorner)
-                        clip = true
-
-                        compositingStrategy = CompositingStrategy.Offscreen
-                    }
-                    .layout { measurable, constraints ->
-                        val currentW = currentRect.width.roundToInt()
-                        val currentH = currentRect.height.roundToInt()
-
-                        val targetW = expandedBounds.width.roundToInt()
-                        val targetH = expandedBounds.height.roundToInt()
-
-                        val placeable = measurable.measure(
-                            Constraints.fixed(targetW, targetH)
-                        )
-
-                        layout(currentW, currentH) {
-                            placeable.place(0, 0)
-                        }
-                    }
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        enabled = true
-                    ) {},
-                shape = RoundedCornerShape(currentCorner),
-                color = currentContainerColor,
-                shadowElevation = 0.dp
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(targetWidthDp)
-                        .fillMaxHeight()
-                        .graphicsLayer {
-                            this.alpha = contentAlpha
-                        }
-                ) {
-                    content(maxAvailableHeightDp, 1f, targetWidthDp)
-                }
-            }
+                    .wrapContentSize()
+                    .align(Alignment.CenterVertically)
+                    .padding(top = 6.dp, bottom = 6.dp),
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = stringResource(R.string.titles_card_source),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .wrapContentHeight()
+                    .align(Alignment.CenterVertically)
+                    .padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
+                fontWeight = FontWeight.Normal
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Box(
+                modifier = Modifier
+                    .height(24.dp)
+                    .align(Alignment.CenterVertically)
+            )
         }
     }
 }
@@ -322,7 +443,8 @@ private fun TitlesHeaderContent(
     title: Title,
     noTime: Boolean,
     onClicked: () -> Unit,
-    clickableEnabled: Boolean = true
+    clickableEnabled: Boolean = true,
+    animationProgress: Float = 1f
 ) {
     Row(
         modifier = modifier
@@ -336,12 +458,22 @@ private fun TitlesHeaderContent(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (!noTime) {
+            val alpha = (animationProgress * 2f).coerceIn(0f, 1f)
+
             Text(
                 text = getFormattedTimeUnix(title.time),
                 textAlign = TextAlign.Left,
                 modifier = Modifier
-                    .padding(end = 8.dp, top = 8.dp, bottom = 8.dp)
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        val width = (placeable.width * animationProgress).roundToInt()
+                        layout(width, placeable.height) {
+                            placeable.place(0, 0)
+                        }
+                    }
+                    .padding(end = (8 * animationProgress).dp, top = 8.dp, bottom = 8.dp)
                     .wrapContentWidth()
+                    .alpha(alpha)
             )
         }
         Text(
@@ -364,7 +496,9 @@ private fun ExpandedCardContent(
     onCollapse: () -> Unit,
     maxHeight: Dp,
     contentAlpha: Float,
-    targetWidth: Dp
+    targetWidth: Dp,
+    expansionProgress: Float,
+    originalNoTime: Boolean
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -392,6 +526,12 @@ private fun ExpandedCardContent(
         Pair(stringResource(R.string.ban_btn_desc), ::banNew)
     )
 
+    val headerAnimProgress = if (originalNoTime) {
+        expansionProgress
+    } else {
+        1f
+    }
+
     LaunchedEffect(pagerState.targetPage) {
         rememberPage(pagerState.targetPage)
     }
@@ -410,7 +550,8 @@ private fun ExpandedCardContent(
             TitlesHeaderContent(
                 title = title,
                 noTime = false,
-                onClicked = onCollapse
+                onClicked = onCollapse,
+                animationProgress = headerAnimProgress
             )
         }
 
@@ -466,7 +607,9 @@ private fun ExpandedCardContent(
         HorizontalDivider(
             thickness = 1.dp,
             color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(top = 10.dp, start = 16.dp, end = 16.dp)
+            modifier = Modifier
+                .padding(top = 10.dp, start = 16.dp, end = 16.dp)
+                .graphicsLayer { alpha = contentAlpha }
         )
 
         Row(
