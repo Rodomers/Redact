@@ -102,7 +102,7 @@ fun DeferredUpdateTab(
                                             .background(MaterialTheme.colorScheme.surface)
                                     ) {
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        CustomTextDivider(text = header)
+                                        LegacyTextDivider(text = header)
                                     }
                                 }
                             }

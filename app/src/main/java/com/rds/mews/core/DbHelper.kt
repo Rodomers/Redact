@@ -99,10 +99,10 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
-    fun findRSS(sourceName: String, sourceLink: String = ""): RSS? {
+    fun findRSS(sourceName: String = "", sourceLink: String = "", id: Long? = null): RSS? {
         val db = this.readableDatabase
-        val query = "SELECT * FROM $RSS_NAME WHERE $RSS_SOURCE = ? OR $RSS_LINK = ?"
-        val args = arrayOf(sourceName, sourceLink)
+        val query = "SELECT * FROM $RSS_NAME WHERE $RSS_SOURCE = ? OR $RSS_LINK = ? OR $RSS_ID = ?"
+        val args = arrayOf(sourceName, sourceLink, id.toString())
 
         return db.rawQuery(query, args).use { cursor ->
             if (cursor.moveToFirst()) {
@@ -277,8 +277,7 @@ class DbHelper(val context: Context) :
             put(RSS_LINK, link)
         }
 
-        val rssItem = findRSS(source, link)
-        val result = when(rssItem) {
+        val result = when(val rssItem = findRSS(source, link)) {
             null -> db.insert(RSS_NAME, null, values)
             else -> rssItem.id
         }
@@ -318,18 +317,18 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
-    fun changeRssSource(oldSource: String, newSource: String): Boolean {
+    fun changeRssSource(id: Long, newSource: String): Boolean {
         val db = this.writableDatabase
         val values = ContentValues().apply {
             put(RSS_SOURCE, newSource)
             put(MESS_SOURCE, newSource)
         }
 
-        return when (findRSS(oldSource)) {
+        return when (val rss = findRSS(id = id)) {
             null -> false
             else -> {
-                db.update(MESS_NAME, values, "$MESS_SOURCE = ?", arrayOf(oldSource))
-                db.update(RSS_NAME, values, "$RSS_SOURCE = ?", arrayOf(oldSource)) > 0
+                db.update(MESS_NAME, values, "$MESS_SOURCE = ?", arrayOf(rss.source))
+                db.update(RSS_NAME, values, "$RSS_SOURCE = ?", arrayOf(rss.source)) > 0
             }
         }
     }

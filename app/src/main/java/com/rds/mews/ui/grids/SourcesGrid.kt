@@ -1,5 +1,6 @@
 package com.rds.mews.ui.grids
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,106 +19,133 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rds.mews.R
 import com.rds.mews.RSS
-import com.rds.mews.localcore.defineSourceType
+import com.rds.mews.SourceType
 import com.rds.mews.localcore.sourcesTypeInterpreter
 import com.rds.mews.ui.custom_elements.SourcesCard
 import com.rds.mews.ui.custom_elements.CustomChangeBottomSheet
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
-import com.rds.mews.ui.custom_elements.CustomTextDivider
+import com.rds.mews.ui.custom_elements.LegacyTextDivider
 import com.rds.mews.ui.custom_elements.SourcesAddCard
+import com.rds.mews.viewmodels.SourcesViewModel
 import kotlinx.coroutines.launch
+
+
+@Composable
+fun SourcesScreen(
+    context: Context,
+    gridState: LazyGridState,
+    modifier: Modifier,
+    viewModel: SourcesViewModel
+) {
+    val groupedTitles by viewModel.groupedSources.collectAsStateWithLifecycle()
+    val newSourcesPermitted by viewModel.newSourcesPermitted.collectAsStateWithLifecycle()
+    val delSource by viewModel.delSource.collectAsStateWithLifecycle()
+    val changedSource by viewModel.changedSource.collectAsStateWithLifecycle()
+    val showAddDialog by viewModel.showAddDialog.collectAsStateWithLifecycle()
+
+    val onAddSource = remember(viewModel, context) {
+        { name: String, link: String -> viewModel.addSource(context, name, link) }
+    }
+
+    SourcesGrid(
+        gridState = gridState,
+        groupedItems = groupedTitles,
+        modifier = modifier,
+        onSourceAdd = onAddSource,
+        onSourceDelete = viewModel::deleteSource,
+        onSourceChange = viewModel::changeSource,
+        setShowAddDialog = viewModel::setShowAddDialog,
+        setDelSource = viewModel::setDelSource,
+        setChangeSource = viewModel::setChangeSource,
+        newSourcesPermitted = newSourcesPermitted,
+        deletedSource = delSource,
+        changedSource = changedSource,
+        showAddDialog = showAddDialog,
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SourcesGrid(
     gridState: LazyGridState,
-    itemsList: List<RSS>,
+    groupedItems: Map<SourceType, List<RSS>>,
     modifier: Modifier,
     onSourceAdd: (String, String) -> Unit,
-    onSourceDelete: (String) -> Unit,
-    onSourceChange: (String, String) -> Unit
+    onSourceDelete: (Long) -> Unit,
+    onSourceChange: (Long, String) -> Unit,
+    setShowAddDialog: (Boolean) -> Unit,
+    setDelSource: (RSS?) -> Unit,
+    setChangeSource: (RSS?) -> Unit,
+    newSourcesPermitted: Boolean,
+    deletedSource: RSS?,
+    changedSource: RSS?,
+    showAddDialog: Boolean
 ) {
-    var showAddDialog by remember { mutableStateOf(false) }
-    var delSourceName by remember { mutableStateOf("") }
-    var changeDialog by remember { mutableStateOf("") }
-    val addDialogTrue = { showAddDialog = true }
-    var newSourcesPermitted by remember { mutableStateOf(itemsList.size < 40) }
-
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val scope = rememberCoroutineScope()
 
-    val groupedBySource by remember(itemsList) {
-        derivedStateOf {
-            itemsList.groupBy { defineSourceType(it.link) }
-        }
-    }
-
     if (showAddDialog) {
         CustomChangeBottomSheet(
-            onDismissRequest = { showAddDialog = false },
+            onDismissRequest = { setShowAddDialog(false) },
             onConfirm = { pair ->
                 scope.launch {
                     onSourceAdd(pair.first, pair.second)
-                    newSourcesPermitted = itemsList.size + 1 < 40
                 }
-                showAddDialog = false
+                setShowAddDialog(false)
             },
             add = true,
             scope = scope,
             sheetState = bottomSheetState
         )
     }
-    if (delSourceName != "") {
+    if (deletedSource != null) {
         CustomErrorBottomSheet(
             title = stringResource(R.string.delsource_title),
-            text = stringResource(R.string.delsource_text, delSourceName),
-            onDismissRequest = { delSourceName = "" },
+            text = stringResource(R.string.delsource_text, deletedSource.source),
+            onDismissRequest = { setDelSource(null) },
             cancelBtnText = stringResource(R.string.cancel),
             confBtnText = stringResource(R.string.delsource_btntext),
             onConfirm = {
                 scope.launch {
-                    onSourceDelete(delSourceName)
-                    delSourceName = ""
+                    onSourceDelete(deletedSource.id)
+                    setDelSource(null)
                 }
             },
             scope = scope,
             sheetState = bottomSheetState
         )
     }
-    if (changeDialog != "") {
-        Popup(
-            onDismissRequest = { delSourceName = "" },
-            alignment = Alignment.TopEnd
-        ) {
-            CustomChangeBottomSheet(
-                onDismissRequest = { changeDialog = "" },
-                onConfirm = { pair ->
-                    scope.launch {
-                        onSourceChange(pair.first, pair.second)
-                        changeDialog = ""
-                    }
-                },
-                add = false,
-                source = changeDialog,
-                scope = scope,
-                sheetState = bottomSheetState,
-                sourceLink = itemsList.find { it.source == changeDialog }?.link
-            )
-        }
+    if (changedSource != null) {
+        CustomChangeBottomSheet(
+            onDismissRequest = { setChangeSource(null) },
+            onConfirm = { pair ->
+                scope.launch {
+                    onSourceChange(changedSource.id, pair.second)
+                    setChangeSource(null)
+                }
+            },
+            add = false,
+            source = changedSource.source,
+            scope = scope,
+            sheetState = bottomSheetState,
+            sourceLink = changedSource.link
+        )
+//        Popup(
+//            onDismissRequest = { setChangeSource(null) },
+//            alignment = Alignment.TopEnd
+//        ) {
+//
+//        }
     }
 
     LazyVerticalGrid(
@@ -130,7 +158,7 @@ fun SourcesGrid(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         state = gridState
     ) {
-        if (groupedBySource.isEmpty()) {
+        if (groupedItems.isEmpty()) {
             stickyHeader() {
                 Box(
                     modifier = Modifier
@@ -138,12 +166,12 @@ fun SourcesGrid(
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    CustomTextDivider(text = stringResource(R.string.no_sources))
+                    LegacyTextDivider(text = stringResource(R.string.no_sources))
                 }
             }
         }
 
-        groupedBySource.forEach { (source, itemsForSource) ->
+        groupedItems.forEach { (source, itemsForSource) ->
             stickyHeader() {
                 Box(
                     modifier = Modifier
@@ -151,16 +179,16 @@ fun SourcesGrid(
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    CustomTextDivider(text = stringResource(sourcesTypeInterpreter(source)))
+                    LegacyTextDivider(text = stringResource(sourcesTypeInterpreter(source)))
                 }
             }
 
             items(items = itemsForSource, key = { item -> item.id }) { item ->
                 SourcesCard(
-                    text = item.source,
+                    source = item,
                     listOf(
-                        Pair(stringResource(R.string.source_change)) { changeDialog = item.source },
-                        Pair(stringResource(R.string.source_delete)) { delSourceName = item.source }
+                        Pair(stringResource(R.string.source_change)) { setChangeSource(item) },
+                        Pair(stringResource(R.string.source_delete)) { setDelSource(item) }
                     )
                 )
             }
@@ -174,7 +202,7 @@ fun SourcesGrid(
             item { Spacer(modifier = Modifier.height(1.dp)) }
 
             item {
-                SourcesAddCard(addDialogTrue, transitionState = showAddDialog)
+                SourcesAddCard({ setShowAddDialog(true) }, transitionState = showAddDialog)
             }
         }
     }

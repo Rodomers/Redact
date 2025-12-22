@@ -11,7 +11,6 @@ import com.rds.mews.ServerAddressProvider
 import com.rds.mews.localcore.SettingsManager
 import com.rds.mews.SummarizationResult
 import com.rds.mews.Title
-import com.rds.mews.localcore.delSource
 import com.rds.mews.localcore.setRssUpdate
 import com.rds.mews.localcore.setTitlesUpdate
 import com.rds.mews.ui.custom_elements.TabScreen
@@ -27,7 +26,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 
@@ -101,31 +99,25 @@ object MewsRepository {
         flow { emit(db.getRSS()) }
     }.flowOn(Dispatchers.IO)
 
-    suspend fun addSource(context: Context, name: String, link: String) {
-        withContext(Dispatchers.IO) {
-            com.rds.mews.localcore.addSource(name, link, db)
-            _sourcesUpdateTrigger.value++
-            AlarmScheduler.cancel(context, true)
-            setLastRssUpdate(0L)
-            setRssUpdate(context, true, rssUpdateInterval.value)
-        }
+    fun addSource(context: Context, name: String, link: String) {
+        db.addRSS(name, link)
+        _sourcesUpdateTrigger.value++
+        AlarmScheduler.cancel(context, true)
+        setLastRssUpdate(0L)
+        setRssUpdate(context, true, rssUpdateInterval.value)
     }
 
-    suspend fun deleteSource(name: String) {
-        withContext(Dispatchers.IO) {
-            delSource(name, db)
-            _sourcesUpdateTrigger.value++
-        }
+    fun deleteSource(id: Long) {
+        db.delRSS(id = id)
+        _sourcesUpdateTrigger.value++
     }
 
-    suspend fun changeSource(oldName: String, newName: String) {
-        withContext(Dispatchers.IO) {
-            com.rds.mews.localcore.changeSource(oldName, newName, db)
-            _sourcesUpdateTrigger.value++
-        }
+    fun changeSource(id: Long, newName: String) {
+        db.changeRssSource(id = id, newSource = newName)
+        _sourcesUpdateTrigger.value++
     }
 
-    suspend fun planTitlesUpdate(context: Context) {
+    fun planTitlesUpdate(context: Context) {
         if (titlesAlarmUpdate.value) {
             val updateFrequencyHours = titlesAutoUpdateFrequency.value
             val updateTimeMins = titlesAlarmTimeMins.value

@@ -6,7 +6,6 @@ import android.app.Activity
 import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -14,6 +13,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.collection.IntList
 import androidx.collection.intListOf
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
@@ -37,9 +37,6 @@ import com.rds.mews.core.DbHelper
 import com.rds.mews.workers.RssUpdateWorker
 import com.rds.mews.workers.TitlesUpdateService
 import com.rds.mews.workers.TitlesUpdateWorker
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -88,7 +85,7 @@ fun formatUpdateTime(unixMillis: Long): Pair<Int, String> {
 }
 
 fun intTimeToStr(time: Int): String {
-    return if (time / 10 == 0) "0${time.toString()}" else time.toString()
+    return if (time / 10 == 0) "0${time}" else time.toString()
 }
 
 fun defineSourceType(link: String): SourceType {
@@ -102,21 +99,6 @@ fun sourcesTypeInterpreter(sourceType: SourceType): Int {
     return when (sourceType) {
         SourceType.RSS_FEED -> R.string.source_type_rss
         SourceType.TELEGRAM_CHANNEL -> R.string.source_type_telegram
-    }
-}
-
-suspend fun addSource(source: String, link: String, db: DbHelper): Long {
-    return db.addRSS(source, link)
-}
-
-suspend fun delSource(source: String, db: DbHelper): Boolean {
-    return db.delRSS(source = source)
-}
-
-suspend fun changeSource(sourceOld: String, sourceNew: String, db: DbHelper): Boolean {
-    return when (sourceOld) {
-        sourceNew -> false
-        else -> db.changeRssSource(sourceOld, sourceNew)
     }
 }
 
@@ -183,24 +165,6 @@ fun setTitlesUpdate(context: Context) {
             ExistingWorkPolicy.REPLACE,
             updateWorkRequest
         )
-    }
-}
-
-fun Context.observeStringSharedPreference(key: String, defaultValue: String): Flow<String> {
-    val sharedPreferences = getSharedPreferences("settings", Context.MODE_PRIVATE)
-
-    return callbackFlow {
-        trySend(sharedPreferences.getString(key, defaultValue) ?: defaultValue)
-
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener {prefs, changedKey ->
-            if (key == changedKey) trySend(prefs.getString(key, defaultValue) ?: defaultValue)
-        }
-
-        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
-
-        awaitClose {
-            sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
-        }
     }
 }
 
@@ -334,5 +298,29 @@ fun getScreenQuadrant(config: Configuration, elementBounds: IntRect): ScreenQuad
         centerX >= screenWidthPx / 2 && centerY < screenHeightPx / 2 -> ScreenQuadrant.TopRight
         centerX < screenWidthPx / 2 && centerY >= screenHeightPx / 2 -> ScreenQuadrant.BottomLeft
         else -> ScreenQuadrant.BottomRight
+    }
+}
+
+fun getStringsFromDate(dateString: String): IntList? {
+    try {
+        val formattedDate = dateString.split(".")
+
+        return when (formattedDate.last().toInt()) {
+            1 -> intListOf(R.string.date_01, formattedDate.first().toInt())
+            2 -> intListOf(R.string.date_02, formattedDate.first().toInt())
+            3 -> intListOf(R.string.date_03, formattedDate.first().toInt())
+            4 -> intListOf(R.string.date_04, formattedDate.first().toInt())
+            5 -> intListOf(R.string.date_05, formattedDate.first().toInt())
+            6 -> intListOf(R.string.date_06, formattedDate.first().toInt())
+            7 -> intListOf(R.string.date_07, formattedDate.first().toInt())
+            8 -> intListOf(R.string.date_08, formattedDate.first().toInt())
+            9 -> intListOf(R.string.date_09, formattedDate.first().toInt())
+            10 -> intListOf(R.string.date_10, formattedDate.first().toInt())
+            11 -> intListOf(R.string.date_11, formattedDate.first().toInt())
+            12 -> intListOf(R.string.date_12, formattedDate.first().toInt())
+            else -> null
+        }
+    } catch (e: Exception) {
+        return null
     }
 }

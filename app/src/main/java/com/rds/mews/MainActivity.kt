@@ -4,9 +4,7 @@ import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,35 +12,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rds.mews.localcore.isBatteryOptimizationIgnored
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.localcore.isScheduleExactAlarm
-import com.rds.mews.localcore.requestIgnoreBatteryOptimization
 import com.rds.mews.repositories.MewsRepository
-import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.MyBottomBar
 import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.ui.grids.SettingsGrid
-import com.rds.mews.ui.grids.SourcesGrid
+import com.rds.mews.ui.grids.SourcesScreen
 import com.rds.mews.ui.grids.TitlesGrid
 import com.rds.mews.ui.theme.MewsTheme
 import com.rds.mews.viewmodels.SettingsViewModel
 import com.rds.mews.viewmodels.SettingsViewModelFactory
+import com.rds.mews.viewmodels.SourcesScrollEvent
 import com.rds.mews.viewmodels.SourcesViewModel
 import com.rds.mews.viewmodels.SourcesViewModelFactory
 import com.rds.mews.viewmodels.TitlesScrollEvent
@@ -118,16 +110,21 @@ fun MainScreen(mainActivity: MainActivity) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
         val context = LocalContext.current
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        var optimizationIgnore by remember { mutableStateOf(false) }
+//        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+//        var optimizationIgnore by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
 
+        val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()
 
-        val sourcesGridState = sourcesViewModel.gridState
         val settingsGridState = settingsViewModel.gridState
 
         LaunchedEffect(Unit) {
+            sourcesViewModel.scrollEvents.collect { event ->
+                when (event) {
+                    SourcesScrollEvent.ScrollToTop -> sourcesGridState.scrollToItem(0)
+                }
+            }
             titlesViewModel.scrollEvents.collect { event ->
                 when (event) {
                     TitlesScrollEvent.ScrollToTop -> {
@@ -144,21 +141,21 @@ fun MainScreen(mainActivity: MainActivity) {
             }
         }
 
-        if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
-            CustomErrorBottomSheet(
-                title = stringResource(R.string.optimization_sheet_header),
-                text = stringResource(R.string.optimization_sheet_text),
-                cancelBtnText = stringResource(R.string.optimization_sheet_cancel),
-                confBtnText = stringResource(R.string.optimization_sheet_conf),
-                onDismissRequest = { optimizationIgnore = true },
-                onConfirm = {
-                    requestIgnoreBatteryOptimization(context)
-                    optimizationIgnore = true
-                },
-                scope = scope,
-                sheetState = sheetState,
-            )
-        }
+//        if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
+//            CustomErrorBottomSheet(
+//                title = stringResource(R.string.optimization_sheet_header),
+//                text = stringResource(R.string.optimization_sheet_text),
+//                cancelBtnText = stringResource(R.string.optimization_sheet_cancel),
+//                confBtnText = stringResource(R.string.optimization_sheet_conf),
+//                onDismissRequest = { optimizationIgnore = true },
+//                onConfirm = {
+//                    requestIgnoreBatteryOptimization(context)
+//                    optimizationIgnore = true
+//                },
+//                scope = scope,
+//                sheetState = sheetState,
+//            )
+//        }
 
         Scaffold(
             bottomBar = {
@@ -193,20 +190,11 @@ fun MainScreen(mainActivity: MainActivity) {
 
             when (selectedTab) {
                 TabScreen.Sources -> {
-                    val sourcesList by sourcesViewModel.sources.collectAsState()
-                    val onAddSource = remember(sourcesViewModel, context) {
-                        { name: String, link: String -> sourcesViewModel.addSource(context, name, link) }
-                    }
-
-                    SourcesGrid(
+                    SourcesScreen(
+                        context = context,
                         gridState = sourcesGridState,
-                        itemsList = sourcesList,
                         modifier = modifier,
-                        onSourceAdd = onAddSource,
-                        onSourceDelete = sourcesViewModel::deleteSource,
-                        onSourceChange = { oldName, newName ->
-                            sourcesViewModel.changeSource(oldName, newName)
-                        }
+                        viewModel = sourcesViewModel
                     )
                 }
                 TabScreen.Titles -> {

@@ -61,7 +61,7 @@ import com.rds.mews.ui.custom_elements.CustomIconButton
 import com.rds.mews.ui.custom_elements.SettingsItem
 import com.rds.mews.ui.custom_elements.CustomSwitch
 import com.rds.mews.ui.custom_elements.CustomTextButton
-import com.rds.mews.ui.custom_elements.CustomTextDivider
+import com.rds.mews.ui.custom_elements.LegacyTextDivider
 import com.rds.mews.ui.custom_elements.DeferredUpdateTab
 import com.rds.mews.ui.custom_elements.DropdownButton
 import com.rds.mews.ui.theme.Shapes
@@ -319,7 +319,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    CustomTextDivider(text = stringResource(R.string.settings_chapter_appearance))
+                    LegacyTextDivider(text = stringResource(R.string.settings_chapter_appearance))
                 }
             }
             item {
@@ -364,7 +364,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    CustomTextDivider(text = stringResource(R.string.settings_chapter_titles))
+                    LegacyTextDivider(text = stringResource(R.string.settings_chapter_titles))
                 }
             }
             item {
@@ -436,7 +436,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    CustomTextDivider(text = stringResource(R.string.settings_chapter_llm))
+                    LegacyTextDivider(text = stringResource(R.string.settings_chapter_llm))
                 }
             }
             if (geminiApiText != defaultGeminiApiKey) {
@@ -569,7 +569,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    CustomTextDivider(text = stringResource(R.string.settings_chapter_additional))
+                    LegacyTextDivider(text = stringResource(R.string.settings_chapter_additional))
                 }
             }
             item {

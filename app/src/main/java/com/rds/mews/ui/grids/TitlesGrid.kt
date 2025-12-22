@@ -52,7 +52,7 @@ import com.rds.mews.localcore.mapResultToUiResources
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
-import com.rds.mews.ui.custom_elements.CustomTextDivider
+import com.rds.mews.ui.custom_elements.LegacyTextDivider
 import com.rds.mews.ui.custom_elements.CustomTimeMark
 import com.rds.mews.ui.custom_elements.TitlesCard
 import kotlinx.coroutines.CoroutineScope
@@ -185,7 +185,7 @@ fun TitlesGrid(
                             .background(MaterialTheme.colorScheme.surface)
                     ) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        CustomTextDivider(date = true, dateString = date)
+                        LegacyTextDivider(date = true, dateString = date)
                     }
                 }
 
