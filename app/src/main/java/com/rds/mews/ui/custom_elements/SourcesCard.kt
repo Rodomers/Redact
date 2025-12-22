@@ -37,12 +37,11 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
 import com.rds.mews.R
-import com.rds.mews.RSS
 import com.rds.mews.ui.theme.Shapes
 
 @Composable
 fun SourcesCard(
-    source: RSS,
+    source: String,
     buttons: List<Pair<String, () -> Unit>>
 ) {
     val transitionState = remember { MutableTransitionState(false) }
@@ -75,7 +74,7 @@ fun SourcesCard(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = source.source,
+                    text = source,
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
                     maxLines = 2,

@@ -47,11 +47,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rds.mews.MainActivity
 import com.rds.mews.R
+import com.rds.mews.SettingsUiFunctions
+import com.rds.mews.SettingsUiState
 import com.rds.mews.viewmodels.SettingsViewModel
 import com.rds.mews.localcore.intTimeToStr
 import com.rds.mews.localcore.requestNotificationPermission
@@ -66,113 +69,186 @@ import com.rds.mews.ui.custom_elements.DeferredUpdateTab
 import com.rds.mews.ui.custom_elements.DropdownButton
 import com.rds.mews.ui.theme.Shapes
 
+@Composable
+fun SettingsScreen(
+    gridState: LazyGridState,
+    modifier: Modifier,
+    viewModel: SettingsViewModel,
+    mainActivity: MainActivity
+) {
+    val density = LocalDensity.current
+
+    val showDates by viewModel.showDates.collectAsStateWithLifecycle()
+    val compactTab by viewModel.compactTabBar.collectAsStateWithLifecycle()
+    val monetColors by viewModel.isMonetColors.collectAsStateWithLifecycle()
+    val filterTopics by viewModel.filterTopics.collectAsStateWithLifecycle()
+    val titlesNum by viewModel.titlesNum.collectAsStateWithLifecycle()
+    val geminiApiText by viewModel.userApi.collectAsStateWithLifecycle()
+    val currentLlmModel by viewModel.currentLlm.collectAsStateWithLifecycle()
+    val titlesPeriod by viewModel.titlesPeriod.collectAsStateWithLifecycle()
+    val rssUpdateInterval by viewModel.rssUpdateInterval.collectAsStateWithLifecycle()
+    val endureTime by viewModel.endureTime.collectAsStateWithLifecycle()
+    val titlesAlarmUpdate by viewModel.titlesAlarmUpdate.collectAsStateWithLifecycle()
+    val alarmMins by viewModel.titlesAlarmMins.collectAsStateWithLifecycle()
+    val alarmFrequency by viewModel.titlesUpdateFrequency.collectAsStateWithLifecycle()
+    val bannedNews by viewModel.bannedNews.collectAsStateWithLifecycle()
+    val proxyEnabled by viewModel.proxyEnabled.collectAsStateWithLifecycle()
+    val showAlarmsSheet by viewModel.showAlarmsSheet.collectAsStateWithLifecycle()
+    val showNotificationsSheet by viewModel.showNotificationSheet.collectAsStateWithLifecycle()
+    val isApiKeyDefault by viewModel.isKeyDefault.collectAsStateWithLifecycle()
+    val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
+
+    val state = SettingsUiState(
+        showDates = showDates,
+        compactTab = compactTab,
+        currentTheme = currentTheme,
+        monetColors = monetColors,
+        filterTopics = filterTopics,
+        titlesNum = titlesNum,
+        geminiApiText = geminiApiText,
+        currentLlmModel = currentLlmModel,
+        titlesPeriod = titlesPeriod,
+        rssUpdateInterval = rssUpdateInterval,
+        endureTime = endureTime,
+        titlesAlarmUpdate = titlesAlarmUpdate,
+        alarmMins = alarmMins,
+        alarmFrequency = alarmFrequency,
+        bannedNews = bannedNews,
+        proxyEnabled = proxyEnabled,
+        showAlarmsSheet = showAlarmsSheet,
+        showNotificationsSheet = showNotificationsSheet,
+        defaultApiCheck = isApiKeyDefault
+    )
+
+    val functions = remember {
+        SettingsUiFunctions(
+            setCompactTab = viewModel::setCompactTab,
+            setMonetColors = viewModel::setMonetColors,
+            setCurrentTheme = viewModel::setCurrentTheme,
+            setShowDates = viewModel::setShowDates,
+            setEndureTime = viewModel::setEndureTime,
+            setTitlesNum = viewModel::setTitlesNum,
+            setTitlesPeriod = viewModel::setTitlesPeriod,
+            setRssUpdateInterval = viewModel::setRssUpdateInterval,
+            setFilterTopics = viewModel::setFilterTopics,
+            setBannedNews = viewModel::setBannedNews,
+            delBannedNews = viewModel::delBannedNews,
+            setCurrentLlm = viewModel::setCurrentLlm,
+            setUserGeminiApi = viewModel::setUserGeminiApi,
+            resetUserGeminiApi = viewModel::resetApiKey,
+            setProxyEnabled = viewModel::setProxyEnabled,
+            setTitlesAlarmUpdate = viewModel::setTitlesAlarmUpdate,
+            setTitlesAlarmMins = viewModel::setTitlesAlarmMins,
+            setTitlesUpdFrequency = viewModel::setTitlesUpdFrequency,
+            setAlarmsAllowed = viewModel::setAlarmsAllowed,
+            planTitlesAutoUpdate = viewModel::planTitlesAutoUpdate,
+            setShowAlarmsSheet = viewModel::setShowAlarmsSheet,
+            setShowNotificationsSheet = viewModel::setShowNotificationsSheet,
+        )
+    }
+
+    SettingsGrid(
+        gridState = gridState,
+        modifier = modifier,
+        mainActivity = mainActivity,
+        density = density,
+        state = state,
+        functions = functions
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: SettingsViewModel, mainActivity: MainActivity) {
+fun SettingsGrid(
+    gridState: LazyGridState,
+    modifier: Modifier,
+    mainActivity: MainActivity,
+    density: Density,
+    state: SettingsUiState,
+    functions: SettingsUiFunctions
+) {
     val clipboardManager = LocalClipboardManager.current
-    val density = LocalDensity.current
 
     var text by remember { mutableStateOf("") }
-    val showDates by settingsModel.showDates.collectAsStateWithLifecycle()
-    val compactTab by settingsModel.compactTabBar.collectAsStateWithLifecycle()
-    val monetColors by settingsModel.isMonetColors.collectAsStateWithLifecycle()
-    val filterTopics by settingsModel.filterTopics.collectAsStateWithLifecycle()
-    val titlesNum by settingsModel.titlesNum.collectAsStateWithLifecycle()
-    val defaultGeminiApiKey by remember { mutableStateOf(settingsModel.defaultApiKey) }
-    val geminiApiText by settingsModel.userApi.collectAsStateWithLifecycle()
-    val currentLlmModel by settingsModel.currentLlm.collectAsStateWithLifecycle()
-    val titlesPeriod by settingsModel.titlesPeriod.collectAsStateWithLifecycle()
-    val rssUpdateInterval by settingsModel.rssUpdateInterval.collectAsStateWithLifecycle()
-    val endureTime by settingsModel.endureTime.collectAsStateWithLifecycle()
-    val titlesAlarmUpdate by settingsModel.titlesAlarmUpdate.collectAsStateWithLifecycle()
-    val alarmMins by settingsModel.titlesAlarmMins.collectAsStateWithLifecycle()
-    val alarmFrequency by settingsModel.titlesUpdateFrequency.collectAsStateWithLifecycle()
-    val bannedNews by settingsModel.bannedNews.collectAsStateWithLifecycle()
-    val proxyEnabled by settingsModel.proxyEnabled.collectAsStateWithLifecycle()
-    var alarmHrsText by remember { mutableIntStateOf(alarmMins / 60) }
-    var alarmMinsText by remember { mutableIntStateOf(alarmMins % 60) }
-    var showAlarmsSheet by remember { mutableStateOf(false) }
-    var showNotificationsSheet by remember { mutableStateOf(false) }
+    var alarmHrsText by remember { mutableIntStateOf(state.alarmMins / 60) }
+    var alarmMinsText by remember { mutableIntStateOf(state.alarmMins % 60) }
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    LaunchedEffect(alarmMins) {
-        alarmHrsText = alarmMins / 60
-        alarmMinsText = alarmMins % 60
+    LaunchedEffect(state.alarmMins) {
+        alarmHrsText = state.alarmMins / 60
+        alarmMinsText = state.alarmMins % 60
     }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-
-    val currentTheme by settingsModel.currentTheme.collectAsStateWithLifecycle()
     val colorSchemeDropdownItems = mutableListOf(
-        stringResource(R.string.settings_system_theme) to { settingsModel.setCurrentTheme("system") },
-        stringResource(R.string.settings_light_theme) to { settingsModel.setCurrentTheme("light") },
-        stringResource(R.string.settings_dark_theme) to { settingsModel.setCurrentTheme("dark") }
+        stringResource(R.string.settings_system_theme) to { functions.setCurrentTheme("system") },
+        stringResource(R.string.settings_light_theme) to { functions.setCurrentTheme("light") },
+        stringResource(R.string.settings_dark_theme) to { functions.setCurrentTheme("dark") }
     )
 
     val titlesDropdownItems = mutableListOf(
-        pluralStringResource(R.plurals.titles, count = 10, 10) to { settingsModel.setTitlesNum(10) },
-        pluralStringResource(R.plurals.titles, count = 20, 20) to { settingsModel.setTitlesNum(20) },
+        pluralStringResource(R.plurals.titles, count = 10, 10) to { functions.setTitlesNum(10) },
+        pluralStringResource(R.plurals.titles, count = 20, 20) to { functions.setTitlesNum(20) },
     )
-    if (geminiApiText != defaultGeminiApiKey) {
+    if (!state.defaultApiCheck) {
         titlesDropdownItems.addAll(listOf(
-            pluralStringResource(R.plurals.titles, count = 30, 30) to { settingsModel.setTitlesNum(30) },
-            pluralStringResource(R.plurals.titles, count = 40, 40) to { settingsModel.setTitlesNum(40) },
-            pluralStringResource(R.plurals.titles, count = 50, 50) to { settingsModel.setTitlesNum(50) })
+            pluralStringResource(R.plurals.titles, count = 30, 30) to { functions.setTitlesNum(30) },
+            pluralStringResource(R.plurals.titles, count = 40, 40) to { functions.setTitlesNum(40) },
+            pluralStringResource(R.plurals.titles, count = 50, 50) to { functions.setTitlesNum(50) })
         )
     }
-    else if (titlesNum > 20) settingsModel.setTitlesNum(20)
+    else if (state.titlesNum > 20) functions.setTitlesNum(20)
 
     val limitationDropdownItems = listOf(
-        pluralStringResource(R.plurals.hours, count = 12, 12) to { settingsModel.setTitlesPeriod(12) },
-        pluralStringResource(R.plurals.hours, count = 24, 24) to { settingsModel.setTitlesPeriod(24) },
-        pluralStringResource(R.plurals.hours, count = 48, 48) to { settingsModel.setTitlesPeriod(48) },
-        pluralStringResource(R.plurals.hours, count = 72, 72) to { settingsModel.setTitlesPeriod(72) },
-        pluralStringResource(R.plurals.hours, count = 96, 96) to { settingsModel.setTitlesPeriod(96) },
-        pluralStringResource(R.plurals.hours, count = 120, 120) to { settingsModel.setTitlesPeriod(120) }
+        pluralStringResource(R.plurals.hours, count = 12, 12) to { functions.setTitlesPeriod(12) },
+        pluralStringResource(R.plurals.hours, count = 24, 24) to { functions.setTitlesPeriod(24) },
+        pluralStringResource(R.plurals.hours, count = 48, 48) to { functions.setTitlesPeriod(48) },
+        pluralStringResource(R.plurals.hours, count = 72, 72) to { functions.setTitlesPeriod(72) },
+        pluralStringResource(R.plurals.hours, count = 96, 96) to { functions.setTitlesPeriod(96) },
+        pluralStringResource(R.plurals.hours, count = 120, 120) to { functions.setTitlesPeriod(120) }
     )
 
     val rssUpdateDropdownItems = listOf(
-        pluralStringResource(R.plurals.minutes, count = 15, 15) to { settingsModel.setRssUpdateInterval(context, 15) },
-        pluralStringResource(R.plurals.minutes, count = 30, 30) to { settingsModel.setRssUpdateInterval(context, 30) },
-        pluralStringResource(R.plurals.minutes, count = 60, 60) to { settingsModel.setRssUpdateInterval(context, 60) }
+        pluralStringResource(R.plurals.minutes, count = 15, 15) to { functions.setRssUpdateInterval(context, 15) },
+        pluralStringResource(R.plurals.minutes, count = 30, 30) to { functions.setRssUpdateInterval(context, 30) },
+        pluralStringResource(R.plurals.minutes, count = 60, 60) to { functions.setRssUpdateInterval(context, 60) }
     )
 
     val geminiModelDropdownItems = listOf(
-        "2.5 Flash" to { settingsModel.setCurrentLlm("gemini-2.5-flash") },
-        "2.5 Flash Lite" to { settingsModel.setCurrentLlm("gemini-2.5-flash-lite") },
-        "2.0 Flash" to { settingsModel.setCurrentLlm("gemini-2.0-flash") },
-        "2.0 Flash Lite" to { settingsModel.setCurrentLlm("gemini-2.0-flash-lite") }
+        "2.5 Flash" to { functions.setCurrentLlm("gemini-2.5-flash") },
+        "2.5 Flash Lite" to { functions.setCurrentLlm("gemini-2.5-flash-lite") },
+        "2.0 Flash" to { functions.setCurrentLlm("gemini-2.0-flash") },
+        "2.0 Flash Lite" to { functions.setCurrentLlm("gemini-2.0-flash-lite") }
     )
 
     val alarmHrsItems = (0..23).toList().map { num ->
         intTimeToStr(num) to {
             alarmHrsText = num
-            settingsModel.setTitlesAlarmMins(context, alarmHrsText * 60 + alarmMinsText)
+            functions.setTitlesAlarmMins(context, alarmHrsText * 60 + alarmMinsText)
         }
     }
     val alarmMinsItems = (0..59).toList().map {num ->
         intTimeToStr(num) to {
             alarmMinsText = num
-            settingsModel.setTitlesAlarmMins(context, alarmHrsText * 60 + alarmMinsText)
+            functions.setTitlesAlarmMins(context, alarmHrsText * 60 + alarmMinsText)
         }
     }
 
     val titlesFrequencyItems = listOf (
-        pluralStringResource(R.plurals.hours, count = 12, 12) to { settingsModel.setTitlesUpdFrequency(context, 12) },
-        pluralStringResource(R.plurals.hours, count = 24, 24) to { settingsModel.setTitlesUpdFrequency(context, 24) },
-        pluralStringResource(R.plurals.hours, count = 48, 48) to { settingsModel.setTitlesUpdFrequency(context, 48) },
-        pluralStringResource(R.plurals.hours, count = 72, 72) to { settingsModel.setTitlesUpdFrequency(context, 72) },
-        pluralStringResource(R.plurals.hours, count = 96, 96) to { settingsModel.setTitlesUpdFrequency(context, 96) },
-        pluralStringResource(R.plurals.hours, count = 120, 120) to { settingsModel.setTitlesUpdFrequency(context, 120) }
+        pluralStringResource(R.plurals.hours, count = 12, 12) to { functions.setTitlesUpdFrequency(context, 12) },
+        pluralStringResource(R.plurals.hours, count = 24, 24) to { functions.setTitlesUpdFrequency(context, 24) },
+        pluralStringResource(R.plurals.hours, count = 48, 48) to { functions.setTitlesUpdFrequency(context, 48) },
+        pluralStringResource(R.plurals.hours, count = 72, 72) to { functions.setTitlesUpdFrequency(context, 72) },
+        pluralStringResource(R.plurals.hours, count = 96, 96) to { functions.setTitlesUpdFrequency(context, 96) },
+        pluralStringResource(R.plurals.hours, count = 120, 120) to { functions.setTitlesUpdFrequency(context, 120) }
     )
 
     val autoUpdateScreenState = remember { MutableTransitionState(false) }
     val autoUpdateIndexes = remember { mutableStateOf<List<Int>?>(listOf(0)) }
-    LaunchedEffect(titlesAlarmUpdate) {
-        autoUpdateIndexes.value = if (titlesAlarmUpdate) null else listOf(0)
+    LaunchedEffect(state.titlesAlarmUpdate) {
+        autoUpdateIndexes.value = if (state.titlesAlarmUpdate) null else listOf(0)
     }
     val autoUpdateItems: List<@Composable () -> Unit> = listOf(
         {
@@ -180,14 +256,14 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
 
             SettingsItem(text = stringResource(R.string.settings_titles_alarm_update)) {
                 CustomSwitch(
-                    checked = titlesAlarmUpdate,
+                    checked = state.titlesAlarmUpdate,
                     onCheckedChange = {
-                        settingsModel.setTitlesAlarmUpdate(
-                            context = context,
-                            activity = mainActivity,
-                            onShowNotificationsSheet = { showNotificationsSheet = true },
-                            onShowAlarmsSheet = { showAlarmsSheet = true },
-                            value = it
+                        functions.setTitlesAlarmUpdate(
+                            context,
+                            { functions.setShowNotificationsSheet(true) },
+                            { functions.setShowAlarmsSheet(true) },
+                            it,
+                            mainActivity
                         )
                     }
                 )
@@ -201,7 +277,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                     },
                     density = density,
                     cornerShape = Shapes.large,
-                    initialSelectedIndex = titlesFrequencyItems.indexOfFirst { it.first.contains(alarmFrequency.toString()) },
+                    initialSelectedIndex = titlesFrequencyItems.indexOfFirst { it.first.contains(state.alarmFrequency.toString()) },
                     width = 160.dp
                 )
             }
@@ -212,13 +288,13 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         DropdownButton(
                             buttons = alarmHrsItems.mapNotNull { (text, action) ->
-                                if (!(alarmFrequency == 12 && text.toInt() > 12)) text to { action() } else null
+                                if (!(state.alarmFrequency == 12 && text.toInt() > 12)) text to { action() } else null
                             },
                             density = density,
                             cornerShape = Shapes.large,
                             width = 75.dp,
                             initialSelectedIndex = alarmHrsItems.mapNotNull { (text, action) ->
-                                if (!(alarmFrequency == 12 && text.toInt() > 12)) text to { action() } else null
+                                if (!(state.alarmFrequency == 12 && text.toInt() > 12)) text to { action() } else null
                             }.indexOfFirst { it.first.contains(alarmHrsText.toString()) }
                         )
                         Text(
@@ -243,14 +319,14 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
 
     val bannedNewsScreenState = remember { MutableTransitionState(false) }
     val bannedNewsItems: MutableList<@Composable () -> Unit> = mutableListOf()
-    bannedNews.forEach {
+    state.bannedNews.forEach {
         if (it != ""){
             bannedNewsItems.add(
                 {
                     SettingsItem(it) {
                         CustomIconButton(
                             icon = Icons.Default.Close,
-                            onClick = { settingsModel.delBannedNews(it) },
+                            onClick = { functions.delBannedNews(it) },
                             modifier = Modifier
                                 .padding(8.dp)
                                 .size(16.dp)
@@ -265,15 +341,15 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         if (bannedNewsItems.isEmpty()) bannedNewsScreenState.targetState = false
     }
 
-    if (showAlarmsSheet) {
+    if (state.showAlarmsSheet) {
         CustomErrorBottomSheet(
             title = stringResource(R.string.settings_alarms_sheet_title),
             text = stringResource(R.string.settings_alarms_sheet_text),
             confBtnText = stringResource(R.string.settings_alarms_sheet_conf),
             cancelBtnText = stringResource(R.string.settings_alarms_sheet_cancel),
-            onDismissRequest = { showAlarmsSheet = false },
+            onDismissRequest = { functions.setShowAlarmsSheet(false) },
             onConfirm = {
-                showAlarmsSheet = false
+                functions.setShowAlarmsSheet(false)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).also { intent ->
                         mainActivity.startActivity(intent)
@@ -285,15 +361,15 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
         )
     }
 
-    if (showNotificationsSheet) {
+    if (state.showNotificationsSheet) {
         CustomErrorBottomSheet(
             title = stringResource(R.string.settings_notification_sheet_title),
             text = stringResource(R.string.settings_notification_sheet_text),
             confBtnText = stringResource(R.string.settings_notification_sheet_conf),
             cancelBtnText = stringResource(R.string.settings_notification_sheet_cancel),
-            onDismissRequest = { showNotificationsSheet = false },
+            onDismissRequest = { functions.setShowNotificationsSheet(false) },
             onConfirm = {
-                showAlarmsSheet = false
+                functions.setShowNotificationsSheet(false)
                 requestNotificationPermission(mainActivity)
             },
             scope = scope,
@@ -325,8 +401,8 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             item {
                 SettingsItem(text = stringResource(R.string.settings_compact_tab)) {
                     CustomSwitch(
-                        checked = compactTab,
-                        onCheckedChange = { settingsModel.setCompactTab(it) }
+                        checked = state.compactTab,
+                        onCheckedChange = { functions.setCompactTab(it) }
                     )
                 }
             }
@@ -334,8 +410,8 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                 item {
                     SettingsItem(text = stringResource(R.string.settings_monet_colors)) {
                         CustomSwitch(
-                            checked = monetColors,
-                            onCheckedChange = { settingsModel.setMonetColors(it) }
+                            checked = state.monetColors,
+                            onCheckedChange = { functions.setMonetColors(it) }
                         )
                     }
                 }
@@ -348,7 +424,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         },
                         density = density,
                         cornerShape = Shapes.large,
-                        initialSelectedIndex = when (currentTheme) {
+                        initialSelectedIndex = when (state.currentTheme) {
                             "light" -> 1
                             "dark" -> 2
                             else -> 0
@@ -370,16 +446,16 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             item {
                 SettingsItem(text = stringResource(R.string.settings_show_dates)) {
                     CustomSwitch(
-                        checked = showDates,
-                        onCheckedChange = { settingsModel.setShowDates(it) }
+                        checked = state.showDates,
+                        onCheckedChange = { functions.setShowDates(it) }
                     )
                 }
             }
             item {
                 SettingsItem(text = stringResource(R.string.settings_endure_time)) {
                     CustomSwitch(
-                        checked = endureTime,
-                        onCheckedChange = { settingsModel.setEndureTime(it) }
+                        checked = state.endureTime,
+                        onCheckedChange = { functions.setEndureTime(it) }
                     )
                 }
             }
@@ -391,7 +467,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         },
                         density = density,
                         cornerShape = Shapes.large,
-                        initialSelectedIndex = titlesDropdownItems.indexOfFirst { it.first.contains(titlesNum.toString()) }
+                        initialSelectedIndex = titlesDropdownItems.indexOfFirst { it.first.contains(state.titlesNum.toString()) }
                     )
                 }
             }
@@ -403,7 +479,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         },
                         density = density,
                         cornerShape = Shapes.large,
-                        initialSelectedIndex = limitationDropdownItems.indexOfFirst { it.first.contains(titlesPeriod.toString()) }
+                        initialSelectedIndex = limitationDropdownItems.indexOfFirst { it.first.contains(state.titlesPeriod.toString()) }
                     )
                 }
             }
@@ -413,7 +489,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         buttons = rssUpdateDropdownItems,
                         density = density,
                         cornerShape = Shapes.large,
-                        initialSelectedIndex = rssUpdateDropdownItems.indexOfFirst { it.first.contains(rssUpdateInterval.toString()) }
+                        initialSelectedIndex = rssUpdateDropdownItems.indexOfFirst { it.first.contains(state.rssUpdateInterval.toString()) }
                     )
                 }
             }
@@ -424,7 +500,9 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         onClick = {
                             autoUpdateScreenState.targetState = !autoUpdateScreenState.currentState
                         },
-                        modifier = Modifier.wrapContentSize().height(40.dp)
+                        modifier = Modifier
+                            .wrapContentSize()
+                            .height(40.dp)
                     )
                 }
             }
@@ -439,17 +517,17 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                     LegacyTextDivider(text = stringResource(R.string.settings_chapter_llm))
                 }
             }
-            if (geminiApiText != defaultGeminiApiKey) {
+            if (!state.defaultApiCheck) {
                 item {
                     SettingsItem(text = stringResource(R.string.settings_filter_topics)) {
                         CustomSwitch(
-                            checked = filterTopics,
-                            onCheckedChange = { settingsModel.setFilterTopics(it) }
+                            checked = state.filterTopics,
+                            onCheckedChange = { functions.setFilterTopics(it) }
                         )
                     }
                 }
             }
-            if (geminiApiText != defaultGeminiApiKey) {
+            if (!state.defaultApiCheck) {
                 item {
                     SettingsItem(text = stringResource(R.string.settings_gemini_model)) {
                         DropdownButton(
@@ -462,7 +540,7 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                                 "gemini-${
                                     it.first.split(" ")
                                         .joinToString("-") { item -> item.lowercase() }
-                                }" == currentLlmModel
+                                }" == state.currentLlmModel
                             }
                         )
                     }
@@ -471,12 +549,12 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             item {
                 SettingsItem(text = stringResource(R.string.settings_gemini_api_key)) {
                     CustomTextButton(
-                        text = if (geminiApiText != defaultGeminiApiKey) stringResource(R.string.settings_reset) else stringResource(
+                        text = if (!state.defaultApiCheck) stringResource(R.string.settings_reset) else stringResource(
                             R.string.settings_paste
                         ),
                         onClick = {
-                            when (geminiApiText) {
-                                defaultGeminiApiKey -> {
+                            when (state.defaultApiCheck) {
+                                true -> {
                                     val clipboardText: AnnotatedString? =
                                         clipboardManager.getText()
 
@@ -484,14 +562,14 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                                         text += it.text
                                     }
 
-                                    settingsModel.setUserGeminiApi(text)
+                                    functions.setUserGeminiApi(text)
                                     text = ""
                                 }
 
                                 else -> {
-                                    settingsModel.setUserGeminiApi(defaultGeminiApiKey)
-                                    settingsModel.setCurrentLlm("gemini-2.0-flash")
-                                    settingsModel.setFilterTopics(false)
+                                    functions.resetUserGeminiApi()
+                                    functions.setCurrentLlm("gemini-2.0-flash")
+                                    functions.setFilterTopics(false)
                                 }
                             }
                         },
@@ -501,45 +579,6 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
                         shape = Shapes.large,
                         defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha=0.98f)
                     )
-//                    Box {
-//                        Button(
-//                            modifier = Modifier
-//                                .wrapContentSize()
-//                                .widthIn(min = 150.dp, max = 250.dp),
-//                            onClick = {
-//                                when (geminiApiText) {
-//                                    defaultGeminiApiKey -> {
-//                                        val clipboardText: AnnotatedString? =
-//                                            clipboardManager.getText()
-//
-//                                        clipboardText?.let {
-//                                            text += it.text
-//                                        }
-//
-//                                        settingsModel.setUserGeminiApi(text)
-//                                        text = ""
-//                                    }
-//
-//                                    else -> {
-//                                        settingsModel.setUserGeminiApi(defaultGeminiApiKey)
-//                                        settingsModel.setCurrentLlm("gemini-2.0-flash")
-//                                        settingsModel.setFilterTopics(false)
-//                                    }
-//                                }
-//                            },
-//                            shape = Shapes.large,
-//                            colors = ButtonDefaults.buttonColors(
-//                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha=0.98f)
-//                            )
-//                        ) {
-//                            Text(
-//                                text = if (geminiApiText != defaultGeminiApiKey) stringResource(R.string.settings_reset) else stringResource(
-//                                    R.string.settings_paste
-//                                ),
-//                                color = MaterialTheme.colorScheme.onSecondaryContainer
-//                            )
-//                        }
-//                    }
                 }
             }
             if (bannedNewsItems.isNotEmpty()) {
@@ -575,8 +614,8 @@ fun SettingsGrid(gridState: LazyGridState, modifier: Modifier, settingsModel: Se
             item {
                 SettingsItem(text = stringResource(R.string.settings_enable_proxy)) {
                     CustomSwitch(
-                        checked = proxyEnabled,
-                        onCheckedChange = { settingsModel.setProxyEnabled(it) }
+                        checked = state.proxyEnabled,
+                        onCheckedChange = { functions.setProxyEnabled(it) }
                     )
                 }
             }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -91,7 +92,8 @@ fun AnimatedSegmentedControl(
         )
 
         Row(
-            modifier = Modifier.wrapContentSize()
+            modifier = Modifier.wrapContentSize(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             items.forEachIndexed { index, item ->
                 CustomTextButton(
@@ -108,7 +110,9 @@ fun AnimatedSegmentedControl(
                         .padding(horizontal = itemPadding),
                     fontWeight = if (index == selectedIndex && enabled) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.Center,
-                    enabled = enabled
+                    enabled = enabled,
+                    verticalPadding = 5.dp,
+                    horizontalPadding = 12.dp
                 )
             }
         }

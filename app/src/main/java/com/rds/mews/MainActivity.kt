@@ -29,9 +29,11 @@ import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.ui.custom_elements.MyBottomBar
 import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.ui.grids.SettingsGrid
+import com.rds.mews.ui.grids.SettingsScreen
 import com.rds.mews.ui.grids.SourcesScreen
 import com.rds.mews.ui.grids.TitlesGrid
 import com.rds.mews.ui.theme.MewsTheme
+import com.rds.mews.viewmodels.SettingsScrollEvent
 import com.rds.mews.viewmodels.SettingsViewModel
 import com.rds.mews.viewmodels.SettingsViewModelFactory
 import com.rds.mews.viewmodels.SourcesScrollEvent
@@ -116,15 +118,16 @@ fun MainScreen(mainActivity: MainActivity) {
 
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()
-
-        val settingsGridState = settingsViewModel.gridState
+        val settingsGridState = rememberLazyGridState()
 
         LaunchedEffect(Unit) {
             sourcesViewModel.scrollEvents.collect { event ->
                 when (event) {
-                    SourcesScrollEvent.ScrollToTop -> sourcesGridState.scrollToItem(0)
+                    SourcesScrollEvent.ScrollToTop -> sourcesGridState.animateScrollToItem(0)
                 }
             }
+        }
+        LaunchedEffect(Unit) {
             titlesViewModel.scrollEvents.collect { event ->
                 when (event) {
                     TitlesScrollEvent.ScrollToTop -> {
@@ -137,6 +140,13 @@ fun MainScreen(mainActivity: MainActivity) {
                     is TitlesScrollEvent.ScrollToItem -> {
                         titlesGridState.scrollToItem(event.id)
                     }
+                }
+            }
+        }
+        LaunchedEffect(Unit) {
+            settingsViewModel.scrollEvents.collect { event ->
+                when (event) {
+                    SettingsScrollEvent.ScrollToTop -> settingsGridState.animateScrollToItem(0)
                 }
             }
         }
@@ -164,17 +174,18 @@ fun MainScreen(mainActivity: MainActivity) {
                     onTabSelected = { newTab ->
                         if (selectedTab == newTab) {
                             when (selectedTab) {
-                                TabScreen.Sources -> scope.launch {
-                                    sourcesGridState.animateScrollToItem(0)
-                                }
-
-                                TabScreen.Settings -> scope.launch {
-                                    settingsGridState.animateScrollToItem(0)
+                                TabScreen.Sources -> {
+                                    sourcesViewModel.scrollToTop()
                                 }
 
                                 TabScreen.Titles -> {
                                     titlesViewModel.scrollToTop()
                                 }
+
+                                TabScreen.Settings -> {
+                                    settingsViewModel.scrollToTop()
+                                }
+
                             }
                         } else MewsRepository.setCurrentTab(newTab)
                     },
@@ -234,10 +245,10 @@ fun MainScreen(mainActivity: MainActivity) {
                         onConfigChange = titlesViewModel::scrollToItem
                     )
                 }
-                else -> SettingsGrid(
+                else -> SettingsScreen(
                     gridState = settingsGridState,
                     modifier = modifier,
-                    settingsModel = settingsViewModel,
+                    viewModel = settingsViewModel,
                     mainActivity = mainActivity
                 )
             }

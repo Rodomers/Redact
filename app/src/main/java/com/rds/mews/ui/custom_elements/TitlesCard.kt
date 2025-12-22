@@ -610,7 +610,7 @@ private fun ExpandedCardContent(
                             stringResource(R.string.titles_card_source) to { coroutineScope.launch { pagerState.animateScrollToPage(1) } }
                         ),
                         selectedIndex = pagerState.currentPage,
-                        modifier = Modifier.padding(bottom = 12.dp),
+                        modifier = Modifier.padding(bottom = 8.dp),
                         backgroundColor = bottomPanelItemsColor,
                         indicatorColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         itemPadding = 2.dp

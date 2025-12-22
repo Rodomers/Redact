@@ -91,7 +91,6 @@ fun SourcesGrid(
     showAddDialog: Boolean
 ) {
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
     val scope = rememberCoroutineScope()
 
     if (showAddDialog) {
@@ -140,12 +139,6 @@ fun SourcesGrid(
             sheetState = bottomSheetState,
             sourceLink = changedSource.link
         )
-//        Popup(
-//            onDismissRequest = { setChangeSource(null) },
-//            alignment = Alignment.TopEnd
-//        ) {
-//
-//        }
     }
 
     LazyVerticalGrid(
@@ -185,7 +178,7 @@ fun SourcesGrid(
 
             items(items = itemsForSource, key = { item -> item.id }) { item ->
                 SourcesCard(
-                    source = item,
+                    source = item.source,
                     listOf(
                         Pair(stringResource(R.string.source_change)) { setChangeSource(item) },
                         Pair(stringResource(R.string.source_delete)) { setDelSource(item) }

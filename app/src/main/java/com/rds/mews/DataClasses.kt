@@ -1,5 +1,7 @@
 package com.rds.mews
 
+import android.content.Context
+
 data class Message(var id: Long, var time: Long, var link: String, var source: String, var mess: String)
 data class RSS(var id: Long, var source: String, var link: String)
 data class Title(var id: Long, var time: Long, var title: String, var text: String, var sources: String, var links: String)
@@ -44,3 +46,50 @@ sealed interface SummarizationResult {
         val cause: Throwable? = null
     ) : SummarizationResult
 }
+
+data class SettingsUiState(
+    val showDates: Boolean,
+    val compactTab: Boolean,
+    val currentTheme: String,
+    val monetColors: Boolean,
+    val filterTopics: Boolean,
+    val titlesNum: Int,
+    val geminiApiText: String,
+    val currentLlmModel: String,
+    val titlesPeriod: Int,
+    val rssUpdateInterval: Int,
+    val endureTime: Boolean,
+    val titlesAlarmUpdate: Boolean,
+    val alarmMins: Int,
+    val alarmFrequency: Int,
+    val bannedNews: Set<String>,
+    val proxyEnabled: Boolean,
+    val showAlarmsSheet: Boolean,
+    val showNotificationsSheet: Boolean,
+    val defaultApiCheck: Boolean
+)
+
+data class SettingsUiFunctions(
+    val setCompactTab: (Boolean) -> Unit,
+    val setMonetColors: (Boolean) -> Unit,
+    val setCurrentTheme: (String) -> Unit,
+    val setShowDates: (Boolean) -> Unit,
+    val setEndureTime: (Boolean) -> Unit,
+    val setTitlesNum: (Int) -> Unit,
+    val setTitlesPeriod: (Int) -> Unit,
+    val setRssUpdateInterval: (Context, Int) -> Unit,
+    val setFilterTopics: (Boolean) -> Unit,
+    val setBannedNews: (Set<String>) -> Unit,
+    val delBannedNews: (String) -> Unit,
+    val setCurrentLlm: (String) -> Unit,
+    val setUserGeminiApi: (String) -> Unit,
+    val resetUserGeminiApi: () -> Unit,
+    val setProxyEnabled: (Boolean) -> Unit,
+    val setTitlesAlarmUpdate: (Context, () -> Unit, () -> Unit, Boolean, MainActivity) -> Unit,
+    val setTitlesAlarmMins: (Context, Int) -> Unit,
+    val setTitlesUpdFrequency: (Context, Int) -> Unit,
+    val setAlarmsAllowed: (Boolean) -> Unit,
+    val planTitlesAutoUpdate: (Context) -> Unit,
+    val setShowAlarmsSheet: (Boolean) -> Unit,
+    val setShowNotificationsSheet: (Boolean) -> Unit
+)

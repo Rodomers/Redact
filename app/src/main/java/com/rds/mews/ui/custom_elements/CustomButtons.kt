@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import com.rds.mews.ui.theme.Shapes
 import kotlin.math.pow
@@ -53,7 +54,9 @@ fun CustomTextButton(
     transitionBackgroundColor: Color? = null,
     defaultContentColor: Color = LocalContentColor.current,
     transitionContentColor: Color? = null,
-    transitionState: MutableTransitionState<Boolean>? = null
+    transitionState: MutableTransitionState<Boolean>? = null,
+    verticalPadding: Dp = 8.dp,
+    horizontalPadding: Dp = 16.dp
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -113,7 +116,7 @@ fun CustomTextButton(
                 onClick = onClick,
                 role = Role.Button
             )
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding)
     ) {
         Text(
             text = text,
