@@ -614,7 +614,8 @@ private fun ExpandedCardContent(
                         selectedIndex = pagerState.currentPage,
                         modifier = Modifier.padding(bottom = 12.dp),
                         backgroundColor = bottomPanelItemsColor,
-                        indicatorColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        indicatorColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        itemPadding = 2.dp
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     CustomIconButton(

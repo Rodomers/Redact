@@ -1,17 +1,15 @@
 package com.rds.mews.ui.custom_elements
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -29,13 +27,11 @@ fun AnimatedSegmentedControl(
     items: List<Pair<String, () -> Unit>>,
     selectedIndex: Int,
     modifier: Modifier = Modifier,
-    isIndicatorVisible: Boolean = true,
+    enabled: Boolean = true,
     cornerShape: CornerBasedShape = Shapes.large,
-    itemPadding: Dp = 16.dp,
+    itemPadding: Dp = 0.dp,
     backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.8f),
-    indicatorColor: Color = MaterialTheme.colorScheme.secondaryContainer,
-    textColorNormal: Color = MaterialTheme.colorScheme.onSurface,
-    textColorSelected: Color = MaterialTheme.colorScheme.onSecondaryContainer
+    indicatorColor: Color = MaterialTheme.colorScheme.secondaryContainer
 ) {
     val density = LocalDensity.current
 
@@ -53,20 +49,25 @@ fun AnimatedSegmentedControl(
         0.dp
     }
 
+    val animationSpec = spring<Dp>(
+        stiffness = Spring.StiffnessMediumLow,
+        dampingRatio = Spring.DampingRatioLowBouncy
+    )
+
     val indicatorWidth by animateDpAsState(
         targetValue = targetIndicatorWidth,
-        animationSpec = tween(durationMillis = 300),
+        animationSpec = animationSpec,
         label = "Indicator Width"
     )
 
     val indicatorOffset by animateDpAsState(
         targetValue = targetIndicatorOffset,
-        animationSpec = tween(durationMillis = 300),
+        animationSpec = animationSpec,
         label = "Indicator Offset"
     )
 
     val indicatorAlpha by animateFloatAsState(
-        targetValue = if (isIndicatorVisible) 1f else 0f,
+        targetValue = if (enabled) 1f else 0f,
         animationSpec = tween(durationMillis = 300),
         label = "Indicator Alpha"
     )
@@ -93,31 +94,22 @@ fun AnimatedSegmentedControl(
             modifier = Modifier.wrapContentSize()
         ) {
             items.forEachIndexed { index, item ->
-                Box(
-                    contentAlignment = Alignment.Center,
+                CustomTextButton(
+                    text = item.first,
+                    onClick = item.second,
                     modifier = Modifier
-                        .wrapContentWidth()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            item.second()
-                        }
+                        .wrapContentSize()
                         .onSizeChanged { size ->
                             val widthDp = with(density) { size.width.toDp() }
                             if (index < itemWidths.size) {
                                 itemWidths[index] = widthDp
                             }
                         }
-                        .padding(horizontal = itemPadding, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = item.first,
-                        color = if (index == selectedIndex && isIndicatorVisible) textColorSelected else textColorNormal,
-                        fontWeight = if (index == selectedIndex && isIndicatorVisible) FontWeight.Bold else FontWeight.Normal,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                        .padding(horizontal = itemPadding),
+                    fontWeight = if (index == selectedIndex && enabled) FontWeight.Bold else FontWeight.Normal,
+                    textAlign = TextAlign.Center,
+                    enabled = enabled
+                )
             }
         }
     }
