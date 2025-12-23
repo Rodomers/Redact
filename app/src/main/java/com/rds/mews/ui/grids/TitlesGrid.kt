@@ -41,13 +41,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rds.mews.MainActivity
 import com.rds.mews.R
 import com.rds.mews.SummarizationResult
 import com.rds.mews.Title
 import com.rds.mews.TitleCardStates
 import com.rds.mews.localcore.formatUpdateTime
-import com.rds.mews.localcore.getFormattedTimeUnix
+import com.rds.mews.localcore.getStringsFromDate
 import com.rds.mews.localcore.mapResultToUiResources
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
@@ -55,15 +56,54 @@ import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
 import com.rds.mews.ui.custom_elements.LegacyTextDivider
 import com.rds.mews.ui.custom_elements.CustomTimeMark
 import com.rds.mews.ui.custom_elements.TitlesCard
+import com.rds.mews.viewmodels.TitlesViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.collections.component1
 import kotlin.collections.component2
-import kotlin.collections.first
 import kotlin.collections.iterator
-import kotlin.collections.last
-import kotlin.text.toInt
+
+@Composable
+fun TitlesScreen(
+    viewModel: TitlesViewModel,
+    lazyGridState: LazyGridState,
+    mainActivity: MainActivity,
+    modifier: Modifier,
+    scope: CoroutineScope
+) {
+    val groupedItems by viewModel.groupedTitles.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val err by viewModel.errState.collectAsStateWithLifecycle()
+    val showEmptyMess by viewModel.showEmptyMess.collectAsStateWithLifecycle()
+    val titlesCardStates by viewModel.titleCardStates.collectAsStateWithLifecycle()
+    val showDates by viewModel.showDates.collectAsStateWithLifecycle()
+    val endureTime by viewModel.enlargedTimestamps.collectAsStateWithLifecycle()
+    val lastTitlesUpdate by viewModel.lastUpdated.collectAsStateWithLifecycle()
+
+    TitlesGrid(
+        lazyGridState = lazyGridState,
+        mainActivity = mainActivity,
+        groupedItems = groupedItems,
+        modifier = modifier,
+        isRefreshing = isRefreshing,
+        showEmptyMess = showEmptyMess,
+        toggleEmptyMess = viewModel::toggleEmptyMess,
+        errState = err,
+        titlesCardStates = titlesCardStates,
+        rememberCardPage = viewModel::changeTitleCurrentPage,
+        onRefresh = viewModel::refreshTitles,
+        onClearErr = viewModel::clearErr,
+        onErrAction = viewModel::handleErrorAction,
+        onToggleExpanded = viewModel::toggleTitleExpanded,
+        showDates = showDates,
+        lastTitlesUpdate = lastTitlesUpdate,
+        scope = scope,
+        endureTime = endureTime,
+        onBanTheme = viewModel::onBanTheme,
+        onConfigChange = viewModel::scrollToItem
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -231,22 +271,9 @@ private fun TitlesGridFootnote(
     fPair = formatUpdateTime(updatedMills)
     date = when (fPair.first) {
         0 -> {
-            val formattedDate = getFormattedTimeUnix(date = true, unixTime = updatedMills).split(".")
-
-            when (formattedDate.last().toInt()) {
-                1 -> stringResource(R.string.date_01, formattedDate.first().toInt())
-                2 -> stringResource(R.string.date_02, formattedDate.first().toInt())
-                3 -> stringResource(R.string.date_03, formattedDate.first().toInt())
-                4 -> stringResource(R.string.date_04, formattedDate.first().toInt())
-                5 -> stringResource(R.string.date_05, formattedDate.first().toInt())
-                6 -> stringResource(R.string.date_06, formattedDate.first().toInt())
-                7 -> stringResource(R.string.date_07, formattedDate.first().toInt())
-                8 -> stringResource(R.string.date_08, formattedDate.first().toInt())
-                9 -> stringResource(R.string.date_09, formattedDate.first().toInt())
-                10 -> stringResource(R.string.date_10, formattedDate.first().toInt())
-                11 -> stringResource(R.string.date_11, formattedDate.first().toInt())
-                12 -> stringResource(R.string.date_12, formattedDate.first().toInt())
-                else -> fPair.second
+            when (val ints = getStringsFromDate(fPair.second)) {
+                null -> fPair.second
+                else -> stringResource(ints[0], ints[1])
             }
         }
         else -> stringResource(fPair.first)

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.rds.mews.GroupState
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.RSS
 import com.rds.mews.SourceType
@@ -13,13 +14,16 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.forEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import okio.Source
 
 class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
     private val _scrollEvents = Channel<SourcesScrollEvent>(Channel.CONFLATED)
@@ -41,6 +45,7 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+
     val newSourcesPermitted: StateFlow<Boolean> = sources
         .filter { it.isNotEmpty() }
         .distinctUntilChanged()
@@ -48,6 +53,20 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
         .flowOn(Dispatchers.Default)
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    private val _groupStates = MutableStateFlow<Map<SourceType, Boolean>>(emptyMap())
+    val groupStates: StateFlow<List<GroupState>> = combine(
+        groupedSources,
+        _groupStates
+    ) { sourceMap, groupMap ->
+        sourceMap.map { (key, _) ->
+            GroupState(key, groupMap[key] ?: true)
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
 
     private val _showAddDialog = MutableStateFlow(false)
@@ -87,6 +106,12 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
         viewModelScope.launch {
             repository.changeSource(id, newName)
         }
+    }
+
+    fun changeGroupState(group: SourceType) {
+        val currentMap = _groupStates.value.toMutableMap()
+        currentMap[group] = !(currentMap[group] ?: true)
+        _groupStates.value = currentMap
     }
 
     fun scrollToTop() {

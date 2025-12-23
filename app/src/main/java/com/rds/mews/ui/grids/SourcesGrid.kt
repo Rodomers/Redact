@@ -1,7 +1,12 @@
 package com.rds.mews.ui.grids
 
 import android.content.Context
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -16,16 +21,17 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rds.mews.GroupState
 import com.rds.mews.R
 import com.rds.mews.RSS
 import com.rds.mews.SourceType
@@ -33,8 +39,8 @@ import com.rds.mews.localcore.sourcesTypeInterpreter
 import com.rds.mews.ui.custom_elements.SourcesCard
 import com.rds.mews.ui.custom_elements.CustomChangeBottomSheet
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
-import com.rds.mews.ui.custom_elements.LegacyTextDivider
 import com.rds.mews.ui.custom_elements.SourcesAddCard
+import com.rds.mews.ui.custom_elements.customHeader
 import com.rds.mews.viewmodels.SourcesViewModel
 import kotlinx.coroutines.launch
 
@@ -47,6 +53,7 @@ fun SourcesScreen(
     viewModel: SourcesViewModel
 ) {
     val groupedTitles by viewModel.groupedSources.collectAsStateWithLifecycle()
+    val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
     val newSourcesPermitted by viewModel.newSourcesPermitted.collectAsStateWithLifecycle()
     val delSource by viewModel.delSource.collectAsStateWithLifecycle()
     val changedSource by viewModel.changedSource.collectAsStateWithLifecycle()
@@ -59,6 +66,7 @@ fun SourcesScreen(
     SourcesGrid(
         gridState = gridState,
         groupedItems = groupedTitles,
+        groupStates = groupStates,
         modifier = modifier,
         onSourceAdd = onAddSource,
         onSourceDelete = viewModel::deleteSource,
@@ -66,6 +74,7 @@ fun SourcesScreen(
         setShowAddDialog = viewModel::setShowAddDialog,
         setDelSource = viewModel::setDelSource,
         setChangeSource = viewModel::setChangeSource,
+        changeGroupState = viewModel::changeGroupState,
         newSourcesPermitted = newSourcesPermitted,
         deletedSource = delSource,
         changedSource = changedSource,
@@ -78,6 +87,7 @@ fun SourcesScreen(
 fun SourcesGrid(
     gridState: LazyGridState,
     groupedItems: Map<SourceType, List<RSS>>,
+    groupStates: List<GroupState>,
     modifier: Modifier,
     onSourceAdd: (String, String) -> Unit,
     onSourceDelete: (Long) -> Unit,
@@ -85,6 +95,7 @@ fun SourcesGrid(
     setShowAddDialog: (Boolean) -> Unit,
     setDelSource: (RSS?) -> Unit,
     setChangeSource: (RSS?) -> Unit,
+    changeGroupState: (SourceType) -> Unit,
     newSourcesPermitted: Boolean,
     deletedSource: RSS?,
     changedSource: RSS?,
@@ -92,6 +103,7 @@ fun SourcesGrid(
 ) {
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    val animDuration = 250
 
     if (showAddDialog) {
         CustomChangeBottomSheet(
@@ -148,51 +160,56 @@ fun SourcesGrid(
             .padding(horizontal = 10.dp),
         contentPadding = WindowInsets.statusBars.asPaddingValues(),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
         state = gridState
     ) {
         if (groupedItems.isEmpty()) {
-            stickyHeader() {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                ) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LegacyTextDivider(text = stringResource(R.string.no_sources))
-                }
-            }
+            customHeader(
+                textId = R.string.no_sources,
+                expandable = false
+            )
         }
 
         groupedItems.forEach { (source, itemsForSource) ->
-            stickyHeader() {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
+            val isExpanded = groupStates.find { it.group == source }?.expanded ?: false
+
+            customHeader(
+                textId = sourcesTypeInterpreter(source),
+                isExpanded = isExpanded,
+                onHeaderClick = { changeGroupState(source) }
+            )
+
+            items(
+                items = itemsForSource,
+                key = { it.id }
+            ) { item ->
+                AnimatedVisibility(
+                    visible = isExpanded,
+                    enter = expandVertically(
+                        expandFrom = Alignment.Top,
+                        animationSpec = tween(animDuration)
+                    ) + fadeIn(animationSpec = tween(animDuration)),
+                    exit = shrinkVertically(
+                        shrinkTowards = Alignment.Top,
+                        animationSpec = tween(animDuration)
+                    ) + fadeOut(animationSpec = tween(animDuration))
                 ) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LegacyTextDivider(text = stringResource(sourcesTypeInterpreter(source)))
+                    Box(modifier = Modifier.padding(bottom = 16.dp)) {
+                        SourcesCard(
+                            source = item.source,
+                            listOf(
+                                Pair(stringResource(R.string.source_change)) { setChangeSource(item) },
+                                Pair(stringResource(R.string.source_delete)) { setDelSource(item) }
+                            )
+                        )
+                    }
                 }
             }
-
-            items(items = itemsForSource, key = { item -> item.id }) { item ->
-                SourcesCard(
-                    source = item.source,
-                    listOf(
-                        Pair(stringResource(R.string.source_change)) { setChangeSource(item) },
-                        Pair(stringResource(R.string.source_delete)) { setDelSource(item) }
-                    )
-                )
-            }
-
-            if (itemsForSource.size % 2 != 0) item { Spacer(modifier = Modifier.height(1.dp)) }
         }
 
 
         if (newSourcesPermitted) {
-            item { Spacer(modifier = Modifier.height(1.dp)) }
-            item { Spacer(modifier = Modifier.height(1.dp)) }
+            item { Spacer(modifier = Modifier.height(15.dp)) }
+            item { Spacer(modifier = Modifier.height(15.dp)) }
 
             item {
                 SourcesAddCard({ setShowAddDialog(true) }, transitionState = showAddDialog)

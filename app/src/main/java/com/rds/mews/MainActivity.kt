@@ -28,10 +28,9 @@ import com.rds.mews.localcore.isScheduleExactAlarm
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.ui.custom_elements.MyBottomBar
 import com.rds.mews.ui.custom_elements.TabScreen
-import com.rds.mews.ui.grids.SettingsGrid
 import com.rds.mews.ui.grids.SettingsScreen
 import com.rds.mews.ui.grids.SourcesScreen
-import com.rds.mews.ui.grids.TitlesGrid
+import com.rds.mews.ui.grids.TitlesScreen
 import com.rds.mews.ui.theme.MewsTheme
 import com.rds.mews.viewmodels.SettingsScrollEvent
 import com.rds.mews.viewmodels.SettingsViewModel
@@ -42,9 +41,6 @@ import com.rds.mews.viewmodels.SourcesViewModelFactory
 import com.rds.mews.viewmodels.TitlesScrollEvent
 import com.rds.mews.viewmodels.TitlesViewModel
 import com.rds.mews.viewmodels.TitlesViewModelFactory
-
-
-import kotlinx.coroutines.launch
 
 
 class MainActivity : ComponentActivity() {
@@ -209,40 +205,12 @@ fun MainScreen(mainActivity: MainActivity) {
                     )
                 }
                 TabScreen.Titles -> {
-                    val groupedTitles by titlesViewModel.groupedTitles.collectAsStateWithLifecycle()
-                    val isRefreshing by titlesViewModel.isRefreshing.collectAsStateWithLifecycle()
-                    val err by titlesViewModel.errState.collectAsStateWithLifecycle()
-                    val showEmptyMess by titlesViewModel.showEmptyMess.collectAsStateWithLifecycle()
-                    val titlesCardStates by titlesViewModel.titleCardStates.collectAsStateWithLifecycle()
-
-                    val showDates by titlesViewModel.showDates.collectAsStateWithLifecycle()
-                    val endureTime by titlesViewModel.enlargedTimestamps.collectAsStateWithLifecycle()
-                    val lastTitlesUpdate by titlesViewModel.lastUpdated.collectAsStateWithLifecycle()
-
-                    val onRefreshTitle = remember(titlesViewModel) { { titlesViewModel.refreshTitles() } }
-                    val onClearError = remember(titlesViewModel) { { titlesViewModel.clearErr() } }
-
-                    TitlesGrid(
+                    TitlesScreen(
+                        viewModel = titlesViewModel,
                         lazyGridState = titlesGridState,
-                        groupedItems = groupedTitles,
-                        modifier = modifier,
-                        isRefreshing = isRefreshing,
-                        showEmptyMess = showEmptyMess,
-                        toggleEmptyMess = titlesViewModel::toggleEmptyMess,
-                        errState = err,
-                        titlesCardStates = titlesCardStates,
-                        onRefresh = onRefreshTitle,
-                        onClearErr = onClearError,
-                        onErrAction = titlesViewModel::handleErrorAction,
-                        onToggleExpanded = titlesViewModel::toggleTitleExpanded,
-                        rememberCardPage = titlesViewModel::changeTitleCurrentPage,
-                        showDates = showDates,
-                        lastTitlesUpdate = lastTitlesUpdate,
-                        scope = scope,
-                        endureTime = endureTime,
                         mainActivity = mainActivity,
-                        onBanTheme = titlesViewModel::onBanTheme,
-                        onConfigChange = titlesViewModel::scrollToItem
+                        modifier = modifier,
+                        scope = scope
                     )
                 }
                 else -> SettingsScreen(

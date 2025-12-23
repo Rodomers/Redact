@@ -93,3 +93,5 @@ data class SettingsUiFunctions(
     val setShowAlarmsSheet: (Boolean) -> Unit,
     val setShowNotificationsSheet: (Boolean) -> Unit
 )
+
+data class GroupState(val group: SourceType, val expanded: Boolean)
