@@ -116,7 +116,7 @@ class DbHelper(val context: Context) :
     }
 
     @Synchronized
-    fun getMessage(id: Long): Message? {
+    fun getMessage(id: Long?): Message? {
         val db = this.readableDatabase
         val query = "SELECT * FROM $MESS_NAME WHERE $MESS_ID = ?"
         val args = arrayOf(id.toString())

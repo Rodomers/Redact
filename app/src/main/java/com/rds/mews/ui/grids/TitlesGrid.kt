@@ -101,7 +101,8 @@ fun TitlesScreen(
         scope = scope,
         endureTime = endureTime,
         onBanTheme = viewModel::onBanTheme,
-        onConfigChange = viewModel::scrollToItem
+        onConfigChange = viewModel::scrollToItem,
+        changeSourceState = viewModel::changeTitleSourceState
     )
 }
 
@@ -127,7 +128,8 @@ fun TitlesGrid(
     scope: CoroutineScope,
     endureTime: Boolean = false,
     onBanTheme: (String) -> Unit,
-    onConfigChange: (Int) -> Unit
+    onConfigChange: (Int) -> Unit,
+    changeSourceState: (Long, String) -> Unit
 ) {
    val config = LocalConfiguration.current
     val clipboardManager = LocalClipboardManager.current
@@ -232,6 +234,7 @@ fun TitlesGrid(
                 items(items = titlesForDate, key = {it.id}) {item ->
                     val isExpanded = titlesCardStates.find { it.id == item.id }?.expanded ?: false
                     val pagerState = rememberPagerState(initialPage = titlesCardStates.find { it.id == item.id }?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
+                    val sources = titlesCardStates.find { it.id == item.id}?.sources
 
                     Row(
                         modifier = Modifier
@@ -248,7 +251,9 @@ fun TitlesGrid(
                             onToggleExpanded = { onToggleExpanded(item.id) },
                             rememberPage = { page -> rememberCardPage(item.id, page) },
                             noTime = endureTime,
-                            onBanTheme = onBanTheme
+                            onBanTheme = onBanTheme,
+                            sources = sources,
+                            changeSourceState = changeSourceState
                         )
                     }
                 }

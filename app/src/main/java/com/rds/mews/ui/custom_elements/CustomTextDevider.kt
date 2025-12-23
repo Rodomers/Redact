@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.rds.mews.R
 import com.rds.mews.localcore.getStringsFromDate
 import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.TextUnit
 
 @Composable
 fun LegacyTextDivider(text: String? = null, dateString: String? = null, date: Boolean = false) {
@@ -53,7 +54,8 @@ fun LazyGridScope.customHeader(
     date: Boolean = false,
     isExpanded: Boolean = false,
     onHeaderClick: () -> Unit = {},
-    expandable: Boolean = true
+    expandable: Boolean = true,
+    fontSize: TextUnit = 30.sp
 ) {
     stickyHeader {
         val titleText = when (date) {
@@ -96,7 +98,7 @@ fun LazyGridScope.customHeader(
             Text(
                 text = titleText,
                 fontWeight = FontWeight.Bold,
-                fontSize = 30.sp
+                fontSize = fontSize
             )
 
             Spacer(modifier = Modifier.weight(1f))

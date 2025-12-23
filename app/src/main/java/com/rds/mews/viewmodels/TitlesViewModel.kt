@@ -1,7 +1,6 @@
 package com.rds.mews.viewmodels
 
 import android.app.Application
-import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -12,6 +11,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.rds.mews.MainActivity
+import com.rds.mews.Message
+import com.rds.mews.SourceMessages
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.SummarizationErrorType
 import com.rds.mews.SummarizationResult
@@ -73,7 +74,7 @@ class TitlesViewModel(
             list.filter { it.text != "<промежуточный текст>" }.map {
                 it.copy(
                     sources = strTransform(it.sources, ", "),
-                    links = strTransform(it.links, "\n")
+                    ids = strTransform(it.ids, "\n")
                 )
             }.groupBy { getFormattedTimeUnix(it.time, true) }
         }
@@ -153,9 +154,30 @@ class TitlesViewModel(
         }
     }
 
+    fun changeTitleSourceState(id: Long, source: String) {
+        _titleCardStates.update { currentSet ->
+            currentSet.map {
+                if (it.id == id && it.sources != null) {
+                    it.copy(
+                        sources = (it.sources as Iterable<SourceMessages>).map { currentItem ->
+                            SourceMessages(
+                                source = currentItem.source,
+                                state = if (currentItem.source == source) !currentItem.state else currentItem.state,
+                                messages = currentItem.messages
+                            )
+                        }.toList()
+                    )
+                }
+                else it
+            }.toSet()
+        }
+    }
+
     fun clearErr() {
         repository.clearError()
     }
+
+    fun getMessages(ids: String): List<Message>? = repository.getMessages(ids)
 
     init {
         viewModelScope.launch {
@@ -172,7 +194,20 @@ class TitlesViewModel(
 
                         if (currentIds != newIds) {
                             actualTitles
-                                .map { title -> TitleCardStates(id = title.id) }
+                                .map { title ->
+                                    val messages = getMessages(title.ids)
+                                    TitleCardStates(
+                                        id = title.id,
+                                        sources = if (messages == null) null else {
+                                            val groupedMessages = messages.groupBy { it.source }
+                                            var sourceMessages: MutableList<SourceMessages> = emptyList<SourceMessages>().toMutableList()
+                                            groupedMessages.forEach { (source, messages) ->
+                                                sourceMessages.add(SourceMessages(source, false, messages))
+                                            }
+                                            sourceMessages.toList()
+                                        }
+                                    )
+                                }
                                 .toSet()
                         } else {
                             currentStates

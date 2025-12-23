@@ -4,6 +4,7 @@ import android.content.Context
 import com.rds.mews.workers.AlarmScheduler
 import com.rds.mews.core.DbHelper
 import com.rds.mews.GeminiApiKeyProvider
+import com.rds.mews.Message
 import com.rds.mews.R
 import com.rds.mews.RSS
 import com.rds.mews.RssHubApiKeyProvider
@@ -147,6 +148,14 @@ object MewsRepository {
 
     fun delTitles(time: Long? = null) {
         db.titlesTimeKill(time?:0)
+    }
+
+    fun getMessages(ids: String): List<Message>? {
+        val arr =  db.dbPack(ids).split(", ")
+            .mapNotNull {
+                db.getMessage(it.toLongOrNull())
+            }
+        return arr.ifEmpty { null }
     }
 
     private val _titlesUpdateTrigger = MutableStateFlow(0)

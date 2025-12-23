@@ -31,7 +31,7 @@ private data class SummaryResult(
     val summary: String,
     val time: Long,
     val sources: List<String>,
-    val links: List<String>
+    val msgIds: List<Long>
 )
 
 class LLMClient(
@@ -174,7 +174,7 @@ class NewsSummarizer(
         val summary: String,
         val time: Long,
         val sources: List<String>,
-        val links: List<String>
+        val msgIds: List<Long>
     )
 
     private val SUMMARY_BATCH_SIZE = 5
@@ -217,7 +217,7 @@ class NewsSummarizer(
             val titlesToSummarize = db.getTitles().filter {
                 it.text == "<промежуточный текст>"
             }.map {
-                Topics(it.title, db.dbUnpack(it.links).mapNotNull { id -> id.toLongOrNull() })
+                Topics(it.title, db.dbUnpack(it.ids).mapNotNull { id -> id.toLongOrNull() })
             }
 
             if (titlesToSummarize.isEmpty()) {
@@ -286,7 +286,8 @@ class NewsSummarizer(
                                         if (originalData != null) {
                                             val (topic, suitableMessages, _) = originalData
                                             val time = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
-                                            val links = suitableMessages.map { it.link }
+
+                                            val msgIds = suitableMessages.map { it.id }
                                             val sources = suitableMessages.map { it.source }
 
                                             results.add(SummaryResult(
@@ -294,7 +295,7 @@ class NewsSummarizer(
                                                 summary = summary,
                                                 time = time,
                                                 sources = sources.distinct(),
-                                                links = links.distinct()
+                                                msgIds = msgIds.distinct()
                                             ))
                                         }
                                     } catch (e: Exception) {
@@ -321,7 +322,7 @@ class NewsSummarizer(
                         newTime = result.time,
                         newText = result.summary,
                         newSources = db.dbPack(*result.sources.toTypedArray()),
-                        newLinks = db.dbPack(*result.links.toTypedArray())
+                        newLinks = db.dbPack(*result.msgIds.map { it.toString() }.toTypedArray())
                     )
                 }
             }
@@ -516,7 +517,6 @@ class NewsSummarizer(
         currentLanguage: String
     ): String {
 
-        // Формируем JSON структуру для промпта
         val jsonInput = JSONArray()
         batchData.forEach { (topic, _, text) ->
             val item = JSONObject()

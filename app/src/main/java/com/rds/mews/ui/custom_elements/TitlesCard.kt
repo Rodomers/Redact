@@ -7,10 +7,16 @@ import android.content.ContextWrapper
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -30,6 +36,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
@@ -68,6 +77,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -79,6 +89,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -87,6 +98,7 @@ import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.rds.mews.ArrowPosition
 import com.rds.mews.R
+import com.rds.mews.SourceMessages
 import com.rds.mews.Title
 import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.ui.theme.Shapes
@@ -98,6 +110,8 @@ import kotlin.math.roundToInt
 @Composable
 fun TitlesCard(
     title: Title,
+    sources: List<SourceMessages>? = null,
+    changeSourceState: (Long, String) -> Unit = { _, _ -> },
     onBanTheme: (String) -> Unit,
     isExpanded: Boolean,
     onToggleExpanded: () -> Unit,
@@ -160,6 +174,8 @@ fun TitlesCard(
         ) {
             HeroExpansionContent(
                 title = title,
+                sources = sources,
+                changeSourceState = changeSourceState,
                 progress = expansionAnim.value,
                 collapsedBounds = collapsedBounds!!,
                 onDismissRequest = onToggleExpanded,
@@ -234,6 +250,8 @@ private fun Context.findActivity(): Activity? {
 @Composable
 private fun HeroExpansionContent(
     title: Title,
+    sources: List<SourceMessages>?,
+    changeSourceState: (Long, String) -> Unit,
     progress: Float,
     collapsedBounds: Rect,
     onDismissRequest: () -> Unit,
@@ -362,6 +380,8 @@ private fun HeroExpansionContent(
             ) {
                 ExpandedCardContent(
                     title = title,
+                    sources = sources,
+                    changeSourceState = changeSourceState,
                     onBanTheme = onBanTheme,
                     pagerState = pagerState,
                     rememberPage = rememberPage,
@@ -457,6 +477,8 @@ private fun TitlesHeaderContent(
 @Composable
 private fun ExpandedCardContent(
     title: Title,
+    sources: List<SourceMessages>?,
+    changeSourceState: (Long, String) -> Unit,
     onBanTheme: (String) -> Unit,
     pagerState: PagerState,
     rememberPage: (Int) -> Unit,
@@ -472,6 +494,7 @@ private fun ExpandedCardContent(
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val config = LocalConfiguration.current
+    val handler = LocalUriHandler.current
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
@@ -556,26 +579,75 @@ private fun ExpandedCardContent(
                     }
 
                     1 -> {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = title.sources,
+                        if (sources == null) {
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = title.links,
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = title.sources,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = title.ids,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
+                            }
+                        }
+                        else {
+                            LazyVerticalGrid(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                            )
-                            Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
+                                    .fillMaxWidth(),
+                                columns = GridCells.Fixed(5)
+                            ) {
+                                sources.forEach { pack ->
+                                    val source = pack.source
+                                    val state = pack.state
+                                    val messages = pack.messages
+
+                                    customHeader(
+                                        text = source,
+                                        isExpanded = state,
+                                        onHeaderClick = { changeSourceState(title.id, source) },
+                                        fontSize = 18.sp
+                                    )
+                                    items(
+                                        items = messages,
+                                        key = { it.id }
+                                    ) { item ->
+                                        Column(modifier = Modifier.fillMaxWidth()) {
+                                            AnimatedVisibility(
+                                                visible = state,
+                                                enter = expandVertically(
+                                                    expandFrom = Alignment.Top,
+                                                    animationSpec = tween(250)
+                                                ) + fadeIn(animationSpec = tween(250)),
+                                                exit = shrinkVertically(
+                                                    shrinkTowards = Alignment.Top,
+                                                    animationSpec = tween(250)
+                                                ) + fadeOut(animationSpec = tween(250))
+                                            ) {
+                                                Box(modifier = Modifier.padding(bottom = 16.dp)) {
+                                                    CustomTextButton(
+                                                        text = getFormattedTimeUnix(item.time),
+                                                        onClick = { handler.openUri(item.link) },
+                                                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                        shape = Shapes.large
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

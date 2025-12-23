@@ -13,7 +13,6 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.collection.IntList
 import androidx.collection.intListOf
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
@@ -33,7 +32,6 @@ import com.rds.mews.ScreenQuadrant
 import com.rds.mews.SourceType
 import com.rds.mews.SummarizationErrorType
 import com.rds.mews.SummarizationResult
-import com.rds.mews.core.DbHelper
 import com.rds.mews.workers.RssUpdateWorker
 import com.rds.mews.workers.TitlesUpdateService
 import com.rds.mews.workers.TitlesUpdateWorker
