@@ -281,29 +281,31 @@ class TitlesViewModel(
                     _titles.value = actualTitles
 
                     _titleCardStates.update { currentStates ->
-                        val currentIds = currentStates.map { it.id }.toSet()
-                        val newIds = actualTitles.map { it.id }.toSet()
+                        val oldStatesMap = currentStates.associateBy { it.id }
+                        actualTitles.map { title ->
+                            val oldState = oldStatesMap[title.id]
+                            val messages = getMessages(title.ids)
 
-                        if (currentIds != newIds) {
-                            actualTitles
-                                .map { title ->
-                                    val messages = getMessages(title.ids)
-                                    TitleCardStates(
-                                        id = title.id,
-                                        sources = if (messages == null) null else {
-                                            val groupedMessages = messages.groupBy { it.source }
-                                            var sourceMessages: MutableList<SourceMessages> = emptyList<SourceMessages>().toMutableList()
-                                            groupedMessages.forEach { (source, messages) ->
-                                                sourceMessages.add(SourceMessages(source, false, messages))
-                                            }
-                                            sourceMessages.toList()
-                                        }
-                                    )
+                            val newSources = if (messages == null) null else {
+                                val groupedMessages = messages.groupBy { it.source }
+                                val sourceMessages = mutableListOf<SourceMessages>()
+                                groupedMessages.forEach { (source, msgs) ->
+                                    val oldSourceState = oldState?.sources
+                                        ?.find { it.source == source }?.state ?: false
+
+                                    sourceMessages.add(SourceMessages(source, oldSourceState, msgs))
                                 }
-                                .toSet()
-                        } else {
-                            currentStates
-                        }
+                                sourceMessages.toList()
+                            }
+
+                            TitleCardStates(
+                                id = title.id,
+                                expanded = oldState?.expanded ?: false,
+                                read = oldState?.read ?: false,
+                                currentPage = oldState?.currentPage ?: 0,
+                                sources = newSources
+                            )
+                        }.toSet()
                     }
                 }
         }

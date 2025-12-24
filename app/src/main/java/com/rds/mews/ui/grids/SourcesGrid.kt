@@ -31,7 +31,7 @@ import com.rds.mews.localcore.RSS
 import com.rds.mews.localcore.SourceType
 import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.sourcesTypeInterpreter
-import com.rds.mews.ui.ExpandableContainer
+import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.SourcesCard
 import com.rds.mews.ui.custom_elements.CustomChangeBottomSheet
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet

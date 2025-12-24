@@ -319,18 +319,41 @@ class DbHelper(val context: Context) :
     @Synchronized
     fun changeRssSource(id: Long, newSource: String): Boolean {
         val db = this.writableDatabase
+
+        val rss = findRSS(id = id) ?: return false
+        val oldSource = rss.source
+
+        val queryTitles = "SELECT $TITLES_ID, $TITLES_SOURCES FROM $TITLES_NAME WHERE $TITLES_SOURCES LIKE ?"
+        val cursor = db.rawQuery(queryTitles, arrayOf("%$oldSource%"))
+
+        cursor.use { c ->
+            if (c.moveToFirst()) {
+                val idIndex = c.getColumnIndexOrThrow(TITLES_ID)
+                val sourcesIndex = c.getColumnIndexOrThrow(TITLES_SOURCES)
+
+                do {
+                    val tId = c.getLong(idIndex)
+                    val rawSources = c.getString(sourcesIndex)
+                    val sourceList = dbUnpack(rawSources)
+                    if (sourceList.contains(oldSource)) {
+                        val newSourceList = sourceList.map { if (it == oldSource) newSource else it }
+                        val newPackedSources = dbPack(*newSourceList.toTypedArray())
+                        val titleValues = ContentValues().apply {
+                            put(TITLES_SOURCES, newPackedSources)
+                        }
+                        db.update(TITLES_NAME, titleValues, "$TITLES_ID = ?", arrayOf(tId.toString()))
+                    }
+                } while (c.moveToNext())
+            }
+        }
+
         val values = ContentValues().apply {
             put(RSS_SOURCE, newSource)
             put(MESS_SOURCE, newSource)
         }
 
-        return when (val rss = findRSS(id = id)) {
-            null -> false
-            else -> {
-                db.update(MESS_NAME, values, "$MESS_SOURCE = ?", arrayOf(rss.source))
-                db.update(RSS_NAME, values, "$RSS_SOURCE = ?", arrayOf(rss.source)) > 0
-            }
-        }
+        db.update(MESS_NAME, values, "$MESS_SOURCE = ?", arrayOf(oldSource))
+        return db.update(RSS_NAME, values, "$RSS_SOURCE = ?", arrayOf(oldSource)) > 0
     }
 
     @Synchronized

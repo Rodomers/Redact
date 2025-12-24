@@ -62,7 +62,7 @@ import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.viewmodels.SettingsViewModel
 import com.rds.mews.localcore.intTimeToStr
 import com.rds.mews.localcore.requestNotificationPermission
-import com.rds.mews.ui.ExpandableContainer
+import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomIconButton

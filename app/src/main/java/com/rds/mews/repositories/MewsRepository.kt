@@ -116,6 +116,7 @@ object MewsRepository {
     fun changeSource(id: Long, newName: String) {
         db.changeRssSource(id = id, newSource = newName)
         _sourcesUpdateTrigger.value++
+        _titlesUpdateTrigger.value++
     }
 
     fun planTitlesUpdate(context: Context) {

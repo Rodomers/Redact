@@ -1,4 +1,4 @@
-package com.rds.mews.ui
+package com.rds.mews.ui.custom_elements
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope

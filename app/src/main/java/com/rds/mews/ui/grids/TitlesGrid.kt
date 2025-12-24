@@ -47,7 +47,7 @@ import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.TitleCardStates
 import com.rds.mews.localcore.TitlesGroupState
 import com.rds.mews.localcore.mapResultToUiResources
-import com.rds.mews.ui.ExpandableContainer
+import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
@@ -230,15 +230,17 @@ fun TitlesGrid(
             }
 
             groupedItems.forEach { (date, titlesForDate) ->
-                customHeader(
-                    text = if (date.number != null) context.getString(
-                        date.date,
-                        date.number
-                    ) else context.getString(date.date)
-                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
-                    isExpanded = groupStates.find { it.group == date }?.expanded ?: true,
-                    onHeaderClick = { changeGroupState(date) }
-                )
+                if (showDates) {
+                    customHeader(
+                        text = if (date.number != null) context.getString(
+                            date.date,
+                            date.number
+                        ) else context.getString(date.date)
+                            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
+                        isExpanded = groupStates.find { it.group == date }?.expanded ?: true,
+                        onHeaderClick = { changeGroupState(date) }
+                    )
+                }
 
                 items(items = titlesForDate, key = {it.id}) {item ->
                     val statesItem = titlesCardStates.find { it.id == item.id }
