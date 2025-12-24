@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -13,6 +14,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,7 +39,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -65,7 +66,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -106,6 +106,8 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.min
 import kotlin.math.roundToInt
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 
 @Composable
 fun TitlesCard(
@@ -471,10 +473,12 @@ private fun ExpandedCardContent(
     headerStartColor: Color
 ) {
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val config = LocalConfiguration.current
     val handler = LocalUriHandler.current
+    val haptics = LocalHapticFeedback.current
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
@@ -487,15 +491,25 @@ private fun ExpandedCardContent(
 
     val shouldAnimateHeader = headerStartColor != headerEndColor
 
+    val copiedText = "${title.title}\n\n${title.text}\n\n${source}: Mews, ${title.sources}"
     fun copyText() {
-        val copiedText = "${title.title}\n\n${title.text}\n\n${source}: ${title.sources}"
         clipboardManager.setText(AnnotatedString(copiedText))
+    }
+    fun shareText() {
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, copiedText)
+        }
+
+        val shareIntent = Intent.createChooser(sendIntent, null)
+
+        context.startActivity(shareIntent)
     }
     fun banNew() {
         onBanTheme(title.title)
     }
     val buttons = listOf(
-        TextButtonInputs(stringResource(R.string.share_btn_desc), ::copyText, stringResource(R.string.titles_card_copied)),
+        TextButtonInputs(stringResource(R.string.share_btn_desc), ::shareText, stringResource(R.string.titles_card_copied)),
         TextButtonInputs(stringResource(R.string.ban_btn_desc), ::banNew, stringResource(R.string.titles_card_banned))
     )
 
@@ -568,7 +582,18 @@ private fun ExpandedCardContent(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = title.text,
-                                modifier = Modifier.padding(horizontal = 16.dp)
+                                modifier = Modifier
+                                    .combinedClickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = {},
+                                        onLongClick = {
+                                            copyText()
+                                            Toast.makeText(context, R.string.titles_card_copied, Toast.LENGTH_SHORT).show()
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        }
+                                    )
+                                    .padding(horizontal = 16.dp),
                             )
                             Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
                         }
