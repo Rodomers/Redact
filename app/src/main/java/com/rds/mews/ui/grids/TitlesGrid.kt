@@ -1,20 +1,22 @@
 package com.rds.mews.ui.grids
 
+import TimelineMarker
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -51,7 +53,6 @@ import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
-import com.rds.mews.ui.custom_elements.CustomTimeMark
 import com.rds.mews.ui.custom_elements.TitlesCard
 import com.rds.mews.ui.custom_elements.customHeader
 import com.rds.mews.viewmodels.TitlesViewModel
@@ -77,8 +78,7 @@ fun TitlesScreen(
     val err by viewModel.errState.collectAsStateWithLifecycle()
     val showEmptyMess by viewModel.showEmptyMess.collectAsStateWithLifecycle()
     val titlesCardStates by viewModel.titleCardStates.collectAsStateWithLifecycle()
-    val showDates by viewModel.showDates.collectAsStateWithLifecycle()
-    val endureTime by viewModel.enlargedTimestamps.collectAsStateWithLifecycle()
+    val innerTime by viewModel.innerTimestamps.collectAsStateWithLifecycle()
     val lastTitlesUpdate by viewModel.lastUpdated.collectAsStateWithLifecycle()
 
     TitlesGrid(
@@ -97,10 +97,9 @@ fun TitlesScreen(
         onClearErr = viewModel::clearErr,
         onErrAction = viewModel::handleErrorAction,
         onToggleExpanded = viewModel::toggleTitleExpanded,
-        showDates = showDates,
         lastTitlesUpdate = lastTitlesUpdate,
         scope = scope,
-        endureTime = endureTime,
+        innerTime = innerTime,
         onBanTheme = viewModel::onBanTheme,
         onConfigChange = viewModel::scrollToItem,
         changeSourceState = viewModel::changeTitleSourceState,
@@ -127,10 +126,9 @@ fun TitlesGrid(
     onClearErr: () -> Unit,
     onErrAction: (ClipboardManager, MainActivity) -> Unit,
     onToggleExpanded: (Long) -> Unit,
-    showDates: Boolean,
     lastTitlesUpdate: Long,
     scope: CoroutineScope,
-    endureTime: Boolean = false,
+    innerTime: Boolean,
     onBanTheme: (String) -> Unit,
     onConfigChange: (Int) -> Unit,
     changeSourceState: (Long, String) -> Unit,
@@ -230,19 +228,20 @@ fun TitlesGrid(
             }
 
             groupedItems.forEach { (date, titlesForDate) ->
-                if (showDates) {
-                    customHeader(
-                        text = if (date.number != null) context.getString(
-                            date.date,
-                            date.number
-                        ) else context.getString(date.date)
-                            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
-                        isExpanded = groupStates.find { it.group == date }?.expanded ?: true,
-                        onHeaderClick = { changeGroupState(date) }
-                    )
-                }
+                customHeader(
+                    text = if (date.number != null) context.getString(
+                        date.date,
+                        date.number
+                    ) else context.getString(date.date)
+                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
+                    isExpanded = groupStates.find { it.group == date }?.expanded ?: true,
+                    onHeaderClick = { changeGroupState(date) }
+                )
 
-                items(items = titlesForDate, key = {it.id}) {item ->
+                itemsIndexed(titlesForDate) { index, item ->
+                    val isFirst = index == 0
+                    val isLast = index == titlesForDate.lastIndex
+
                     val statesItem = titlesCardStates.find { it.id == item.id }
                     val isExpanded = statesItem?.expanded ?: false
                     val pagerState = rememberPagerState(initialPage = statesItem?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
@@ -255,19 +254,23 @@ fun TitlesGrid(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = verticalArrangement)
-                                .heightIn(max = 4000.dp),
+                                .height(IntrinsicSize.Min),
                         ) {
-                            if (endureTime) {
-                                CustomTimeMark(item.time)
+                            if (!innerTime) {
+                                TimelineMarker(
+                                    time = item.time,
+                                    isFirst = isFirst,
+                                    isLast = isLast
+                                )
                             }
                             TitlesCard(
                                 item,
+                                modifier = Modifier.padding(vertical = verticalArrangement),
                                 isExpanded = isExpanded,
                                 pagerState = pagerState,
                                 onToggleExpanded = { onToggleExpanded(item.id) },
                                 rememberPage = { page -> rememberCardPage(item.id, page) },
-                                noTime = endureTime,
+                                noTime = !innerTime,
                                 onBanTheme = onBanTheme,
                                 sources = sources,
                                 changeSourceState = changeSourceState,

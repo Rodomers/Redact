@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -508,7 +509,7 @@ private fun ExpandedCardContent(
         onBanTheme(title.title)
     }
     val buttons = listOf(
-        TextButtonInputs(stringResource(R.string.share_btn_desc), ::shareText, stringResource(R.string.titles_card_copied)),
+        TextButtonInputs(stringResource(R.string.share_btn_desc), ::shareText),
         TextButtonInputs(stringResource(R.string.ban_btn_desc), ::banNew, stringResource(R.string.titles_card_banned))
     )
 

@@ -93,7 +93,7 @@ fun SettingsScreen(
     val currentLlmModel by viewModel.currentLlm.collectAsStateWithLifecycle()
     val titlesPeriod by viewModel.titlesPeriod.collectAsStateWithLifecycle()
     val rssUpdateInterval by viewModel.rssUpdateInterval.collectAsStateWithLifecycle()
-    val endureTime by viewModel.endureTime.collectAsStateWithLifecycle()
+    val innerTime by viewModel.innerTime.collectAsStateWithLifecycle()
     val titlesAlarmUpdate by viewModel.titlesAlarmUpdate.collectAsStateWithLifecycle()
     val alarmMins by viewModel.titlesAlarmMins.collectAsStateWithLifecycle()
     val alarmFrequency by viewModel.titlesUpdateFrequency.collectAsStateWithLifecycle()
@@ -115,7 +115,7 @@ fun SettingsScreen(
         currentLlmModel = currentLlmModel,
         titlesPeriod = titlesPeriod,
         rssUpdateInterval = rssUpdateInterval,
-        endureTime = endureTime,
+        innerTime = innerTime,
         titlesAlarmUpdate = titlesAlarmUpdate,
         alarmMins = alarmMins,
         alarmFrequency = alarmFrequency,
@@ -132,7 +132,7 @@ fun SettingsScreen(
             setMonetColors = viewModel::setMonetColors,
             setCurrentTheme = viewModel::setCurrentTheme,
             setShowDates = viewModel::setShowDates,
-            setEndureTime = viewModel::setEndureTime,
+            setInnerTime = viewModel::setInnerTime,
             setTitlesNum = viewModel::setTitlesNum,
             setTitlesPeriod = viewModel::setTitlesPeriod,
             setRssUpdateInterval = viewModel::setRssUpdateInterval,
@@ -178,10 +178,10 @@ fun SettingsGrid(
     functions: SettingsUiFunctions
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
-    val appearanceChapterId by remember { mutableStateOf(R.string.settings_chapter_appearance) }
-    val titlesChapterId by remember { mutableStateOf(R.string.settings_chapter_titles) }
-    val llmChapterId by remember { mutableStateOf(R.string.settings_chapter_llm) }
-    val additionalChapterId by remember { mutableStateOf(R.string.settings_chapter_additional) }
+    val appearanceChapterId by remember { mutableIntStateOf(R.string.settings_chapter_appearance) }
+    val titlesChapterId by remember { mutableIntStateOf(R.string.settings_chapter_titles) }
+    val llmChapterId by remember { mutableIntStateOf(R.string.settings_chapter_llm) }
+    val additionalChapterId by remember { mutableIntStateOf(R.string.settings_chapter_additional) }
     val clipboardManager = LocalClipboardManager.current
 
     var text by remember { mutableStateOf("") }
@@ -406,7 +406,6 @@ fun SettingsGrid(
                 .padding(horizontal = 10.dp),
             contentPadding = WindowInsets.statusBars.asPaddingValues(),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-//            verticalArrangement = Arrangement.spacedBy(16.dp),
             state = gridState
         ) {
             customHeader(
@@ -470,22 +469,22 @@ fun SettingsGrid(
                     visible = groupStates.find { it.group == titlesChapterId }?.expanded ?: true
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        SettingsItem(
-                            text = stringResource(R.string.settings_show_dates),
-                            modifier = Modifier.padding(vertical = verticalArrangement),
-                        ) {
-                            CustomSwitch(
-                                checked = state.showDates,
-                                onCheckedChange = { functions.setShowDates(it) }
-                            )
-                        }
+//                        SettingsItem(
+//                            text = stringResource(R.string.settings_show_dates),
+//                            modifier = Modifier.padding(vertical = verticalArrangement),
+//                        ) {
+//                            CustomSwitch(
+//                                checked = state.showDates,
+//                                onCheckedChange = { functions.setShowDates(it) }
+//                            )
+//                        }
                         SettingsItem(
                             text = stringResource(R.string.settings_endure_time),
                             modifier = Modifier.padding(vertical = verticalArrangement)
                         ) {
                             CustomSwitch(
-                                checked = state.endureTime,
-                                onCheckedChange = { functions.setEndureTime(it) }
+                                checked = state.innerTime,
+                                onCheckedChange = { functions.setInnerTime(it) }
                             )
                         }
                         SettingsItem(

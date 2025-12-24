@@ -97,7 +97,7 @@ class TitlesViewModel(
     val isRefreshing: StateFlow<Boolean> = repository.updatingTitles
 
     val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    val enlargedTimestamps: StateFlow<Boolean> = repository.enlargedTimestamps.stateIn(viewModelScope,
+    val innerTimestamps: StateFlow<Boolean> = repository.innerTimestamps.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
 
     val lastUpdated: StateFlow<Long> = repository.lastTitlesUpdate

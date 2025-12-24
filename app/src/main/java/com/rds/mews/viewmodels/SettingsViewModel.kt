@@ -55,7 +55,7 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     val filterTopics: StateFlow<Boolean> = repository.filterTopics.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val currentLlm: StateFlow<String> = repository.currentLlmModel.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "gemini-2.0-flash")
     val userApi: StateFlow<String> = repository.userApiKey.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
-    val endureTime: StateFlow<Boolean> = repository.enlargedTimestamps.stateIn(viewModelScope,
+    val innerTime: StateFlow<Boolean> = repository.innerTimestamps.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
     val titlesAlarmUpdate: StateFlow<Boolean> = repository.titlesAlarmUpdate.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
@@ -93,7 +93,7 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
         repository.setUserApiKey(_defaultApiKey)
         _isKeyDefault.value = true
     }
-    fun setEndureTime(value: Boolean) = viewModelScope.launch { repository.setEnlargeTimestamps(value) }
+    fun setInnerTime(value: Boolean) = viewModelScope.launch { repository.setInnerTimestamps(value) }
     fun setBannedNews(value: Set<String>) = viewModelScope.launch { repository.setBannedNews(value) }
     fun delBannedNews(value: String) = viewModelScope.launch { repository.delBannedNew(value) }
     fun setTitlesAlarmUpdate(

@@ -189,7 +189,7 @@ object MewsRepository {
     const val UPDATING_STATE = "updating_state"
     const val COMPACT_TAB_BAR = "compact_tab_bar"
     const val FILTER_TOPICS = "filter_topics"
-    const val ENLARGE_TIMESTAMPS = "endure_time"
+    const val INNER_TIMESTAMPS = "inner_timestamps"
     const val TITLES_AUTO_UPDATE = "auto_update_titles"
     const val TITLES_AUTO_UPDATE_FREQUENCY = "auto_update_titles_frequency"
     const val ALARMS_ALLOWED = "exact_alarms_allowed"
@@ -315,11 +315,11 @@ object MewsRepository {
         _filterTopics.value = newValue
     }
 
-    private val _enlargedTime = MutableStateFlow(false)
-    val enlargedTimestamps: StateFlow<Boolean> = _enlargedTime.asStateFlow()
-    fun setEnlargeTimestamps(newValue: Boolean) {
-        settingsManager.saveBoolean(ENLARGE_TIMESTAMPS, newValue)
-        _enlargedTime.value = newValue
+    private val _innerTime = MutableStateFlow(false)
+    val innerTimestamps: StateFlow<Boolean> = _innerTime.asStateFlow()
+    fun setInnerTimestamps(newValue: Boolean) {
+        settingsManager.saveBoolean(INNER_TIMESTAMPS, newValue)
+        _innerTime.value = newValue
     }
 
     private val _titlesAlarmUpdate = MutableStateFlow(false)
@@ -395,7 +395,7 @@ object MewsRepository {
         _monetColors.value = settingsManager.getBoolean(IS_MONET, false)
         _compactTabBar.value = settingsManager.getBoolean(COMPACT_TAB_BAR, false)
         _showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
-        _enlargedTime.value = settingsManager.getBoolean(ENLARGE_TIMESTAMPS, false)
+        _innerTime.value = settingsManager.getBoolean(INNER_TIMESTAMPS, false)
         _titlesAlarmUpdate.value = settingsManager.getBoolean(TITLES_AUTO_UPDATE, false)
         _titlesAlarmTimeMins.value = settingsManager.getInt(TITLES_ALARM_MINS, 540)
         _titlesAutoUpdateFrequency.value = settingsManager.getInt(TITLES_AUTO_UPDATE_FREQUENCY, 24)

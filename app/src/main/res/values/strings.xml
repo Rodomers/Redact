@@ -39,7 +39,7 @@
     <string name="settings_monet_colors">Monet colors</string>
     <string name="settings_color_scheme">Color scheme</string>
     <string name="settings_compact_tab">Compact tab</string>
-    <string name="settings_endure_time">Enlarged timestamps</string>
+    <string name="settings_endure_time">Inner timestamps</string>
     <string name="settings_filter_topics">Additional topics filter</string>
     <string name="settings_titles_auto_update">Titles auto update</string>
     <string name="settings_banned_news">Blocked news</string>
