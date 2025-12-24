@@ -42,11 +42,13 @@ fun CustomPullToRefreshIndicator(
 ) {
     var indicatorHeight by remember { mutableIntStateOf(0) }
 
+    val density = LocalDensity.current
     val refreshThreshold = 80.dp
-    val refreshThresholdPx = with(LocalDensity.current) { refreshThreshold.toPx() }
-    val scale = if (isRefreshing) 1f else lerp(0f, 1f, state.distanceFraction.coerceIn(0f, 1f))
+    val refreshThresholdPx = with(density) { refreshThreshold.toPx() }
 
+    // это передаём СНАРУЖИ
     val currentUpdatingState by MewsRepository.updatingState.collectAsStateWithLifecycle()
+
     val text = when {
         currentUpdatingState == "summarizing_topics" -> stringResource(R.string.summarizing, 0, 0)
         currentUpdatingState?.contains("/") ?: false -> {
@@ -66,14 +68,21 @@ fun CustomPullToRefreshIndicator(
                 indicatorHeight = size.height
             }
             .graphicsLayer {
-                val isHeightKnown = indicatorHeight > 0
-                scaleY = scale
-                alpha = if (isHeightKnown) scale else 0f
+                val fraction = state.distanceFraction.coerceIn(0f, 1f)
+                val currentScale = if (isRefreshing) 1f else fraction
 
-                if (isHeightKnown) translationY = state.distanceFraction * refreshThresholdPx - indicatorHeight
+                val isHeightKnown = indicatorHeight > 0
+
+                scaleX = currentScale
+                scaleY = currentScale
+
+                alpha = if (isHeightKnown) currentScale else 0f
+
+                if (isHeightKnown) {
+                    translationY = state.distanceFraction * refreshThresholdPx - indicatorHeight
+                }
             }
             .padding(horizontal = 20.dp, vertical = 10.dp)
-            .statusBarsPadding()
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = Shapes.large,
@@ -95,9 +104,6 @@ fun CustomPullToRefreshIndicator(
                 fontSize = 16.sp,
                 modifier = Modifier.padding(horizontal = 40.dp, vertical = 16.dp)
             )
-//            TextButton(onClick = stopFunc) {
-//                Text(stringResource(R.string.restart_updating))
-//            }
         }
     }
 }

@@ -1,16 +1,13 @@
 package com.rds.mews.ui.grids
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -20,7 +17,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -30,12 +26,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -44,22 +40,24 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rds.mews.MainActivity
 import com.rds.mews.R
-import com.rds.mews.SummarizationResult
-import com.rds.mews.Title
-import com.rds.mews.TitleCardStates
-import com.rds.mews.localcore.formatUpdateTime
-import com.rds.mews.localcore.getStringsFromDate
+import com.rds.mews.localcore.SummarizationResult
+import com.rds.mews.localcore.TimeDate
+import com.rds.mews.localcore.Title
+import com.rds.mews.localcore.TitleCardStates
+import com.rds.mews.localcore.TitlesGroupState
 import com.rds.mews.localcore.mapResultToUiResources
+import com.rds.mews.ui.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
-import com.rds.mews.ui.custom_elements.LegacyTextDivider
 import com.rds.mews.ui.custom_elements.CustomTimeMark
 import com.rds.mews.ui.custom_elements.TitlesCard
+import com.rds.mews.ui.custom_elements.customHeader
 import com.rds.mews.viewmodels.TitlesViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale.getDefault
 import kotlin.collections.component1
 import kotlin.collections.component2
 import kotlin.collections.iterator
@@ -73,6 +71,7 @@ fun TitlesScreen(
     scope: CoroutineScope
 ) {
     val groupedItems by viewModel.groupedTitles.collectAsStateWithLifecycle()
+    val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val err by viewModel.errState.collectAsStateWithLifecycle()
     val showEmptyMess by viewModel.showEmptyMess.collectAsStateWithLifecycle()
@@ -85,6 +84,7 @@ fun TitlesScreen(
         lazyGridState = lazyGridState,
         mainActivity = mainActivity,
         groupedItems = groupedItems,
+        groupStates = groupStates,
         modifier = modifier,
         isRefreshing = isRefreshing,
         showEmptyMess = showEmptyMess,
@@ -102,7 +102,9 @@ fun TitlesScreen(
         endureTime = endureTime,
         onBanTheme = viewModel::onBanTheme,
         onConfigChange = viewModel::scrollToItem,
-        changeSourceState = viewModel::changeTitleSourceState
+        changeSourceState = viewModel::changeTitleSourceState,
+        changeGroupState = viewModel::changeGroupState,
+        getDateFromUnix = viewModel::getDateFromUnix
     )
 }
 
@@ -111,7 +113,8 @@ fun TitlesScreen(
 fun TitlesGrid(
     lazyGridState: LazyGridState,
     mainActivity: MainActivity,
-    groupedItems: Map<String, List<Title>>,
+    groupedItems: Map<TimeDate, List<Title>>,
+    groupStates: List<TitlesGroupState>,
     modifier: Modifier,
     isRefreshing: Boolean,
     showEmptyMess: Boolean,
@@ -129,12 +132,18 @@ fun TitlesGrid(
     endureTime: Boolean = false,
     onBanTheme: (String) -> Unit,
     onConfigChange: (Int) -> Unit,
-    changeSourceState: (Long, String) -> Unit
+    changeSourceState: (Long, String) -> Unit,
+    changeGroupState: (TimeDate) -> Unit,
+    getDateFromUnix: (Long) -> TimeDate
 ) {
-   val config = LocalConfiguration.current
+    val verticalArrangement by remember { mutableStateOf(8.dp) }
+
+    val config = LocalConfiguration.current
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val pullToRefreshState = rememberPullToRefreshState()
+    val lastUpdatedDate = remember(groupedItems) { mutableStateOf(getDateFromUnix(lastTitlesUpdate)) }
 
     LaunchedEffect(config) {
         val cardId = titlesCardStates.firstOrNull { it.expanded }?.id ?: -1
@@ -206,7 +215,7 @@ fun TitlesGrid(
                 .padding(horizontal = 10.dp),
             contentPadding = WindowInsets.statusBars.asPaddingValues(),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+//            verticalArrangement = Arrangement.spacedBy(16.dp),
             state = lazyGridState
         ) {
             if (showEmptyMess) {
@@ -220,69 +229,62 @@ fun TitlesGrid(
             }
 
             groupedItems.forEach { (date, titlesForDate) ->
-                if (showDates) stickyHeader() {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface)
-                    ) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LegacyTextDivider(date = true, dateString = date)
-                    }
-                }
+                customHeader(
+                    text = if (date.number != null) context.getString(
+                        date.date,
+                        date.number
+                    ) else context.getString(date.date)
+                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
+                    isExpanded = groupStates.find { it.group == date }?.expanded ?: true,
+                    onHeaderClick = { changeGroupState(date) }
+                )
 
                 items(items = titlesForDate, key = {it.id}) {item ->
                     val isExpanded = titlesCardStates.find { it.id == item.id }?.expanded ?: false
                     val pagerState = rememberPagerState(initialPage = titlesCardStates.find { it.id == item.id }?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
                     val sources = titlesCardStates.find { it.id == item.id}?.sources
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 4000.dp),
+                    ExpandableContainer(
+                        visible = groupStates.find { it.group == date }?.expanded ?: true
                     ) {
-                        if (endureTime) {
-                            CustomTimeMark(item.time)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = verticalArrangement)
+                                .heightIn(max = 4000.dp),
+                        ) {
+                            if (endureTime) {
+                                CustomTimeMark(item.time)
+                            }
+                            TitlesCard(
+                                item,
+                                isExpanded = isExpanded,
+                                pagerState = pagerState,
+                                onToggleExpanded = { onToggleExpanded(item.id) },
+                                rememberPage = { page -> rememberCardPage(item.id, page) },
+                                noTime = endureTime,
+                                onBanTheme = onBanTheme,
+                                sources = sources,
+                                changeSourceState = changeSourceState
+                            )
                         }
-                        TitlesCard(
-                            item,
-                            isExpanded = isExpanded,
-                            pagerState = pagerState,
-                            onToggleExpanded = { onToggleExpanded(item.id) },
-                            rememberPage = { page -> rememberCardPage(item.id, page) },
-                            noTime = endureTime,
-                            onBanTheme = onBanTheme,
-                            sources = sources,
-                            changeSourceState = changeSourceState
-                        )
                     }
                 }
             }
 
             if (groupedItems.isNotEmpty()) {
-                item { TitlesGridFootnote(lastTitlesUpdate) }
-                item { Spacer(modifier = Modifier.height(1.dp)) }
+                item {
+                    CustomBottomFootnote(
+                        text = stringResource(
+                            R.string.updated_footnote,
+                            if (lastUpdatedDate.value.number == null) stringResource(lastUpdatedDate.value.date)
+                            else stringResource(lastUpdatedDate.value.date, lastUpdatedDate.value.number!!),
+                            lastUpdatedDate.value.time
+                        ),
+                        modifier = Modifier.padding(vertical = verticalArrangement)
+                    )
+                }
             }
         }
     }
-}
-
-@Composable
-private fun TitlesGridFootnote(
-    updatedMills: Long
-) {
-    var fPair by remember { mutableStateOf(0 to "") }
-    var date by remember { mutableStateOf("") }
-    fPair = formatUpdateTime(updatedMills)
-    date = when (fPair.first) {
-        0 -> {
-            when (val ints = getStringsFromDate(fPair.second)) {
-                null -> fPair.second
-                else -> stringResource(ints[0], ints[1])
-            }
-        }
-        else -> stringResource(fPair.first)
-    }
-
-    CustomBottomFootnote(text = stringResource(R.string.updated_footnote, date, fPair.second))
 }

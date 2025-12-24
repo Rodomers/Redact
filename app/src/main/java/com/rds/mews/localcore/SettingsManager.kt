@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
-import com.rds.mews.SummarizationErrorType
-import com.rds.mews.SummarizationResult
 import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow

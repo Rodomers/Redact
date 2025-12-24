@@ -28,10 +28,6 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.rds.mews.R
-import com.rds.mews.ScreenQuadrant
-import com.rds.mews.SourceType
-import com.rds.mews.SummarizationErrorType
-import com.rds.mews.SummarizationResult
 import com.rds.mews.workers.RssUpdateWorker
 import com.rds.mews.workers.TitlesUpdateService
 import com.rds.mews.workers.TitlesUpdateWorker
@@ -63,14 +59,13 @@ fun getFormattedTimeUnix(unixTime: Long, date: Boolean = false, fullDate: Boolea
     return formatter.format(instant)
 }
 
-fun formatUpdateTime(unixMillis: Long): Pair<Int, String> {
+fun formatUpdateTime(unixMillis: Long, today: LocalDate = LocalDate.now()): Pair<Int, String> {
     val instant = Instant.ofEpochMilli(unixMillis)
     val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
     val date = dateTime.toLocalDate()
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     val timeString = dateTime.format(timeFormatter)
 
-    val today = LocalDate.now()
     val yesterday = today.minusDays(1)
 
     val dateInt = when (date) {

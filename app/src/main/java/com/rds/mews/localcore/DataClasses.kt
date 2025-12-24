@@ -1,6 +1,8 @@
-package com.rds.mews
+package com.rds.mews.localcore
 
 import android.content.Context
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.rds.mews.MainActivity
 
 data class Message(var id: Long, var time: Long, var link: String, var source: String, var mess: String)
 data class RSS(var id: Long, var source: String, var link: String)
@@ -91,9 +93,25 @@ data class SettingsUiFunctions(
     val setAlarmsAllowed: (Boolean) -> Unit,
     val planTitlesAutoUpdate: (Context) -> Unit,
     val setShowAlarmsSheet: (Boolean) -> Unit,
-    val setShowNotificationsSheet: (Boolean) -> Unit
+    val setShowNotificationsSheet: (Boolean) -> Unit,
+    val addGroupState: (Int, Boolean) -> Unit,
+    val changeGroupState: (Int) -> Unit
 )
 
-data class GroupState(val group: SourceType, val expanded: Boolean)
+data class SourcesGroupState(val group: SourceType, val expanded: Boolean)
+data class TitlesGroupState(val group: TimeDate, val expanded: Boolean)
+data class SettingsGroupState(val group: Int, val expanded: Boolean)
 
 data class SourceMessages(val source: String, val state: Boolean, val messages: List<Message>)
+data class TimeDate(val number: Int? = null, val date: Int, val time: String)
+
+data class TextButtonInputs(
+    val text: String,
+    override val action: () -> Unit,
+    override val toast: String? = null
+) : ButtonInputs
+data class IconButtonInputs(
+    val icon: ImageVector,
+    override val action: () -> Unit,
+    override val toast: String? = null
+) : ButtonInputs

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.rds.mews.MainActivity
+import com.rds.mews.localcore.SettingsGroupState
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.localcore.handleNotificationsPermissionRequest
 import com.rds.mews.localcore.isNotificationPermissionGranted
@@ -13,6 +14,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -27,6 +29,21 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     private val _showNotificationSheet = MutableStateFlow(false)
     val showNotificationSheet: StateFlow<Boolean> = _showNotificationSheet
 
+    private val _groupStates = MutableStateFlow<List<SettingsGroupState>>(emptyList())
+    val groupStates = _groupStates.asStateFlow()
+
+    fun addGroupState(group: Int, initState: Boolean = true) {
+        if (_groupStates.value.indexOfFirst { it.group == group } == -1)
+            _groupStates.value += SettingsGroupState(group, initState)
+    }
+
+    fun changeGroupState(group: Int) {
+        val current = _groupStates.value.map {
+            if (it.group == group) it.copy(expanded = !it.expanded)
+            else it
+        }
+        _groupStates.value = current
+    }
 
     val compactTabBar: StateFlow<Boolean> = repository.compactTabBar.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val isMonetColors: StateFlow<Boolean> = repository.monetColors.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)

@@ -1,12 +1,6 @@
 package com.rds.mews.ui.grids
 
 import android.content.Context
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -24,18 +18,20 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.rds.mews.GroupState
+import com.rds.mews.localcore.SourcesGroupState
 import com.rds.mews.R
-import com.rds.mews.RSS
-import com.rds.mews.SourceType
+import com.rds.mews.localcore.RSS
+import com.rds.mews.localcore.SourceType
+import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.sourcesTypeInterpreter
+import com.rds.mews.ui.ExpandableContainer
 import com.rds.mews.ui.custom_elements.SourcesCard
 import com.rds.mews.ui.custom_elements.CustomChangeBottomSheet
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
@@ -87,7 +83,7 @@ fun SourcesScreen(
 fun SourcesGrid(
     gridState: LazyGridState,
     groupedItems: Map<SourceType, List<RSS>>,
-    groupStates: List<GroupState>,
+    groupStates: List<SourcesGroupState>,
     modifier: Modifier,
     onSourceAdd: (String, String) -> Unit,
     onSourceDelete: (Long) -> Unit,
@@ -101,9 +97,10 @@ fun SourcesGrid(
     changedSource: RSS?,
     showAddDialog: Boolean
 ) {
+    val verticalArrangement by remember { mutableStateOf(8.dp) }
+
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
-    val animDuration = 250
 
     if (showAddDialog) {
         CustomChangeBottomSheet(
@@ -182,23 +179,21 @@ fun SourcesGrid(
                 items = itemsForSource,
                 key = { it.id }
             ) { item ->
-                AnimatedVisibility(
-                    visible = isExpanded,
-                    enter = expandVertically(
-                        expandFrom = Alignment.Top,
-                        animationSpec = tween(animDuration)
-                    ) + fadeIn(animationSpec = tween(animDuration)),
-                    exit = shrinkVertically(
-                        shrinkTowards = Alignment.Top,
-                        animationSpec = tween(animDuration)
-                    ) + fadeOut(animationSpec = tween(animDuration))
+                ExpandableContainer(
+                    visible = isExpanded
                 ) {
-                    Box(modifier = Modifier.padding(bottom = 16.dp)) {
+                    Box(modifier = Modifier.padding(bottom = verticalArrangement * 2)) {
                         SourcesCard(
                             source = item.source,
                             listOf(
-                                Pair(stringResource(R.string.source_change)) { setChangeSource(item) },
-                                Pair(stringResource(R.string.source_delete)) { setDelSource(item) }
+                                TextButtonInputs(stringResource(R.string.source_change), {
+                                    setChangeSource(
+                                        item
+                                    )
+                                }),
+                                TextButtonInputs(
+                                    stringResource(R.string.source_delete),
+                                    { setDelSource(item) })
                             )
                         )
                     }
@@ -208,8 +203,8 @@ fun SourcesGrid(
 
 
         if (newSourcesPermitted) {
-            item { Spacer(modifier = Modifier.height(15.dp)) }
-            item { Spacer(modifier = Modifier.height(15.dp)) }
+            item { Spacer(modifier = Modifier.height(verticalArrangement * 2 - 1.dp)) }
+            item { Spacer(modifier = Modifier.height(verticalArrangement * 2 - 1.dp)) }
 
             item {
                 SourcesAddCard({ setShowAddDialog(true) }, transitionState = showAddDialog)

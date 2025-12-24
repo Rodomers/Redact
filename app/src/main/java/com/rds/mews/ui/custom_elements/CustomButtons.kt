@@ -1,5 +1,6 @@
 package com.rds.mews.ui.custom_elements
 
+import android.widget.Toast
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Indication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -29,20 +31,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
+import com.rds.mews.localcore.IconButtonInputs
+import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.ui.theme.Shapes
 import kotlin.math.pow
 import kotlin.math.sqrt
 
 @Composable
 fun CustomTextButton(
-    text: String,
-    onClick: () -> Unit,
+    inputs: TextButtonInputs,
     modifier: Modifier = Modifier,
     textModifier: Modifier = Modifier,
     fontSize: TextUnit = TextUnit.Unspecified,
@@ -56,8 +59,11 @@ fun CustomTextButton(
     transitionContentColor: Color? = null,
     transitionState: MutableTransitionState<Boolean>? = null,
     verticalPadding: Dp = 8.dp,
-    horizontalPadding: Dp = 16.dp
+    horizontalPadding: Dp = 16.dp,
+    indication: Indication? = null
 ) {
+    val context = LocalContext.current
+
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -111,15 +117,18 @@ fun CustomTextButton(
             }
             .clickable(
                 interactionSource = interactionSource,
-                indication = null,
+                indication = indication,
                 enabled = enabled,
-                onClick = onClick,
+                onClick = {
+                    inputs.action()
+                    if (inputs.toast != null) Toast.makeText(context, inputs.toast, Toast.LENGTH_SHORT).show()
+                          },
                 role = Role.Button
             )
             .padding(horizontal = horizontalPadding, vertical = verticalPadding)
     ) {
         Text(
-            text = text,
+            text = inputs.text,
             modifier = textModifier,
             color = contentColor,
             fontSize = fontSize,
@@ -131,8 +140,7 @@ fun CustomTextButton(
 
 @Composable
 fun CustomIconButton(
-    icon: ImageVector,
-    onClick: () -> Unit,
+    inputs: IconButtonInputs,
     modifier: Modifier = Modifier,
     iconModifier: Modifier = Modifier,
     enabled: Boolean = true,
@@ -143,6 +151,8 @@ fun CustomIconButton(
     transitionState: MutableTransitionState<Boolean>? = null,
     shape: CornerBasedShape? = null
 ) {
+    val context = LocalContext.current
+
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -199,13 +209,16 @@ fun CustomIconButton(
                 interactionSource = interactionSource,
                 indication = null,
                 enabled = enabled,
-                onClick = onClick,
+                onClick = {
+                    inputs.action()
+                    if (inputs.toast != null) Toast.makeText(context, inputs.toast, Toast.LENGTH_SHORT).show()
+                },
                 role = Role.Button
             )
     ) {
         Icon(
             modifier = iconModifier,
-            imageVector = icon,
+            imageVector = inputs.icon,
             contentDescription = null,
             tint = contentColor
         )

@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupPositionProvider
-import com.rds.mews.ArrowPosition
+import com.rds.mews.localcore.ArrowPosition
 import kotlin.math.roundToInt
 
 class CenteredPopupPositionProvider(

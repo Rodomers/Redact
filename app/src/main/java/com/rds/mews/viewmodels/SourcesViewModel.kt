@@ -4,10 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.rds.mews.GroupState
+import com.rds.mews.localcore.SourcesGroupState
 import com.rds.mews.repositories.MewsRepository
-import com.rds.mews.RSS
-import com.rds.mews.SourceType
+import com.rds.mews.localcore.RSS
+import com.rds.mews.localcore.SourceType
 import com.rds.mews.localcore.defineSourceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -18,12 +18,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.forEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import okio.Source
 
 class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
     private val _scrollEvents = Channel<SourcesScrollEvent>(Channel.CONFLATED)
@@ -55,12 +53,12 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     private val _groupStates = MutableStateFlow<Map<SourceType, Boolean>>(emptyMap())
-    val groupStates: StateFlow<List<GroupState>> = combine(
+    val groupStates: StateFlow<List<SourcesGroupState>> = combine(
         groupedSources,
         _groupStates
     ) { sourceMap, groupMap ->
         sourceMap.map { (key, _) ->
-            GroupState(key, groupMap[key] ?: true)
+            SourcesGroupState(key, groupMap[key] ?: true)
         }
     }.stateIn(
         scope = viewModelScope,

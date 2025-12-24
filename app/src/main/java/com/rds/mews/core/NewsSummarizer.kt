@@ -1,10 +1,10 @@
 package com.rds.mews.core
 
 import android.annotation.SuppressLint
-import com.rds.mews.Message
+import com.rds.mews.localcore.Message
 import com.rds.mews.localcore.SettingsManager
-import com.rds.mews.SummarizationErrorType
-import com.rds.mews.SummarizationResult
+import com.rds.mews.localcore.SummarizationErrorType
+import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.repositories.MewsRepository
 import org.json.JSONArray
 import org.json.JSONObject

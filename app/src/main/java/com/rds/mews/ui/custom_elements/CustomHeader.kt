@@ -50,24 +50,13 @@ fun LegacyTextDivider(text: String? = null, dateString: String? = null, date: Bo
 fun LazyGridScope.customHeader(
     text: String = "null",
     textId: Int? = null,
-    dateString: String? = null,
-    date: Boolean = false,
     isExpanded: Boolean = false,
     onHeaderClick: () -> Unit = {},
     expandable: Boolean = true,
     fontSize: TextUnit = 30.sp
 ) {
     stickyHeader {
-        val titleText = when (date) {
-            true -> {
-                val ints = getStringsFromDate(dateString ?: "null")
-                when (ints) {
-                    null -> stringResource(R.string.wrong_date)
-                    else -> stringResource(ints[0], ints[1])
-                }
-            }
-            else -> if (textId == null) text else stringResource(textId)
-        }
+        val titleText = textId?.let { stringResource(it) } ?: text
 
         val rotation by animateFloatAsState(
             targetValue = if (isExpanded) 0f else -90f,

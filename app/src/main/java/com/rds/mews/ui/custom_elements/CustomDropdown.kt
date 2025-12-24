@@ -11,8 +11,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,11 +23,11 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -46,17 +44,18 @@ import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
-import com.rds.mews.ArrowPosition
-import com.rds.mews.ScreenQuadrant
+import com.rds.mews.localcore.ArrowPosition
+import com.rds.mews.localcore.ScreenQuadrant
+import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.getScreenQuadrant
 import com.rds.mews.ui.theme.Shapes
+import androidx.compose.material3.ripple
 
 class BubbleShape(
     private val cornerShape: CornerBasedShape,
@@ -194,7 +193,7 @@ class BubbleShape(
 @Composable
 fun CustomDropdown(
     transitionState: MutableTransitionState<Boolean>,
-    buttons: List<Pair<String, () -> Unit>>,
+    buttons: List<TextButtonInputs>,
     inputBounds: IntRect?,
     config: Configuration,
     density: Density,
@@ -241,7 +240,7 @@ fun CustomDropdown(
 @Composable
 private fun NPDropdown(
     transitionState: MutableTransitionState<Boolean>,
-    buttons: List<Pair<String, () -> Unit>>,
+    buttons: List<TextButtonInputs>,
     animDuration: Int = 200,
     timeList: Boolean = false,
     arrowPosition: ArrowPosition = ArrowPosition.None,
@@ -348,10 +347,9 @@ private fun NPDropdown(
                     .padding(padding),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                buttons.forEachIndexed { index, button ->
+                buttons.forEachIndexed { index, inputs ->
                     NPDropdownMenuItem(
-                        button.first,
-                        button.second,
+                        inputs = inputs,
                         onDismiss = onDismiss,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -386,28 +384,25 @@ private fun NPDropdown(
 
 @Composable
 private fun NPDropdownMenuItem(
-    text: String,
-    onClick: () -> Unit,
+    inputs: TextButtonInputs,
     onDismiss: () -> Unit,
     modifier: Modifier
 ) {
-    Box(
-        modifier = modifier
-            .wrapContentHeight()
-            .clickable {
-                onClick()
+    CustomTextButton(
+        inputs = inputs.copy(
+            action = {
+                inputs.action()
                 onDismiss()
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            maxLines = 3
-        )
-    }
+            }
+        ),
+        modifier = modifier.wrapContentHeight(),
+        textModifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        defaultBackgroundColor = Color.Transparent,
+        verticalPadding = 0.dp,
+        horizontalPadding = 0.dp,
+        indication = ripple(bounded = true),
+        shape = Shapes.large
+    )
 }
 
 private fun getArrowPosByBounds(config: Configuration, bounds: IntRect): ArrowPosition {

@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.rds.mews.ArrowPosition
+import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest

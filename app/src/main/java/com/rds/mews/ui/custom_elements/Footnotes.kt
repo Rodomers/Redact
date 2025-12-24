@@ -12,9 +12,9 @@ import androidx.compose.ui.unit.sp
 import com.rds.mews.localcore.getFormattedTimeUnix
 
 @Composable
-fun CustomBottomFootnote(text: String) {
+fun CustomBottomFootnote(text: String, modifier: Modifier = Modifier) {
     Text(text = text, fontWeight = FontWeight.Normal, fontSize = 12.sp, textAlign = TextAlign.Center,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp))
+        modifier = modifier.padding(start = 20.dp, end = 20.dp))
 }
 
 @Composable

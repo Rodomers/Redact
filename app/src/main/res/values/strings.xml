@@ -26,7 +26,7 @@
     <string name="titles_update_text">Pull down to update\n(Veery long)</string>
     <string name="today">today</string>
     <string name="yesterday">yesterday</string>
-    <string name="updated_footnote">Updated on %1$s at %2$s</string>
+    <string name="updated_footnote">Updated: %1$s at %2$s</string>
 
     <string name="settings_chapter_appearance">Appearance</string>
     <string name="settings_chapter_titles">Titles</string>

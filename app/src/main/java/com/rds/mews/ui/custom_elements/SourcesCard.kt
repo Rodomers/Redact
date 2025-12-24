@@ -37,12 +37,14 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
 import com.rds.mews.R
+import com.rds.mews.localcore.IconButtonInputs
+import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.ui.theme.Shapes
 
 @Composable
 fun SourcesCard(
     source: String,
-    buttons: List<Pair<String, () -> Unit>>
+    buttons: List<TextButtonInputs>
 ) {
     val transitionState = remember { MutableTransitionState(false) }
     val toggleDropdown = { transitionState.targetState = !transitionState.currentState }
@@ -82,8 +84,7 @@ fun SourcesCard(
                 )
             }
             CustomIconButton(
-                icon = Icons.Default.MoreVert,
-                onClick = { toggleDropdown() },
+                inputs = IconButtonInputs(Icons.Default.MoreVert, { toggleDropdown() }),
                 modifier = Modifier
                     .fillMaxHeight()
                     .padding(bottom = 4.dp, top = 4.dp, end = 4.dp)
@@ -128,8 +129,7 @@ fun SourcesAddCard(
         shadowElevation = 0.dp
     ) {
         CustomTextButton(
-            text = stringResource(R.string.sources_add_text),
-            onClick = action,
+            inputs = TextButtonInputs(stringResource(R.string.sources_add_text), action),
             modifier = Modifier.fillMaxSize(),
             transitionState = buttonTransitionState,
             transitionBackgroundColor = primaryColor,

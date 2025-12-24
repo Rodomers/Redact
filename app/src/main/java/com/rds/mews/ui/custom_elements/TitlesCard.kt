@@ -7,16 +7,10 @@ import android.content.ContextWrapper
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,6 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -96,11 +91,14 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.rds.mews.ArrowPosition
+import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.R
-import com.rds.mews.SourceMessages
-import com.rds.mews.Title
+import com.rds.mews.localcore.IconButtonInputs
+import com.rds.mews.localcore.SourceMessages
+import com.rds.mews.localcore.TextButtonInputs
+import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.getFormattedTimeUnix
+import com.rds.mews.ui.ExpandableContainer
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -117,7 +115,8 @@ fun TitlesCard(
     onToggleExpanded: () -> Unit,
     pagerState: PagerState,
     rememberPage: (Int) -> Unit,
-    noTime: Boolean = false
+    noTime: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
     var isPopupReady by remember { mutableStateOf(false) }
@@ -148,7 +147,7 @@ fun TitlesCard(
     val showPopup = expansionAnim.value > 0.001f || isExpanded
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
             .padding(vertical = 4.dp)
@@ -500,7 +499,6 @@ private fun ExpandedCardContent(
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
 
     val source = stringResource(R.string.titles_card_source)
-    val toastText = stringResource(R.string.titles_card_copied)
 
     val bottomPanelHeight = 50.dp
     val bottomPanelItemsColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f)
@@ -508,15 +506,21 @@ private fun ExpandedCardContent(
     fun copyText() {
         val copiedText = "${title.title}\n\n${title.text}\n\n${source}: ${title.sources}"
         clipboardManager.setText(AnnotatedString(copiedText))
-        Toast.makeText(context, toastText, Toast.LENGTH_SHORT).show()
     }
     fun banNew() {
         onBanTheme(title.title)
-        Toast.makeText(context, R.string.titles_card_banned, Toast.LENGTH_SHORT).show()
     }
     val buttons = listOf(
-        Pair(stringResource(R.string.share_btn_desc), ::copyText),
-        Pair(stringResource(R.string.ban_btn_desc), ::banNew)
+        TextButtonInputs(
+            stringResource(R.string.share_btn_desc),
+            ::copyText,
+            stringResource(R.string.titles_card_copied)
+        ),
+        TextButtonInputs(
+            stringResource(R.string.ban_btn_desc),
+            ::banNew,
+            stringResource(R.string.titles_card_banned)
+        )
     )
 
     val headerAnimProgress = if (originalNoTime) {
@@ -605,6 +609,7 @@ private fun ExpandedCardContent(
                         else {
                             LazyVerticalGrid(
                                 modifier = Modifier
+                                    .padding(horizontal = 8.dp)
                                     .fillMaxWidth(),
                                 columns = GridCells.Fixed(5)
                             ) {
@@ -624,21 +629,15 @@ private fun ExpandedCardContent(
                                         key = { it.id }
                                     ) { item ->
                                         Column(modifier = Modifier.fillMaxWidth()) {
-                                            AnimatedVisibility(
-                                                visible = state,
-                                                enter = expandVertically(
-                                                    expandFrom = Alignment.Top,
-                                                    animationSpec = tween(250)
-                                                ) + fadeIn(animationSpec = tween(250)),
-                                                exit = shrinkVertically(
-                                                    shrinkTowards = Alignment.Top,
-                                                    animationSpec = tween(250)
-                                                ) + fadeOut(animationSpec = tween(250))
+                                            ExpandableContainer(
+                                                visible = state
                                             ) {
                                                 Box(modifier = Modifier.padding(bottom = 16.dp)) {
                                                     CustomTextButton(
-                                                        text = getFormattedTimeUnix(item.time),
-                                                        onClick = { handler.openUri(item.link) },
+                                                        inputs = TextButtonInputs(
+                                                            getFormattedTimeUnix(item.time),
+                                                            { handler.openUri(item.link) }
+                                                        ),
                                                         defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
                                                         shape = Shapes.large
                                                     )
@@ -646,6 +645,14 @@ private fun ExpandedCardContent(
                                             }
                                         }
                                     }
+                                }
+
+                                item(
+                                    span = { GridItemSpan(maxLineSpan) }
+                                ) {
+                                    Spacer(modifier = Modifier
+                                        .height(bottomPanelHeight - 8.dp)
+                                        .fillMaxWidth())
                                 }
                             }
                         }
@@ -689,8 +696,12 @@ private fun ExpandedCardContent(
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     CustomIconButton(
-                        icon = Icons.Default.MoreVert,
-                        onClick = { dropdownTransitionState.targetState = !dropdownTransitionState.currentState },
+                        inputs = IconButtonInputs(
+                            Icons.Default.MoreVert,
+                            {
+                                dropdownTransitionState.targetState =
+                                    !dropdownTransitionState.currentState
+                            }),
                         modifier = Modifier
                             .size(40.dp)
                             .padding(bottom = 6.dp)

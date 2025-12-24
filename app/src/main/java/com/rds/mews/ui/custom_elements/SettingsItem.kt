@@ -17,13 +17,13 @@ import androidx.compose.ui.unit.sp
 import com.rds.mews.ui.theme.Shapes
 
 @Composable
-fun SettingsItem(text: String, item: @Composable () -> Unit) {
+fun SettingsItem(text: String, modifier: Modifier = Modifier, item: @Composable () -> Unit) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = Shapes.large,
-        color = MaterialTheme.colorScheme.secondaryContainer
+        color = MaterialTheme.colorScheme.secondaryContainer,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),

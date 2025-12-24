@@ -8,8 +8,8 @@ import com.rds.mews.core.LLMClient
 import com.rds.mews.core.NewsSummarizer
 import com.rds.mews.core.RssFetcher
 import com.rds.mews.localcore.SettingsManager
-import com.rds.mews.SummarizationErrorType
-import com.rds.mews.SummarizationResult
+import com.rds.mews.localcore.SummarizationErrorType
+import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

@@ -1,6 +1,11 @@
 package com.rds.mews.viewmodels
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.collection.intListOf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -11,36 +16,43 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.rds.mews.MainActivity
-import com.rds.mews.Message
-import com.rds.mews.SourceMessages
+import com.rds.mews.localcore.Message
+import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.repositories.MewsRepository
-import com.rds.mews.SummarizationErrorType
-import com.rds.mews.SummarizationResult
-import com.rds.mews.Title
-import com.rds.mews.TitleCardStates
-import com.rds.mews.localcore.getFormattedTimeUnix
+import com.rds.mews.localcore.SummarizationErrorType
+import com.rds.mews.localcore.SummarizationResult
+import com.rds.mews.localcore.TimeDate
+import com.rds.mews.localcore.Title
+import com.rds.mews.localcore.TitleCardStates
+import com.rds.mews.localcore.TitlesGroupState
+import com.rds.mews.localcore.formatUpdateTime
+import com.rds.mews.localcore.getStringsFromDate
 import com.rds.mews.localcore.requestNotificationPermission
-import com.rds.mews.localcore.strTransform
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 class TitlesViewModel(
     private val application: Application,
     private val repository: MewsRepository
 ): AndroidViewModel(application) {
-
     private val _scrollEvents = Channel<TitlesScrollEvent>(Channel.CONFLATED)
     val scrollEvents = _scrollEvents.receiveAsFlow()
 
@@ -50,6 +62,28 @@ class TitlesViewModel(
         .map { it.firstOrNull() }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val todayDateFlow = callbackFlow {
+        trySend(LocalDate.now())
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                trySend(LocalDate.now())
+            }
+        }
+
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+            addAction(Intent.ACTION_DATE_CHANGED)
+        }
+
+        application.applicationContext.registerReceiver(receiver, filter)
+
+        awaitClose {
+            application.applicationContext.unregisterReceiver(receiver)
+        }
+    }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(), replay = 1)
 
     private val _titles = MutableStateFlow<List<Title>>(emptyList())
     val titles = _titles.asStateFlow()
@@ -67,20 +101,32 @@ class TitlesViewModel(
     private val _errState = MutableStateFlow<SummarizationResult.Failure?>(null)
     val errState = _errState.asStateFlow()
 
-    val groupedTitles: StateFlow<Map<String, List<Title>>> = titles
-        .filter { it.isNotEmpty() }
-        .distinctUntilChanged()
-        .map { list ->
-            list.filter { it.text != "<промежуточный текст>" }.map {
-                it.copy(
-                    sources = strTransform(it.sources, ", "),
-                    ids = strTransform(it.ids, "\n")
-                )
-            }.groupBy { getFormattedTimeUnix(it.time, true) }
+    val groupedTitles = combine(
+        titles,
+        todayDateFlow
+    ) { titles, today ->
+        titles.groupBy { title ->
+            getDateFromUnix(title.time, today).copy(time = "00:00")
         }
-        .flowOn(Dispatchers.Default)
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyMap()
+    )
+
+    private val _groupStates = MutableStateFlow<Map<TimeDate, Boolean>>(emptyMap())
+    val groupStates: StateFlow<List<TitlesGroupState>> = combine(
+        groupedTitles,
+        _groupStates
+    ) { titleMap, groupMap  ->
+        titleMap.map { (key, _) ->
+            TitlesGroupState(key, groupMap[key] ?: true)
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     private val _showEmptyMessage = MutableStateFlow(false)
     val showEmptyMess: StateFlow<Boolean> = _showEmptyMessage
@@ -178,6 +224,37 @@ class TitlesViewModel(
     }
 
     fun getMessages(ids: String): List<Message>? = repository.getMessages(ids)
+
+    fun changeGroupState(date: TimeDate) {
+        val currentMap = _groupStates.value.toMutableMap()
+        currentMap[date] = !(currentMap[date] ?: true)
+        _groupStates.value = currentMap
+    }
+
+    fun getDateFromUnix(timeUnix: Long, today: LocalDate = LocalDate.now()): TimeDate {
+        val fPair = formatUpdateTime(timeUnix, today = today)
+
+        return when (fPair.first) {
+            0 -> {
+                val instant = Instant.ofEpochMilli(timeUnix)
+                val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+                val dateFormatter = DateTimeFormatter.ofPattern("d.M")
+                val dateString = dateTime.format(dateFormatter)
+
+                val ints = getStringsFromDate(dateString) ?: intListOf(1, 1)
+
+                TimeDate(
+                    number = ints[1],
+                    date = ints[0],
+                    time = fPair.second
+                )
+            }
+            else -> TimeDate(
+                date = fPair.first,
+                time = fPair.second
+            )
+        }
+    }
 
     init {
         viewModelScope.launch {

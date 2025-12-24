@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.ui.theme.Shapes
 
 @Composable
@@ -97,8 +98,7 @@ fun AnimatedSegmentedControl(
         ) {
             items.forEachIndexed { index, item ->
                 CustomTextButton(
-                    text = item.first,
-                    onClick = item.second,
+                    inputs = TextButtonInputs(item.first, item.second),
                     modifier = Modifier
                         .wrapContentSize()
                         .onSizeChanged { size ->
