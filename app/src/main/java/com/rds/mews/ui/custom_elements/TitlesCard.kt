@@ -57,6 +57,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Brush
@@ -116,7 +118,8 @@ fun TitlesCard(
     pagerState: PagerState,
     rememberPage: (Int) -> Unit,
     noTime: Boolean = false,
-    modifier: Modifier = Modifier
+    backgroundColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+    @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
     var isPopupReady by remember { mutableStateOf(false) }
@@ -155,8 +158,8 @@ fun TitlesCard(
                 collapsedBounds = coordinates.boundsInWindow()
             }
             .alpha(if (isPopupReady && expansionAnim.value > 0.02f) 0f else 1f),
-        shape = RoundedCornerShape(25.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = Shapes.large,
+        color = backgroundColor,
         shadowElevation = 0.dp
     ) {
         TitlesHeaderContent(
@@ -168,9 +171,7 @@ fun TitlesCard(
     }
 
     if (showPopup && collapsedBounds != null) {
-        RootViewOverlay(
-            onDismissRequest = onToggleExpanded
-        ) {
+        RootViewOverlay {
             HeroExpansionContent(
                 title = title,
                 sources = sources,
@@ -182,7 +183,8 @@ fun TitlesCard(
                 onBanTheme = onBanTheme,
                 pagerState = pagerState,
                 rememberPage = rememberPage,
-                originalNoTime = noTime
+                originalNoTime = noTime,
+                backgroundColor = backgroundColor
             )
         }
     }
@@ -190,7 +192,6 @@ fun TitlesCard(
 
 @Composable
 fun RootViewOverlay(
-    onDismissRequest: () -> Unit,
     content: @Composable () -> Unit
 ) {
     val view = LocalView.current
@@ -258,7 +259,8 @@ private fun HeroExpansionContent(
     onBanTheme: (String) -> Unit,
     pagerState: PagerState,
     rememberPage: (Int) -> Unit,
-    originalNoTime: Boolean
+    originalNoTime: Boolean,
+    backgroundColor: Color
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -270,9 +272,7 @@ private fun HeroExpansionContent(
 
     val clampedProgress = progress.coerceIn(0f, 1f)
 
-    BackHandler {
-        onDismissRequest()
-    }
+    BackHandler { onDismissRequest() }
 
     val displayMetrics = context.resources.displayMetrics
     val screenWidthPx = displayMetrics.widthPixels.toFloat()
@@ -289,6 +289,8 @@ private fun HeroExpansionContent(
     val scrimAlpha = clampedProgress * 0.6f
     val contentAlpha = ((clampedProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
 
+    val containerColor = MaterialTheme.colorScheme.surface
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -297,19 +299,12 @@ private fun HeroExpansionContent(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 enabled = true
-            ) {
-                onDismissRequest()
-            }
+            ) { onDismissRequest() }
     ) {
         if (contentHeight == null) {
             Box(
                 modifier = Modifier
-                    .offset {
-                        IntOffset(
-                            horizontalMarginPx.roundToInt(),
-                            verticalMarginPx.roundToInt()
-                        )
-                    }
+                    .offset { IntOffset(horizontalMarginPx.roundToInt(), verticalMarginPx.roundToInt()) }
                     .width(targetWidthDp)
                     .alpha(0f)
                     .onGloballyPositioned { coordinates ->
@@ -317,13 +312,12 @@ private fun HeroExpansionContent(
                         onReady()
                     }
             ) {
-                MeasureCardCompleteStructure(title, onBanTheme)
+                MeasureCardCompleteStructure(title)
             }
         }
 
         val currentContentHeight = contentHeight ?: collapsedBounds.height
         val targetHeight = min(currentContentHeight, maxAvailableHeight)
-
         val centeredTop = (screenHeightPx - targetHeight) / 2
 
         val expandedBounds = Rect(
@@ -335,41 +329,28 @@ private fun HeroExpansionContent(
 
         val currentRect: Rect = lerp(collapsedBounds, expandedBounds, progress)
 
-        val currentContainerColor = lerp(
-            MaterialTheme.colorScheme.secondaryContainer,
-            MaterialTheme.colorScheme.surface,
-            progress
-        )
-        val currentCorner = 25.dp
-
         Surface(
             modifier = Modifier
                 .graphicsLayer {
                     translationX = currentRect.left
                     translationY = currentRect.top
-                    shape = RoundedCornerShape(currentCorner)
+                    shape = Shapes.large
                     clip = true
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
                 .layout { measurable, _ ->
                     val currentW = currentRect.width.roundToInt()
                     val currentH = currentRect.height.roundToInt()
-
-                    val placeable = measurable.measure(
-                        Constraints.fixed(currentW, currentH)
-                    )
-
-                    layout(currentW, currentH) {
-                        placeable.place(0, 0)
-                    }
+                    val placeable = measurable.measure(Constraints.fixed(currentW, currentH))
+                    layout(currentW, currentH) { placeable.place(0, 0) }
                 }
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
                     enabled = true
                 ) {},
-            shape = RoundedCornerShape(currentCorner),
-            color = currentContainerColor,
+            shape = Shapes.large,
+            color = containerColor,
             shadowElevation = 0.dp
         ) {
             Box(
@@ -389,7 +370,8 @@ private fun HeroExpansionContent(
                     contentAlpha = contentAlpha,
                     targetWidth = targetWidthDp,
                     expansionProgress = clampedProgress,
-                    originalNoTime = originalNoTime
+                    originalNoTime = originalNoTime,
+                    headerStartColor = backgroundColor
                 )
             }
         }
@@ -398,8 +380,7 @@ private fun HeroExpansionContent(
 
 @Composable
 private fun MeasureCardCompleteStructure(
-    title: Title,
-    onBanTheme: (String) -> Unit
+    title: Title
 ) {
     Column(modifier = Modifier
         .fillMaxWidth()
@@ -486,9 +467,9 @@ private fun ExpandedCardContent(
     contentAlpha: Float,
     targetWidth: Dp,
     expansionProgress: Float,
-    originalNoTime: Boolean
+    originalNoTime: Boolean,
+    headerStartColor: Color
 ) {
-    val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -499,9 +480,12 @@ private fun ExpandedCardContent(
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
 
     val source = stringResource(R.string.titles_card_source)
-
     val bottomPanelHeight = 50.dp
     val bottomPanelItemsColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f)
+
+    val headerEndColor = MaterialTheme.colorScheme.secondaryContainer
+
+    val shouldAnimateHeader = headerStartColor != headerEndColor
 
     fun copyText() {
         val copiedText = "${title.title}\n\n${title.text}\n\n${source}: ${title.sources}"
@@ -511,23 +495,11 @@ private fun ExpandedCardContent(
         onBanTheme(title.title)
     }
     val buttons = listOf(
-        TextButtonInputs(
-            stringResource(R.string.share_btn_desc),
-            ::copyText,
-            stringResource(R.string.titles_card_copied)
-        ),
-        TextButtonInputs(
-            stringResource(R.string.ban_btn_desc),
-            ::banNew,
-            stringResource(R.string.titles_card_banned)
-        )
+        TextButtonInputs(stringResource(R.string.share_btn_desc), ::copyText, stringResource(R.string.titles_card_copied)),
+        TextButtonInputs(stringResource(R.string.ban_btn_desc), ::banNew, stringResource(R.string.titles_card_banned))
     )
 
-    val headerAnimProgress = if (originalNoTime) {
-        expansionProgress
-    } else {
-        1f
-    }
+    val headerAnimProgress = if (originalNoTime) expansionProgress else 1f
 
     LaunchedEffect(pagerState.targetPage) {
         rememberPage(pagerState.targetPage)
@@ -540,9 +512,29 @@ private fun ExpandedCardContent(
             .wrapContentHeight()
     ) {
         Surface(
-            shape = RoundedCornerShape(25.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            modifier = Modifier.fillMaxWidth()
+            shape = Shapes.large,
+            color = Color.Transparent,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(Shapes.large)
+                .drawBehind {
+                    if (!shouldAnimateHeader) {
+                        drawRect(headerEndColor)
+                    } else {
+                        drawRect(headerStartColor)
+
+                        if (expansionProgress > 0f) {
+                            drawRect(
+                                color = headerEndColor,
+                                topLeft = androidx.compose.ui.geometry.Offset.Zero,
+                                size = androidx.compose.ui.geometry.Size(
+                                    width = size.width * expansionProgress,
+                                    height = size.height
+                                )
+                            )
+                        }
+                    }
+                }
         ) {
             TitlesHeaderContent(
                 title = title,
@@ -581,7 +573,6 @@ private fun ExpandedCardContent(
                             Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
                         }
                     }
-
                     1 -> {
                         if (sources == null) {
                             Column(
@@ -605,8 +596,7 @@ private fun ExpandedCardContent(
                                 )
                                 Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
                             }
-                        }
-                        else {
+                        } else {
                             LazyVerticalGrid(
                                 modifier = Modifier
                                     .padding(horizontal = 8.dp)
@@ -624,14 +614,9 @@ private fun ExpandedCardContent(
                                         onHeaderClick = { changeSourceState(title.id, source) },
                                         fontSize = 18.sp
                                     )
-                                    items(
-                                        items = messages,
-                                        key = { it.id }
-                                    ) { item ->
+                                    items(items = messages, key = { it.id }) { item ->
                                         Column(modifier = Modifier.fillMaxWidth()) {
-                                            ExpandableContainer(
-                                                visible = state
-                                            ) {
+                                            ExpandableContainer(visible = state) {
                                                 Box(modifier = Modifier.padding(bottom = 16.dp)) {
                                                     CustomTextButton(
                                                         inputs = TextButtonInputs(
@@ -646,13 +631,8 @@ private fun ExpandedCardContent(
                                         }
                                     }
                                 }
-
-                                item(
-                                    span = { GridItemSpan(maxLineSpan) }
-                                ) {
-                                    Spacer(modifier = Modifier
-                                        .height(bottomPanelHeight - 8.dp)
-                                        .fillMaxWidth())
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Spacer(modifier = Modifier.height(bottomPanelHeight - 8.dp).fillMaxWidth())
                                 }
                             }
                         }
@@ -673,7 +653,6 @@ private fun ExpandedCardContent(
                             )
                         )
                     )
-//                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                     .graphicsLayer { alpha = contentAlpha }
             ) {
                 Row(
@@ -696,19 +675,14 @@ private fun ExpandedCardContent(
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     CustomIconButton(
-                        inputs = IconButtonInputs(
-                            Icons.Default.MoreVert,
-                            {
-                                dropdownTransitionState.targetState =
-                                    !dropdownTransitionState.currentState
-                            }),
+                        inputs = IconButtonInputs(Icons.Default.MoreVert, {
+                            dropdownTransitionState.targetState = !dropdownTransitionState.currentState
+                        }),
                         modifier = Modifier
                             .size(40.dp)
                             .padding(bottom = 6.dp)
                             .align(Alignment.CenterVertically)
-                            .onGloballyPositioned {
-                                buttonBounds = it.boundsInWindow().roundToIntRect()
-                            },
+                            .onGloballyPositioned { buttonBounds = it.boundsInWindow().roundToIntRect() },
                         iconModifier = Modifier.size(18.dp),
                         defaultBackgroundColor = bottomPanelItemsColor,
                         transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.7f),

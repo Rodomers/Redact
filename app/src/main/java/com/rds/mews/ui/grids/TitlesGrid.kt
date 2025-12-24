@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -240,9 +241,11 @@ fun TitlesGrid(
                 )
 
                 items(items = titlesForDate, key = {it.id}) {item ->
-                    val isExpanded = titlesCardStates.find { it.id == item.id }?.expanded ?: false
-                    val pagerState = rememberPagerState(initialPage = titlesCardStates.find { it.id == item.id }?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
-                    val sources = titlesCardStates.find { it.id == item.id}?.sources
+                    val statesItem = titlesCardStates.find { it.id == item.id }
+                    val isExpanded = statesItem?.expanded ?: false
+                    val pagerState = rememberPagerState(initialPage = statesItem?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
+                    val sources = statesItem?.sources
+                    val read = statesItem?.read ?: false
 
                     ExpandableContainer(
                         visible = groupStates.find { it.group == date }?.expanded ?: true
@@ -265,7 +268,10 @@ fun TitlesGrid(
                                 noTime = endureTime,
                                 onBanTheme = onBanTheme,
                                 sources = sources,
-                                changeSourceState = changeSourceState
+                                changeSourceState = changeSourceState,
+                                backgroundColor = if (read)
+                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.5f)
+                                else MaterialTheme.colorScheme.secondaryContainer
                             )
                         }
                     }

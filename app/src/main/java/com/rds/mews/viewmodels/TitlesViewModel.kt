@@ -9,6 +9,7 @@ import androidx.collection.intListOf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -78,7 +79,12 @@ class TitlesViewModel(
             addAction(Intent.ACTION_DATE_CHANGED)
         }
 
-        application.applicationContext.registerReceiver(receiver, filter)
+        ContextCompat.registerReceiver(
+            application.applicationContext,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         awaitClose {
             application.applicationContext.unregisterReceiver(receiver)
@@ -183,7 +189,7 @@ class TitlesViewModel(
                     null -> it.copy(expanded = false)
                     else -> {
                         if (it.id == id) {
-                            it.copy(expanded = !it.expanded)
+                            it.copy(expanded = !it.expanded, read = true)
                         } else it
                     }
                 }
@@ -195,6 +201,15 @@ class TitlesViewModel(
         _titleCardStates.update { currentSet ->
             currentSet.map {
                 if (it.id == id) { it.copy(currentPage = newPage) }
+                else it
+            }.toSet()
+        }
+    }
+
+    fun markTitleAsRead(id: Long, read: Boolean = true) {
+        _titleCardStates.update { currentSet ->
+            currentSet.map {
+                if (it.id == id) { it.copy(read = read) }
                 else it
             }.toSet()
         }
