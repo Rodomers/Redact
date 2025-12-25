@@ -39,7 +39,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -81,6 +80,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -120,6 +120,7 @@ fun TitlesCard(
     pagerState: PagerState,
     rememberPage: (Int) -> Unit,
     noTime: Boolean = false,
+    showSnippet: Boolean = false,
     backgroundColor: Color = MaterialTheme.colorScheme.secondaryContainer,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
@@ -144,7 +145,7 @@ fun TitlesCard(
         } else {
             expansionAnim.animateTo(
                 targetValue = 0f,
-                animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)
+                animationSpec = spring(dampingRatio = 1f, stiffness = 750f)
             )
         }
     }
@@ -159,17 +160,30 @@ fun TitlesCard(
             .onGloballyPositioned { coordinates ->
                 collapsedBounds = coordinates.boundsInWindow()
             }
-            .alpha(if (isPopupReady && expansionAnim.value > 0.02f) 0f else 1f),
+            .alpha(if (showPopup && isPopupReady) 0f else 1f)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onToggleExpanded() },
         shape = Shapes.large,
         color = backgroundColor,
         shadowElevation = 0.dp
     ) {
-        TitlesHeaderContent(
-            title = title,
-            noTime = noTime,
-            onClicked = onToggleExpanded,
-            clickableEnabled = true
-        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            TitlesHeaderContent(
+                title = title,
+                noTime = noTime,
+                onClicked = {},
+                clickableEnabled = false
+            )
+
+            if (showSnippet) {
+                SnippetText(
+                    text = title.text,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+            }
+        }
     }
 
     if (showPopup && collapsedBounds != null) {
@@ -186,10 +200,30 @@ fun TitlesCard(
                 pagerState = pagerState,
                 rememberPage = rememberPage,
                 originalNoTime = noTime,
+                showSnippet = showSnippet,
                 backgroundColor = backgroundColor
             )
         }
     }
+}
+
+@Composable
+private fun SnippetText(
+    text: String,
+    modifier: Modifier = Modifier,
+    alpha: Float = 1f
+) {
+    Text(
+        text = text,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .alpha(alpha),
+        style = MaterialTheme.typography.bodySmall,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 @Composable
@@ -262,6 +296,7 @@ private fun HeroExpansionContent(
     pagerState: PagerState,
     rememberPage: (Int) -> Unit,
     originalNoTime: Boolean,
+    showSnippet: Boolean,
     backgroundColor: Color
 ) {
     val context = LocalContext.current
@@ -373,6 +408,7 @@ private fun HeroExpansionContent(
                     targetWidth = targetWidthDp,
                     expansionProgress = clampedProgress,
                     originalNoTime = originalNoTime,
+                    showSnippet = showSnippet,
                     headerStartColor = backgroundColor
                 )
             }
@@ -418,11 +454,16 @@ private fun TitlesHeaderContent(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = clickableEnabled
-            ) { onClicked() }
+            .then(
+                if (clickableEnabled) {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onClicked() }
+                } else {
+                    Modifier
+                }
+            )
             .padding(horizontal = 16.dp, vertical = 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -470,6 +511,7 @@ private fun ExpandedCardContent(
     targetWidth: Dp,
     expansionProgress: Float,
     originalNoTime: Boolean,
+    showSnippet: Boolean,
     headerStartColor: Color
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -531,6 +573,10 @@ private fun ExpandedCardContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(Shapes.large)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { onCollapse() }
                 .drawBehind {
                     if (!shouldAnimateHeader) {
                         drawRect(headerEndColor)
@@ -550,12 +596,32 @@ private fun ExpandedCardContent(
                     }
                 }
         ) {
-            TitlesHeaderContent(
-                title = title,
-                noTime = false,
-                onClicked = onCollapse,
-                animationProgress = headerAnimProgress
-            )
+            Column {
+                TitlesHeaderContent(
+                    title = title,
+                    noTime = false,
+                    onClicked = {},
+                    clickableEnabled = false,
+                    animationProgress = headerAnimProgress
+                )
+
+                if (showSnippet) {
+                    val snippetAlpha = (1f - expansionProgress).coerceIn(0f, 1f)
+                    SnippetText(
+                        text = title.text,
+                        modifier = Modifier
+                            .layout { measurable, constraints ->
+                                val placeable = measurable.measure(constraints)
+                                val visibleHeight = (placeable.height * snippetAlpha).roundToInt()
+                                layout(placeable.width, visibleHeight) {
+                                    val yOffset = (placeable.height * expansionProgress).roundToInt() * -1
+                                    placeable.place(0, yOffset)
+                                }
+                            },
+                        alpha = snippetAlpha
+                    )
+                }
+            }
         }
 
         Box(

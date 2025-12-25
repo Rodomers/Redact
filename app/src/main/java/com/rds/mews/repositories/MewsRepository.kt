@@ -190,6 +190,7 @@ object MewsRepository {
     const val COMPACT_TAB_BAR = "compact_tab_bar"
     const val FILTER_TOPICS = "filter_topics"
     const val INNER_TIMESTAMPS = "inner_timestamps"
+    const val SHOW_SNIPPETS = "show_snippets"
     const val TITLES_AUTO_UPDATE = "auto_update_titles"
     const val TITLES_AUTO_UPDATE_FREQUENCY = "auto_update_titles_frequency"
     const val ALARMS_ALLOWED = "exact_alarms_allowed"
@@ -322,6 +323,13 @@ object MewsRepository {
         _innerTime.value = newValue
     }
 
+    private val _showSnippets = MutableStateFlow(false)
+    val showSnippets: StateFlow<Boolean> = _showSnippets.asStateFlow()
+    fun setShowSnippets(newValue: Boolean) {
+        settingsManager.saveBoolean(SHOW_SNIPPETS, newValue)
+        _showSnippets.value = newValue
+    }
+
     private val _titlesAlarmUpdate = MutableStateFlow(false)
     val titlesAlarmUpdate: StateFlow<Boolean> = _titlesAlarmUpdate.asStateFlow()
     fun setTitlesAlarmUpdate(newValue: Boolean) {
@@ -396,6 +404,7 @@ object MewsRepository {
         _compactTabBar.value = settingsManager.getBoolean(COMPACT_TAB_BAR, false)
         _showDates.value = settingsManager.getBoolean(SHOW_DATES, false)
         _innerTime.value = settingsManager.getBoolean(INNER_TIMESTAMPS, false)
+        _showSnippets.value = settingsManager.getBoolean(SHOW_SNIPPETS, false)
         _titlesAlarmUpdate.value = settingsManager.getBoolean(TITLES_AUTO_UPDATE, false)
         _titlesAlarmTimeMins.value = settingsManager.getInt(TITLES_ALARM_MINS, 540)
         _titlesAutoUpdateFrequency.value = settingsManager.getInt(TITLES_AUTO_UPDATE_FREQUENCY, 24)

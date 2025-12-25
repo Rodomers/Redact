@@ -19,7 +19,7 @@ fun TimelineMarker(
     isFirst: Boolean,
     isLast: Boolean,
     modifier: Modifier = Modifier,
-    topOffset: Dp = 30.dp
+    topOffset: Dp = 35.dp
 ) {
     Row(modifier = modifier.fillMaxHeight()) {
         Text(

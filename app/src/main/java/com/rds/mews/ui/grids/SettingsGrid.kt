@@ -94,6 +94,7 @@ fun SettingsScreen(
     val titlesPeriod by viewModel.titlesPeriod.collectAsStateWithLifecycle()
     val rssUpdateInterval by viewModel.rssUpdateInterval.collectAsStateWithLifecycle()
     val innerTime by viewModel.innerTime.collectAsStateWithLifecycle()
+    val showSnippets by viewModel.showSnippets.collectAsStateWithLifecycle()
     val titlesAlarmUpdate by viewModel.titlesAlarmUpdate.collectAsStateWithLifecycle()
     val alarmMins by viewModel.titlesAlarmMins.collectAsStateWithLifecycle()
     val alarmFrequency by viewModel.titlesUpdateFrequency.collectAsStateWithLifecycle()
@@ -116,6 +117,7 @@ fun SettingsScreen(
         titlesPeriod = titlesPeriod,
         rssUpdateInterval = rssUpdateInterval,
         innerTime = innerTime,
+        showSnippets = showSnippets,
         titlesAlarmUpdate = titlesAlarmUpdate,
         alarmMins = alarmMins,
         alarmFrequency = alarmFrequency,
@@ -133,6 +135,7 @@ fun SettingsScreen(
             setCurrentTheme = viewModel::setCurrentTheme,
             setShowDates = viewModel::setShowDates,
             setInnerTime = viewModel::setInnerTime,
+            setShowSnippets = viewModel::setShowSnippets,
             setTitlesNum = viewModel::setTitlesNum,
             setTitlesPeriod = viewModel::setTitlesPeriod,
             setRssUpdateInterval = viewModel::setRssUpdateInterval,
@@ -469,15 +472,15 @@ fun SettingsGrid(
                     visible = groupStates.find { it.group == titlesChapterId }?.expanded ?: true
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-//                        SettingsItem(
-//                            text = stringResource(R.string.settings_show_dates),
-//                            modifier = Modifier.padding(vertical = verticalArrangement),
-//                        ) {
-//                            CustomSwitch(
-//                                checked = state.showDates,
-//                                onCheckedChange = { functions.setShowDates(it) }
-//                            )
-//                        }
+                        SettingsItem(
+                            text = stringResource(R.string.settings_show_snippets),
+                            modifier = Modifier.padding(vertical = verticalArrangement),
+                        ) {
+                            CustomSwitch(
+                                checked = state.showSnippets,
+                                onCheckedChange = { functions.setShowSnippets(it) }
+                            )
+                        }
                         SettingsItem(
                             text = stringResource(R.string.settings_endure_time),
                             modifier = Modifier.padding(vertical = verticalArrangement)

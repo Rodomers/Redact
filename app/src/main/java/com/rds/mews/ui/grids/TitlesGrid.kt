@@ -79,6 +79,7 @@ fun TitlesScreen(
     val showEmptyMess by viewModel.showEmptyMess.collectAsStateWithLifecycle()
     val titlesCardStates by viewModel.titleCardStates.collectAsStateWithLifecycle()
     val innerTime by viewModel.innerTimestamps.collectAsStateWithLifecycle()
+    val showSnippets by viewModel.showSnippets.collectAsStateWithLifecycle()
     val lastTitlesUpdate by viewModel.lastUpdated.collectAsStateWithLifecycle()
 
     TitlesGrid(
@@ -100,6 +101,7 @@ fun TitlesScreen(
         lastTitlesUpdate = lastTitlesUpdate,
         scope = scope,
         innerTime = innerTime,
+        showSnippets = showSnippets,
         onBanTheme = viewModel::onBanTheme,
         onConfigChange = viewModel::scrollToItem,
         changeSourceState = viewModel::changeTitleSourceState,
@@ -129,6 +131,7 @@ fun TitlesGrid(
     lastTitlesUpdate: Long,
     scope: CoroutineScope,
     innerTime: Boolean,
+    showSnippets: Boolean,
     onBanTheme: (String) -> Unit,
     onConfigChange: (Int) -> Unit,
     changeSourceState: (Long, String) -> Unit,
@@ -214,7 +217,6 @@ fun TitlesGrid(
                 .padding(horizontal = 10.dp),
             contentPadding = WindowInsets.statusBars.asPaddingValues(),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-//            verticalArrangement = Arrangement.spacedBy(16.dp),
             state = lazyGridState
         ) {
             if (showEmptyMess) {
@@ -271,6 +273,7 @@ fun TitlesGrid(
                                 onToggleExpanded = { onToggleExpanded(item.id) },
                                 rememberPage = { page -> rememberCardPage(item.id, page) },
                                 noTime = !innerTime,
+                                showSnippet = showSnippets,
                                 onBanTheme = onBanTheme,
                                 sources = sources,
                                 changeSourceState = changeSourceState,

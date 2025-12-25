@@ -38,6 +38,7 @@
     <string name="settings_color_scheme">Тема оформления</string>
     <string name="settings_compact_tab">Компактная навигационная панель</string>
     <string name="settings_endure_time">Компактное время</string>
+    <string name="settings_show_snippets">Показывать сниппеты</string>
     <string name="settings_filter_topics">Дополнительный фильтр тем</string>
     <string name="settings_titles_auto_update">Автообновление ленты</string>
     <string name="settings_banned_news">Заблокированные заголовки</string>
