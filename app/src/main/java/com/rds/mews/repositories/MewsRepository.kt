@@ -105,6 +105,10 @@ object MewsRepository {
         )
     }
 
+    fun containsSetting(key: String): Boolean {
+        return settingsManager.checkValue(key)
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val sources: Flow<List<RSS>> = _sourcesUpdateTrigger.flatMapLatest {
         flow { emit(db.getRSS()) }

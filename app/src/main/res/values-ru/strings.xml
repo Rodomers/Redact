@@ -177,4 +177,8 @@
     <string name="titles_updated_name">Успешное обновление</string>
     <string name="titles_updated_title">Новостная лента обновлена</string>
     <string name="titles_updated_text">Нажмите на уведомление, чтобы прочитать</string>
+
+    <string name="greeting_1">Больше — никакой воды.</string>
+    <string name="greeting_2">Мы убрали всё лишнее. Оставили только факты и суть событий.</string>
+    <string name="greeting_3">Добавьте источники, потяните экран вниз - и лента оживёт.</string>
 </resources>

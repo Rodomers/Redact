@@ -49,6 +49,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.rds.mews.R
+import kotlinx.coroutines.delay
 
 class TitlesViewModel(
     private val application: Application,
@@ -176,6 +178,42 @@ class TitlesViewModel(
         return repository.getTitlesCount() == _titleCardStates.value.size
     }
 
+    fun showGreeting(context: Context) {
+        viewModelScope.launch {
+            println("kljwda")
+            val list = emptyList<Title>().toMutableList()
+            list += Title(
+                id = 0L,
+                time = System.currentTimeMillis(),
+                title = context.getString(R.string.greeting_1),
+                text = "",
+                sources = "",
+                ids = ""
+            )
+            _titles.value = list.toList()
+            delay(500L)
+            list += Title(
+                id = 1L,
+                time = System.currentTimeMillis(),
+                title = context.getString(R.string.greeting_2),
+                text = "",
+                sources = "",
+                ids = ""
+            )
+            _titles.value = list.toList()
+            delay(500L)
+            list += Title(
+                id = 2L,
+                time = System.currentTimeMillis(),
+                title = context.getString(R.string.greeting_3),
+                text = "",
+                sources = "",
+                ids = ""
+            )
+            _titles.value = list.toList()
+        }
+    }
+
     @OptIn(ExperimentalMaterial3Api::class)
     fun handleErrorAction(clipboardManager: ClipboardManager, activity: MainActivity) {
         val err = errState.value ?: return
@@ -259,6 +297,10 @@ class TitlesViewModel(
         val currentMap = _groupStates.value.toMutableMap()
         currentMap[date] = !(currentMap[date] ?: true)
         _groupStates.value = currentMap
+    }
+
+    fun lastTitlesUpdateExists(): Boolean {
+        return repository.containsSetting(MewsRepository.LAST_TITLES_UPDATE)
     }
 
     fun getDateFromUnix(timeUnix: Long, today: LocalDate = LocalDate.now()): TimeDate {

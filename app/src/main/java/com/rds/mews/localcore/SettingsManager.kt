@@ -157,6 +157,10 @@ class SettingsManager(context: Context) {
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
     }
 
+    fun checkValue(key: String): Boolean {
+        return sharedPreferences.contains(key)
+    }
+
     @SuppressLint("CommitPrefEdits")
     fun saveLastError(failure: SummarizationResult.Failure) {
         sharedPreferences.edit().apply {

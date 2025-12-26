@@ -175,4 +175,8 @@
     <string name="titles_updated_name">Successful titles update</string>
     <string name="titles_updated_title">Titles successfully updated</string>
     <string name="titles_updated_text">Tap the notification to read</string>
+
+    <string name="greeting_1">No more noise.</string>
+    <string name="greeting_2">We stripped away the clutter. Just facts and the core story.</string>
+    <string name="greeting_3">Add sources, pull down to refresh — and your feed will come to life.</string>
 </resources>

@@ -1,6 +1,7 @@
 package com.rds.mews.ui.grids
 
 import TimelineMarker
+import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -124,7 +125,9 @@ fun TitlesScreen(
         onConfigChange = viewModel::scrollToItem,
         changeSourceState = viewModel::changeTitleSourceState,
         changeGroupState = viewModel::changeGroupState,
-        getDateFromUnix = viewModel::getDateFromUnix
+        getDateFromUnix = viewModel::getDateFromUnix,
+        showGreeting = viewModel::showGreeting,
+        lastTitlesUpdateExists = viewModel::lastTitlesUpdateExists
     )
 }
 
@@ -158,7 +161,9 @@ fun TitlesGrid(
     onConfigChange: (Int) -> Unit,
     changeSourceState: (Long, String) -> Unit,
     changeGroupState: (TimeDate) -> Unit,
-    getDateFromUnix: (Long) -> TimeDate
+    getDateFromUnix: (Long) -> TimeDate,
+    showGreeting: (Context) -> Unit,
+    lastTitlesUpdateExists: () -> Boolean
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
 
@@ -168,6 +173,10 @@ fun TitlesGrid(
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val pullToRefreshState = rememberPullToRefreshState()
     val lastUpdatedDate = remember(groupedItems) { mutableStateOf(getDateFromUnix(lastTitlesUpdate)) }
+
+    LaunchedEffect(groupedItems.isEmpty()) {
+        if (!lastTitlesUpdateExists() && groupedItems.isEmpty()) showGreeting(context)
+    }
 
     LaunchedEffect(config) {
         val cardId = titlesCardStates.firstOrNull { it.expanded }?.id ?: -1
@@ -185,7 +194,7 @@ fun TitlesGrid(
     }
 
     LaunchedEffect(groupedItems.isEmpty(), isRefreshing) {
-        if (groupedItems.isEmpty() && !isRefreshing) {
+        if (groupedItems.isEmpty() && !isRefreshing && lastTitlesUpdateExists()) {
             delay(300L)
             if (groupedItems.isEmpty()) toggleEmptyMess(true)
         }
@@ -332,14 +341,15 @@ fun TitlesGrid(
                                 changeSourceState = changeSourceState,
                                 backgroundColor = if (read)
                                     MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.5f)
-                                else MaterialTheme.colorScheme.secondaryContainer
+                                else MaterialTheme.colorScheme.secondaryContainer,
+                                expandable = lastTitlesUpdateExists()
                             )
                         }
                     }
                 }
             }
 
-            if (groupedItems.isNotEmpty()) {
+            if (groupedItems.isNotEmpty() && lastTitlesUpdateExists()) {
                 item {
                     CustomBottomFootnote(
                         text = stringResource(
