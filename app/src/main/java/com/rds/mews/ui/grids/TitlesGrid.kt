@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -29,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipboardManager
@@ -49,6 +51,7 @@ import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.TitleCardStates
 import com.rds.mews.localcore.TitlesGroupState
 import com.rds.mews.localcore.mapResultToUiResources
+import com.rds.mews.localcore.updatingStateInterpreter
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
@@ -75,6 +78,9 @@ fun TitlesScreen(
     val groupedItems by viewModel.groupedTitles.collectAsStateWithLifecycle()
     val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val updatingState by viewModel.updatingState.collectAsStateWithLifecycle()
+    val updatingProgress by viewModel.updatingProgress.collectAsStateWithLifecycle()
+    val isIndicatorCollapsed by viewModel.isIndicatorCollapsed.collectAsStateWithLifecycle()
     val err by viewModel.errState.collectAsStateWithLifecycle()
     val showEmptyMess by viewModel.showEmptyMess.collectAsStateWithLifecycle()
     val titlesCardStates by viewModel.titleCardStates.collectAsStateWithLifecycle()
@@ -89,12 +95,16 @@ fun TitlesScreen(
         groupStates = groupStates,
         modifier = modifier,
         isRefreshing = isRefreshing,
+        updatingState = updatingState ?: "updating",
+        updatingProgress = updatingProgress,
+        indicatorCollapsed = isIndicatorCollapsed,
         showEmptyMess = showEmptyMess,
         toggleEmptyMess = viewModel::toggleEmptyMess,
         errState = err,
         titlesCardStates = titlesCardStates,
         rememberCardPage = viewModel::changeTitleCurrentPage,
         onRefresh = viewModel::refreshTitles,
+        onIndicatorClick = viewModel::changeIndicatorCollapsed,
         onClearErr = viewModel::clearErr,
         onErrAction = viewModel::handleErrorAction,
         onToggleExpanded = viewModel::toggleTitleExpanded,
@@ -119,12 +129,16 @@ fun TitlesGrid(
     groupStates: List<TitlesGroupState>,
     modifier: Modifier,
     isRefreshing: Boolean,
+    updatingState: String,
+    updatingProgress: Float,
+    indicatorCollapsed: Boolean,
     showEmptyMess: Boolean,
     toggleEmptyMess: (Boolean) -> Unit,
     errState: SummarizationResult.Failure?,
     titlesCardStates: Set<TitleCardStates>,
     rememberCardPage: (Long, Int) -> Unit,
     onRefresh: () -> Unit,
+    onIndicatorClick: () -> Unit,
     onClearErr: () -> Unit,
     onErrAction: (ClipboardManager, MainActivity) -> Unit,
     onToggleExpanded: (Long) -> Unit,
@@ -206,7 +220,11 @@ fun TitlesGrid(
                 state = pullToRefreshState,
                 modifier = Modifier
                     .align(Alignment.TopCenter),
-                isRefreshing = isRefreshing
+                isRefreshing = isRefreshing,
+                statusText = context.getString(updatingStateInterpreter(updatingState)),
+                progress = updatingProgress,
+                isCollapsed = indicatorCollapsed,
+                onCollapseChange = { onIndicatorClick() },
             )
         }
     ) {

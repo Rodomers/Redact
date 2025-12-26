@@ -25,6 +25,7 @@ import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.*
+import kotlinx.coroutines.time.delay
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.CancellationException
@@ -98,6 +99,8 @@ class TitlesUpdateService : Service() {
 
             // надо вызывать ошибку парсинга, но не прекращать обновление
 
+            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.1f)
+
             val needToFetchRss = (System.currentTimeMillis() - rssLastUpdate) / 60000L > rssUpdateInterval
             val noFetchErrors = if (needToFetchRss) {
                 val result = fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600).errors.isEmpty()
@@ -108,6 +111,21 @@ class TitlesUpdateService : Service() {
             }
 
             if (!currentCoroutineContext().isActive) return
+
+//            delay(1000L)
+//            settingsManager.saveString(MewsRepository.UPDATING_STATE, "summarizing_topics")
+//            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.2f)
+//            delay(500L)
+//            settingsManager.saveString(MewsRepository.UPDATING_STATE, "filtering_topics")
+//            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.3f)
+//            delay(2000L)
+//            settingsManager.saveString(MewsRepository.UPDATING_STATE, "summarizing_topics")
+//            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.7f)
+//            delay(2000L)
+//            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.9f)
+//            delay(1000L)
+//            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 1f)
+//            delay(100L)
 
             if ((oneTimeUpdate || updateDeltaMills >= 7200000L) && noFetchErrors) {
                 val titles = db.getTitles()
@@ -173,8 +191,11 @@ class TitlesUpdateService : Service() {
             settingsManager.saveLastError(errorResult)
         } finally {
             println("TitlesUpdateService: Вход в блок FINALLY.")
-            settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
+            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 1f)
             settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
+            delay(500L)
+            settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
+            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0f)
             println("TitlesUpdateService: Состояние обновлено на 'off'.")
         }
     }

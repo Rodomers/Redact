@@ -317,3 +317,13 @@ fun getStringsFromDate(dateString: String): IntList? {
         return null
     }
 }
+
+fun updatingStateInterpreter(state: String?): Int {
+    return when (state) {
+        "summarizing_topics" -> R.string.summarizing
+        "extracting_topics" -> R.string.extracting_topics
+        "updating" -> R.string.updating
+        "filtering_topics" -> R.string.filtering_topics
+        else -> R.string.update
+    }
+}

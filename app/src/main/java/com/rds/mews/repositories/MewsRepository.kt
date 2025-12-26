@@ -38,6 +38,7 @@ object MewsRepository {
     lateinit var lastTitlesUpdate: StateFlow<Long>
     lateinit var updatingTitles: StateFlow<Boolean>
     lateinit var updatingState: StateFlow<String?>
+    lateinit var updatingProgress: StateFlow<Float>
     lateinit var bannedNewsFlow: StateFlow<Set<String>>
     private var isInitialized = false
     private val _sourcesUpdateTrigger = MutableStateFlow(0)
@@ -85,6 +86,13 @@ object MewsRepository {
                 scope = MewsRepository.externalScope,
                 started = SharingStarted.Companion.WhileSubscribed(5000),
                 initialValue = settingsManager.getString(UPDATING_STATE, "off")
+            )
+
+        updatingProgress = settingsManager.updatingTitlesProgressStateFlow
+            .stateIn(
+                scope = MewsRepository.externalScope,
+                started = SharingStarted.Companion.WhileSubscribed(5000),
+                initialValue = settingsManager.getFloat(UPDATING_PROGRESS, 0f)
             )
 
         bannedNewsFlow = settingsManager.bannedNewsFlow
@@ -187,6 +195,7 @@ object MewsRepository {
     const val LAST_TITLES_UPDATE = "last_titles_update"
     const val UPDATING_TITLES = "updating_titles"
     const val UPDATING_STATE = "updating_state"
+    const val UPDATING_PROGRESS = "updating_progress"
     const val COMPACT_TAB_BAR = "compact_tab_bar"
     const val FILTER_TOPICS = "filter_topics"
     const val INNER_TIMESTAMPS = "inner_timestamps"
@@ -288,6 +297,10 @@ object MewsRepository {
 
     fun setUpdatingState(newValue: String) {
         settingsManager.saveString(UPDATING_STATE, newValue)
+    }
+
+    fun setUpdatingProgress(newValue: Float) {
+        settingsManager.saveFloat(UPDATING_PROGRESS, newValue)
     }
 
     fun setBannedNews(newValue: Set<String>) {

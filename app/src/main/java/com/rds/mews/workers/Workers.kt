@@ -12,6 +12,7 @@ import com.rds.mews.localcore.SummarizationErrorType
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -72,12 +73,14 @@ class TitlesUpdateWorker(
             withContext(Dispatchers.IO) {
                 if (isStopped) return@withContext
 
+                settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.1f)
+
                 val needToFetchRss = (System.currentTimeMillis() - rssLastUpdate) / 60000L > rssUpdateInterval
                 val noFetchErrors = if (needToFetchRss) {
                     val result = fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600).errors.isEmpty()
                     settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
 
-                    result
+                    true
                 } else {
                     true
                 }
@@ -130,8 +133,11 @@ class TitlesUpdateWorker(
             return Result.retry()
         }  finally {
             println("TitlesUpdateWorker: Вход в блок FINALLY. isStopped = $isStopped")
-            settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
+            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 1f)
             settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
+            delay(500L)
+            settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
+            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0f)
             println("TitlesUpdateWorker: Состояние обновлено на 'off'.")
         }
     }

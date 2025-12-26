@@ -108,8 +108,6 @@ fun MainScreen(mainActivity: MainActivity) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
         val context = LocalContext.current
-//        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-//        var optimizationIgnore by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
 
         val sourcesGridState = rememberLazyGridState()
@@ -146,22 +144,6 @@ fun MainScreen(mainActivity: MainActivity) {
                 }
             }
         }
-
-//        if (!isBatteryOptimizationIgnored(context) && !optimizationIgnore) {
-//            CustomErrorBottomSheet(
-//                title = stringResource(R.string.optimization_sheet_header),
-//                text = stringResource(R.string.optimization_sheet_text),
-//                cancelBtnText = stringResource(R.string.optimization_sheet_cancel),
-//                confBtnText = stringResource(R.string.optimization_sheet_conf),
-//                onDismissRequest = { optimizationIgnore = true },
-//                onConfirm = {
-//                    requestIgnoreBatteryOptimization(context)
-//                    optimizationIgnore = true
-//                },
-//                scope = scope,
-//                sheetState = sheetState,
-//            )
-//        }
 
         Scaffold(
             bottomBar = {

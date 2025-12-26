@@ -107,7 +107,7 @@
     <string name="updating">Обновление…</string>
     <string name="extracting_topics">Выделяю темы…</string>
     <string name="filtering_topics">Фильтрую базар…</string>
-    <string name="summarizing">Резюмирую: %1$d/%2$d</string>
+    <string name="summarizing">Резюмирую…</string>
     <string name="restart_updating">Перезапуск</string>
 
     <string name="err_header_success">Успех</string>

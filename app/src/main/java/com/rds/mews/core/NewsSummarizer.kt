@@ -200,10 +200,9 @@ class NewsSummarizer(
             }
 
             if (unfinishedTitles.isEmpty()) {
-                settingsManager.saveString(MewsRepository.UPDATING_STATE, "extracting_topics")
                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
 
-                val success = processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics)
+                val success = processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics, settingsManager)
 
                 if (!success) {
                     readyFunc()
@@ -232,6 +231,9 @@ class NewsSummarizer(
             var emptyAnswer = false
             val semaphore = Semaphore(1)
 
+            val currentProgress = settingsManager.getFloat(MewsRepository.UPDATING_PROGRESS, 0f)
+            val remainingProgress = 0.95f - currentProgress
+
             val summarizedResults = coroutineScope {
                 titleBatches.map { batch ->
                     async(Dispatchers.IO) {
@@ -240,7 +242,14 @@ class NewsSummarizer(
                                 processedBatches++
                                 if (processedBatches > 1) delay(2000L)
 
-                                settingsManager.saveString(MewsRepository.UPDATING_STATE, "${processedBatches}/${totalBatches}")
+                                settingsManager.saveString(MewsRepository.UPDATING_STATE, "summarizing_topics")
+                                settingsManager.saveFloat(
+                                    MewsRepository.UPDATING_PROGRESS,
+                                    (currentProgress + remainingProgress * processedBatches / totalBatches).coerceIn(
+                                        0f,
+                                        0.95f
+                                    )
+                                )
                                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
 
                                 println("Обработка пачки из ${batch.size} тем...")
@@ -344,11 +353,24 @@ class NewsSummarizer(
         }
     }
 
-    private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, currentLanguage: String, filterTopics: Boolean = false): Boolean {
+    private suspend fun processNewsInBatches(
+        maxTopics: Int,
+        messages: List<Message>,
+        currentLanguage: String,
+        filterTopics: Boolean = false,
+        settingsManager: SettingsManager
+    ): Boolean {
         val messageBatches = messages.chunked(NEWS_BATCH_SIZE)
         val allExtractedTopics = mutableListOf<Topics>()
 
         try {
+            settingsManager.saveString(MewsRepository.UPDATING_STATE, "extracting_topics")
+            settingsManager.saveFloat(
+                MewsRepository.UPDATING_PROGRESS, (settingsManager.getFloat(
+                    MewsRepository.UPDATING_PROGRESS, 0.1f
+                ) + 0.1f).coerceIn(0f, 0.2f)
+            )
+
             coroutineScope {
                 messageBatches.map { batch ->
                     async(Dispatchers.IO) {
@@ -367,6 +389,12 @@ class NewsSummarizer(
             }
 
             return if (filterTopics) {
+                settingsManager.saveString(MewsRepository.UPDATING_STATE, "filtering_topics")
+                settingsManager.saveFloat(
+                    MewsRepository.UPDATING_PROGRESS, (settingsManager.getFloat(
+                        MewsRepository.UPDATING_PROGRESS, 0.1f
+                    ) + 0.1f).coerceIn(0f, 0.3f)
+                )
                 mergeAndFilterTopics(allExtractedTopics, maxTopics, currentLanguage)
             } else {
                 allExtractedTopics.forEachIndexed { index, batch ->

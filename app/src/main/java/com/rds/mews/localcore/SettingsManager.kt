@@ -44,6 +44,24 @@ class SettingsManager(context: Context) {
         }
     }
 
+    val updatingTitlesProgressStateFlow: Flow<Float> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            if (key == MewsRepository.UPDATING_PROGRESS) trySend(
+                prefs.getFloat(
+                    MewsRepository.UPDATING_PROGRESS,
+                    0f
+                )
+            )
+        }
+
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getFloat(MewsRepository.UPDATING_PROGRESS, 0f))
+
+        awaitClose {
+            sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
     val lastTitlesUpdateFlow: Flow<Long> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener {prefs, key ->
             if (key == MewsRepository.LAST_TITLES_UPDATE) {
@@ -105,6 +123,14 @@ class SettingsManager(context: Context) {
 
     fun getLong(key: String, defaultValue: Long): Long {
         return sharedPreferences.getLong(key, defaultValue)
+    }
+
+    fun saveFloat(key: String, value: Float) {
+        sharedPreferences.edit { putFloat(key, value) }
+    }
+
+    fun getFloat(key: String, defaultValue: Float): Float {
+        return sharedPreferences.getFloat(key, defaultValue)
     }
 
     fun saveString(key: String, value: String) {

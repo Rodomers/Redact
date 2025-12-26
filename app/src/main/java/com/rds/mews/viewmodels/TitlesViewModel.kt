@@ -95,6 +95,8 @@ class TitlesViewModel(
     val titles = _titles.asStateFlow()
 
     val isRefreshing: StateFlow<Boolean> = repository.updatingTitles
+    val updatingState: StateFlow<String?> = repository.updatingState
+    val updatingProgress: StateFlow<Float> = repository.updatingProgress
 
     val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val innerTimestamps: StateFlow<Boolean> = repository.innerTimestamps.stateIn(viewModelScope,
@@ -139,6 +141,9 @@ class TitlesViewModel(
     private val _showEmptyMessage = MutableStateFlow(false)
     val showEmptyMess: StateFlow<Boolean> = _showEmptyMessage
 
+    private val _isIndicatorCollapsed = MutableStateFlow(false)
+    val isIndicatorCollapsed: StateFlow<Boolean> = _isIndicatorCollapsed
+
     private val _titleCardStates = MutableStateFlow<Set<TitleCardStates>>(emptySet())
     val titleCardStates: StateFlow<Set<TitleCardStates>> = _titleCardStates.asStateFlow()
 
@@ -148,6 +153,10 @@ class TitlesViewModel(
 
     fun refreshTitles() {
         repository.startTitlesUpdate(application)
+    }
+
+    fun changeIndicatorCollapsed() {
+        _isIndicatorCollapsed.value = !_isIndicatorCollapsed.value
     }
 
     fun scrollToTop() {
