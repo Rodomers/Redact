@@ -181,6 +181,8 @@ fun SourcesGrid(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         state = gridState
     ) {
+        var lastItemsSize = 0
+
         if (groupedItems.isEmpty()) {
             customHeader(
                 textId = R.string.no_sources,
@@ -189,6 +191,7 @@ fun SourcesGrid(
         }
 
         groupedItems.forEach { (source, itemsForSource) ->
+            lastItemsSize = itemsForSource.size
             val isExpanded = groupStates.find { it.group == source }?.expanded ?: false
 
             customHeader(
@@ -225,7 +228,9 @@ fun SourcesGrid(
 
 
         if (newSourcesPermitted) {
-            item { Spacer(modifier = Modifier.height(verticalArrangement * 2 - 1.dp)) }
+            if (lastItemsSize % 2 == 0) item {
+                Spacer(modifier = Modifier.height(verticalArrangement * 2 - 1.dp))
+            }
             item { Spacer(modifier = Modifier.height(verticalArrangement * 2 - 1.dp)) }
 
             item {

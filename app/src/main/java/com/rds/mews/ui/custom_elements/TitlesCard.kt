@@ -122,6 +122,7 @@ fun TitlesCard(
     noTime: Boolean = false,
     showSnippet: Boolean = false,
     backgroundColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+    expandable: Boolean = true,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
@@ -164,7 +165,7 @@ fun TitlesCard(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
-            ) { onToggleExpanded() },
+            ) { if (expandable) onToggleExpanded() },
         shape = Shapes.large,
         color = backgroundColor,
         shadowElevation = 0.dp
@@ -177,7 +178,7 @@ fun TitlesCard(
                 clickableEnabled = false
             )
 
-            if (showSnippet) {
+            if (showSnippet && expandable) {
                 SnippetText(
                     text = title.text,
                     modifier = Modifier.padding(bottom = 12.dp)
