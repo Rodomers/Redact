@@ -3,7 +3,6 @@ package com.rds.mews.ui.grids
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,8 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -49,6 +46,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,7 +60,6 @@ import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.viewmodels.SettingsViewModel
 import com.rds.mews.localcore.intTimeToStr
 import com.rds.mews.localcore.requestNotificationPermission
-import com.rds.mews.ui.custom_elements.BaseFloatingBottomSheet
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
@@ -70,7 +67,6 @@ import com.rds.mews.ui.custom_elements.CustomIconButton
 import com.rds.mews.ui.custom_elements.SettingsItem
 import com.rds.mews.ui.custom_elements.CustomSwitch
 import com.rds.mews.ui.custom_elements.CustomTextButton
-import com.rds.mews.ui.custom_elements.DeferredUpdateTab
 import com.rds.mews.ui.custom_elements.DropdownButton
 import com.rds.mews.ui.custom_elements.SettingsListBottomSheet
 import com.rds.mews.ui.custom_elements.customHeader
@@ -82,7 +78,8 @@ fun SettingsScreen(
     gridState: LazyGridState,
     modifier: Modifier,
     viewModel: SettingsViewModel,
-    mainActivity: MainActivity
+    mainActivity: MainActivity,
+    bottomSpacer: Dp
 ) {
     val density = LocalDensity.current
 
@@ -175,7 +172,8 @@ fun SettingsScreen(
         mainActivity = mainActivity,
         density = density,
         state = state,
-        functions = functions
+        functions = functions,
+        bottomSpacer = bottomSpacer
     )
 }
 
@@ -188,7 +186,8 @@ fun SettingsGrid(
     mainActivity: MainActivity,
     density: Density,
     state: SettingsUiState,
-    functions: SettingsUiFunctions
+    functions: SettingsUiFunctions,
+    bottomSpacer: Dp
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
     val appearanceChapterId by remember { mutableIntStateOf(R.string.settings_chapter_appearance) }
@@ -742,6 +741,10 @@ fun SettingsGrid(
                     ),
                     modifier = Modifier.padding(vertical = verticalArrangement)
                 )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(bottomSpacer))
             }
         }
     }

@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -44,18 +43,15 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
         )
 
     val groupedSources: StateFlow<Map<SourceType, List<RSS>>> = sources
-        .filter { it.isNotEmpty() }
-        .distinctUntilChanged()
         .map { list ->
-            list.groupBy { defineSourceType(it.link) } }
+            list.groupBy { defineSourceType(it.link) }
+        }
         .flowOn(Dispatchers.Default)
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
 
     val newSourcesPermitted: StateFlow<Boolean> = sources
-        .filter { it.isNotEmpty() }
-        .distinctUntilChanged()
         .map { list -> list.size < 40 }
         .flowOn(Dispatchers.Default)
         .distinctUntilChanged()

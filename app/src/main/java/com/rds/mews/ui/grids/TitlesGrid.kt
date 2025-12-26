@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -27,7 +27,6 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -48,6 +47,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -82,7 +82,8 @@ fun TitlesScreen(
     lazyGridState: LazyGridState,
     mainActivity: MainActivity,
     modifier: Modifier,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    bottomSpacer: Dp
 ) {
     val groupedItems by viewModel.groupedTitles.collectAsStateWithLifecycle()
     val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
@@ -121,13 +122,14 @@ fun TitlesScreen(
         scope = scope,
         innerTime = innerTime,
         showSnippets = showSnippets,
+        bottomSpacer = bottomSpacer,
         onBanTheme = viewModel::onBanTheme,
         onConfigChange = viewModel::scrollToItem,
         changeSourceState = viewModel::changeTitleSourceState,
         changeGroupState = viewModel::changeGroupState,
         getDateFromUnix = viewModel::getDateFromUnix,
         showGreeting = viewModel::showGreeting,
-        lastTitlesUpdateExists = viewModel::lastTitlesUpdateExists
+        lastTitlesUpdateExists = viewModel::lastTitlesUpdateExists,
     )
 }
 
@@ -157,6 +159,7 @@ fun TitlesGrid(
     scope: CoroutineScope,
     innerTime: Boolean,
     showSnippets: Boolean,
+    bottomSpacer: Dp,
     onBanTheme: (String) -> Unit,
     onConfigChange: (Int) -> Unit,
     changeSourceState: (Long, String) -> Unit,
@@ -361,6 +364,10 @@ fun TitlesGrid(
                         modifier = Modifier.padding(vertical = verticalArrangement)
                     )
                 }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(bottomSpacer))
             }
         }
     }

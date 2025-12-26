@@ -7,33 +7,33 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rds.mews.core.getRssName
-import com.rds.mews.localcore.SummarizationErrorType
-import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.localcore.isScheduleExactAlarm
 import com.rds.mews.repositories.MewsRepository
+import com.rds.mews.ui.MainContentPager
 import com.rds.mews.ui.custom_elements.MyBottomBar
 import com.rds.mews.ui.custom_elements.TabScreen
-import com.rds.mews.ui.grids.SettingsScreen
-import com.rds.mews.ui.grids.SourcesScreen
-import com.rds.mews.ui.grids.TitlesScreen
 import com.rds.mews.ui.theme.MewsTheme
 import com.rds.mews.viewmodels.SettingsScrollEvent
 import com.rds.mews.viewmodels.SettingsViewModel
@@ -45,14 +45,11 @@ import com.rds.mews.viewmodels.TitlesScrollEvent
 import com.rds.mews.viewmodels.TitlesViewModel
 import com.rds.mews.viewmodels.TitlesViewModelFactory
 
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
         handleIntent(intent)
-
         setContent {
             MainScreen(this)
         }
@@ -68,7 +65,6 @@ class MainActivity : ComponentActivity() {
         if (notificationsAllowed != MewsRepository.notificationsGranted.value) {
             MewsRepository.setNotificationsGranted(notificationsAllowed)
         }
-
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(1)
     }
@@ -110,12 +106,35 @@ fun MainScreen(mainActivity: MainActivity) {
     MewsTheme(settingsTheme = currentTheme, monetTheme = isMonetColors) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
-        val context = LocalContext.current
         val scope = rememberCoroutineScope()
 
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()
         val settingsGridState = rememberLazyGridState()
+
+        val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)
+        val pagerState = rememberPagerState(pageCount = { tabs.size })
+
+        var isProgrammaticScroll by remember { mutableStateOf(false) }
+        LaunchedEffect(pagerState) {
+            snapshotFlow { pagerState.currentPage }.collect { page ->
+                if (!isProgrammaticScroll) {
+                    val currentTabFromPager = tabs[page]
+                    if (MewsRepository.selectedTab.value != currentTabFromPager) {
+                        MewsRepository.setCurrentTab(currentTabFromPager)
+                    }
+                }
+            }
+        }
+
+        LaunchedEffect(selectedTab) {
+            val targetIndex = tabs.indexOf(selectedTab)
+            if (pagerState.currentPage != targetIndex) {
+                isProgrammaticScroll = true
+                pagerState.animateScrollToPage(targetIndex)
+                isProgrammaticScroll = false
+            }
+        }
 
         LaunchedEffect(Unit) {
             sourcesViewModel.scrollEvents.collect { event ->
@@ -148,61 +167,39 @@ fun MainScreen(mainActivity: MainActivity) {
             }
         }
 
-        Scaffold(
-            bottomBar = {
+        Scaffold { paddingValues ->
+            Box(modifier = Modifier.fillMaxSize()) {
+
+                MainContentPager(
+                    pagerState = pagerState,
+                    tabs = tabs,
+                    paddingValues = paddingValues,
+                    compactTab = compactTab,
+                    sourcesViewModel = sourcesViewModel,
+                    titlesViewModel = titlesViewModel,
+                    settingsViewModel = settingsViewModel,
+                    sourcesGridState = sourcesGridState,
+                    titlesGridState = titlesGridState,
+                    settingsGridState = settingsGridState,
+                    mainActivity = mainActivity,
+                    scope = scope
+                )
+
                 MyBottomBar(
                     selectedTab = selectedTab,
                     onTabSelected = { newTab ->
                         if (selectedTab == newTab) {
                             when (selectedTab) {
-                                TabScreen.Sources -> {
-                                    sourcesViewModel.scrollToTop()
-                                }
-
-                                TabScreen.Titles -> {
-                                    titlesViewModel.scrollToTop()
-                                }
-
-                                TabScreen.Settings -> {
-                                    settingsViewModel.scrollToTop()
-                                }
-
+                                TabScreen.Sources -> sourcesViewModel.scrollToTop()
+                                TabScreen.Titles -> titlesViewModel.scrollToTop()
+                                TabScreen.Settings -> settingsViewModel.scrollToTop()
                             }
-                        } else MewsRepository.setCurrentTab(newTab)
+                        } else {
+                            MewsRepository.setCurrentTab(newTab)
+                        }
                     },
-                    compact = compactTab
-                )
-            }
-        ) { paddingValues ->
-            val modifier = remember(paddingValues) {
-                Modifier
-                    .padding(paddingValues)
-                    .fillMaxSize()
-            }
-
-            when (selectedTab) {
-                TabScreen.Sources -> {
-                    SourcesScreen(
-                        context = context,
-                        gridState = sourcesGridState,
-                        modifier = modifier,
-                        viewModel = sourcesViewModel
-                    )
-                }
-                TabScreen.Titles -> {
-                    TitlesScreen(
-                        viewModel = titlesViewModel,
-                        lazyGridState = titlesGridState,
-                        mainActivity = mainActivity,
-                        modifier = modifier,
-                        scope = scope
-                    )
-                }
-                else -> SettingsScreen(
-                    gridState = settingsGridState,
-                    modifier = modifier,
-                    viewModel = settingsViewModel,
-                    mainActivity = mainActivity
+                    compact = compactTab,
+                    modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }
         }

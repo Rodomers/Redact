@@ -180,7 +180,6 @@ class TitlesViewModel(
 
     fun showGreeting(context: Context) {
         viewModelScope.launch {
-            println("kljwda")
             val list = emptyList<Title>().toMutableList()
             list += Title(
                 id = 0L,
@@ -190,8 +189,9 @@ class TitlesViewModel(
                 sources = "",
                 ids = ""
             )
+            delay(300L)
             _titles.value = list.toList()
-            delay(500L)
+            delay(800L)
             list += Title(
                 id = 1L,
                 time = System.currentTimeMillis(),
@@ -201,7 +201,7 @@ class TitlesViewModel(
                 ids = ""
             )
             _titles.value = list.toList()
-            delay(500L)
+            delay(800L)
             list += Title(
                 id = 2L,
                 time = System.currentTimeMillis(),

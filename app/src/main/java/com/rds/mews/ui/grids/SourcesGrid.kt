@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -26,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rds.mews.localcore.SourcesGroupState
@@ -50,7 +53,8 @@ fun SourcesScreen(
     context: Context,
     gridState: LazyGridState,
     modifier: Modifier,
-    viewModel: SourcesViewModel
+    viewModel: SourcesViewModel,
+    bottomSpacer: Dp
 ) {
     val groupedTitles by viewModel.groupedSources.collectAsStateWithLifecycle()
     val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
@@ -86,6 +90,7 @@ fun SourcesScreen(
         sourceNameBuffer = sourceNameBuffer,
         rssLinkBuffer = rssLinkBuffer,
         isCorrectLink = isCorrectLink,
+        bottomSpacer = bottomSpacer,
         setSourceNameBuffer = viewModel::setSourceNameBuffer,
         setRssLinkBuffer = viewModel::setRssLinkBuffer
     )
@@ -112,6 +117,7 @@ fun SourcesGrid(
     sourceNameBuffer: String,
     rssLinkBuffer: String,
     isCorrectLink: Boolean,
+    bottomSpacer: Dp,
     setSourceNameBuffer: (String) -> Unit,
     setRssLinkBuffer: (String) -> Unit
 ) {
@@ -185,6 +191,7 @@ fun SourcesGrid(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         state = gridState
     ) {
+        println("groupedItems: ${groupedItems.size}")
         var lastItemsSize = 0
 
         if (groupedItems.isEmpty()) {
@@ -195,8 +202,8 @@ fun SourcesGrid(
         }
 
         groupedItems.forEach { (source, itemsForSource) ->
-            lastItemsSize = itemsForSource.size
             val isExpanded = groupStates.find { it.group == source }?.expanded ?: false
+            lastItemsSize = itemsForSource.size
 
             customHeader(
                 textId = sourcesTypeInterpreter(source),
@@ -232,14 +239,16 @@ fun SourcesGrid(
 
 
         if (newSourcesPermitted) {
-            if (lastItemsSize % 2 == 0) item {
-                Spacer(modifier = Modifier.height(verticalArrangement * 2 - 1.dp))
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            item { Spacer(modifier = Modifier.height(verticalArrangement * 2 - 1.dp)) }
-
             item {
                 SourcesAddCard({ setShowAddDialog(true) }, transitionState = showAddDialog)
             }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(bottomSpacer))
         }
     }
 }
