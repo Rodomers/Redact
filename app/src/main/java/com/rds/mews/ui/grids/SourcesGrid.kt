@@ -122,6 +122,10 @@ fun SourcesGrid(
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(changedSource) {
+        setSourceNameBuffer(changedSource?.source ?: "")
+    }
+
     if (showAddDialog) {
         AddSourceBottomSheet(
             rssLinkValue = rssLinkBuffer,
@@ -129,7 +133,7 @@ fun SourcesGrid(
             sourceNameValue = sourceNameBuffer,
             onSourceNameChange = setSourceNameBuffer,
             isRssValid = isCorrectLink,
-            onConfirm = { onSourceAdd(rssLinkBuffer, sourceNameBuffer) },
+            onConfirm = { onSourceAdd(sourceNameBuffer, rssLinkBuffer) },
             onDismissRequest = {
                 setShowAddDialog(false)
                 setSourceNameBuffer("")

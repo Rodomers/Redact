@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
@@ -265,7 +266,8 @@ fun TitlesGrid(
                                 contentDescription = "zhdun.swag",
                                 modifier = Modifier
                                     .size(256.dp)
-                                    .padding(top = 50.dp)
+                                    .padding(top = 50.dp),
+                                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSecondaryContainer)
                             )
                             Text(
                                 text = stringResource(R.string.titles_update_text),

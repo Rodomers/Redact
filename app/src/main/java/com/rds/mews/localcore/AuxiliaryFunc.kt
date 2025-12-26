@@ -327,3 +327,26 @@ fun updatingStateInterpreter(state: String?): Int {
         else -> R.string.update
     }
 }
+
+fun rebuildSourceLink(strLink: String): String {
+    val rawLink = strLink.trim()
+    var finalLink: String
+
+    return when {
+        rawLink.startsWith("@") -> {
+            val username = rawLink.drop(1)
+            "https://t.me/s/${username}"
+        }
+        rawLink.contains("t.me") || rawLink.contains("telegram.me") -> {
+            val username = rawLink.trimEnd('/')
+                .split("/")
+                .last()
+                .substringBefore("?")
+
+            "https://t.me/s/${username}"
+        }
+        else -> {
+            rawLink
+        }
+    }
+}

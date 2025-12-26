@@ -13,6 +13,7 @@ import com.rds.mews.core.getRssName
 import com.rds.mews.localcore.SettingsManager
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.Title
+import com.rds.mews.localcore.linkTransform
 import com.rds.mews.localcore.setRssUpdate
 import com.rds.mews.localcore.setTitlesUpdate
 import com.rds.mews.ui.custom_elements.TabScreen
@@ -110,7 +111,7 @@ object MewsRepository {
     }.flowOn(Dispatchers.IO)
 
     fun addSource(context: Context, name: String, link: String) {
-        db.addRSS(name, link)
+        db.addRSS(name, linkTransform(link))
         _sourcesUpdateTrigger.value++
         AlarmScheduler.cancel(context, true)
         setLastRssUpdate(0L)
