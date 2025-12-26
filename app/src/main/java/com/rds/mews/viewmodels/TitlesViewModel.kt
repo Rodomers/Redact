@@ -172,6 +172,10 @@ class TitlesViewModel(
         viewModelScope.launch { repository.addBannedNew(value) }
     }
 
+    fun isTitlesNumCorrect(): Boolean {
+        return repository.getTitlesCount() == _titleCardStates.value.size
+    }
+
     @OptIn(ExperimentalMaterial3Api::class)
     fun handleErrorAction(clipboardManager: ClipboardManager, activity: MainActivity) {
         val err = errState.value ?: return

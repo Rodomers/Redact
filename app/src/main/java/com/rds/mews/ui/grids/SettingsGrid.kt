@@ -62,6 +62,7 @@ import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.viewmodels.SettingsViewModel
 import com.rds.mews.localcore.intTimeToStr
 import com.rds.mews.localcore.requestNotificationPermission
+import com.rds.mews.ui.custom_elements.BaseFloatingBottomSheet
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
@@ -71,8 +72,10 @@ import com.rds.mews.ui.custom_elements.CustomSwitch
 import com.rds.mews.ui.custom_elements.CustomTextButton
 import com.rds.mews.ui.custom_elements.DeferredUpdateTab
 import com.rds.mews.ui.custom_elements.DropdownButton
+import com.rds.mews.ui.custom_elements.SettingsListBottomSheet
 import com.rds.mews.ui.custom_elements.customHeader
 import com.rds.mews.ui.theme.Shapes
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -82,6 +85,9 @@ fun SettingsScreen(
     mainActivity: MainActivity
 ) {
     val density = LocalDensity.current
+
+    val autoupdateScreenOpened by viewModel.autoUpdateScreenOpened.collectAsStateWithLifecycle()
+    val bannedNewsScreenOpened by viewModel.bannedNewsScreenOpened.collectAsStateWithLifecycle()
 
     val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
     val showDates by viewModel.showDates.collectAsStateWithLifecycle()
@@ -106,6 +112,8 @@ fun SettingsScreen(
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
 
     val state = SettingsUiState(
+        autoUpdateScreenOpened = autoupdateScreenOpened,
+        bannedNewsScreenOpened = bannedNewsScreenOpened,
         showDates = showDates,
         compactTab = compactTab,
         currentTheme = currentTheme,
@@ -130,6 +138,8 @@ fun SettingsScreen(
 
     val functions = remember {
         SettingsUiFunctions(
+            setAutoupdateScreen = viewModel::setAutoupdateScreen,
+            setBannedNewsScreen = viewModel::setBannedNewsScreen,
             setCompactTab = viewModel::setCompactTab,
             setMonetColors = viewModel::setMonetColors,
             setCurrentTheme = viewModel::setCurrentTheme,
@@ -191,6 +201,9 @@ fun SettingsGrid(
     var alarmHrsText by remember { mutableIntStateOf(state.alarmMins / 60) }
     var alarmMinsText by remember { mutableIntStateOf(state.alarmMins % 60) }
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val screensState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val screenScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         functions.addGroupState(appearanceChapterId, true)
@@ -270,45 +283,9 @@ fun SettingsGrid(
         pluralStringResource(R.plurals.hours, count = 120, 120) to { functions.setTitlesUpdFrequency(context, 120) }
     )
 
-    val autoUpdateScreenState = remember { MutableTransitionState(false) }
-    val autoUpdateIndexes = remember { mutableStateOf<List<Int>?>(listOf(0)) }
-    LaunchedEffect(state.titlesAlarmUpdate) {
-        autoUpdateIndexes.value = if (state.titlesAlarmUpdate) null else listOf(0)
-    }
     val autoUpdateItems: List<@Composable () -> Unit> = listOf(
         {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            SettingsItem(text = stringResource(R.string.settings_titles_alarm_update)) {
-                CustomSwitch(
-                    checked = state.titlesAlarmUpdate,
-                    onCheckedChange = {
-                        functions.setTitlesAlarmUpdate(
-                            context,
-                            { functions.setShowNotificationsSheet(true) },
-                            { functions.setShowAlarmsSheet(true) },
-                            it,
-                            mainActivity
-                        )
-                    }
-                )
-            }
-        },
-        {
-            SettingsItem(text = stringResource(R.string.settings_titles_update_frequency)) {
-                DropdownButton(
-                    buttons = titlesFrequencyItems.map { (text, action) ->
-                        text to { action() }
-                    },
-                    density = density,
-                    cornerShape = Shapes.large,
-                    initialSelectedIndex = titlesFrequencyItems.indexOfFirst { it.first.contains(state.alarmFrequency.toString()) },
-                    width = 160.dp
-                )
-            }
-        },
-        {
-            SettingsItem(text = stringResource(R.string.settings_titles_update_time)) {
+            SettingsItem(text = stringResource(R.string.settings_titles_update_time), modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)) {
                 Box {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         DropdownButton(
@@ -339,30 +316,104 @@ fun SettingsGrid(
                     }
                 }
             }
+        },
+        {
+            SettingsItem(text = stringResource(R.string.settings_titles_update_frequency), modifier = Modifier.padding(vertical = 8.dp)) {
+                DropdownButton(
+                    buttons = titlesFrequencyItems.map { (text, action) ->
+                        text to { action() }
+                    },
+                    density = density,
+                    cornerShape = Shapes.large,
+                    initialSelectedIndex = titlesFrequencyItems.indexOfFirst { it.first.contains(state.alarmFrequency.toString()) },
+                    width = 160.dp
+                )
+            }
+        },
+        {
+            SettingsItem(
+                text = stringResource(R.string.settings_titles_alarm_update),
+                modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
+            ) {
+                CustomSwitch(
+                    checked = state.titlesAlarmUpdate,
+                    onCheckedChange = {
+                        functions.setTitlesAlarmUpdate(
+                            context,
+                            { functions.setShowNotificationsSheet(true) },
+                            { functions.setShowAlarmsSheet(true) },
+                            it,
+                            mainActivity
+                        )
+                    }
+                )
+            }
         }
     )
 
-    val bannedNewsScreenState = remember { MutableTransitionState(false) }
-    val bannedNewsItems: MutableList<@Composable () -> Unit> = mutableListOf()
-    state.bannedNews.forEach {
-        if (it != ""){
-            bannedNewsItems.add(
-                {
-                    SettingsItem(it) {
-                        CustomIconButton(
-                            inputs = IconButtonInputs(Icons.Default.Close, { functions.delBannedNews(it) }),
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .size(16.dp)
-                                .background(MaterialTheme.colorScheme.secondaryContainer)
-                        )
+    if (state.autoUpdateScreenOpened) {
+        val itemsToShow = if (state.titlesAlarmUpdate) {
+            autoUpdateItems
+        } else {
+            autoUpdateItems.subList(2, autoUpdateItems.size)
+        }
+
+        SettingsListBottomSheet(
+            title = stringResource(R.string.settings_titles_auto_update),
+            items = itemsToShow,
+            onDismissRequest = { functions.setAutoupdateScreen(false) },
+            sheetState = screensState,
+            scope = screenScope
+        )
+    }
+
+    LaunchedEffect(state.bannedNews) {
+        if (state.bannedNews.none { it.isNotBlank() } && state.bannedNewsScreenOpened) {
+            screenScope.launch { screensState.hide() }
+                .invokeOnCompletion {
+                    if (!screensState.isVisible) {
+                        functions.setBannedNewsScreen(false)
                     }
                 }
-            )
         }
     }
-    LaunchedEffect(bannedNewsItems) {
-        if (bannedNewsItems.isEmpty()) bannedNewsScreenState.targetState = false
+
+    if (state.bannedNewsScreenOpened) {
+        val bannedItems = remember(state.bannedNews) {
+            val list = mutableListOf<@Composable () -> Unit>()
+            state.bannedNews.forEach { link ->
+                if (link.isNotBlank()) {
+                    list.add {
+                        SettingsItem(
+                            text = link,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        ) {
+                            CustomIconButton(
+                                inputs = IconButtonInputs(
+                                    icon = Icons.Default.Close,
+                                    action = { functions.delBannedNews(link) }
+                                ),
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        shape = Shapes.large
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+            list
+        }
+
+        SettingsListBottomSheet(
+            title = stringResource(R.string.settings_banned_news),
+            items = bannedItems,
+            onDismissRequest = { functions.setBannedNewsScreen(false) },
+            sheetState = screensState,
+            scope = screenScope
+        )
     }
 
     if (state.showAlarmsSheet) {
@@ -547,8 +598,7 @@ fun SettingsGrid(
                                 inputs = IconButtonInputs(
                                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                     {
-                                        autoUpdateScreenState.targetState =
-                                            !autoUpdateScreenState.currentState
+                                        functions.setAutoupdateScreen(!state.autoUpdateScreenOpened)
                                     }
                                 ),
                                 modifier = Modifier
@@ -639,24 +689,22 @@ fun SettingsGrid(
                                 )
                             )
                         }
-                        if (bannedNewsItems.isNotEmpty()) {
+                        if (state.bannedNews.any { it.isNotBlank() }) {
                             SettingsItem(
                                 text = stringResource(R.string.settings_banned_news),
                                 modifier = Modifier.padding(vertical = verticalArrangement)
                             ) {
-                                IconButton(
+                                CustomIconButton(
+                                    inputs = IconButtonInputs(
+                                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                        {
+                                            functions.setBannedNewsScreen(!state.bannedNewsScreenOpened)
+                                        }
+                                    ),
                                     modifier = Modifier
-                                        .wrapContentSize(),
-                                    onClick = {
-                                        bannedNewsScreenState.targetState =
-                                            !bannedNewsScreenState.currentState
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                        contentDescription = stringResource(R.string.custom_card_with_menu_icon_desc)
-                                    )
-                                }
+                                        .wrapContentSize()
+                                        .height(40.dp)
+                                )
                             }
                         }
                     }
@@ -696,20 +744,5 @@ fun SettingsGrid(
                 )
             }
         }
-
-        DeferredUpdateTab(
-            transitionState = autoUpdateScreenState,
-            onDismissRequest = {},
-            items = autoUpdateItems,
-            indexes = autoUpdateIndexes.value,
-            header = stringResource(R.string.settings_titles_auto_update)
-        )
-
-        DeferredUpdateTab(
-            transitionState = bannedNewsScreenState,
-            onDismissRequest = {},
-            items = bannedNewsItems,
-            header = stringResource(R.string.settings_banned_news)
-        )
     }
 }

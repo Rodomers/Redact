@@ -9,6 +9,7 @@ import com.rds.mews.R
 import com.rds.mews.localcore.RSS
 import com.rds.mews.RssHubApiKeyProvider
 import com.rds.mews.ServerAddressProvider
+import com.rds.mews.core.getRssName
 import com.rds.mews.localcore.SettingsManager
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.Title
@@ -401,6 +402,14 @@ object MewsRepository {
             null -> null
             else -> _context.value!!.getString(id)
         }
+    }
+
+    fun getTitlesCount(): Int {
+        return db.getTitles().size
+    }
+
+    suspend fun getRssName(link: String): String? {
+        return getRssName(link, _enableProxy.value)
     }
 
     private val _currentLanguage =

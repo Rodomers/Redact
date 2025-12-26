@@ -56,6 +56,8 @@ sealed interface SummarizationResult {
 }
 
 data class SettingsUiState(
+    val autoUpdateScreenOpened: Boolean,
+    val bannedNewsScreenOpened: Boolean,
     val showDates: Boolean,
     val compactTab: Boolean,
     val currentTheme: String,
@@ -79,6 +81,8 @@ data class SettingsUiState(
 )
 
 data class SettingsUiFunctions(
+    val setAutoupdateScreen: (Boolean) -> Unit,
+    val setBannedNewsScreen: (Boolean) -> Unit,
     val setCompactTab: (Boolean) -> Unit,
     val setMonetColors: (Boolean) -> Unit,
     val setCurrentTheme: (String) -> Unit,

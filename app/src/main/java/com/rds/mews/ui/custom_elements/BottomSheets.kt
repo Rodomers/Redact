@@ -1,215 +1,381 @@
 package com.rds.mews.ui.custom_elements
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.SheetState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withLink
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.R
-import com.rds.mews.core.RSSName
-import com.rds.mews.localcore.linkTransform
+import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlin.text.ifEmpty
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CustomChangeBottomSheet(
+fun BaseFloatingBottomSheet(
     onDismissRequest: () -> Unit,
-    onConfirm: (Pair<String, String>) -> Unit,
-    add: Boolean = false,
-    source: String = stringResource(R.string.change_dialog_source),
-    scope: CoroutineScope,
     sheetState: SheetState,
-    sourceLink: String? = null
+    scope: CoroutineScope,
+    maxHeight: Dp = 500.dp,
+    stickyHeaderText: String? = null,
+    footer: (@Composable (closeSheet: () -> Unit) -> Unit)? = null,
+    content: (closeSheet: () -> Unit) -> List<@Composable () -> Unit>
 ) {
-    val title = if (add) stringResource(R.string.change_dialog_add_source) else stringResource(R.string.change_dialog_change_source)
+    val closeSheet: () -> Unit = {
+        scope.launch { sheetState.hide() }
+            .invokeOnCompletion { if (!sheetState.isVisible) onDismissRequest() }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = Color.Transparent,
+        dragHandle = null,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
-        val closeSheet = {
-            scope.launch { sheetState.hide() }
-                .invokeOnCompletion { if (!sheetState.isVisible) onDismissRequest() }
-        }
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .navigationBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .windowInsetsPadding(WindowInsets.ime)
+                .padding(vertical = 24.dp, horizontal = 8.dp)
+                .animateContentSize(),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            Text(
-                text = title,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp,
+            Surface(
                 modifier = Modifier
-                    .padding(horizontal = 40.dp, vertical = 16.dp)
                     .fillMaxWidth()
-            )
+                    .heightIn(max = maxHeight),
+                shape = Shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.97f)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    BottomSheetDefaults.DragHandle()
 
-            var rssText by remember { mutableStateOf("") }
-            var sourceText by remember { mutableStateOf(if (!add) source else "") }
-            var validRss by remember { mutableStateOf(!add) }
+                    val contentList = content(closeSheet)
 
-            if (add) {
-                OutlinedTextField(
-                    value = rssText,
-                    onValueChange = {
-                        rssText = it
-                        validRss = false
-                        scope.launch(Dispatchers.IO) {
-                            val res = RSSName(
-                                linkTransform(rssText),
-                                enableProxy = MewsRepository.proxyEnabled.value
-                            )
-                            if (res != null) {
-                                sourceText = res
-                                validRss = true
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (stickyHeaderText != null) {
+                            stickyHeader {
+                                Text(
+                                    modifier = Modifier
+                                        .background(color = MaterialTheme.colorScheme.surfaceContainerLow.copy(0.97f))
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp),
+                                    text = stickyHeaderText,
+                                    fontSize = 20.sp,
+                                    textAlign = TextAlign.Center,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
-                    },
-                    shape = MaterialTheme.shapes.large,
+
+                        items(contentList) { itemContent ->
+                            Box(modifier = Modifier.padding(horizontal = 8.dp)) {
+                                itemContent()
+                            }
+                        }
+                        item { Spacer(modifier = Modifier.height(16.dp)) }
+                    }
+
+                    if (footer != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                        ) {
+                            footer(closeSheet)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsListBottomSheet(
+    title: String,
+    items: List<@Composable () -> Unit>,
+    onDismissRequest: () -> Unit,
+    sheetState: SheetState,
+    scope: CoroutineScope
+) {
+    BaseFloatingBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        scope = scope,
+        stickyHeaderText = title,
+        maxHeight = 600.dp,
+        content = { _ -> items },
+        footer = { closeSheet ->
+            Row {
+                Spacer(modifier = Modifier.weight(1f))
+                CustomTextButton(
+                    inputs = TextButtonInputs(
+                        text = stringResource(R.string.settings_close),
+                        action = { closeSheet() }
+                    ),
+                    shape = Shapes.large,
+                    defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddSourceBottomSheet(
+    rssLinkValue: String,
+    onRssLinkChange: (String) -> Unit,
+    sourceNameValue: String,
+    onSourceNameChange: (String) -> Unit,
+    isRssValid: Boolean,
+    onConfirm: () -> Unit,
+    onDismissRequest: () -> Unit,
+    sheetState: SheetState,
+    scope: CoroutineScope
+) {
+    val textFieldsColor = MaterialTheme.colorScheme.secondaryContainer.copy(0.4f)
+    val onTextFieldColor = MaterialTheme.colorScheme.onSecondaryContainer
+
+    BaseFloatingBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        scope = scope
+    ) { closeSheet ->
+        listOf(
+            {
+                Text(
+                    text = stringResource(R.string.change_dialog_add_source),
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    modifier = Modifier
+                        .padding(vertical = 16.dp)
+                        .fillMaxWidth()
+                )
+            },
+            {
+                TextField(
+                    value = rssLinkValue,
+                    onValueChange = onRssLinkChange,
+                    shape = Shapes.large,
                     label = { Text(stringResource(R.string.change_dialog_link)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.onSurface,
-                        cursorColor = MaterialTheme.colorScheme.onSurface,
-                        focusedLabelColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurface,
-                    )
-                )
-            }
-
-            OutlinedTextField(
-                value = sourceText,
-                onValueChange = { sourceText = it },
-                shape = MaterialTheme.shapes.large,
-                label = { Text(stringResource(R.string.change_dialog_source)) },
-                placeholder = { Text(source) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.onSurface,
-                    cursorColor = MaterialTheme.colorScheme.onSurface,
-                    focusedLabelColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurface,
-                )
-            )
-
-            if (add) {
-                Text(
-                    text = if (validRss) stringResource(R.string.valid_link) else stringResource(R.string.enter_correct_link),
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-
-            if (!add && sourceLink != null) {
-                Text(
-                    modifier = Modifier.padding(16.dp),
-                    text = buildAnnotatedString {
-                        append(stringResource(R.string.link))
-
-                        withLink(
-                            link = LinkAnnotation.Url(
-                                url = sourceLink,
-                                styles = TextLinkStyles(
-                                    style = SpanStyle(
-//                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        textDecoration = TextDecoration.Underline
-                                    )
-                                )
-                            )
-                        ) {
-                            append(source)
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = textFieldsColor,
+                        unfocusedContainerColor = textFieldsColor,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = onTextFieldColor,
+                        focusedLabelColor = onTextFieldColor,
+                        unfocusedLabelColor = onTextFieldColor,
+                    ),
+                    trailingIcon = {
+                        if (rssLinkValue.isNotEmpty()) {
+                            if (isRssValid) {
+                                Icon(Icons.Default.Check, "Valid", tint = MaterialTheme.colorScheme.onSurface)
+                            } else {
+                                Icon(Icons.Default.Close, "Invalid", tint = MaterialTheme.colorScheme.error)
+                            }
                         }
-                    }
+                    },
+                    singleLine = true
                 )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp, end = 8.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(
-                    onClick = { closeSheet() }
+            },
+            {
+                TextField(
+                    value = sourceNameValue,
+                    onValueChange = onSourceNameChange,
+                    shape = Shapes.large,
+                    label = { Text(stringResource(R.string.change_dialog_source)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = textFieldsColor,
+                        unfocusedContainerColor = textFieldsColor,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = onTextFieldColor,
+                        focusedLabelColor = onTextFieldColor,
+                        unfocusedLabelColor = onTextFieldColor,
+                    ),
+                    singleLine = true
+                )
+            },
+            {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onSurface)
-                }
+                    CustomTextButton(
+                        inputs = TextButtonInputs(
+                            text = stringResource(R.string.cancel),
+                            action = { closeSheet() }
+                        )
+                    )
 
-                if ((validRss && rssText.isNotBlank() && sourceText.isNotBlank() && add)) {
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    TextButton(
-                        onClick = {
-                            val finalSourceName = sourceText.ifEmpty { source }
-                            onConfirm(Pair(finalSourceName, linkTransform(rssText.trim())))
-                            closeSheet()
-                        },
-                        modifier = Modifier.background(color = MaterialTheme.colorScheme.secondaryContainer, shape = Shapes.large)
-                    ) {
-                        Text(stringResource(R.string.add), color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
+                    val canAdd = isRssValid && rssLinkValue.isNotBlank() && sourceNameValue.isNotBlank()
 
-                if (!add && sourceText.isNotBlank()) {
-                    TextButton(
-                        onClick = {
-                            val finalSourceName = sourceText.ifEmpty { source }
-                            onConfirm(Pair(source, finalSourceName))
-                            closeSheet()
-                        },
-                        modifier = Modifier.background(color = MaterialTheme.colorScheme.secondaryContainer, shape = Shapes.large)
-                    ) {
-                        Text(stringResource(R.string.change), color = MaterialTheme.colorScheme.onSurface)
-                    }
+                    CustomTextButton(
+                        inputs = TextButtonInputs(
+                            text = stringResource(R.string.add),
+                            action = {
+                                if (canAdd) {
+                                    onConfirm()
+                                    closeSheet()
+                                }
+                            }
+                        ),
+                        shape = Shapes.large,
+                        enabled = canAdd,
+                        defaultBackgroundColor = if (canAdd) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                    )
                 }
             }
-        }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditSourceBottomSheet(
+    sourceNameValue: String,
+    onSourceNameChange: (String) -> Unit,
+    originalSourceName: String,
+    onLinkClick: () -> Unit,
+    onConfirm: () -> Unit,
+    onDismissRequest: () -> Unit,
+    sheetState: SheetState,
+    scope: CoroutineScope
+) {
+    val textFieldColor = MaterialTheme.colorScheme.secondaryContainer.copy(0.4f)
+    val onTextFieldColor = MaterialTheme.colorScheme.onSecondaryContainer
+
+    BaseFloatingBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        scope = scope
+    ) { closeSheet ->
+        listOf(
+            {
+                Text(
+                    text = stringResource(R.string.change_dialog_change_source),
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    modifier = Modifier
+                        .padding(vertical = 16.dp)
+                        .fillMaxWidth()
+                )
+            },
+            {
+                TextField(
+                    value = sourceNameValue,
+                    onValueChange = onSourceNameChange,
+                    shape = Shapes.large,
+                    label = { Text(stringResource(R.string.change_dialog_source)) },
+                    placeholder = { Text(originalSourceName) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = textFieldColor,
+                        unfocusedContainerColor = textFieldColor,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = onTextFieldColor,
+                        focusedLabelColor = onTextFieldColor,
+                        unfocusedLabelColor = onTextFieldColor,
+                    ),
+                    singleLine = true
+                )
+            },
+            {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CustomTextButton(
+                        inputs = TextButtonInputs(
+                            text = "Ссылка",
+                            action = onLinkClick
+                        ),
+                        shape = Shapes.large,
+                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                        defaultContentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            },
+            {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    CustomTextButton(
+                        inputs = TextButtonInputs(
+                            text = stringResource(R.string.cancel),
+                            action = { closeSheet() }
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    val canChange = sourceNameValue.isNotBlank()
+
+                    CustomTextButton(
+                        inputs = TextButtonInputs(
+                            text = stringResource(R.string.change),
+                            action = {
+                                if (canChange) {
+                                    onConfirm()
+                                    closeSheet()
+                                }
+                            }
+                        ),
+                        shape = Shapes.large,
+                        enabled = canChange,
+                        defaultBackgroundColor = if (canChange) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+                    )
+                }
+            }
+        )
     }
 }
 
@@ -222,68 +388,66 @@ fun CustomErrorBottomSheet(
     cancelBtnText: String,
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
-    scope: CoroutineScope,
-    sheetState: SheetState
+    sheetState: SheetState,
+    scope: CoroutineScope
 ) {
-    ModalBottomSheet(
+    BaseFloatingBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.background
-    ) {
-        val closeSheet = {
-            scope.launch { sheetState.hide() }
-                .invokeOnCompletion { if (!sheetState.isVisible) onDismissRequest() }
-        }
+        scope = scope
+    ) { closeSheet ->
+        listOf(
+            {
+                Text(
+                    text = title,
+                    textAlign = TextAlign.Center,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .padding(vertical = 16.dp)
+                        .fillMaxWidth()
+                )
+            },
+            {
+                Text(
+                    text = text,
+                    textAlign = TextAlign.Start,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal,
+                    modifier = Modifier
+                        .padding(vertical = 8.dp)
+                        .fillMaxWidth()
+                )
+            },
+            {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    CustomTextButton(
+                        inputs = TextButtonInputs(
+                            text = cancelBtnText,
+                            action = { closeSheet() }
+                        )
+                    )
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .navigationBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = title,
-                textAlign = TextAlign.Center,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .padding(horizontal = 40.dp, vertical = 16.dp)
-                    .fillMaxWidth()
-            )
-            Text(
-                text = text,
-                textAlign = TextAlign.Start,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Normal,
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-                    .fillMaxWidth()
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp, end = 8.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(
-                    onClick = {
-                        closeSheet()
-                    }
-                ) {
-                    Text(cancelBtnText, color = MaterialTheme.colorScheme.onSurface)
-                }
-                TextButton(
-                    onClick = {
-                        onConfirm()
-                        closeSheet()
-                    },
-                    modifier = Modifier.background(color = MaterialTheme.colorScheme.secondaryContainer, shape = Shapes.large)
-                ) {
-                    Text(confBtnText, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    CustomTextButton(
+                        inputs = TextButtonInputs(
+                            text = confBtnText,
+                            action = {
+                                onConfirm()
+                                closeSheet()
+                            }
+                        ),
+                        shape = Shapes.large,
+                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
                 }
             }
-        }
+        )
     }
 }

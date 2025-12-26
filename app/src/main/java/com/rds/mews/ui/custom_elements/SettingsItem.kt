@@ -12,21 +12,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rds.mews.ui.theme.Shapes
 
 @Composable
-fun SettingsItem(text: String, modifier: Modifier = Modifier, item: @Composable () -> Unit) {
+fun SettingsItem(
+    text: String,
+    modifier: Modifier = Modifier,
+    horizontalPadding: Dp = 8.dp,
+    verticalPadding: Dp = 6.dp,
+    item: @Composable () -> Unit
+) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = Shapes.large,
         color = MaterialTheme.colorScheme.secondaryContainer,
+
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = horizontalPadding, vertical = verticalPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(

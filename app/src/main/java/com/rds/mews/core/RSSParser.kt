@@ -183,19 +183,57 @@ class RssFetcher(
         val errors: List<String>
     )
 }
-suspend fun RSSName(strLink: String, enableProxy: Boolean = true): String? {
-    val httpClient = SharedHttpClient.createInstance(MewsRepository.SERVER_IP, MewsRepository.RSS_HUB_KEY, enableProxy = enableProxy)
+
+
+suspend fun getRssName(strLink: String, enableProxy: Boolean = true): String? {
+    val httpClient = SharedHttpClient.createInstance(
+        MewsRepository.SERVER_IP,
+        MewsRepository.RSS_HUB_KEY,
+        enableProxy = enableProxy
+    )
+
     try {
-        val doc: Document
-        var link = strLink
-        if (strLink.contains("t.me")) {
-            link = "http://${MewsRepository.SERVER_IP}:1200/telegram/channel/${link.split("/").last().trim()}?limit=1&key=${MewsRepository.RSS_HUB_KEY}"
+        val rawLink = strLink.trim()
+        val finalLink: String
+
+        when {
+            rawLink.startsWith("@") -> {
+                val username = rawLink.drop(1)
+                finalLink = buildTelegramRssUrl(username)
+            }
+            rawLink.contains("t.me") || rawLink.contains("telegram.me") -> {
+                val username = rawLink.trimEnd('/')
+                    .split("/")
+                    .last()
+                    .substringBefore("?")
+
+                finalLink = buildTelegramRssUrl(username)
+            }
+            else -> {
+                finalLink = rawLink
+            }
         }
-        val xmlContent: String = httpClient.get(link).body()
-        doc = Jsoup.parse(xmlContent, link, Parser.xmlParser())
-        return doc.select("title").firstOrNull()?.text()
+
+        val xmlContent: String = httpClient.get(finalLink).body()
+        val doc = Jsoup.parse(xmlContent, finalLink, Parser.xmlParser())
+
+        val name = doc.select("title").firstOrNull()?.text() ?: return null
+        if (name.lowercase() == "welcome to rsshub!") return null
+
+        if (name.lowercase().contains("telegram")) {
+            if (!name.lowercase().contains("channel")) return null
+
+            return name.take(name.indexOfFirst { it == '-' }).trim()
+        }
+
+        return name
+
     } catch (e: Exception) {
-        println(e)
+        e.printStackTrace()
         return null
     }
+}
+
+private fun buildTelegramRssUrl(username: String): String {
+    return "http://${MewsRepository.SERVER_IP}:1200/telegram/channel/${username.trim()}?limit=1&key=${MewsRepository.RSS_HUB_KEY}"
 }

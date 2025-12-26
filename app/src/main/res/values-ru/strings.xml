@@ -66,6 +66,7 @@
     \nВыдать разрешение?</string>
     <string name="settings_notification_sheet_cancel">Позже</string>
     <string name="settings_notification_sheet_conf">Выдать</string>
+    <string name="settings_close">Закрыть</string>
 
     <plurals name="titles" tools:ignore="MissingQuantity">
         <item quantity="one">%d штука</item>

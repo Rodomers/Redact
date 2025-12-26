@@ -67,6 +67,7 @@
     \nGrant permission?</string>
     <string name="settings_notification_sheet_cancel">Maybe later</string>
     <string name="settings_notification_sheet_conf">Grant</string>
+    <string name="settings_close">Close</string>
 
 
     <plurals name="titles">

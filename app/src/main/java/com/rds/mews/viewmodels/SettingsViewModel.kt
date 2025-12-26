@@ -32,6 +32,12 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     private val _groupStates = MutableStateFlow<List<SettingsGroupState>>(emptyList())
     val groupStates = _groupStates.asStateFlow()
 
+    private val _autoUpdateScreenOpened = MutableStateFlow(false)
+    val autoUpdateScreenOpened: StateFlow<Boolean> = _autoUpdateScreenOpened
+
+    private val _bannedNewsScreenOpened = MutableStateFlow(false)
+    val bannedNewsScreenOpened: StateFlow<Boolean> = _bannedNewsScreenOpened
+
     fun addGroupState(group: Int, initState: Boolean = true) {
         if (_groupStates.value.indexOfFirst { it.group == group } == -1)
             _groupStates.value += SettingsGroupState(group, initState)
@@ -73,6 +79,14 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     private val _isKeyDefault = MutableStateFlow(isApiKeyDefault(userApi.value))
     val isKeyDefault: StateFlow<Boolean> = _isKeyDefault
     val bannedNews = repository.bannedNewsFlow
+
+    fun setAutoupdateScreen(value: Boolean) {
+        _autoUpdateScreenOpened.value = value
+    }
+
+    fun setBannedNewsScreen(value: Boolean) {
+        _bannedNewsScreenOpened.value = value
+    }
 
     fun setCompactTab(value: Boolean) = viewModelScope.launch { repository.setCompactTab(value) }
     fun setMonetColors(value: Boolean) = viewModelScope.launch { repository.setMonetColors(value) }

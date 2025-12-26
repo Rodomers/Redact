@@ -17,11 +17,14 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,10 +34,11 @@ import com.rds.mews.localcore.RSS
 import com.rds.mews.localcore.SourceType
 import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.sourcesTypeInterpreter
+import com.rds.mews.ui.custom_elements.AddSourceBottomSheet
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.SourcesCard
-import com.rds.mews.ui.custom_elements.CustomChangeBottomSheet
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
+import com.rds.mews.ui.custom_elements.EditSourceBottomSheet
 import com.rds.mews.ui.custom_elements.SourcesAddCard
 import com.rds.mews.ui.custom_elements.customHeader
 import com.rds.mews.viewmodels.SourcesViewModel
@@ -54,6 +58,10 @@ fun SourcesScreen(
     val delSource by viewModel.delSource.collectAsStateWithLifecycle()
     val changedSource by viewModel.changedSource.collectAsStateWithLifecycle()
     val showAddDialog by viewModel.showAddDialog.collectAsStateWithLifecycle()
+
+    val sourceNameBuffer by viewModel.sourceNameBuffer.collectAsStateWithLifecycle()
+    val rssLinkBuffer by viewModel.rssLinkBuffer.collectAsStateWithLifecycle()
+    val isCorrectLink by viewModel.isLinkCorrect.collectAsStateWithLifecycle()
 
     val onAddSource = remember(viewModel, context) {
         { name: String, link: String -> viewModel.addSource(context, name, link) }
@@ -75,6 +83,11 @@ fun SourcesScreen(
         deletedSource = delSource,
         changedSource = changedSource,
         showAddDialog = showAddDialog,
+        sourceNameBuffer = sourceNameBuffer,
+        rssLinkBuffer = rssLinkBuffer,
+        isCorrectLink = isCorrectLink,
+        setSourceNameBuffer = viewModel::setSourceNameBuffer,
+        setRssLinkBuffer = viewModel::setRssLinkBuffer
     )
 }
 
@@ -95,25 +108,35 @@ fun SourcesGrid(
     newSourcesPermitted: Boolean,
     deletedSource: RSS?,
     changedSource: RSS?,
-    showAddDialog: Boolean
+    showAddDialog: Boolean,
+    sourceNameBuffer: String,
+    rssLinkBuffer: String,
+    isCorrectLink: Boolean,
+    setSourceNameBuffer: (String) -> Unit,
+    setRssLinkBuffer: (String) -> Unit
 ) {
+    val handler = LocalUriHandler.current
+
     val verticalArrangement by remember { mutableStateOf(8.dp) }
 
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
     if (showAddDialog) {
-        CustomChangeBottomSheet(
-            onDismissRequest = { setShowAddDialog(false) },
-            onConfirm = { pair ->
-                scope.launch {
-                    onSourceAdd(pair.first, pair.second)
-                }
+        AddSourceBottomSheet(
+            rssLinkValue = rssLinkBuffer,
+            onRssLinkChange = setRssLinkBuffer,
+            sourceNameValue = sourceNameBuffer,
+            onSourceNameChange = setSourceNameBuffer,
+            isRssValid = isCorrectLink,
+            onConfirm = { onSourceAdd(rssLinkBuffer, sourceNameBuffer) },
+            onDismissRequest = {
                 setShowAddDialog(false)
-            },
-            add = true,
-            scope = scope,
-            sheetState = bottomSheetState
+                setSourceNameBuffer("")
+                setRssLinkBuffer("")
+                               },
+            sheetState = bottomSheetState,
+            scope = scope
         )
     }
     if (deletedSource != null) {
@@ -134,19 +157,18 @@ fun SourcesGrid(
         )
     }
     if (changedSource != null) {
-        CustomChangeBottomSheet(
-            onDismissRequest = { setChangeSource(null) },
-            onConfirm = { pair ->
-                scope.launch {
-                    onSourceChange(changedSource.id, pair.second)
-                    setChangeSource(null)
-                }
-            },
-            add = false,
-            source = changedSource.source,
-            scope = scope,
+        EditSourceBottomSheet(
+            sourceNameValue = sourceNameBuffer,
+            onSourceNameChange = setSourceNameBuffer,
+            originalSourceName = changedSource.source,
+            onConfirm = { scope.launch { onSourceChange(changedSource.id, sourceNameBuffer) } },
+            onLinkClick = { handler.openUri(changedSource.link) },
+            onDismissRequest = {
+                setChangeSource(null)
+                setSourceNameBuffer("")
+                               },
             sheetState = bottomSheetState,
-            sourceLink = changedSource.link
+            scope = scope
         )
     }
 

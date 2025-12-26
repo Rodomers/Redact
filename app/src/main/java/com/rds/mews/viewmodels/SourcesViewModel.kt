@@ -27,6 +27,15 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
     private val _scrollEvents = Channel<SourcesScrollEvent>(Channel.CONFLATED)
     val scrollEvents = _scrollEvents.receiveAsFlow()
 
+    private val _rssLinkBuffer = MutableStateFlow("")
+    val rssLinkBuffer: StateFlow<String> = _rssLinkBuffer
+
+    private val _sourceNameBuffer = MutableStateFlow("")
+    val sourceNameBuffer: StateFlow<String> = _sourceNameBuffer
+
+    private val _isLinkCorrect = MutableStateFlow(false)
+    val isLinkCorrect: StateFlow<Boolean> = _isLinkCorrect
+
     val sources: StateFlow<List<RSS>> = repository.sources
         .stateIn(
             scope = viewModelScope,
@@ -110,6 +119,27 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
         val currentMap = _groupStates.value.toMutableMap()
         currentMap[group] = !(currentMap[group] ?: true)
         _groupStates.value = currentMap
+    }
+
+    fun setRssLinkBuffer(value: String) {
+        viewModelScope.launch {
+            _rssLinkBuffer.value = value
+            val linkName = if (value == "") null else repository.getRssName(value)
+            when (linkName) {
+                null -> {
+                    _sourceNameBuffer.value = ""
+                    _isLinkCorrect.value = false
+                }
+                else -> {
+                    _sourceNameBuffer.value = linkName
+                    _isLinkCorrect.value = true
+                }
+            }
+        }
+    }
+
+    fun setSourceNameBuffer(value: String) {
+        _sourceNameBuffer.value = value
     }
 
     fun scrollToTop() {
