@@ -10,6 +10,8 @@ import com.rds.mews.localcore.RSS
 import com.rds.mews.RssHubApiKeyProvider
 import com.rds.mews.ServerAddressProvider
 import com.rds.mews.core.getRssName
+import com.rds.mews.core.validateGeminiKey
+import com.rds.mews.localcore.GeminiModel
 import com.rds.mews.localcore.SettingsManager
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.Title
@@ -102,6 +104,28 @@ object MewsRepository {
                 scope = MewsRepository.externalScope,
                 started = SharingStarted.Companion.WhileSubscribed(5000),
                 initialValue = settingsManager.getStringSet(BANNED_NEWS_SET, setOf(""))
+        )
+    }
+
+    val geminiModelsList: List<GeminiModel> = listOf(
+        GeminiModel("2.5 Flash Lite", "gemini-2.5-flash-lite"),
+        GeminiModel("2.5 Flash", "gemini-2.5-flash"),
+        GeminiModel("2.5 Pro", "gemini-2.5-pro"),
+        GeminiModel("3.0 Flash Preview", "gemini-3-flash-preview"),
+        GeminiModel("3.0 Pro Preview", "gemini-3-pro-preview"),
+        GeminiModel("Flash Lite Latest", "gemini-flash-lite-latest"),
+        GeminiModel("Flash Latest", "gemini-flash-latest"),
+        GeminiModel("Pro Latest", "gemini-pro-latest")
+    )
+
+    val defaultModel = geminiModelsList[5]
+
+    suspend fun checkGeminiApiKey(key: String): Boolean {
+        return validateGeminiKey(
+            key,
+            SERVER_IP,
+            RSS_HUB_KEY,
+            proxyEnabled.value
         )
     }
 

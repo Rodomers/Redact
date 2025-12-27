@@ -3,6 +3,7 @@ package com.rds.mews.ui.grids
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rds.mews.MainActivity
 import com.rds.mews.R
+import com.rds.mews.localcore.GeminiModel
 import com.rds.mews.localcore.IconButtonInputs
 import com.rds.mews.localcore.SettingsGroupState
 import com.rds.mews.localcore.SettingsUiFunctions
@@ -60,6 +62,7 @@ import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.viewmodels.SettingsViewModel
 import com.rds.mews.localcore.intTimeToStr
 import com.rds.mews.localcore.requestNotificationPermission
+import com.rds.mews.ui.custom_elements.ApiKeyBottomSheet
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
@@ -85,6 +88,13 @@ fun SettingsScreen(
 
     val autoupdateScreenOpened by viewModel.autoUpdateScreenOpened.collectAsStateWithLifecycle()
     val bannedNewsScreenOpened by viewModel.bannedNewsScreenOpened.collectAsStateWithLifecycle()
+    val geminiScreenOpened by viewModel.geminiScreenOpened.collectAsStateWithLifecycle()
+
+    val geminiModels by remember { mutableStateOf(viewModel.geminiModels) }
+    val defaultGeminiModel by remember { mutableStateOf(viewModel.defaultGeminiModel) }
+
+    val geminiBuffer by viewModel.geminiKeyBuffer.collectAsStateWithLifecycle()
+    val isApiKeyValid by viewModel.isApiKeyCorrect.collectAsStateWithLifecycle()
 
     val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
     val showDates by viewModel.showDates.collectAsStateWithLifecycle()
@@ -111,6 +121,7 @@ fun SettingsScreen(
     val state = SettingsUiState(
         autoUpdateScreenOpened = autoupdateScreenOpened,
         bannedNewsScreenOpened = bannedNewsScreenOpened,
+        geminiKeyScreenOpened = geminiScreenOpened,
         showDates = showDates,
         compactTab = compactTab,
         currentTheme = currentTheme,
@@ -130,13 +141,18 @@ fun SettingsScreen(
         proxyEnabled = proxyEnabled,
         showAlarmsSheet = showAlarmsSheet,
         showNotificationsSheet = showNotificationsSheet,
-        defaultApiCheck = isApiKeyDefault
+        defaultApiCheck = isApiKeyDefault,
+        geminiModels = geminiModels,
+        defaultGeminiModel = defaultGeminiModel,
+        geminiApiBuffer = geminiBuffer,
+        isApiKeyCorrect = isApiKeyValid
     )
 
     val functions = remember {
         SettingsUiFunctions(
             setAutoupdateScreen = viewModel::setAutoupdateScreen,
             setBannedNewsScreen = viewModel::setBannedNewsScreen,
+            setGeminiScreenOpened = viewModel::setGeminiScreen,
             setCompactTab = viewModel::setCompactTab,
             setMonetColors = viewModel::setMonetColors,
             setCurrentTheme = viewModel::setCurrentTheme,
@@ -161,7 +177,9 @@ fun SettingsScreen(
             setShowAlarmsSheet = viewModel::setShowAlarmsSheet,
             setShowNotificationsSheet = viewModel::setShowNotificationsSheet,
             addGroupState = viewModel::addGroupState,
-            changeGroupState = viewModel::changeGroupState
+            changeGroupState = viewModel::changeGroupState,
+            setGeminiBuffer = viewModel::setGeminiKeyBuffer
+
         )
     }
 
@@ -195,6 +213,8 @@ fun SettingsGrid(
     val llmChapterId by remember { mutableIntStateOf(R.string.settings_chapter_llm) }
     val additionalChapterId by remember { mutableIntStateOf(R.string.settings_chapter_additional) }
     val clipboardManager = LocalClipboardManager.current
+
+    val apiBtnState = remember { MutableTransitionState(state.geminiKeyScreenOpened) }
 
     var text by remember { mutableStateOf("") }
     var alarmHrsText by remember { mutableIntStateOf(state.alarmMins / 60) }
@@ -253,12 +273,11 @@ fun SettingsGrid(
         pluralStringResource(R.plurals.minutes, count = 60, 60) to { functions.setRssUpdateInterval(context, 60) }
     )
 
-    val geminiModelDropdownItems = listOf(
-        "2.5 Flash" to { functions.setCurrentLlm("gemini-2.5-flash") },
-        "2.5 Flash Lite" to { functions.setCurrentLlm("gemini-2.5-flash-lite") },
-        "2.0 Flash" to { functions.setCurrentLlm("gemini-2.0-flash") },
-        "2.0 Flash Lite" to { functions.setCurrentLlm("gemini-2.0-flash-lite") }
-    )
+    val modelListItemsBuffer = mutableListOf<Pair<String, () -> Unit>>()
+    state.geminiModels.forEach {
+        modelListItemsBuffer += it.name to { functions.setCurrentLlm(it.key) }
+    }
+    val geminiModelDropdownItems by remember { mutableStateOf(modelListItemsBuffer) }
 
     val alarmHrsItems = (0..23).toList().map { num ->
         intTimeToStr(num) to {
@@ -412,6 +431,61 @@ fun SettingsGrid(
             onDismissRequest = { functions.setBannedNewsScreen(false) },
             sheetState = screensState,
             scope = screenScope
+        )
+    }
+
+    if (state.geminiKeyScreenOpened) {
+        ApiKeyBottomSheet(
+            apiKeyValue = state.geminiApiBuffer,
+            onApiKeyChange = functions.setGeminiBuffer,
+            confirmBtnInputs = TextButtonInputs(
+                text = stringResource(R.string.settings_sheet_api_save),
+                action = {
+                    functions.setUserGeminiApi(state.geminiApiBuffer)
+                    screenScope.launch {
+                        screensState.hide()
+                    }.invokeOnCompletion {
+                        if (!screensState.isVisible) {
+                            functions.setGeminiScreenOpened(false)
+                        }
+                        apiBtnState.targetState = false
+                        functions.setGeminiBuffer("")
+                    }
+                }
+            ),
+            cancelBtnInputs = TextButtonInputs(
+                text = stringResource(R.string.settings_sheet_api_cancel),
+                action = {
+                    screenScope.launch {
+                        screensState.hide()
+                    }.invokeOnCompletion {
+                        if (!screensState.isVisible) {
+                            functions.setGeminiScreenOpened(false)
+                        }
+                        functions.setGeminiBuffer("")
+                        apiBtnState.targetState = false
+                    }
+                }
+            ),
+            resetBtnInputs = TextButtonInputs(
+                text = stringResource(R.string.settings_reset),
+                action = {
+                    functions.resetUserGeminiApi()
+                    functions.setGeminiBuffer("")
+
+                    screenScope.launch {
+                        screensState.hide()
+                    }.invokeOnCompletion {
+                        if (!screensState.isVisible) {
+                            functions.setGeminiScreenOpened(false)
+                        }
+                        apiBtnState.targetState = false
+                    }
+                }
+            ),
+            sheetState = screensState,
+            scope = screenScope,
+            isApiKeyCorrect = state.isApiKeyCorrect
         )
     }
 
@@ -639,11 +713,8 @@ fun SettingsGrid(
                                     },
                                     density = density,
                                     cornerShape = Shapes.large,
-                                    initialSelectedIndex = geminiModelDropdownItems.indexOfFirst {
-                                        "gemini-${
-                                            it.first.split(" ")
-                                                .joinToString("-") { item -> item.lowercase() }
-                                        }" == state.currentLlmModel
+                                    initialSelectedIndex = geminiModelDropdownItems.indexOfFirst { item ->
+                                        state.geminiModels.find { it.name == item.first }?.key == state.currentLlmModel
                                     }
                                 )
                             }
@@ -654,29 +725,10 @@ fun SettingsGrid(
                         ) {
                             CustomTextButton(
                                 inputs = TextButtonInputs(
-                                    if (!state.defaultApiCheck) stringResource(R.string.settings_reset) else stringResource(
-                                        R.string.settings_paste
-                                    ),
-                                    {
-                                        when (state.defaultApiCheck) {
-                                            true -> {
-                                                val clipboardText: AnnotatedString? =
-                                                    clipboardManager.getText()
-
-                                                clipboardText?.let {
-                                                    text += it.text
-                                                }
-
-                                                functions.setUserGeminiApi(text)
-                                                text = ""
-                                            }
-
-                                            else -> {
-                                                functions.resetUserGeminiApi()
-                                                functions.setCurrentLlm("gemini-2.0-flash")
-                                                functions.setFilterTopics(false)
-                                            }
-                                        }
+                                    stringResource(R.string.settings_change),
+                                    action = {
+                                        functions.setGeminiScreenOpened(true)
+                                        apiBtnState.targetState = true
                                     }
                                 ),
                                 modifier = Modifier
@@ -685,7 +737,9 @@ fun SettingsGrid(
                                 shape = Shapes.large,
                                 defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(
                                     alpha = 0.98f
-                                )
+                                ),
+                                transitionBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                transitionState = apiBtnState
                             )
                         }
                         if (state.bannedNews.any { it.isNotBlank() }) {

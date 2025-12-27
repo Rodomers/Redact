@@ -3,6 +3,7 @@ package com.rds.mews.ui.custom_elements
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -327,12 +328,12 @@ fun EditSourceBottomSheet(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
+                        .padding(top = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     CustomTextButton(
                         inputs = TextButtonInputs(
-                            text = "Ссылка",
+                            text = stringResource(R.string.link),
                             action = onLinkClick
                         ),
                         shape = Shapes.large,
@@ -345,7 +346,7 @@ fun EditSourceBottomSheet(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 16.dp),
+                        .padding(top = 4.dp),
                     horizontalArrangement = Arrangement.End
                 ) {
                     CustomTextButton(
@@ -445,6 +446,107 @@ fun CustomErrorBottomSheet(
                         ),
                         shape = Shapes.large,
                         defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ApiKeyBottomSheet(
+    apiKeyValue: String,
+    onApiKeyChange: (String) -> Unit,
+    confirmBtnInputs: TextButtonInputs,
+    cancelBtnInputs: TextButtonInputs,
+    resetBtnInputs: TextButtonInputs,
+    sheetState: SheetState,
+    scope: CoroutineScope,
+    isApiKeyCorrect: Boolean
+) {
+    val textFieldColor = MaterialTheme.colorScheme.secondaryContainer.copy(0.4f)
+    val onTextFieldColor = MaterialTheme.colorScheme.onSecondaryContainer
+
+    BaseFloatingBottomSheet(
+        onDismissRequest = cancelBtnInputs.action,
+        sheetState = sheetState,
+        scope = scope
+    ) { closeSheet ->
+        listOf(
+            {
+                Text(
+                    text = stringResource(R.string.settings_sheet_current_key),
+                    textAlign = TextAlign.Center,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .padding(vertical = 16.dp)
+                        .fillMaxWidth()
+                )
+            },
+            {
+                TextField(
+                    value = apiKeyValue,
+                    onValueChange = onApiKeyChange,
+                    shape = Shapes.large,
+                    label = { Text(stringResource(R.string.settings_sheet_api_key)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = textFieldColor,
+                        unfocusedContainerColor = textFieldColor,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = onTextFieldColor,
+                        focusedLabelColor = onTextFieldColor,
+                        unfocusedLabelColor = onTextFieldColor,
+                    ),
+                    trailingIcon = {
+                        if (apiKeyValue.isNotEmpty()) {
+                            if (isApiKeyCorrect) {
+                                Icon(Icons.Default.Check, "Valid", tint = MaterialTheme.colorScheme.onSurface)
+                            } else {
+                                Icon(Icons.Default.Close, "Invalid", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    },
+                    singleLine = true
+                )
+            },
+            {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    CustomTextButton(
+                        inputs = resetBtnInputs,
+                        shape = Shapes.large,
+                        defaultBackgroundColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                }
+            },
+            {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    CustomTextButton(
+                        inputs = cancelBtnInputs
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    CustomTextButton(
+                        inputs = confirmBtnInputs,
+                        shape = Shapes.large,
+                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                        enabled = isApiKeyCorrect
                     )
                 }
             }

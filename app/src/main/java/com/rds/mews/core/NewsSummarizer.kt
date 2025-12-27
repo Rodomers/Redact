@@ -36,8 +36,8 @@ private data class SummaryResult(
 
 class LLMClient(
     val apiKey: String = "",
-    val MODEL: String = "gemini-2.0-flash-lite",
-    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/${if (MODEL != "") MODEL else "gemini-2.0-flash"}:generateContent",
+    val MODEL: String = MewsRepository.defaultModel.key,
+    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/${if (MODEL != "") MODEL else MewsRepository.defaultModel.key}:generateContent",
     enableProxy: Boolean = false
 ) : Closeable {
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.SERVER_IP, MewsRepository.RSS_HUB_KEY, enableProxy = enableProxy)
@@ -158,6 +158,32 @@ class LLMClient(
     data class Part(
         val text: String
     )
+}
+
+suspend fun validateGeminiKey(
+    apiKey: String,
+    proxyIp: String,
+    proxyKey: String,
+    enableProxy: Boolean
+): Boolean {
+    val client = SharedHttpClient.createInstance(
+        serverIp = proxyIp,
+        rssHubKey = proxyKey,
+        enableProxy = enableProxy
+    )
+
+    return try {
+        val response = client.get("https://generativelanguage.googleapis.com/v1beta/models") {
+            parameter("key", apiKey)
+        }
+
+        response.status == HttpStatusCode.OK
+    } catch (e: Exception) {
+        e.printStackTrace()
+        false
+    } finally {
+        client.close()
+    }
 }
 
 class NewsSummarizer(

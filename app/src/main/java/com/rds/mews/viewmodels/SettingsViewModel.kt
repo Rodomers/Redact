@@ -38,6 +38,24 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     private val _bannedNewsScreenOpened = MutableStateFlow(false)
     val bannedNewsScreenOpened: StateFlow<Boolean> = _bannedNewsScreenOpened
 
+    private val _geminiKeyScreenOpened = MutableStateFlow(false)
+    val geminiScreenOpened = _geminiKeyScreenOpened
+
+    private val _geminiKeyBuffer = MutableStateFlow("")
+    val geminiKeyBuffer = _geminiKeyBuffer
+
+    private val _isApiKeyCorrect = MutableStateFlow(false)
+    val isApiKeyCorrect = _isApiKeyCorrect
+
+    fun setGeminiKeyBuffer(value: String) {
+        val default = value == _defaultApiKey
+
+        viewModelScope.launch {
+            _geminiKeyBuffer.value = value
+            if (!default) _isApiKeyCorrect.value = repository.checkGeminiApiKey(value)
+        }
+    }
+
     fun addGroupState(group: Int, initState: Boolean = true) {
         if (_groupStates.value.indexOfFirst { it.group == group } == -1)
             _groupStates.value += SettingsGroupState(group, initState)
@@ -50,6 +68,9 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
         }
         _groupStates.value = current
     }
+
+    val geminiModels = repository.geminiModelsList
+    val defaultGeminiModel = repository.defaultModel
 
     val compactTabBar: StateFlow<Boolean> = repository.compactTabBar.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val isMonetColors: StateFlow<Boolean> = repository.monetColors.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -88,6 +109,13 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
         _bannedNewsScreenOpened.value = value
     }
 
+    fun setGeminiScreen(value: Boolean) {
+        if (_geminiKeyBuffer.value == "" && !_isKeyDefault.value) {
+            setGeminiKeyBuffer(repository.userApiKey.value)
+        }
+        _geminiKeyScreenOpened.value = value
+    }
+
     fun setCompactTab(value: Boolean) = viewModelScope.launch { repository.setCompactTab(value) }
     fun setMonetColors(value: Boolean) = viewModelScope.launch { repository.setMonetColors(value) }
     fun setCurrentTheme(value: String) = viewModelScope.launch { repository.setCurrentTheme(value) }
@@ -107,6 +135,8 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     }
     fun resetApiKey() = viewModelScope.launch {
         repository.setUserApiKey(_defaultApiKey)
+        repository.setCurrentLlmModel(defaultGeminiModel.key)
+        repository.setTitlesNum(titlesNum.value.coerceIn(0, 20))
         _isKeyDefault.value = true
     }
     fun setInnerTime(value: Boolean) = viewModelScope.launch { repository.setInnerTimestamps(value) }

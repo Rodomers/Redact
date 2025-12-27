@@ -58,6 +58,7 @@ sealed interface SummarizationResult {
 data class SettingsUiState(
     val autoUpdateScreenOpened: Boolean,
     val bannedNewsScreenOpened: Boolean,
+    val geminiKeyScreenOpened: Boolean,
     val showDates: Boolean,
     val compactTab: Boolean,
     val currentTheme: String,
@@ -77,12 +78,17 @@ data class SettingsUiState(
     val proxyEnabled: Boolean,
     val showAlarmsSheet: Boolean,
     val showNotificationsSheet: Boolean,
-    val defaultApiCheck: Boolean
+    val defaultApiCheck: Boolean,
+    val geminiModels: List<GeminiModel>,
+    val defaultGeminiModel: GeminiModel,
+    val geminiApiBuffer: String,
+    val isApiKeyCorrect: Boolean
 )
 
 data class SettingsUiFunctions(
     val setAutoupdateScreen: (Boolean) -> Unit,
     val setBannedNewsScreen: (Boolean) -> Unit,
+    val setGeminiScreenOpened: (Boolean) -> Unit,
     val setCompactTab: (Boolean) -> Unit,
     val setMonetColors: (Boolean) -> Unit,
     val setCurrentTheme: (String) -> Unit,
@@ -107,7 +113,8 @@ data class SettingsUiFunctions(
     val setShowAlarmsSheet: (Boolean) -> Unit,
     val setShowNotificationsSheet: (Boolean) -> Unit,
     val addGroupState: (Int, Boolean) -> Unit,
-    val changeGroupState: (Int) -> Unit
+    val changeGroupState: (Int) -> Unit,
+    val setGeminiBuffer: (String) -> Unit
 )
 
 data class SourcesGroupState(val group: SourceType, val expanded: Boolean)
@@ -127,3 +134,5 @@ data class IconButtonInputs(
     override val action: () -> Unit,
     override val toast: String? = null
 ) : ButtonInputs
+
+data class GeminiModel(val name: String, val key: String)

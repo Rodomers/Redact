@@ -21,9 +21,9 @@
     <string name="optimization_sheet_cancel">Maybe Later</string>
     <string name="optimization_sheet_conf">Allow</string>
     <string name="no_sources">No sources :(</string>
-    <string name="link">Link:\ </string>
+    <string name="link">Link </string>
 
-    <string name="titles_update_text">Pull down to update\n(Veery long)</string>
+    <string name="titles_update_text">Pull down to update</string>
     <string name="today">today</string>
     <string name="yesterday">yesterday</string>
     <string name="updated_footnote">Updated: %1$s at %2$s</string>
@@ -41,19 +41,23 @@
     <string name="settings_compact_tab">Compact tab</string>
     <string name="settings_endure_time">Inner timestamps</string>
     <string name="settings_show_snippets">Show snippets</string>
-    <string name="settings_filter_topics">Additional topics filter</string>
-    <string name="settings_titles_auto_update">Titles auto update</string>
+    <string name="settings_filter_topics">Topics filter</string>
+    <string name="settings_titles_auto_update">Topics autoupdate</string>
     <string name="settings_banned_news">Blocked news</string>
     <string name="settings_unban_new_button">Unban news button</string>
-    <string name="settings_titles_alarm_update">Update at a fixed time</string>
+    <string name="settings_titles_alarm_update">Turn on autoupdate</string>
     <string name="settings_titles_update_time">Update time</string>
     <string name="settings_titles_update_frequency">Update interval</string>
     <string name="settings_maximum_headers">Maximum headers</string>
     <string name="settings_news_period">News period</string>
-    <string name="settings_news_update_frequency">Background news update frequency</string>
+    <string name="settings_news_update_frequency">Sources update frequency</string>
     <string name="settings_gemini_api_key">Gemini API key</string>
+    <string name="settings_sheet_current_key">API key change</string>
+    <string name="settings_sheet_api_key">API key</string>
+    <string name="settings_sheet_api_save">Save</string>
+    <string name="settings_sheet_api_cancel">Cancel</string>
     <string name="settings_reset">Reset</string>
-    <string name="settings_paste">Paste</string>
+    <string name="settings_change">Change</string>
     <string name="settings_ignore_optimization">Ignore battery optimization</string>
     <string name="settings_gemini_model">Gemini model</string>
     <string name="settings_enable_proxy">Built-in proxy</string>
@@ -68,7 +72,6 @@
     <string name="settings_notification_sheet_cancel">Maybe later</string>
     <string name="settings_notification_sheet_conf">Grant</string>
     <string name="settings_close">Close</string>
-
 
     <plurals name="titles">
         <item quantity="one">%d title</item>

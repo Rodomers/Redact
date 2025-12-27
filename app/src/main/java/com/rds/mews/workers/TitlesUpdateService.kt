@@ -73,7 +73,7 @@ class TitlesUpdateService : Service() {
 
         if (!oneTimeUpdate) AlarmScheduler.cancel(applicationContext)
 
-        val currentLLM = settingsManager.getString(MewsRepository.CURRENT_LLM_MODEL, "gemini-2.0-flash")
+        val currentLLM = settingsManager.getString(MewsRepository.CURRENT_LLM_MODEL, MewsRepository.defaultModel.key)
         val llmApiKey = settingsManager.getString(MewsRepository.USER_API_KEY, MewsRepository.DEFAULT_GEMINI_API_KEY)
         val rssLastUpdate = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
         val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)

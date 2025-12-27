@@ -129,7 +129,7 @@ fun SourcesGrid(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(changedSource) {
-        setSourceNameBuffer(changedSource?.source ?: "")
+        if (sourceNameBuffer == "") setSourceNameBuffer(changedSource?.source ?: "")
     }
 
     if (showAddDialog) {
