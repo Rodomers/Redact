@@ -5,6 +5,9 @@ import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,12 +36,19 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
@@ -75,6 +85,7 @@ import kotlin.collections.component1
 import kotlin.collections.component2
 import kotlin.collections.iterator
 import com.rds.mews.ui.theme.Shapes
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
 
 @Composable
 fun TitlesScreen(
@@ -177,6 +188,25 @@ fun TitlesGrid(
     val pullToRefreshState = rememberPullToRefreshState()
     val lastUpdatedDate = remember(groupedItems) { mutableStateOf(getDateFromUnix(lastTitlesUpdate)) }
 
+    var allowPullToRefresh by remember { mutableStateOf(false) }
+
+    val connection = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (source == UserInput) {
+                    if (available.y > 0 && !allowPullToRefresh) {
+                        return available
+                    }
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
     LaunchedEffect(groupedItems.isEmpty()) {
         if (!lastTitlesUpdateExists() && groupedItems.isEmpty()) showGreeting(context)
     }
@@ -251,6 +281,15 @@ fun TitlesGrid(
         LazyVerticalGrid(
             columns = GridCells.Fixed(1),
             modifier = Modifier
+                .nestedScroll(connection)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitFirstDown(requireUnconsumed = false)
+                            allowPullToRefresh = !lazyGridState.canScrollBackward
+                        }
+                    }
+                }
                 .fillMaxSize()
                 .padding(horizontal = 10.dp),
             contentPadding = WindowInsets.statusBars.asPaddingValues(),
@@ -294,6 +333,8 @@ fun TitlesGrid(
                 }
             }
 
+            var globalIndex = 0
+
             groupedItems.forEach { (date, titlesForDate) ->
                 customHeader(
                     text = if (date.number != null) context.getString(
@@ -304,16 +345,28 @@ fun TitlesGrid(
                     isExpanded = groupStates.find { it.group == date }?.expanded ?: true,
                     onHeaderClick = { changeGroupState(date) }
                 )
+                globalIndex++
+                val currentGroupStartIndex = globalIndex
 
                 itemsIndexed(titlesForDate) { index, item ->
                     val isFirst = index == 0
                     val isLast = index == titlesForDate.lastIndex
+
+                    val itemGlobalIndex = currentGroupStartIndex + index
 
                     val statesItem = titlesCardStates.find { it.id == item.id }
                     val isExpanded = statesItem?.expanded ?: false
                     val pagerState = rememberPagerState(initialPage = statesItem?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
                     val sources = statesItem?.sources
                     val read = statesItem?.read ?: false
+
+                    val isPartiallyObscured by remember {
+                        derivedStateOf {
+                            val firstIndex = lazyGridState.firstVisibleItemIndex
+                            val firstOffset = lazyGridState.firstVisibleItemScrollOffset
+                            itemGlobalIndex == firstIndex && firstOffset > 0
+                        }
+                    }
 
                     ExpandableContainer(
                         visible = groupStates.find { it.group == date }?.expanded ?: true
@@ -330,26 +383,43 @@ fun TitlesGrid(
                                     isLast = isLast
                                 )
                             }
-                            TitlesCard(
-                                item,
-                                modifier = Modifier.padding(vertical = verticalArrangement),
-                                isExpanded = isExpanded,
-                                pagerState = pagerState,
-                                onToggleExpanded = { onToggleExpanded(item.id) },
-                                rememberPage = { page -> rememberCardPage(item.id, page) },
-                                noTime = !innerTime,
-                                showSnippet = showSnippets,
-                                onBanTheme = onBanTheme,
-                                sources = sources,
-                                changeSourceState = changeSourceState,
-                                backgroundColor = if (read)
-                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.5f)
-                                else MaterialTheme.colorScheme.secondaryContainer,
-                                expandable = lastTitlesUpdateExists()
-                            )
+
+                            Box(modifier = Modifier.weight(1f)) {
+                                TitlesCard(
+                                    item,
+                                    modifier = Modifier.padding(vertical = verticalArrangement),
+                                    isExpanded = isExpanded,
+                                    pagerState = pagerState,
+                                    onToggleExpanded = { onToggleExpanded(item.id) },
+                                    rememberPage = { page -> rememberCardPage(item.id, page) },
+                                    noTime = !innerTime,
+                                    showSnippet = showSnippets,
+                                    onBanTheme = onBanTheme,
+                                    sources = sources,
+                                    changeSourceState = changeSourceState,
+                                    backgroundColor = if (read)
+                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.5f)
+                                    else MaterialTheme.colorScheme.secondaryContainer,
+                                    expandable = lastTitlesUpdateExists()
+                                )
+
+                                if (isPartiallyObscured) {
+                                    Box(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null,
+                                                onClick = {  }
+                                            )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+
+                globalIndex += titlesForDate.size
             }
 
             if (groupedItems.isNotEmpty() && lastTitlesUpdateExists()) {

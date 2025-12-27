@@ -186,11 +186,13 @@ fun CustomIconButton(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(48.dp)
-            .clip(shape = shape ?: RoundedCornerShape(0.dp))
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
                 alpha = if (enabled) 1f else 0.5f
+
+                this.shape = shape ?: Shapes.large
+                this.clip = true
             }
             .drawBehind {
                 drawRect(color = defaultBackgroundColor)

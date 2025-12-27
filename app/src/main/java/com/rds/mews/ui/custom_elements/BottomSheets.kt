@@ -472,7 +472,7 @@ fun ApiKeyBottomSheet(
         onDismissRequest = cancelBtnInputs.action,
         sheetState = sheetState,
         scope = scope
-    ) { closeSheet ->
+    ) { _ ->
         listOf(
             {
                 Text(
