@@ -25,53 +25,59 @@ import org.json.JSONException
 import kotlinx.coroutines.sync.withPermit
 import java.io.Closeable
 
-
-private data class SummaryResult(
-    val originalTitle: String,
-    val summary: String,
-    val time: Long,
-    val sources: List<String>,
-    val msgIds: List<Long>
-)
-
 class LLMClient(
     val apiKey: String = "",
     val MODEL: String = MewsRepository.defaultModel.key,
-    private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/${if (MODEL != "") MODEL else MewsRepository.defaultModel.key}:generateContent",
+    private val URL_TEMPLATE: String = "https://generativelanguage.googleapis.com/v1beta/models/%MODEL%:generateContent",
     enableProxy: Boolean = false
 ) : Closeable {
-    private val httpClient = SharedHttpClient.createInstance(MewsRepository.PROXY_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
+
+    private val finalUrl = URL_TEMPLATE.replace(
+        "%MODEL%",
+        MODEL.ifBlank { MewsRepository.defaultModel.key }
+    )
+
+    private val httpClient = SharedHttpClient.createInstance(
+        MewsRepository.PROXY_ADDRESS,
+        MewsRepository.SERVER_KEY,
+        enableProxy = enableProxy
+    )
     private val jsonParser = SharedHttpClient.jsonParser
 
     suspend fun sendPrompt(prompt: String): String? {
-        val requestBody = GeminiRequest(
-            contents = listOf(
-                ContentInput(parts = listOf(PartInput(prompt)))
-            ),
-            generationConfig = GenerationConfig(
-                temperature = 0.5,
-                maxOutputTokens = 8192
-            )
+        val requestBodyObj = GeminiRequest(
+            contents = listOf(ContentInput(parts = listOf(PartInput(prompt)))),
+            generationConfig = GenerationConfig(temperature = 0.5, maxOutputTokens = 8192)
         )
 
-        try {
-            val response = httpClient.post(URL) {
-                header("x-goog-api-key", apiKey)
-                contentType(ContentType.Application.Json)
-                setBody(requestBody)
-            }
+        val requestBodyString = jsonParser.encodeToString(requestBodyObj)
 
-            val responseString = response.body<String>()
+        try {
+            val response = httpClient.post(
+                url = finalUrl,
+                body = requestBodyString,
+                headers = mapOf(
+                    "x-goog-api-key" to apiKey,
+                    "Content-Type" to "application/json"
+                )
+            )
+
+            val responseString = response.body
 
             println("--- RAW GEMINI RESPONSE ---")
             println("Status Code: ${response.status}")
-            println("Body: $responseString")
+            println("Body: ${responseString.take(500)}...")
             println("---------------------------")
+
+            if (response.status != 200) {
+                println("GEMINI API ERROR: HTTP ${response.status}")
+                return null
+            }
 
             val geminiResponse = jsonParser.decodeFromString<GeminiResponse>(responseString)
 
             if (geminiResponse.error != null) {
-                println("API ERROR: ${geminiResponse.error.message} (Code: ${geminiResponse.error.code})")
+                println("API ERROR: ${geminiResponse.error.message}")
                 return null
             }
 
@@ -96,68 +102,16 @@ class LLMClient(
         httpClient.close()
     }
 
-    @Serializable
-    data class SafetySetting(
-        val category: String,
-        val threshold: String
-    )
-
-    @Serializable
-    data class GeminiRequest(
-        val contents: List<ContentInput>,
-        val generationConfig: GenerationConfig? = null
-    )
-
-    @Serializable
-    data class GenerationConfig(
-        val temperature: Double,
-        val maxOutputTokens: Int? = null
-    )
-
-    @Serializable
-    data class ContentInput(
-        val parts: List<PartInput>
-    )
-
-    @Serializable
-    data class PartInput(
-        val text: String
-    )
-
-    @Serializable
-    data class GeminiResponse(
-        val candidates: List<Candidate>? = null,
-        val error: GeminiError? = null,
-        val promptFeedback: PromptFeedback? = null
-    )
-
-    @Serializable
-    data class GeminiError(
-        val code: Int? = null,
-        val message: String? = null,
-        val status: String? = null
-    )
-
-    @Serializable
-    data class PromptFeedback(
-        val blockReason: String? = null
-    )
-
-    @Serializable
-    data class Candidate(
-        val content: Content?,
-        val finishReason: String? = null
-    )
-
-    @Serializable
-    data class Content(
-        val parts: List<Part>
-    )
-
-    @Serializable
-    data class Part(
-        val text: String
-    )
+    @Serializable data class GeminiRequest(val contents: List<ContentInput>, val generationConfig: GenerationConfig? = null)
+    @Serializable data class GenerationConfig(val temperature: Double, val maxOutputTokens: Int? = null)
+    @Serializable data class ContentInput(val parts: List<PartInput>)
+    @Serializable data class PartInput(val text: String)
+    @Serializable data class GeminiResponse(val candidates: List<Candidate>? = null, val error: GeminiError? = null, val promptFeedback: PromptFeedback? = null)
+    @Serializable data class GeminiError(val code: Int? = null, val message: String? = null, val status: String? = null)
+    @Serializable data class PromptFeedback(val blockReason: String? = null)
+    @Serializable data class Candidate(val content: Content?, val finishReason: String? = null)
+    @Serializable data class Content(val parts: List<Part>)
+    @Serializable data class Part(val text: String)
 }
 
 suspend fun validateGeminiKey(
@@ -173,11 +127,12 @@ suspend fun validateGeminiKey(
     )
 
     return try {
-        val response = client.get("https://generativelanguage.googleapis.com/v1beta/models") {
-            parameter("key", apiKey)
-        }
+        val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
 
-        response.status == HttpStatusCode.OK
+        val response = client.get(url)
+
+        // Просто проверяем статус 200 OK
+        response.status == 200
     } catch (e: Exception) {
         e.printStackTrace()
         false

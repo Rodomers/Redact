@@ -4,6 +4,7 @@ import com.rds.mews.localcore.SettingsManager
 import com.rds.mews.repositories.MewsRepository
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import kotlinx.coroutines.withContext
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -44,22 +45,39 @@ class RssFetcher(
         for (rss in rssList) {
             try {
                 var fetchUrl = rss.link
-
-                if (fetchUrl.contains("t.me")) {
-                    fetchUrl = buildTelegramRssUrl(fetchUrl.split("/").last().trim())
-//                    fetchUrl = "http://${MewsRepository.HUB_ADDRESS}/telegram/channel/${fetchUrl.split("/").last().trim()}?limit=100&key=${MewsRepository.SERVER_KEY}"
-                    if (newsUpdateDelta != null) fetchUrl = "$fetchUrl&filter_time=${newsUpdateDelta}"
-                }
                 println("Fetching RSS: $fetchUrl")
 
-                val xmlContent: String = httpClient.get(fetchUrl).body()
+                if (fetchUrl.contains("t.me")) {
+                    val channelName = fetchUrl.split("/").last().trim()
+                    fetchUrl = "http://${MewsRepository.HUB_ADDRESS}/telegram/channel/$channelName?limit=100&key=${MewsRepository.SERVER_KEY}"
+                    if (newsUpdateDelta != null) fetchUrl = "$fetchUrl&filter_time=${newsUpdateDelta}"
+                }
+
+                val response = httpClient.get(fetchUrl)
+
+                if (response.status != 200) {
+                    val msg = "Ошибка HTTP ${response.status} при загрузке ${rss.link}"
+                    println(msg)
+                    errors.add(msg)
+                    continue
+                }
+
+                val xmlContent = response.body
+
+                if (xmlContent.isBlank()) {
+                    println("Пришел пустой ответ от ${rss.link}")
+                    continue
+                }
+
                 val doc = Jsoup.parse(xmlContent, fetchUrl, Parser.xmlParser())
 
                 val items = parseRssItems(doc)
                 println("items: ${items.size}")
+
                 for (item in items) {
                     val link = item.link ?: continue
                     val desc = item.description ?: continue
+
                     if (db.findMessage(rss.source, desc) != null) {
                         itemsSkipped++
                         continue
@@ -82,6 +100,7 @@ class RssFetcher(
             } catch (e: Exception) {
                 val msg = "Ошибка при обработке RSS (id=${rss.id}, link=${rss.link}): ${e.message}"
                 println(msg)
+                e.printStackTrace()
                 errors.add(msg)
             } finally {
                 db.messageTimeKill(messAliveTime * 3)
@@ -196,36 +215,42 @@ suspend fun getRssName(strLink: String, enableProxy: Boolean = false): String? {
 
     try {
         val rawLink = strLink.trim()
-        val finalLink: String
-
-        when {
+        val finalLink: String = when {
             rawLink.startsWith("@") -> {
-                val username = rawLink.drop(1)
-                finalLink = buildTelegramRssUrl(username)
+                buildTelegramRssUrl(rawLink.drop(1))
             }
             rawLink.contains("t.me") || rawLink.contains("telegram.me") -> {
-                val username = rawLink.trimEnd('/')
-                    .split("/")
-                    .last()
-                    .substringBefore("?")
-
-                finalLink = buildTelegramRssUrl(username)
+                val username = rawLink.trimEnd('/').split("/").last().substringBefore("?")
+                buildTelegramRssUrl(username)
             }
-            else -> {
-                finalLink = rawLink
-            }
+            else -> rawLink
         }
 
-        val xmlContent: String = httpClient.get(finalLink).body()
-        val doc = Jsoup.parse(xmlContent, finalLink, Parser.xmlParser())
+        // Используем наш новый клиент (он уже внутри Dispatchers.IO)
+        val response = httpClient.get(finalLink)
 
+        // Проверяем статус (ловим 503 или 404)
+        if (response.status != 200) {
+            System.err.println("RssError: Сервер вернул код ${response.status}")
+            return null
+        }
+
+        val xmlContent = response.body
+        if (xmlContent.isBlank()) return null
+
+        // Парсинг
+        val doc = Jsoup.parse(xmlContent, finalLink, Parser.xmlParser())
         val name = doc.select("title").firstOrNull()?.text() ?: return null
+
         if (name.lowercase() == "welcome to rsshub!") return null
 
         if (name.lowercase().contains("telegram")) {
-            if (!name.lowercase().contains("channel")) return null
-
-            return name.take(name.indexOfFirst { it == '-' }).trim()
+            // Мягкая проверка имени
+            return if (name.contains("-")) {
+                name.substringBeforeLast("-").trim()
+            } else {
+                name.trim()
+            }
         }
 
         return name
@@ -233,6 +258,8 @@ suspend fun getRssName(strLink: String, enableProxy: Boolean = false): String? {
     } catch (e: Exception) {
         e.printStackTrace()
         return null
+    } finally {
+        httpClient.close()
     }
 }
 

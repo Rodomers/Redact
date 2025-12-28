@@ -119,19 +119,17 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
     }
 
     fun setRssLinkBuffer(value: String) {
+        _rssLinkBuffer.value = value
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                _rssLinkBuffer.value = value
-                val linkName = if (value == "") null else repository.getRssName(value)
-                when (linkName) {
-                    null -> {
-                        _sourceNameBuffer.value = ""
-                        _isLinkCorrect.value = false
-                    }
-                    else -> {
-                        _sourceNameBuffer.value = linkName
-                        _isLinkCorrect.value = true
-                    }
+            val linkName = if (value == "") null else repository.getRssName(value)
+            when (linkName) {
+                null -> {
+                    _sourceNameBuffer.value = ""
+                    _isLinkCorrect.value = false
+                }
+                else -> {
+                    _sourceNameBuffer.value = linkName
+                    _isLinkCorrect.value = true
                 }
             }
         }

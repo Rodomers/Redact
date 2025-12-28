@@ -19,7 +19,7 @@
     <string name="optimization_sheet_cancel">Позже</string>
     <string name="optimization_sheet_conf">Разрешить</string>
     <string name="no_sources">Нет источников :(</string>
-    <string name="link">Ссылка:\ </string>
+    <string name="link">Ссылка</string>
 
     <string name="titles_update_text">Потяните вниз,\nчтобы обновить</string>
     <string name="today">сегодня</string>

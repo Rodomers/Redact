@@ -1,15 +1,15 @@
 package com.rds.mews.core
 
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.*
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.request.*
-import io.ktor.serialization.kotlinx.json.*
-import kotlinx.serialization.json.Json
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.Closeable
+import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
-import java.util.*
+import java.net.URL
+import java.nio.charset.StandardCharsets
+import java.util.Base64
+import kotlinx.serialization.json.Json
 
 object SharedHttpClient {
     val jsonParser = Json {
@@ -17,28 +17,83 @@ object SharedHttpClient {
         isLenient = true
     }
 
-    fun createInstance(serverIp: String, rssHubKey: String, enableProxy: Boolean = false): HttpClient {
-        return HttpClient(CIO) {
-            install(ContentNegotiation) {
-                json(jsonParser)
-            }
-            install(HttpTimeout) {
-                requestTimeoutMillis = 60000
-                connectTimeoutMillis = 15000
-                socketTimeoutMillis = 60000
-            }
+    data class HttpResponse(
+        val status: Int,
+        val body: String,
+        val error: Exception? = null
+    )
 
-            if (enableProxy) {
-                engine {
-                    proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(serverIp, 80))
-                }
+    class JdkClient(
+        private val serverIp: String,
+        private val rssHubKey: String,
+        private val enableProxy: Boolean
+    ) : Closeable {
 
-                defaultRequest {
-                    val credentials = "mews:$rssHubKey"
-                    val encodedCredentials = Base64.getEncoder().encodeToString(credentials.toByteArray())
-                    header("Proxy-Authorization", "Basic $encodedCredentials")
+        suspend fun request(
+            method: String,
+            urlString: String,
+            body: String? = null,
+            headers: Map<String, String> = emptyMap()
+        ): HttpResponse {
+            return withContext(Dispatchers.IO) {
+                var connection: HttpURLConnection? = null
+                try {
+                    val url = URL(urlString)
+
+                    val proxy = if (enableProxy) {
+                        Proxy(Proxy.Type.SOCKS, InetSocketAddress(serverIp, 8443))
+                    } else {
+                        Proxy.NO_PROXY
+                    }
+
+                    connection = url.openConnection(proxy) as HttpURLConnection
+                    connection.connectTimeout = 15_000
+                    connection.readTimeout = 60_000
+                    connection.requestMethod = method
+                    connection.instanceFollowRedirects = true
+                    connection.setRequestProperty("User-Agent", "Mozilla/5.0")
+
+                    if (enableProxy) {
+                        val credentials = "mews:$rssHubKey"
+                        val encoded = Base64.getEncoder().encodeToString(credentials.toByteArray())
+                        connection.setRequestProperty("Proxy-Authorization", "Basic $encoded")
+                    }
+
+                    headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
+
+                    if (body != null && (method == "POST" || method == "PUT")) {
+                        connection.doOutput = true
+                        connection.outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(body) }
+                    }
+
+                    val status = connection.responseCode
+
+                    val stream = if (status < 400) connection.inputStream else connection.errorStream
+                    val responseBody = stream?.bufferedReader()?.use { it.readText() } ?: ""
+
+                    return@withContext HttpResponse(status, responseBody)
+
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    return@withContext HttpResponse(0, "", e)
+                } finally {
+                    connection?.disconnect()
                 }
             }
         }
+
+        suspend fun get(url: String): HttpResponse {
+            return request("GET", url)
+        }
+
+        suspend fun post(url: String, body: String, headers: Map<String, String>): HttpResponse {
+            return request("POST", url, body, headers)
+        }
+
+        override fun close() {}
+    }
+
+    fun createInstance(serverIp: String, rssHubKey: String, enableProxy: Boolean = false): JdkClient {
+        return JdkClient(serverIp, rssHubKey, enableProxy)
     }
 }
