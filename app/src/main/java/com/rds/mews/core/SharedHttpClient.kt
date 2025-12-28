@@ -51,6 +51,15 @@ object SharedHttpClient {
                 .followSslRedirects(true)
 
             builder.addInterceptor { chain ->
+                val original = chain.request()
+                val request = original.newBuilder()
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+                    .build()
+                chain.proceed(request)
+            }
+
+            builder.addInterceptor { chain ->
                 val request = chain.request()
                 Log.d("API_LOG", "--> ${request.method} ${request.url}")
                 try {
@@ -92,14 +101,6 @@ object SharedHttpClient {
                         .header("Proxy-Authorization", credential)
                         .build()
                 }
-            }
-
-            builder.addNetworkInterceptor { chain ->
-                val original = chain.request()
-                val request = original.newBuilder()
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    .build()
-                chain.proceed(request)
             }
 
             client = builder.build()
@@ -166,7 +167,7 @@ object SharedHttpClient {
                     }
 
                     client.newCall(requestBuilder.build()).execute().use { response ->
-                        val responseBody = response.body?.string() ?: ""
+                        val responseBody = response.body.string()
                         return@withContext HttpResponse(response.code, responseBody)
                     }
 
