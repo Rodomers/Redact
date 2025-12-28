@@ -41,7 +41,7 @@ object SharedHttpClient {
                     val url = URL(urlString)
 
                     val proxy = if (enableProxy) {
-                        Proxy(Proxy.Type.SOCKS, InetSocketAddress(serverIp, 8443))
+                        Proxy(Proxy.Type.HTTP, InetSocketAddress(serverIp, 80))
                     } else {
                         Proxy.NO_PROXY
                     }
