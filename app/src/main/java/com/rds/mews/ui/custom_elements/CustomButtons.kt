@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.TextUnit
 import com.rds.mews.localcore.IconButtonInputs
 import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.ui.theme.Shapes
-import kotlin.math.pow
+import kotlin.math.hypot
 import kotlin.math.sqrt
 
 @Composable
@@ -106,7 +106,7 @@ fun CustomTextButton(
                 drawRect(color = defaultBackgroundColor)
 
                 if (transitionBackgroundColor != null && radialProgress > 0f) {
-                    val maxRadius = sqrt(size.width.pow(2) + size.height.pow(2))
+                    val maxRadius = hypot(size.width, size.height)
 
                     drawCircle(
                         color = transitionBackgroundColor,

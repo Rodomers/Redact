@@ -212,11 +212,20 @@ fun SettingsGrid(
     val titlesChapterId by remember { mutableIntStateOf(R.string.settings_chapter_titles) }
     val llmChapterId by remember { mutableIntStateOf(R.string.settings_chapter_llm) }
     val additionalChapterId by remember { mutableIntStateOf(R.string.settings_chapter_additional) }
-    val clipboardManager = LocalClipboardManager.current
 
     val apiBtnState = remember { MutableTransitionState(state.geminiKeyScreenOpened) }
+    val apiBtnText = stringResource(R.string.change)
+    val apiButtonText = remember { mutableStateOf(apiBtnText) }
+    val apiButtonInputs = remember {
+        TextButtonInputs(
+            apiButtonText.value,
+            action = {
+                functions.setGeminiScreenOpened(true)
+                apiBtnState.targetState = true
+            }
+        )
+    }
 
-    var text by remember { mutableStateOf("") }
     var alarmHrsText by remember { mutableIntStateOf(state.alarmMins / 60) }
     var alarmMinsText by remember { mutableIntStateOf(state.alarmMins % 60) }
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -728,13 +737,7 @@ fun SettingsGrid(
                             modifier = Modifier.padding(vertical = verticalArrangement)
                         ) {
                             CustomTextButton(
-                                inputs = TextButtonInputs(
-                                    stringResource(R.string.settings_change),
-                                    action = {
-                                        functions.setGeminiScreenOpened(true)
-                                        apiBtnState.targetState = true
-                                    }
-                                ),
+                                inputs = apiButtonInputs,
                                 modifier = Modifier
                                     .wrapContentSize()
                                     .widthIn(min = 150.dp, max = 250.dp),

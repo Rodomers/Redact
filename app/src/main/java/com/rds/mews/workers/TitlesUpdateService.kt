@@ -113,10 +113,10 @@ class TitlesUpdateService : Service() {
             if (!currentCoroutineContext().isActive) return
 
             if ((oneTimeUpdate || updateDeltaMills >= 7200000L) && noFetchErrors) {
-                val titles = db.getTitles()
-                if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
-                    db.titlesTimeKill(0)
-                }
+//                val titles = db.getTitles()
+//                if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
+//                    db.titlesTimeKill(0)
+//                }
                 var iter = 0
                 var res: SummarizationResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
                 while (settingsManager.getBoolean(MewsRepository.UPDATING_TITLES, false) && iter <= 3 && currentCoroutineContext().isActive) {

@@ -90,10 +90,10 @@ class TitlesUpdateWorker(
                 if (isStopped) return@withContext
 
                 if (noFetchErrors) {
-                    val titles = db.getTitles()
-                    if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
-                        db.titlesTimeKill(0)
-                    }
+//                    val titles = db.getTitles()
+//                    if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
+//                        db.titlesTimeKill(0)
+//                    }
                     var iter = 0
                     var res: SummarizationResult = SummarizationResult.Failure(
                         SummarizationErrorType.UNKNOWN_ERROR)
