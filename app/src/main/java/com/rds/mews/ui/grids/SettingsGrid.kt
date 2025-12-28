@@ -442,13 +442,15 @@ fun SettingsGrid(
                 text = stringResource(R.string.settings_sheet_api_save),
                 action = {
                     functions.setUserGeminiApi(state.geminiApiBuffer)
+
+                    apiBtnState.targetState = false
+
                     screenScope.launch {
                         screensState.hide()
                     }.invokeOnCompletion {
                         if (!screensState.isVisible) {
                             functions.setGeminiScreenOpened(false)
                         }
-                        apiBtnState.targetState = false
                         functions.setGeminiBuffer("")
                     }
                 }
@@ -456,6 +458,8 @@ fun SettingsGrid(
             cancelBtnInputs = TextButtonInputs(
                 text = stringResource(R.string.settings_sheet_api_cancel),
                 action = {
+                    apiBtnState.targetState = false
+
                     screenScope.launch {
                         screensState.hide()
                     }.invokeOnCompletion {
@@ -463,7 +467,6 @@ fun SettingsGrid(
                             functions.setGeminiScreenOpened(false)
                         }
                         functions.setGeminiBuffer("")
-                        apiBtnState.targetState = false
                     }
                 }
             ),
@@ -473,13 +476,14 @@ fun SettingsGrid(
                     functions.resetUserGeminiApi()
                     functions.setGeminiBuffer("")
 
+                    apiBtnState.targetState = false
+
                     screenScope.launch {
                         screensState.hide()
                     }.invokeOnCompletion {
                         if (!screensState.isVisible) {
                             functions.setGeminiScreenOpened(false)
                         }
-                        apiBtnState.targetState = false
                     }
                 }
             ),

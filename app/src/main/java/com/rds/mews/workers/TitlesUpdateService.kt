@@ -89,7 +89,7 @@ class TitlesUpdateService : Service() {
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
         val summarizer = NewsSummarizer(db, llm)
 
-        val startTitlesNum = db.getTitles().size
+        val startTitlesNum = db.getTitles().filter { it.text != "<промежуточный текст>" }.size
 
         settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, true)
         settingsManager.saveString(MewsRepository.UPDATING_STATE, "updating")
@@ -133,8 +133,14 @@ class TitlesUpdateService : Service() {
                     iter++
                 }
 
-                val currentTitlesNum = db.getTitles().size
-                if (startTitlesNum != currentTitlesNum && currentTitlesNum != 0) MewsRepository.triggerTitlesRefresh()
+                val currentTitlesNum = db.getTitles().filter { it.text != "<промежуточный текст>" }.size
+                if (startTitlesNum != currentTitlesNum && currentTitlesNum != 0) {
+                    if (!MewsRepository.isInitialized) {
+                        val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+                        MewsRepository.initialize(applicationContext, appScope)
+                    }
+                    MewsRepository.triggerTitlesRefresh()
+                }
 
                 when (res) {
                     is SummarizationResult.Success -> {
@@ -175,13 +181,6 @@ class TitlesUpdateService : Service() {
             val errorResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
             settingsManager.saveLastError(errorResult)
         } finally {
-            if (!MewsRepository.isInitialized) {
-                val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-                MewsRepository.initialize(applicationContext, appScope)
-                println("TitlesUpdateWorker: Репозиторий инициализирован с новым AppScope.")
-            }
-            MewsRepository.triggerTitlesRefresh()
-
             println("TitlesUpdateService: Вход в блок FINALLY.")
             settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 1f)
             settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)

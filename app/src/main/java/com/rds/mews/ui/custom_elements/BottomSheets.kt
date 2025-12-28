@@ -94,7 +94,7 @@ fun BaseFloatingBottomSheet(
                         }
 
                         items(contentList) { itemContent ->
-                            Box(modifier = Modifier.padding(horizontal = 8.dp)) {
+                            Box(modifier = Modifier.padding(horizontal = 10.dp)) {
                                 itemContent()
                             }
                         }

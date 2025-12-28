@@ -8,19 +8,19 @@ import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.repositories.MewsRepository
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.collections.mutableListOf
+import org.json.JSONException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlin.math.min
-import kotlinx.coroutines.withTimeout
-import org.json.JSONException
-import kotlinx.coroutines.sync.withPermit
 import java.io.Closeable
+import kotlin.math.pow
 
 class LLMClient(
     val apiKey: String = "",
@@ -41,6 +41,8 @@ class LLMClient(
     )
     private val jsonParser = SharedHttpClient.jsonParser
 
+    private val MAX_RETRIES = 3
+
     suspend fun sendPrompt(prompt: String): String? {
         val requestBodyObj = GeminiRequest(
             contents = listOf(ContentInput(parts = listOf(PartInput(prompt)))),
@@ -49,50 +51,72 @@ class LLMClient(
 
         val requestBodyString = jsonParser.encodeToString(requestBodyObj)
 
-        try {
-            val response = httpClient.post(
-                url = finalUrl,
-                body = requestBodyString,
-                headers = mapOf(
-                    "x-goog-api-key" to apiKey,
-                    "Content-Type" to "application/json"
+        var attempt = 0
+        while (attempt <= MAX_RETRIES) {
+            try {
+                val response = httpClient.post(
+                    url = finalUrl,
+                    body = requestBodyString,
+                    headers = mapOf(
+                        "x-goog-api-key" to apiKey,
+                        "Content-Type" to "application/json"
+                    )
                 )
-            )
 
-            val responseString = response.body
+                if (response.status == 429) {
+                    attempt++
+                    if (attempt > MAX_RETRIES) {
+                        println("GEMINI QUOTA EXCEEDED: Gave up after $MAX_RETRIES retries.")
+                        return null
+                    }
+                    val waitTime = 2000L * (2.0.pow(attempt - 1).toLong())
+                    println("GEMINI QUOTA EXCEEDED (429). Waiting ${waitTime}ms before retry #$attempt...")
+                    delay(waitTime)
+                    continue
+                }
 
-            println("--- RAW GEMINI RESPONSE ---")
-            println("Status Code: ${response.status}")
-            println("Body: ${responseString.take(500)}...")
-            println("---------------------------")
+                val responseString = response.body
 
-            if (response.status != 200) {
-                println("GEMINI API ERROR: HTTP ${response.status}")
+                println("--- RAW GEMINI RESPONSE ---")
+                println("Status Code: ${response.status}")
+                if (response.status != 200) {
+                    println("GEMINI API ERROR: HTTP ${response.status}")
+                    return null
+                }
+
+                println("Body received (len: ${responseString.length})")
+                println("---------------------------")
+
+                val geminiResponse = jsonParser.decodeFromString<GeminiResponse>(responseString)
+
+                if (geminiResponse.error != null) {
+                    println("API ERROR: ${geminiResponse.error.message}")
+                    if (geminiResponse.error.message?.contains("quota", true) == true) {
+                        attempt++
+                        if (attempt > MAX_RETRIES) return null
+                        delay(5000L)
+                        continue
+                    }
+                    return null
+                }
+
+                if (geminiResponse.promptFeedback?.blockReason != null) {
+                    println("PROMPT BLOCKED: ${geminiResponse.promptFeedback.blockReason}")
+                    return null
+                }
+
+                return geminiResponse.candidates
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.flatMap { candidate -> candidate.content?.parts ?: emptyList() }
+                    ?.joinToString("\n") { part -> part.text }
+
+            } catch (e: Exception) {
+                println("Error inside sendPrompt logic: ${e.message}")
+                e.printStackTrace()
                 return null
             }
-
-            val geminiResponse = jsonParser.decodeFromString<GeminiResponse>(responseString)
-
-            if (geminiResponse.error != null) {
-                println("API ERROR: ${geminiResponse.error.message}")
-                return null
-            }
-
-            if (geminiResponse.promptFeedback?.blockReason != null) {
-                println("PROMPT BLOCKED: ${geminiResponse.promptFeedback.blockReason}")
-                return null
-            }
-
-            return geminiResponse.candidates
-                ?.takeIf { it.isNotEmpty() }
-                ?.flatMap { candidate -> candidate.content?.parts ?: emptyList() }
-                ?.joinToString("\n") { part -> part.text }
-
-        } catch (e: Exception) {
-            println("Error inside sendPrompt logic: ${e.message}")
-            e.printStackTrace()
-            return null
         }
+        return null
     }
 
     override fun close() {
@@ -125,10 +149,7 @@ suspend fun validateGeminiKey(
 
     return try {
         val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
-
         val response = client.get(url)
-
-        // Просто проверяем статус 200 OK
         response.status == 200
     } catch (e: Exception) {
         e.printStackTrace()
@@ -155,9 +176,8 @@ class NewsSummarizer(
         val msgIds: List<Long>
     )
 
-    private val SUMMARY_BATCH_SIZE = 5
-
-    private val NEWS_BATCH_SIZE = 70
+    private val SUMMARY_BATCH_SIZE = 7
+    private val NEWS_BATCH_SIZE = 40
 
     suspend fun summarizeTopics(
         maxTopics: Int = 20,
@@ -179,7 +199,6 @@ class NewsSummarizer(
 
             if (unfinishedTitles.isEmpty()) {
                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
-
                 val success = processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics, settingsManager)
 
                 if (!success) {
@@ -187,8 +206,6 @@ class NewsSummarizer(
                     return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
                 }
                 settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
-            } else {
-                println("Найдены незавершенные темы с прошлого запуска. Продолжаем суммаризацию.")
             }
 
             val titlesToSummarize = db.getTitles().filter {
@@ -218,19 +235,14 @@ class NewsSummarizer(
                         semaphore.withPermit {
                             try {
                                 processedBatches++
-                                if (processedBatches > 1) delay(2000L)
+                                if (processedBatches > 1) delay(4000L)
 
                                 settingsManager.saveString(MewsRepository.UPDATING_STATE, "summarizing_topics")
                                 settingsManager.saveFloat(
                                     MewsRepository.UPDATING_PROGRESS,
-                                    (currentProgress + remainingProgress * processedBatches / totalBatches).coerceIn(
-                                        0f,
-                                        0.95f
-                                    )
+                                    (currentProgress + remainingProgress * processedBatches / totalBatches).coerceIn(0f, 0.95f)
                                 )
                                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
-
-                                println("Обработка пачки из ${batch.size} тем...")
 
                                 val topicsData = batch.mapNotNull { topic ->
                                     val suitableMessages = topic.ids?.mapNotNull { id ->
@@ -248,18 +260,16 @@ class NewsSummarizer(
 
                                 val bannedNews = MewsRepository.bannedNewsFlow.value.joinToString("'; '")
 
-                                val response = withTimeout(90000L) {
+                                val response = withTimeout(150000L) {
                                     sumTopicsBatch(llm, topicsData, bannedNews, currentLanguage)
                                 }
 
                                 if (response.isBlank()) {
-                                    println("Пустой ответ от LLM для пачки тем")
                                     emptyAnswer = true
                                     return@withPermit emptyList<SummaryResult>()
                                 }
 
-                                val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
-                                val jsonArray = JSONArray(cleanResponse)
+                                val jsonArray = safeParseJsonArray(response)
                                 val results = mutableListOf<SummaryResult>()
 
                                 for (i in 0 until jsonArray.length()) {
@@ -286,13 +296,12 @@ class NewsSummarizer(
                                             ))
                                         }
                                     } catch (e: Exception) {
-                                        println("Ошибка парсинга одного элемента из пачки: ${e.message}")
+                                        e.printStackTrace()
                                     }
                                 }
                                 return@withPermit results
 
                             } catch (e: Exception) {
-                                println("Ошибка при обработке пачки тем: ${e.message}")
                                 e.printStackTrace()
                                 return@withPermit emptyList<SummaryResult>()
                             }
@@ -303,7 +312,6 @@ class NewsSummarizer(
 
             if (summarizedResults.isNotEmpty()) {
                 summarizedResults.forEach { result ->
-                    println("Обновление в БД: ${result.originalTitle}")
                     db.updateTitle(
                         name = result.originalTitle,
                         newTime = result.time,
@@ -342,6 +350,8 @@ class NewsSummarizer(
         val messageBatches = uniqueMessages.chunked(NEWS_BATCH_SIZE)
         val allExtractedTopics = mutableListOf<Topics>()
 
+        val extractSemaphore = Semaphore(2)
+
         try {
             settingsManager.saveString(MewsRepository.UPDATING_STATE, "extracting_topics")
             settingsManager.saveFloat(
@@ -353,7 +363,9 @@ class NewsSummarizer(
             coroutineScope {
                 messageBatches.map { batch ->
                     async(Dispatchers.IO) {
-                        extractTopicsFromBatch(batch, maxTopics, currentLanguage)
+                        extractSemaphore.withPermit {
+                            extractTopicsFromBatch(batch, maxTopics, currentLanguage)
+                        }
                     }
                 }.forEach { deferred ->
                     deferred.await()?.let { topicsFromBatch ->
@@ -363,7 +375,6 @@ class NewsSummarizer(
             }
 
             if (allExtractedTopics.isEmpty()) {
-                println("Не удалось извлечь ни одной темы из новостей.")
                 return false
             }
 
@@ -425,21 +436,23 @@ class NewsSummarizer(
             val response = withTimeout(60000L) { llm.sendPrompt(prompt) ?: "" }
             if (response.isBlank()) return null
 
-            val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
-            val jsonArray = JSONArray(cleanResponse)
+            val jsonArray = safeParseJsonArray(response)
             val topics = mutableListOf<Topics>()
 
             for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                val title = obj.getString("title")
-                val idsArray = obj.getJSONArray("id")
-                val ids = (0 until idsArray.length()).map { idsArray.getLong(it) }
-                topics.add(Topics(title, ids))
+                try {
+                    val obj = jsonArray.getJSONObject(i)
+                    val title = obj.getString("title")
+                    val idsArray = obj.getJSONArray("id")
+                    val ids = (0 until idsArray.length()).map { idsArray.getLong(it) }
+                    topics.add(Topics(title, ids))
+                } catch (e: Exception) {
+                    continue
+                }
             }
 
             return topics
         } catch (e: Exception) {
-            println("Ошибка при извлечении тем из пакета: ${e.message}")
             return null
         }
     }
@@ -479,39 +492,35 @@ class NewsSummarizer(
             val response = withTimeout(60000L) { llm.sendPrompt(prompt) ?: "" }
             if (response.isBlank()) return false
 
-            val cleanResponse = response.trim().removePrefix("```json").removeSuffix("```").trim()
-            val jsonArray = JSONArray(cleanResponse)
+            val jsonArray = safeParseJsonArray(response)
             val iterEnd = min(jsonArray.length(), maxTopics)
 
             db.titlesTimeKill(0)
 
             for (i in 0 until iterEnd) {
-                val obj = jsonArray.getJSONObject(i)
-                val title = obj.getString("title")
-                val idsArray = obj.getJSONArray("ids")
-                val idsStr = (0 until idsArray.length()).map { idsArray.getLong(it).toString() }
+                try {
+                    val obj = jsonArray.getJSONObject(i)
+                    val title = obj.getString("title")
+                    val idsArray = obj.getJSONArray("ids")
+                    val idsStr = (0 until idsArray.length()).map { idsArray.getLong(it).toString() }
 
-                db.addTitle(
-                    titleTime = 0,
-                    title = title,
-                    text = "<промежуточный текст>",
-                    sources = "<промежуточный текст>",
-                    links = db.dbPack(*idsStr.toTypedArray())
-                )
+                    db.addTitle(
+                        titleTime = 0,
+                        title = title,
+                        text = "<промежуточный текст>",
+                        sources = "<промежуточный текст>",
+                        links = db.dbPack(*idsStr.toTypedArray())
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
             return true
-        } catch (e: JSONException) {
-            println("Ошибка парсинга JSON при финальном объединении тем: ${e.message}")
-            return false
         } catch (e: Exception) {
-            println("Общая ошибка при финальном объединении тем: ${e.message}")
             return false
         }
     }
 
-    /**
-     * Этап 3 (Новый): Создает резюме для ПАКЕТА (batch) тем.
-     */
     @SuppressLint("SuspiciousIndentation")
     private suspend fun sumTopicsBatch(
         llm: LLMClient,
@@ -566,6 +575,25 @@ class NewsSummarizer(
         } catch (e: Exception) {
             e.printStackTrace()
             return ""
+        }
+    }
+
+    private fun safeParseJsonArray(jsonString: String): JSONArray {
+        val cleanJson = jsonString.trim().removePrefix("```json").removeSuffix("```").trim()
+        try {
+            return JSONArray(cleanJson)
+        } catch (e: JSONException) {
+            val lastObjectEnd = cleanJson.lastIndexOf('}')
+
+            if (lastObjectEnd != -1) {
+                val fixedJson = cleanJson.take(lastObjectEnd + 1) + "]"
+                try {
+                    return JSONArray(fixedJson)
+                } catch (e2: Exception) {
+                    return JSONArray()
+                }
+            }
+            return JSONArray()
         }
     }
 }
