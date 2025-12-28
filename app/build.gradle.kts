@@ -13,8 +13,8 @@ android {
         applicationId = "com.rds.mews"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0-alpha.10"
+        versionCode = 100001
+        versionName = "1.0.0-beta.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
