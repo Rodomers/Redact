@@ -191,9 +191,6 @@ fun SourcesGrid(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         state = gridState
     ) {
-        println("groupedItems: ${groupedItems.size}")
-        var lastItemsSize = 0
-
         if (groupedItems.isEmpty()) {
             customHeader(
                 textId = R.string.no_sources,
@@ -203,7 +200,6 @@ fun SourcesGrid(
 
         groupedItems.forEach { (source, itemsForSource) ->
             val isExpanded = groupStates.find { it.group == source }?.expanded ?: false
-            lastItemsSize = itemsForSource.size
 
             customHeader(
                 textId = sourcesTypeInterpreter(source),

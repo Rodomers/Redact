@@ -10,6 +10,7 @@ import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.localcore.handleNotificationsPermissionRequest
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.localcore.isScheduleExactAlarm
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     private val _scrollEvents = Channel<SettingsScrollEvent>(Channel.CONFLATED)
@@ -51,8 +53,10 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
         val default = value == _defaultApiKey
 
         viewModelScope.launch {
-            _geminiKeyBuffer.value = value
-            if (!default) _isApiKeyCorrect.value = repository.checkGeminiApiKey(value)
+            withContext(Dispatchers.IO) {
+                _geminiKeyBuffer.value = value
+                if (!default) _isApiKeyCorrect.value = repository.checkGeminiApiKey(value)
+            }
         }
     }
 

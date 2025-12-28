@@ -187,7 +187,7 @@ class RssFetcher(
 }
 
 
-suspend fun getRssName(strLink: String, enableProxy: Boolean = true): String? {
+suspend fun getRssName(strLink: String, enableProxy: Boolean = false): String? {
     val httpClient = SharedHttpClient.createInstance(
         MewsRepository.HUB_ADDRESS,
         MewsRepository.SERVER_KEY,
@@ -237,5 +237,5 @@ suspend fun getRssName(strLink: String, enableProxy: Boolean = true): String? {
 }
 
 private fun buildTelegramRssUrl(username: String): String {
-    return "https://${MewsRepository.HUB_ADDRESS}/telegram/channel/${username.trim()}?limit=1&key=${MewsRepository.SERVER_KEY}"
+    return "http://${MewsRepository.HUB_ADDRESS}/telegram/channel/${username.trim()}?limit=1&key=${MewsRepository.SERVER_KEY}"
 }

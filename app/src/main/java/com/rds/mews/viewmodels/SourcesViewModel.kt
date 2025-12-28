@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
     private val _scrollEvents = Channel<SourcesScrollEvent>(Channel.CONFLATED)
@@ -119,16 +120,18 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
 
     fun setRssLinkBuffer(value: String) {
         viewModelScope.launch {
-            _rssLinkBuffer.value = value
-            val linkName = if (value == "") null else repository.getRssName(value)
-            when (linkName) {
-                null -> {
-                    _sourceNameBuffer.value = ""
-                    _isLinkCorrect.value = false
-                }
-                else -> {
-                    _sourceNameBuffer.value = linkName
-                    _isLinkCorrect.value = true
+            withContext(Dispatchers.IO) {
+                _rssLinkBuffer.value = value
+                val linkName = if (value == "") null else repository.getRssName(value)
+                when (linkName) {
+                    null -> {
+                        _sourceNameBuffer.value = ""
+                        _isLinkCorrect.value = false
+                    }
+                    else -> {
+                        _sourceNameBuffer.value = linkName
+                        _isLinkCorrect.value = true
+                    }
                 }
             }
         }
