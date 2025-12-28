@@ -226,10 +226,8 @@ suspend fun getRssName(strLink: String, enableProxy: Boolean = false): String? {
             else -> rawLink
         }
 
-        // Используем наш новый клиент (он уже внутри Dispatchers.IO)
         val response = httpClient.get(finalLink)
 
-        // Проверяем статус (ловим 503 или 404)
         if (response.status != 200) {
             System.err.println("RssError: Сервер вернул код ${response.status}")
             return null
@@ -238,14 +236,12 @@ suspend fun getRssName(strLink: String, enableProxy: Boolean = false): String? {
         val xmlContent = response.body
         if (xmlContent.isBlank()) return null
 
-        // Парсинг
         val doc = Jsoup.parse(xmlContent, finalLink, Parser.xmlParser())
         val name = doc.select("title").firstOrNull()?.text() ?: return null
 
         if (name.lowercase() == "welcome to rsshub!") return null
 
         if (name.lowercase().contains("telegram")) {
-            // Мягкая проверка имени
             return if (name.contains("-")) {
                 name.substringBeforeLast("-").trim()
             } else {

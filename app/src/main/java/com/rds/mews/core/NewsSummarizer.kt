@@ -9,9 +9,6 @@ import com.rds.mews.repositories.MewsRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.collections.mutableListOf
-import io.ktor.client.call.*
-import io.ktor.client.request.*
-import io.ktor.http.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll

@@ -191,7 +191,7 @@ fun CustomIconButton(
                 scaleY = scale
                 alpha = if (enabled) 1f else 0.5f
 
-                this.shape = shape ?: Shapes.large
+                this.shape = shape ?: RoundedCornerShape(0.dp)
                 this.clip = true
             }
             .drawBehind {
