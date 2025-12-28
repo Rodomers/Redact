@@ -28,10 +28,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import java.util.Calendar
 import java.util.Date
 
@@ -45,8 +47,8 @@ object MewsRepository {
     lateinit var updatingState: StateFlow<String?>
     lateinit var updatingProgress: StateFlow<Float>
     lateinit var bannedNewsFlow: StateFlow<Set<String>>
-    private var isInitialized = false
     private val _sourcesUpdateTrigger = MutableStateFlow(0)
+    var isInitialized = false
     var DEFAULT_GEMINI_API_KEY: String = ""
     var SERVER_KEY: String = ""
     var PROXY_ADDRESS: String = ""
@@ -109,6 +111,8 @@ object MewsRepository {
                 initialValue = settingsManager.getStringSet(BANNED_NEWS_SET, setOf(""))
         )
     }
+
+    fun isInitialized(): Boolean = isInitialized
 
     val geminiModelsList: List<GeminiModel> = listOf(
         GeminiModel("2.5 Flash Lite", "gemini-2.5-flash-lite"),
@@ -201,16 +205,21 @@ object MewsRepository {
     }
 
     private val _titlesUpdateTrigger = MutableStateFlow(0)
+    fun triggerTitlesRefresh() {
+        _titlesUpdateTrigger.update { it + 1 }
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val titles: Flow<List<Title>> = _titlesUpdateTrigger.flatMapLatest {
+    val titles: Flow<List<Title>> = combine(
+        _titlesUpdateTrigger,
+        updatingTitles
+    ) { trigger, isUpdating ->
+        Pair(trigger, isUpdating)
+    }.flatMapLatest { (_, isUpdating) ->
         flow {
             emit(db.getTitles())
         }
     }.flowOn(Dispatchers.IO)
-
-    fun triggerTitlesRefresh() {
-        _titlesUpdateTrigger.value++
-    }
 
     fun startTitlesUpdate(context: Context) {
         setTitlesUpdate(context)
@@ -241,6 +250,7 @@ object MewsRepository {
     const val CURRENT_LANGUAGE = "current_language"
     const val BANNED_NEWS_SET = "banned_news_set"
     const val ENABLE_PROXY = "enable_proxy"
+    const val UPDATE_TRIGGER = "update_trigger"
 
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
     var selectedTab: StateFlow<TabScreen> = _selectedTab.asStateFlow()

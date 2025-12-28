@@ -11,7 +11,9 @@ import com.rds.mews.localcore.SettingsManager
 import com.rds.mews.localcore.SummarizationErrorType
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.repositories.MewsRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
@@ -132,6 +134,13 @@ class TitlesUpdateWorker(
             settingsManager.saveLastError(errorResult)
             return Result.retry()
         }  finally {
+            if (!MewsRepository.isInitialized) {
+                val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+                MewsRepository.initialize(applicationContext, appScope)
+                println("TitlesUpdateWorker: Репозиторий инициализирован с новым AppScope.")
+            }
+            MewsRepository.triggerTitlesRefresh()
+
             println("TitlesUpdateWorker: Вход в блок FINALLY. isStopped = $isStopped")
             settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 1f)
             settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)

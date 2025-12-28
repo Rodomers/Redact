@@ -112,21 +112,6 @@ class TitlesUpdateService : Service() {
 
             if (!currentCoroutineContext().isActive) return
 
-//            delay(1000L)
-//            settingsManager.saveString(MewsRepository.UPDATING_STATE, "summarizing_topics")
-//            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.2f)
-//            delay(500L)
-//            settingsManager.saveString(MewsRepository.UPDATING_STATE, "filtering_topics")
-//            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.3f)
-//            delay(2000L)
-//            settingsManager.saveString(MewsRepository.UPDATING_STATE, "summarizing_topics")
-//            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.7f)
-//            delay(2000L)
-//            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.9f)
-//            delay(1000L)
-//            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 1f)
-//            delay(100L)
-
             if ((oneTimeUpdate || updateDeltaMills >= 7200000L) && noFetchErrors) {
                 val titles = db.getTitles()
                 if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
@@ -190,6 +175,13 @@ class TitlesUpdateService : Service() {
             val errorResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
             settingsManager.saveLastError(errorResult)
         } finally {
+            if (!MewsRepository.isInitialized) {
+                val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+                MewsRepository.initialize(applicationContext, appScope)
+                println("TitlesUpdateWorker: Репозиторий инициализирован с новым AppScope.")
+            }
+            MewsRepository.triggerTitlesRefresh()
+
             println("TitlesUpdateService: Вход в блок FINALLY.")
             settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 1f)
             settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
