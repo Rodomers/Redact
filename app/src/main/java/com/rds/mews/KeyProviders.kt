@@ -11,7 +11,7 @@ class GeminiApiKeyProvider: ApiKeyProvider {
 
     private external fun getGeminiApiKey(): String
 
-    override fun getKey(): String =getGeminiApiKey()
+    override fun getKey(): String = getGeminiApiKey()
 }
 
 class RssHubApiKeyProvider: ApiKeyProvider {
@@ -24,12 +24,22 @@ class RssHubApiKeyProvider: ApiKeyProvider {
     override fun getKey(): String = getRssHubKey()
 }
 
-class ServerAddressProvider: ApiKeyProvider {
+class ProxyAddressProvider: ApiKeyProvider {
     companion object {
         init { System.loadLibrary("mews-lib") }
     }
 
-    private external fun getServerAddress(): String
+    private external fun getProxyAddress(): String
 
-    override fun getKey(): String = getServerAddress()
+    override fun getKey(): String = getProxyAddress()
+}
+
+class RSSHubAddressProvider: ApiKeyProvider {
+    companion object {
+        init { System.loadLibrary("mews-lib") }
+    }
+
+    private external fun getHubAddress(): String
+
+    override fun getKey(): String = getHubAddress()
 }

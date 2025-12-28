@@ -16,7 +16,7 @@ std::string getDecodedApiKey() {
 }
 
 std::string getDecodedServerKey() {
-    std::vector<char> obfuscatedKey = {0};
+    std::vector<char> obfuscatedKey = {};
 
     char xorKey = '@';
 
@@ -44,8 +44,21 @@ Java_com_rds_mews_RssHubApiKeyProvider_getRssHubKey (
     return env->NewStringUTF(apiKey.c_str());
 }
 
-std::string getDecodedServerAddress() {
-    std::vector<char> obfuscatedKey = {0};
+std::string getDecodedProxyAddress() {
+    std::vector<char> obfuscatedKey = {};
+
+    char xorKey = '@';
+
+    std::string address;
+    address.reserve(obfuscatedKey.size());
+    for (char c : obfuscatedKey) {
+        address += c ^ xorKey;
+    }
+    return address;
+}
+
+std::string getDecodedHubAddress() {
+    std::vector<char> obfuscatedKey = {};
 
     char xorKey = '@';
 
@@ -58,9 +71,17 @@ std::string getDecodedServerAddress() {
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_rds_mews_ServerAddressProvider_getServerAddress (
+Java_com_rds_mews_ProxyAddressProvider_getProxyAddress (
         JNIEnv* env,
         jobject /* this */) {
-    std::string apiKey = getDecodedServerAddress();
+    std::string apiKey = getDecodedProxyAddress();
+    return env->NewStringUTF(apiKey.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_rds_mews_RSSHubAddressProvider_getHubAddress (
+        JNIEnv* env,
+        jobject /* this */) {
+    std::string apiKey = getDecodedHubAddress();
     return env->NewStringUTF(apiKey.c_str());
 }

@@ -8,7 +8,8 @@ import com.rds.mews.localcore.Message
 import com.rds.mews.R
 import com.rds.mews.localcore.RSS
 import com.rds.mews.RssHubApiKeyProvider
-import com.rds.mews.ServerAddressProvider
+import com.rds.mews.ProxyAddressProvider
+import com.rds.mews.RSSHubAddressProvider
 import com.rds.mews.core.getRssName
 import com.rds.mews.core.validateGeminiKey
 import com.rds.mews.localcore.GeminiModel
@@ -47,8 +48,9 @@ object MewsRepository {
     private var isInitialized = false
     private val _sourcesUpdateTrigger = MutableStateFlow(0)
     var DEFAULT_GEMINI_API_KEY: String = ""
-    var RSS_HUB_KEY: String = ""
-    var SERVER_IP: String = ""
+    var SERVER_KEY: String = ""
+    var PROXY_ADDRESS: String = ""
+    var HUB_ADDRESS: String = ""
 
     fun initialize(context: Context, externalScope: CoroutineScope) {
         if (isInitialized) return
@@ -57,8 +59,9 @@ object MewsRepository {
         this.settingsManager = SettingsManager(context)
         this.externalScope = externalScope
         this.DEFAULT_GEMINI_API_KEY = GeminiApiKeyProvider().getKey()
-        this.RSS_HUB_KEY = RssHubApiKeyProvider().getKey()
-        this.SERVER_IP = ServerAddressProvider().getKey()
+        this.SERVER_KEY = RssHubApiKeyProvider().getKey()
+        this.PROXY_ADDRESS = ProxyAddressProvider().getKey()
+        this.HUB_ADDRESS = RSSHubAddressProvider().getKey()
 
         loadInitSettings()
         setContext(context)
@@ -123,8 +126,8 @@ object MewsRepository {
     suspend fun checkGeminiApiKey(key: String): Boolean {
         return validateGeminiKey(
             key,
-            SERVER_IP,
-            RSS_HUB_KEY,
+            PROXY_ADDRESS,
+            SERVER_KEY,
             proxyEnabled.value
         )
     }

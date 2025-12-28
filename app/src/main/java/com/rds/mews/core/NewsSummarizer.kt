@@ -40,7 +40,7 @@ class LLMClient(
     private val URL: String = "https://generativelanguage.googleapis.com/v1beta/models/${if (MODEL != "") MODEL else MewsRepository.defaultModel.key}:generateContent",
     enableProxy: Boolean = false
 ) : Closeable {
-    private val httpClient = SharedHttpClient.createInstance(MewsRepository.SERVER_IP, MewsRepository.RSS_HUB_KEY, enableProxy = enableProxy)
+    private val httpClient = SharedHttpClient.createInstance(MewsRepository.PROXY_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
     private val jsonParser = SharedHttpClient.jsonParser
 
     suspend fun sendPrompt(prompt: String): String? {

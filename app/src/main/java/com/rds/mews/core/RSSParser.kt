@@ -19,7 +19,7 @@ class RssFetcher(
     enableProxy: Boolean = false
 ) {
     // Получаем экземпляр общего HTTP-клиента
-    private val httpClient = SharedHttpClient.createInstance(MewsRepository.SERVER_IP, MewsRepository.RSS_HUB_KEY, enableProxy = enableProxy)
+    private val httpClient = SharedHttpClient.createInstance(MewsRepository.HUB_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
 
     // Основной запуск — парсит все RSS-каналы и сохраняет новые сообщения
     suspend fun fetchAndStoreAll(messAliveTime: Long, maxTimeHours: Int = 168): FetchResult {
@@ -44,11 +44,13 @@ class RssFetcher(
         for (rss in rssList) {
             try {
                 var fetchUrl = rss.link
-                println("Fetching RSS: $fetchUrl")
+
                 if (fetchUrl.contains("t.me")) {
-                    fetchUrl = "http://${MewsRepository.SERVER_IP}:1200/telegram/channel/${fetchUrl.split("/").last().trim()}?limit=100&key=${MewsRepository.RSS_HUB_KEY}"
+                    fetchUrl = buildTelegramRssUrl(fetchUrl.split("/").last().trim())
+//                    fetchUrl = "http://${MewsRepository.HUB_ADDRESS}/telegram/channel/${fetchUrl.split("/").last().trim()}?limit=100&key=${MewsRepository.SERVER_KEY}"
                     if (newsUpdateDelta != null) fetchUrl = "$fetchUrl&filter_time=${newsUpdateDelta}"
                 }
+                println("Fetching RSS: $fetchUrl")
 
                 val xmlContent: String = httpClient.get(fetchUrl).body()
                 val doc = Jsoup.parse(xmlContent, fetchUrl, Parser.xmlParser())
@@ -187,8 +189,8 @@ class RssFetcher(
 
 suspend fun getRssName(strLink: String, enableProxy: Boolean = true): String? {
     val httpClient = SharedHttpClient.createInstance(
-        MewsRepository.SERVER_IP,
-        MewsRepository.RSS_HUB_KEY,
+        MewsRepository.HUB_ADDRESS,
+        MewsRepository.SERVER_KEY,
         enableProxy = enableProxy
     )
 
@@ -235,5 +237,5 @@ suspend fun getRssName(strLink: String, enableProxy: Boolean = true): String? {
 }
 
 private fun buildTelegramRssUrl(username: String): String {
-    return "http://${MewsRepository.SERVER_IP}:1200/telegram/channel/${username.trim()}?limit=1&key=${MewsRepository.RSS_HUB_KEY}"
+    return "https://${MewsRepository.HUB_ADDRESS}/telegram/channel/${username.trim()}?limit=1&key=${MewsRepository.SERVER_KEY}"
 }

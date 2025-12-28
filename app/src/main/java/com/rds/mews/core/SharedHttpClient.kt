@@ -1,3 +1,5 @@
+package com.rds.mews.core
+
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
@@ -8,7 +10,6 @@ import kotlinx.serialization.json.Json
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.util.*
-
 
 object SharedHttpClient {
     val jsonParser = Json {
