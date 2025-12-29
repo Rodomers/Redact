@@ -122,7 +122,7 @@ object MewsRepository {
         GeminiModel("Pro Latest", "gemini-pro-latest")
     )
 
-    val defaultModel = geminiModelsList[5]
+    val defaultModel = geminiModelsList[0]
 
     suspend fun checkGeminiApiKey(key: String): Boolean {
         return validateGeminiKey(

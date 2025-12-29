@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -101,8 +102,13 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     val proxyEnabled: StateFlow<Boolean> = repository.proxyEnabled.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
     private val _defaultApiKey = repository.DEFAULT_GEMINI_API_KEY
-    private val _isKeyDefault = MutableStateFlow(isApiKeyDefault(userApi.value))
-    val isKeyDefault: StateFlow<Boolean> = _isKeyDefault
+    val isKeyDefault: StateFlow<Boolean> = userApi.map { apiKey ->
+        apiKey == _defaultApiKey
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = isApiKeyDefault(repository.userApiKey.value)
+    )
     val bannedNews = repository.bannedNewsFlow
 
     fun setAutoupdateScreen(value: Boolean) {
@@ -114,7 +120,7 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     }
 
     fun setGeminiScreen(value: Boolean) {
-        if (_geminiKeyBuffer.value == "" && !_isKeyDefault.value) {
+        if (_geminiKeyBuffer.value == "" && !isKeyDefault.value) {
             setGeminiKeyBuffer(repository.userApiKey.value)
         }
         _geminiKeyScreenOpened.value = value
@@ -135,13 +141,11 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     fun setCurrentLlm(value: String) = viewModelScope.launch { repository.setCurrentLlmModel(value) }
     fun setUserGeminiApi(value: String) = viewModelScope.launch {
         repository.setUserApiKey(value)
-        _isKeyDefault.value = isApiKeyDefault(value)
     }
     fun resetApiKey() = viewModelScope.launch {
         repository.setUserApiKey(_defaultApiKey)
         repository.setCurrentLlmModel(defaultGeminiModel.key)
         repository.setTitlesNum(titlesNum.value.coerceIn(0, 20))
-        _isKeyDefault.value = true
     }
     fun setInnerTime(value: Boolean) = viewModelScope.launch { repository.setInnerTimestamps(value) }
     fun setShowSnippets(value: Boolean) = viewModelScope.launch { repository.setShowSnippets(value) }
