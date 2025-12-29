@@ -5,7 +5,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -25,7 +24,7 @@ fun TimelineMarker(
         Text(
             text = getFormattedTimeUnix(time).split(":").joinToString("\n"),
             modifier = Modifier
-                .width(30.dp)
+                .width(37.dp)
                 .padding(top = 16.dp, end = 8.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface,

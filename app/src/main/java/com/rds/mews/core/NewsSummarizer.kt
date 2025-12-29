@@ -257,8 +257,31 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
     }
 
     private suspend fun sumTopicsBatch(llm: LLMClient, data: List<Triple<Topics, List<Message>, String>>, banned: String, lang: String): String {
-        val jsonInput = JSONArray(data.map { (t, _, txt) -> JSONObject().apply { put("title", t.title); put("news_content", txt) } })
-        val prompt = "Ты - умный редактор. Напиши живые саммари для каждой темы. Стиль Smart Casual, без кликбейта. Формат JSON: [{\"title\": \"Заголовок\", \"summary\": \"Текст\"}]. Если тема касается '$banned', summary = \"\". Язык: $lang. Ввод:\n$jsonInput"
+        val jsonInput = JSONArray(data.map { (t, _, txt) ->
+            JSONObject().apply {
+                put("title", t.title)
+                put("news_content", txt)
+            }
+        })
+
+        val prompt = """
+        Ты — профессиональный редактор новостной ленты. Твоя задача — написать живые, вовлекающие саммари для предоставленных тем.
+        
+        Правила работы:
+        1. **Адаптивный объем (ВАЖНО):** Проанализируй количество фактов в исходном тексте "news_content".
+           - Если информации много и тема сложная: пиши подробно, раскрывай детали, не "комкай" повествование. Целевой объем: до 500 слов.
+           - Если новость стандартная или короткая: пиши емко. Целевой объем: до 300 слов.
+        2. **Стиль:** Smart Casual. Пиши увлекательно, но сохраняй экспертность. Без кликбейта и воды.
+        3. **Фильтр:** Если тема или контент касаются '$banned', поле summary должно быть пустой строкой "".
+        4. **Язык вывода:** $lang.
+        
+        Формат вывода строго JSON (список объектов): 
+        [{"title": "Заголовок темы", "summary": "Текст саммари..."}]
+        
+        Ввод:
+        $jsonInput
+    """.trimIndent()
+
         return llm.sendPrompt(prompt) ?: ""
     }
 
