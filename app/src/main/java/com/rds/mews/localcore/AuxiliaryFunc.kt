@@ -196,6 +196,8 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
                     intListOf(R.string.err_header_rate_limit_exceeded, R.string.err_text_rate_limit_exceeded, R.string.err_btn_rate_limit_exceeded)
                 SummarizationErrorType.NO_NETWORK ->
                     intListOf(R.string.err_header_no_network, R.string.err_text_no_network, R.string.err_btn_no_network)
+                SummarizationErrorType.UNPROCESSED_ITEMS ->
+                    intListOf(R.string.err_header_unprocessed_items, R.string.err_text_unprocessed_items, R.string.err_btn_unprocessed_items)
 
                 SummarizationErrorType.UNKNOWN_ERROR ->
                 {

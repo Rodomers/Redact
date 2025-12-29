@@ -155,6 +155,9 @@
     <string name="err_header_no_network">No network</string>
     <string name="err_text_no_network">No connection to the server. Please check your network connection.</string>
     <string name="err_btn_no_network">OK</string>
+    <string name="err_header_unprocessed_items">Hidden Items</string>
+    <string name="err_text_unprocessed_items">Draft items detected. The list is incomplete.\nRefresh?</string>
+    <string name="err_btn_unprocessed_items">Refresh</string>
 
     <string name="date_01">January, %d</string>
     <string name="date_02">February, %d</string>

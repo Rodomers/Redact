@@ -224,7 +224,8 @@ class TitlesViewModel(
                 SummarizationErrorType.SUMMARIZE_TOPICS_FAILED,
                 SummarizationErrorType.EMPTY_ANSWER,
                 SummarizationErrorType.NETWORK_TIMEOUT,
-                SummarizationErrorType.FILTER_FAILED
+                SummarizationErrorType.FILTER_FAILED,
+                SummarizationErrorType.UNPROCESSED_ITEMS
             ) -> refreshTitles()
             SummarizationErrorType.JOB_CANCELLED -> requestNotificationPermission(activity)
             SummarizationErrorType.UNKNOWN_ERROR -> {
@@ -334,6 +335,21 @@ class TitlesViewModel(
                 .distinctUntilChanged()
                 .collect { titleListFromDb ->
                     val actualTitles = titleListFromDb.filter { it.text != "<промежуточный текст>" }
+                    val hasHiddenItems = actualTitles.size != titleListFromDb.size
+
+                    val currentErr = _errState.value
+
+                    if (hasHiddenItems) {
+                        if (currentErr == null) {
+                            repository.saveLastError(SummarizationResult.Failure(SummarizationErrorType.UNPROCESSED_ITEMS))
+                        }
+                    } else {
+                        if (currentErr?.type == SummarizationErrorType.UNPROCESSED_ITEMS) {
+                            repository.clearError()
+                        }
+                    }
+
+                    _titles.value = actualTitles
 
                     _titles.value = actualTitles
 

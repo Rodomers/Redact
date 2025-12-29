@@ -158,6 +158,9 @@
     <string name="err_header_no_network">Нет сети</string>
     <string name="err_text_no_network">Нет связи с сервером. Проверьте своё подключение к интернету (и текущий IP).</string>
     <string name="err_btn_no_network">Ок</string>
+    <string name="err_header_unprocessed_items">Скрытые элементы</string>
+    <string name="err_text_unprocessed_items">Обнаружены черновые записи. Список неполный.\nОбновить?</string>
+    <string name="err_btn_unprocessed_items">Обновить</string>
 
     <string name="date_01">%d января</string>
     <string name="date_02">%d февраля</string>

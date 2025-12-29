@@ -27,6 +27,7 @@ enum class SummarizationErrorType {
     JOB_CANCELLED,
     RATE_LIMIT_EXCEEDED,
     NO_NETWORK,
+    UNPROCESSED_ITEMS,
     UNKNOWN_ERROR
 }
 
