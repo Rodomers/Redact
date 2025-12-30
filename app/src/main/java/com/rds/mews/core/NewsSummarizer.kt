@@ -194,7 +194,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
     private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, lang: String, filter: Boolean, sm: SettingsManager): Boolean {
         val batches = messages.distinctBy { it.id }.chunked(NEWS_BATCH_SIZE)
         val allExtracted = mutableListOf<Topics>()
-        val semaphore = Semaphore(2)
+        val semaphore = Semaphore(1)
         try {
             sm.saveString(MewsRepository.UPDATING_STATE, "extracting_topics")
             sm.saveFloat(MewsRepository.UPDATING_PROGRESS, (sm.getFloat(MewsRepository.UPDATING_PROGRESS, 0.1f) + 0.1f).coerceIn(0f, 0.2f))
