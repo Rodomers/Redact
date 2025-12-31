@@ -1,6 +1,7 @@
 package com.rds.mews.core
 
 import android.annotation.SuppressLint
+import android.util.Log
 import com.rds.mews.localcore.Message
 import com.rds.mews.localcore.SettingsManager
 import com.rds.mews.localcore.SummarizationErrorType
@@ -100,6 +101,8 @@ suspend fun validateGeminiKey(apiKey: String, proxyIp: String, proxyKey: String,
     } catch (e: Exception) { false } finally { client.close() }
 }
 
+private const val TAG = "SumDebug"
+
 class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
     data class Topics(val title: String, val ids: List<Long>?)
     private val SUMMARY_BATCH_SIZE = 7
@@ -112,11 +115,17 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         settingsManager: SettingsManager,
         filterTopics: Boolean = false
     ): SummarizationResult {
+        Log.d(TAG, "Summarizer: Started summarizeTopics")
         try {
             val messages = db.getMessages(messageSeconds).sortedBy { it.time }
-            if (messages.isEmpty()) { readyFunc(); return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE) }
+            Log.d(TAG, "Summarizer: Found ${messages.size} messages.")
+
+            if (messages.isEmpty()) {
+                readyFunc(); return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE)
+            }
 
             val unfinishedTitles = db.getTitles().filter { it.text == "<промежуточный текст>" && it.time.toInt() == 0 }
+
             if (unfinishedTitles.isEmpty()) {
                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
                 if (!processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics, settingsManager)) {
@@ -150,36 +159,50 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                                 settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, (currentProgress + remainingProgress * processedBatches / totalBatches).coerceIn(0f, 0.95f))
 
                                 val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
-                                val topicsData = batch.mapNotNull { topic ->
+
+                                val topicsData = batch.mapIndexedNotNull { index, topic ->
                                     val suitableMessages = topic.ids?.mapNotNull { id -> messages.find { it.id == id } ?: db.getMessage(id) } ?: emptyList()
-                                    if (suitableMessages.isEmpty()) null else Triple(topic, suitableMessages, suitableMessages.joinToString("\n") { "— ${it.mess}" })
+                                    if (suitableMessages.isEmpty()) null
+                                    else Triple(index, topic, suitableMessages)
                                 }
+
                                 if (topicsData.isEmpty()) return@withPermit
 
                                 val response = withTimeout(150000L) { sumTopicsBatch(llm, topicsData, MewsRepository.bannedNewsFlow.value.joinToString("'; '"), currentLanguage) }
                                 if (response.isBlank()) { wasEmptyAnswer = true; return@withPermit }
 
                                 val jsonArray = safeParseJsonArray(response)
+
                                 for (i in 0 until jsonArray.length()) {
                                     try {
                                         val obj = jsonArray.getJSONObject(i)
-                                        val topicTitle = obj.getString("title")
-                                        val summary = obj.getString("summary")
-                                        val originalData = topicsData.find { it.first.title == topicTitle }
-                                        if (originalData != null) {
-                                            val (topic, suitableMessages, _) = originalData
-                                            db.updateTitle(
-                                                name = topic.title,
-                                                newTime = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis(),
-                                                newText = summary,
-                                                newSources = db.dbPack(*suitableMessages.map { it.source }.distinct().toTypedArray()),
-                                                newLinks = db.dbPack(*suitableMessages.map { it.id.toString() }.distinct().toTypedArray())
-                                            )
-                                            successCount++
+                                        val id = obj.optInt("id", -1)
+
+                                        val originalData = if (id != -1) {
+                                            topicsData.find { it.first == id }
+                                        } else {
+                                            val titleKey = obj.optString("title")
+                                            topicsData.find { it.second.title == titleKey }
                                         }
-                                    } catch (e: Exception) {}
+
+                                        if (originalData != null) {
+                                            val (_, topic, suitableMessages) = originalData
+                                            val summary = obj.optString("summary")
+
+                                            if (summary.isNotBlank()) {
+                                                db.updateTitle(
+                                                    name = topic.title,
+                                                    newTime = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis(),
+                                                    newText = summary,
+                                                    newSources = db.dbPack(*suitableMessages.map { it.source }.distinct().toTypedArray()),
+                                                    newLinks = db.dbPack(*suitableMessages.map { it.id.toString() }.distinct().toTypedArray())
+                                                )
+                                                successCount++
+                                            }
+                                        }
+                                    } catch (e: Exception) { Log.e(TAG, "Error parsing summary item", e) }
                                 }
-                            } catch (e: Exception) {}
+                            } catch (e: Exception) { Log.e(TAG, "Batch processing error", e) }
                         }
                     }
                 }.awaitAll()
@@ -188,60 +211,94 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 return if (wasEmptyAnswer) SummarizationResult.Failure(SummarizationErrorType.EMPTY_ANSWER) else SummarizationResult.Failure(SummarizationErrorType.SUMMARIZE_TOPICS_FAILED)
             }
             readyFunc(); return SummarizationResult.Success
-        } catch (e: Exception) { readyFunc(); return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Global error", e)
+            readyFunc(); return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
+        }
     }
 
     private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, lang: String, filter: Boolean, sm: SettingsManager): Boolean {
         val batches = messages.distinctBy { it.id }.chunked(NEWS_BATCH_SIZE)
-        val allExtracted = mutableListOf<Topics>()
+        val allExtractedWithScore = mutableListOf<Pair<Topics, Int>>()
         val semaphore = Semaphore(1)
+
         try {
             sm.saveString(MewsRepository.UPDATING_STATE, "extracting_topics")
             sm.saveFloat(MewsRepository.UPDATING_PROGRESS, (sm.getFloat(MewsRepository.UPDATING_PROGRESS, 0.1f) + 0.1f).coerceIn(0f, 0.2f))
+
             coroutineScope {
-                batches.map { batch -> async(Dispatchers.IO) { semaphore.withPermit { extractTopicsFromBatch(batch, maxTopics, lang) } } }
-                    .forEach { it.await()?.let { allExtracted.addAll(it) } }
+                batches.map { batch ->
+                    async(Dispatchers.IO) {
+                        semaphore.withPermit { extractTopicsFromBatch(batch, maxTopics, lang) }
+                    }
+                }.forEach {
+                    it.await()?.let { list -> allExtractedWithScore.addAll(list) }
+                }
             }
-            if (allExtracted.isEmpty()) return false
+
+            if (allExtractedWithScore.isEmpty()) return false
+
+            // Сортируем ВСЕ найденные темы по важности (score), чтобы при обрезке остались самые важные
+            val sortedTopics = allExtractedWithScore.sortedByDescending { it.second }.map { it.first }
+
             return if (filter) {
                 sm.saveString(MewsRepository.UPDATING_STATE, "filtering_topics")
                 sm.saveFloat(MewsRepository.UPDATING_PROGRESS, (sm.getFloat(MewsRepository.UPDATING_PROGRESS, 0.1f) + 0.1f).coerceIn(0f, 0.3f))
-                mergeAndFilterTopics(allExtracted, maxTopics, lang)
+                mergeAndFilterTopics(sortedTopics, maxTopics, lang)
             } else {
-                allExtracted.take(maxTopics).forEach { batch ->
-                    db.addTitle(0, batch.title, "<промежуточный текст>", "<промежуточный текст>", db.dbPack(*(batch.ids?.map { it.toString() } ?: emptyList()).toTypedArray()))
+                sortedTopics.take(maxTopics).forEach { topic ->
+                    db.addTitle(0, topic.title, "<промежуточный текст>", "<промежуточный текст>", db.dbPack(*(topic.ids?.map { it.toString() } ?: emptyList()).toTypedArray()))
                 }
                 true
             }
-        } catch (e: Exception) { return false }
+        } catch (e: Exception) {
+            Log.e(TAG, "Process batches error", e)
+            return false
+        }
     }
 
-    private suspend fun extractTopicsFromBatch(batch: List<Message>, max: Int, lang: String): List<Topics>? {
-        val prompt = "Сгруппируй новости по событиям (макс $max). Верни ТОЛЬКО JSON массив: [{\"title\": \"Заголовок\", \"id\": [101, 105]}]. Язык: $lang. Новости:\n${batch.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }}"
+    private suspend fun extractTopicsFromBatch(batch: List<Message>, max: Int, lang: String): List<Pair<Topics, Int>>? {
+        // Запрос теперь требует поле score
+        val prompt = """
+            Сгруппируй новости по событиям (макс $max).
+            Для каждой группы оцени важность 'score' (0-10), где 10 — главное мировое событие, 0 — мусор.
+            Верни JSON: [{"title": "Заголовок", "id": [1, 2], "score": 8}].
+            Язык: $lang.
+            Новости:
+            ${batch.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }}
+        """.trimIndent()
+
         return try {
             val response = withTimeout(60000L) { llm.sendPrompt(prompt) ?: "" }
             if (response.isBlank()) return null
+
             val jsonArray = safeParseJsonArray(response)
-            val topics = mutableListOf<Topics>()
+            val result = mutableListOf<Pair<Topics, Int>>()
+
             for (i in 0 until jsonArray.length()) {
                 try {
                     val obj = jsonArray.getJSONObject(i)
                     val idsArr = obj.getJSONArray("id")
-                    topics.add(Topics(obj.getString("title"), (0 until idsArr.length()).map { idsArr.getLong(it) }))
+                    val topic = Topics(obj.getString("title"), (0 until idsArr.length()).map { idsArr.getLong(it) })
+                    val score = obj.optInt("score", 5) // По умолчанию средняя важность
+                    result.add(topic to score)
                 } catch (e: Exception) { continue }
             }
-            topics
+            result
         } catch (e: Exception) { null }
     }
 
     private suspend fun mergeAndFilterTopics(topics: List<Topics>, max: Int, lang: String): Boolean {
         val jsonInput = JSONArray(topics.map { t -> JSONObject().apply { put("title", t.title); put("ids", JSONArray(t.ids)) } }).toString()
-        val prompt = "Объедини дублирующиеся темы (макс $max). Верни JSON: [{\"title\": \"Заголовок\", \"ids\": [1, 2, 3]}]. Язык: $lang. Данные:\n$jsonInput"
+        val prompt = "Объедини дубли. Верни самых важных (макс $max). JSON: [{\"title\": \"...\", \"ids\": [...]}]. Язык: $lang. Данные:\n$jsonInput"
+
         return try {
             val response = withTimeout(60000L) { llm.sendPrompt(prompt) ?: "" }
             if (response.isBlank()) return false
+
             val jsonArray = safeParseJsonArray(response)
             val toAdd = mutableListOf<Topics>()
+
             for (i in 0 until min(jsonArray.length(), max)) {
                 try {
                     val obj = jsonArray.getJSONObject(i)
@@ -249,34 +306,32 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                     toAdd.add(Topics(obj.getString("title"), (0 until idsArr.length()).map { idsArr.getLong(it) }))
                 } catch (e: Exception) {}
             }
+
             if (toAdd.isEmpty()) return false
+
             db.titlesTimeKill(0)
             toAdd.forEach { t -> db.addTitle(0, t.title, "<промежуточный текст>", "<промежуточный текст>", db.dbPack(*(t.ids?.map { it.toString() } ?: emptyList()).toTypedArray())) }
             true
         } catch (e: Exception) { false }
     }
 
-    private suspend fun sumTopicsBatch(llm: LLMClient, data: List<Triple<Topics, List<Message>, String>>, banned: String, lang: String): String {
-        val jsonInput = JSONArray(data.map { (t, _, txt) ->
+    private suspend fun sumTopicsBatch(llm: LLMClient, data: List<Triple<Int, Topics, List<Message>>>, banned: String, lang: String): String {
+        val jsonInput = JSONArray(data.map { (id, t, msgs) ->
             JSONObject().apply {
+                put("id", id)
                 put("title", t.title)
-                put("news_content", txt)
+                put("news_content", msgs.joinToString("\n") { "— ${it.mess}" })
             }
         })
 
         val prompt = """
-        Ты — профессиональный редактор новостной ленты. Твоя задача — написать живые, вовлекающие саммари для предоставленных тем.
+        Ты — редактор. Напиши саммари.
+        1. **ID:** Верни поле "id" (Int) из входных данных.
+        2. **Объем:** Сложная тема - до 500 слов, простая - до 300.
+        3. **Фильтр:** Если тема о '$banned', summary = "".
+        4. **Язык:** $lang.
         
-        Правила работы:
-        1. **Адаптивный объем (ВАЖНО):** Проанализируй количество фактов в исходном тексте "news_content".
-           - Если информации много и тема сложная: пиши подробно, раскрывай детали, не "комкай" повествование. Целевой объем: до 500 слов.
-           - Если новость стандартная или короткая: пиши емко. Целевой объем: до 300 слов.
-        2. **Стиль:** Smart Casual. Пиши увлекательно, но сохраняй экспертность. Без кликбейта и воды.
-        3. **Фильтр:** Если тема или контент касаются '$banned', поле summary должно быть пустой строкой "".
-        4. **Язык вывода:** $lang.
-        
-        Формат вывода строго JSON (список объектов): 
-        [{"title": "Заголовок темы", "summary": "Текст саммари..."}]
+        JSON: [{"id": 0, "title": "Заголовок", "summary": "Текст..."}]
         
         Ввод:
         $jsonInput
