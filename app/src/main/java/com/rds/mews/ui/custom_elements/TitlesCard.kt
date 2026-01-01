@@ -108,6 +108,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import dev.jeziellago.compose.markdowntext.MarkdownText
 
 @Composable
 fun TitlesCard(
@@ -342,7 +343,12 @@ private fun HeroExpansionContent(
         if (contentHeight == null) {
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(horizontalMarginPx.roundToInt(), verticalMarginPx.roundToInt()) }
+                    .offset {
+                        IntOffset(
+                            horizontalMarginPx.roundToInt(),
+                            verticalMarginPx.roundToInt()
+                        )
+                    }
                     .width(targetWidthDp)
                     .alpha(0f)
                     .onGloballyPositioned { coordinates ->
@@ -423,7 +429,8 @@ private fun MeasureCardCompleteStructure(
 ) {
     Column(modifier = Modifier
         .fillMaxWidth()
-        .wrapContentHeight()) {
+        .wrapContentHeight()
+    ) {
         TitlesHeaderContent(
             title = title,
             noTime = false,
@@ -431,14 +438,20 @@ private fun MeasureCardCompleteStructure(
             animationProgress = 1f
         )
 
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = title.text,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
+        Spacer(modifier = Modifier.height(8.dp))
 
+        // ИЗМЕРЯЕМ
+        // Библиотека jeziellago использует внутри обычный Text.
+        // Он измеряется корректно.
+        MarkdownText(
+            markdown = title.text.trim(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        // Нижний отступ под панель кнопок + небольшой запас
         Spacer(modifier = Modifier.height(54.dp))
     }
 }
@@ -647,21 +660,30 @@ private fun ExpandedCardContent(
                                 .verticalScroll(rememberScrollState())
                         ) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = title.text,
+                            Box(
                                 modifier = Modifier
+                                    .fillMaxWidth()
                                     .combinedClickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null,
                                         onClick = {},
                                         onLongClick = {
                                             copyText()
-                                            Toast.makeText(context, R.string.titles_card_copied, Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(
+                                                context,
+                                                R.string.titles_card_copied,
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                         }
                                     )
-                                    .padding(horizontal = 16.dp),
-                            )
+                                    .padding(horizontal = 16.dp)
+                            ) {
+                                MarkdownText(
+                                    markdown = title.text.trim(),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                             Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
                         }
                     }
@@ -724,7 +746,9 @@ private fun ExpandedCardContent(
                                     }
                                 }
                                 item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Spacer(modifier = Modifier.height(bottomPanelHeight - 8.dp).fillMaxWidth())
+                                    Spacer(modifier = Modifier
+                                        .height(bottomPanelHeight - 8.dp)
+                                        .fillMaxWidth())
                                 }
                             }
                         }
@@ -774,7 +798,9 @@ private fun ExpandedCardContent(
                             .size(40.dp)
                             .padding(bottom = 6.dp)
                             .align(Alignment.CenterVertically)
-                            .onGloballyPositioned { buttonBounds = it.boundsInWindow().roundToIntRect() },
+                            .onGloballyPositioned {
+                                buttonBounds = it.boundsInWindow().roundToIntRect()
+                            },
                         iconModifier = Modifier.size(18.dp),
                         defaultBackgroundColor = bottomPanelItemsColor,
                         transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.7f),

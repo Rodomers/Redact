@@ -52,7 +52,6 @@ android {
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
@@ -90,6 +89,8 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.animation)
     implementation(libs.androidx.compose.ui.ui)
+    implementation(libs.compose.markdown)
+    implementation(libs.androidx.compose.material.icons.extended)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
