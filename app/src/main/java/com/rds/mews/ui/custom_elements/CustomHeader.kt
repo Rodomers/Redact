@@ -80,7 +80,9 @@ fun LazyGridScope.customHeader(
         Row(
             modifier = modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface.copy(0.95f))
+                .background(
+                    MaterialTheme.colorScheme.surface.copy(0.95f)
+                )
                 .padding(start = 2.dp, top = 16.dp, bottom = animatedBottomPadding, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

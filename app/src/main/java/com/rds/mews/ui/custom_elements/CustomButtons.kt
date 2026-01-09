@@ -133,7 +133,8 @@ fun CustomTextButton(
             color = contentColor,
             fontSize = fontSize,
             fontWeight = fontWeight,
-            textAlign = textAlign
+            textAlign = textAlign,
+            maxLines = 1
         )
     }
 }

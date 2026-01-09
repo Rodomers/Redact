@@ -16,8 +16,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -35,7 +37,6 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
@@ -440,18 +441,17 @@ private fun MeasureCardCompleteStructure(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // ИЗМЕРЯЕМ
-        // Библиотека jeziellago использует внутри обычный Text.
-        // Он измеряется корректно.
         MarkdownText(
             markdown = title.text.trim(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 14.sp,
+                lineHeight = 22.sp
+            )
         )
 
-        // Нижний отступ под панель кнопок + небольшой запас
         Spacer(modifier = Modifier.height(54.dp))
     }
 }
@@ -652,6 +652,8 @@ private fun ExpandedCardContent(
                     .fillMaxHeight()
                     .graphicsLayer { alpha = contentAlpha }
             ) { page ->
+                val headersColor = MaterialTheme.colorScheme.secondaryContainer
+
                 when (page) {
                     0 -> {
                         Column(
@@ -681,7 +683,11 @@ private fun ExpandedCardContent(
                             ) {
                                 MarkdownText(
                                     markdown = title.text.trim(),
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontSize = 14.sp,
+                                        lineHeight = 22.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
                                 )
                             }
                             Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
@@ -711,11 +717,16 @@ private fun ExpandedCardContent(
                                 Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
                             }
                         } else {
+                            val allMessages = remember(sources) { sources.flatMap { it.messages } }
+
+                            val minLength = remember(allMessages) { allMessages.minOfOrNull { it.mess.length } ?: 0 }
+                            val maxLength = remember(allMessages) { allMessages.maxOfOrNull { it.mess.length } ?: 1 }
+
                             LazyVerticalGrid(
                                 modifier = Modifier
                                     .padding(horizontal = 8.dp)
                                     .fillMaxWidth(),
-                                columns = GridCells.Fixed(5)
+                                columns = GridCells.Fixed(1)
                             ) {
                                 sources.forEach { pack ->
                                     val source = pack.source
@@ -728,23 +739,48 @@ private fun ExpandedCardContent(
                                         onHeaderClick = { changeSourceState(title.id, source) },
                                         fontSize = 18.sp
                                     )
-                                    items(items = messages, key = { it.id }) { item ->
+
+                                    item(key = "${title.id}_$source") {
                                         Column(modifier = Modifier.fillMaxWidth()) {
                                             ExpandableContainer(visible = state) {
                                                 Box(modifier = Modifier.padding(bottom = 16.dp)) {
-                                                    CustomTextButton(
-                                                        inputs = TextButtonInputs(
-                                                            getFormattedTimeUnix(item.time),
-                                                            { handler.openUri(item.link) }
-                                                        ),
-                                                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                        shape = Shapes.large
-                                                    )
+
+                                                    FlowRow(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                                        maxItemsInEachRow = 5
+                                                    ) {
+                                                        messages.forEach { item ->
+                                                            val padding = remember(item.mess.length, minLength, maxLength) {
+                                                                if (maxLength == minLength) {
+                                                                    val absoluteMaxChars = 200f
+                                                                    val fraction = (item.mess.length / absoluteMaxChars).coerceIn(0f, 1f)
+                                                                    12.dp + (48.dp * fraction)
+                                                                } else {
+                                                                    val fraction = (item.mess.length - minLength).toFloat() / (maxLength - minLength)
+                                                                    12.dp + (48.dp * fraction)
+                                                                }
+                                                            }
+
+                                                            CustomTextButton(
+                                                                inputs = TextButtonInputs(
+                                                                    getFormattedTimeUnix(item.time),
+                                                                    { handler.openUri(item.link) }
+                                                                ),
+                                                                horizontalPadding = padding,
+
+                                                                defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                                shape = Shapes.large
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
+
                                 item(span = { GridItemSpan(maxLineSpan) }) {
                                     Spacer(modifier = Modifier
                                         .height(bottomPanelHeight - 8.dp)

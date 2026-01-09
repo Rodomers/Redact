@@ -25,7 +25,6 @@ import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.*
-import kotlinx.coroutines.time.delay
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.CancellationException
