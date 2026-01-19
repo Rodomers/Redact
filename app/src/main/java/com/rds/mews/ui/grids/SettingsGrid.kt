@@ -213,6 +213,32 @@ fun SettingsGrid(
     val llmChapterId by remember { mutableIntStateOf(R.string.settings_chapter_llm) }
     val additionalChapterId by remember { mutableIntStateOf(R.string.settings_chapter_additional) }
 
+    val autoUpdateBtnState = remember { MutableTransitionState(state.autoUpdateScreenOpened) }
+    val autoUpdateBtnText = stringResource(R.string.setup)
+    val autoUpdateButtonText = remember { mutableStateOf(autoUpdateBtnText) }
+    val autoUpdateButtonInputs = remember {
+        TextButtonInputs(
+            autoUpdateButtonText.value,
+            action = {
+                functions.setAutoupdateScreen(true)
+                autoUpdateBtnState.targetState = true
+            }
+        )
+    }
+
+    val filterBtnState = remember { MutableTransitionState(state.bannedNewsScreenOpened) }
+    val filterBtnText = stringResource(R.string.setup)
+    val filterButtonText = remember { mutableStateOf(filterBtnText) }
+    val filterButtonInputs = remember {
+        TextButtonInputs(
+            filterButtonText.value,
+            action = {
+                functions.setBannedNewsScreen(true)
+                filterBtnState.targetState = true
+            }
+        )
+    }
+
     val apiBtnState = remember { MutableTransitionState(state.geminiKeyScreenOpened) }
     val apiBtnText = stringResource(R.string.change)
     val apiButtonText = remember { mutableStateOf(apiBtnText) }
@@ -268,6 +294,7 @@ fun SettingsGrid(
     else if (state.titlesNum > 20) functions.setTitlesNum(20)
 
     val limitationDropdownItems = listOf(
+        stringResource(R.string.adaptive) to { functions.setTitlesPeriod(0) },
         pluralStringResource(R.plurals.hours, count = 12, 12) to { functions.setTitlesPeriod(12) },
         pluralStringResource(R.plurals.hours, count = 24, 24) to { functions.setTitlesPeriod(24) },
         pluralStringResource(R.plurals.hours, count = 48, 48) to { functions.setTitlesPeriod(48) },
@@ -388,7 +415,10 @@ fun SettingsGrid(
         SettingsListBottomSheet(
             title = stringResource(R.string.settings_titles_auto_update),
             items = itemsToShow,
-            onDismissRequest = { functions.setAutoupdateScreen(false) },
+            onDismissRequest = {
+                functions.setAutoupdateScreen(false)
+                autoUpdateBtnState.targetState = false
+                               },
             sheetState = screensState,
             scope = screenScope
         )
@@ -437,7 +467,10 @@ fun SettingsGrid(
         SettingsListBottomSheet(
             title = stringResource(R.string.settings_banned_news),
             items = bannedItems,
-            onDismissRequest = { functions.setBannedNewsScreen(false) },
+            onDismissRequest = {
+                functions.setBannedNewsScreen(false)
+                filterBtnState.targetState = false
+                               },
             sheetState = screensState,
             scope = screenScope
         )
@@ -567,6 +600,24 @@ fun SettingsGrid(
                                 onCheckedChange = { functions.setCompactTab(it) }
                             )
                         }
+                        SettingsItem(
+                            text = stringResource(R.string.settings_show_snippets),
+                            modifier = Modifier.padding(vertical = verticalArrangement),
+                        ) {
+                            CustomSwitch(
+                                checked = state.showSnippets,
+                                onCheckedChange = { functions.setShowSnippets(it) }
+                            )
+                        }
+                        SettingsItem(
+                            text = stringResource(R.string.settings_endure_time),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        ) {
+                            CustomSwitch(
+                                checked = state.innerTime,
+                                onCheckedChange = { functions.setInnerTime(it) }
+                            )
+                        }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                             SettingsItem(
                                 text = stringResource(R.string.settings_monet_colors),
@@ -610,24 +661,6 @@ fun SettingsGrid(
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         SettingsItem(
-                            text = stringResource(R.string.settings_show_snippets),
-                            modifier = Modifier.padding(vertical = verticalArrangement),
-                        ) {
-                            CustomSwitch(
-                                checked = state.showSnippets,
-                                onCheckedChange = { functions.setShowSnippets(it) }
-                            )
-                        }
-                        SettingsItem(
-                            text = stringResource(R.string.settings_endure_time),
-                            modifier = Modifier.padding(vertical = verticalArrangement)
-                        ) {
-                            CustomSwitch(
-                                checked = state.innerTime,
-                                onCheckedChange = { functions.setInnerTime(it) }
-                            )
-                        }
-                        SettingsItem(
                             text = stringResource(R.string.settings_maximum_headers),
                             modifier = Modifier.padding(vertical = verticalArrangement)
                         ) {
@@ -654,42 +687,43 @@ fun SettingsGrid(
                                 },
                                 density = density,
                                 cornerShape = Shapes.large,
-                                initialSelectedIndex = limitationDropdownItems.indexOfFirst {
+                                initialSelectedIndex = if (state.titlesPeriod != 0) limitationDropdownItems.indexOfFirst {
                                     it.first.contains(
                                         state.titlesPeriod.toString()
                                     )
-                                }
+                                } else 0
                             )
                         }
-                        SettingsItem(
-                            text = stringResource(R.string.settings_news_update_frequency),
-                            modifier = Modifier.padding(vertical = verticalArrangement)
-                        ) {
-                            DropdownButton(
-                                buttons = rssUpdateDropdownItems,
-                                density = density,
-                                cornerShape = Shapes.large,
-                                initialSelectedIndex = rssUpdateDropdownItems.indexOfFirst {
-                                    it.first.contains(
-                                        state.rssUpdateInterval.toString()
-                                    )
-                                }
-                            )
-                        }
+//                        SettingsItem(
+//                            text = stringResource(R.string.settings_news_update_frequency),
+//                            modifier = Modifier.padding(vertical = verticalArrangement)
+//                        ) {
+//                            DropdownButton(
+//                                buttons = rssUpdateDropdownItems,
+//                                density = density,
+//                                cornerShape = Shapes.large,
+//                                initialSelectedIndex = rssUpdateDropdownItems.indexOfFirst {
+//                                    it.first.contains(
+//                                        state.rssUpdateInterval.toString()
+//                                    )
+//                                }
+//                            )
+//                        }
                         SettingsItem(
                             text = stringResource(R.string.settings_titles_auto_update),
                             modifier = Modifier.padding(vertical = verticalArrangement)
                         ) {
-                            CustomIconButton(
-                                inputs = IconButtonInputs(
-                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                    {
-                                        functions.setAutoupdateScreen(!state.autoUpdateScreenOpened)
-                                    }
-                                ),
+                            CustomTextButton(
+                                inputs = autoUpdateButtonInputs,
                                 modifier = Modifier
                                     .wrapContentSize()
-                                    .height(40.dp)
+                                    .widthIn(min = 150.dp, max = 250.dp),
+                                shape = Shapes.large,
+                                defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(
+                                    alpha = 0.98f
+                                ),
+                                transitionBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                transitionState = autoUpdateBtnState
                             )
                         }
                     }
@@ -754,16 +788,17 @@ fun SettingsGrid(
                                 text = stringResource(R.string.settings_banned_news),
                                 modifier = Modifier.padding(vertical = verticalArrangement)
                             ) {
-                                CustomIconButton(
-                                    inputs = IconButtonInputs(
-                                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                        {
-                                            functions.setBannedNewsScreen(!state.bannedNewsScreenOpened)
-                                        }
-                                    ),
+                                CustomTextButton(
+                                    inputs = filterButtonInputs,
                                     modifier = Modifier
                                         .wrapContentSize()
-                                        .height(40.dp)
+                                        .widthIn(min = 150.dp, max = 250.dp),
+                                    shape = Shapes.large,
+                                    defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(
+                                        alpha = 0.98f
+                                    ),
+                                    transitionBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    transitionState = filterBtnState
                                 )
                             }
                         }

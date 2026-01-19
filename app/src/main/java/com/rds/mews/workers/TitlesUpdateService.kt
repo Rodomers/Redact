@@ -76,11 +76,10 @@ class TitlesUpdateService : Service() {
         val llmApiKey = settingsManager.getString(MewsRepository.USER_API_KEY, MewsRepository.DEFAULT_GEMINI_API_KEY)
         val rssLastUpdate = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
         val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
-        val titlesPeriod = if (!oneTimeUpdate) {
+        val titlesUpdatePeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
+        val titlesPeriod = if (!oneTimeUpdate || titlesUpdatePeriod == 0) {
             updateDeltaMills / 3600000L + 1
-        } else {
-            settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
-        }
+        } else titlesUpdatePeriod
         val titlesNum = settingsManager.getInt(MewsRepository.TITLES_NUM, 10)
         val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
 
@@ -100,18 +99,13 @@ class TitlesUpdateService : Service() {
 
             settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.1f)
 
-            val needToFetchRss = (System.currentTimeMillis() - rssLastUpdate) / 60000L > rssUpdateInterval
-            val noFetchErrors = if (needToFetchRss) {
-                val result = fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600).errors.isEmpty()
-                settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
-                true
-            } else {
-                true
-            }
+            settingsManager.saveString(MewsRepository.UPDATING_STATE, "parsing")
+            val result = fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600).errors.isEmpty()
+            settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
 
             if (!currentCoroutineContext().isActive) return
 
-            if ((oneTimeUpdate || updateDeltaMills >= 7200000L) && noFetchErrors) {
+            if ((oneTimeUpdate || updateDeltaMills >= 7200000L)) {
 //                val titles = db.getTitles()
 //                if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
 //                    db.titlesTimeKill(0)

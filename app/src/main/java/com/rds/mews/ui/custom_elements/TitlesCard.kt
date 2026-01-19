@@ -447,8 +447,8 @@ private fun MeasureCardCompleteStructure(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 14.sp,
-                lineHeight = 22.sp
+                fontSize = 14.2.sp,
+                lineHeight = 22.2.sp
             )
         )
 
@@ -652,8 +652,6 @@ private fun ExpandedCardContent(
                     .fillMaxHeight()
                     .graphicsLayer { alpha = contentAlpha }
             ) { page ->
-                val headersColor = MaterialTheme.colorScheme.secondaryContainer
-
                 when (page) {
                     0 -> {
                         Column(
@@ -684,8 +682,8 @@ private fun ExpandedCardContent(
                                 MarkdownText(
                                     markdown = title.text.trim(),
                                     style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontSize = 14.sp,
-                                        lineHeight = 22.sp,
+                                        fontSize = 14.2.sp,
+                                        lineHeight = 22.2.sp,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                 )

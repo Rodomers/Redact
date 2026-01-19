@@ -325,6 +325,7 @@ fun updatingStateInterpreter(state: String?): Int {
         "summarizing_topics" -> R.string.summarizing
         "extracting_topics" -> R.string.extracting_topics
         "updating" -> R.string.updating
+        "parsing" -> R.string.parsing
         "filtering_topics" -> R.string.filtering_topics
         else -> R.string.update
     }

@@ -122,7 +122,7 @@ object MewsRepository {
         GeminiModel("Pro Latest", "gemini-pro-latest")
     )
 
-    val defaultModel = geminiModelsList[0]
+    val defaultModel = geminiModelsList[5]
 
     suspend fun checkGeminiApiKey(key: String): Boolean {
         return validateGeminiKey(
@@ -298,7 +298,7 @@ object MewsRepository {
         _showDates.value = newValue
     }
 
-    private val _rssUpdateInterval = MutableStateFlow(15)
+    private val _rssUpdateInterval = MutableStateFlow(30)
     val rssUpdateInterval: StateFlow<Int> = _rssUpdateInterval.asStateFlow()
     fun setRssUpdateInterval(context: Context, newValue: Int) {
         settingsManager.saveInt(RSS_UPDATE_INTERVAL, newValue)
@@ -470,10 +470,10 @@ object MewsRepository {
         _titlesNum.value = settingsManager.getInt(TITLES_NUM, 10)
         _titlesPeriod.value = settingsManager.getInt(TITLES_PERIOD, 24)
         _userApiKey.value = settingsManager.getString(USER_API_KEY, DEFAULT_GEMINI_API_KEY)
-        _currentLlmModel.value = settingsManager.getString(CURRENT_LLM_MODEL, "gemini-2.0-flash")
+        _currentLlmModel.value = settingsManager.getString(CURRENT_LLM_MODEL, defaultModel.key)
         _filterTopics.value = settingsManager.getBoolean(FILTER_TOPICS, false)
 
-        _rssUpdateInterval.value = settingsManager.getInt(RSS_UPDATE_INTERVAL, 15)
+//        _rssUpdateInterval.value = settingsManager.getInt(RSS_UPDATE_INTERVAL, 15)
         _lastRssUpdate.value = settingsManager.getLong(LAST_RSS_UPDATE, 0L)
     }
 }

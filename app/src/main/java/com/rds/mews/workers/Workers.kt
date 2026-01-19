@@ -64,6 +64,11 @@ class TitlesUpdateWorker(
         val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
         val enableProxy = settingsManager.getBoolean(MewsRepository.ENABLE_PROXY, false)
 
+        val updateDeltaMills = System.currentTimeMillis() - settingsManager.getLong(MewsRepository.LAST_TITLES_UPDATE, 0L)
+        val titlesUpdatePeriod = if (titlesPeriod == 0) {
+            updateDeltaMills / 3600000L + 1
+        } else titlesPeriod
+
         val fetcher = RssFetcher(db, settingsManager)
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
         val summarizer = NewsSummarizer(db, llm)
@@ -77,19 +82,13 @@ class TitlesUpdateWorker(
 
                 settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.1f)
 
-                val needToFetchRss = (System.currentTimeMillis() - rssLastUpdate) / 60000L > rssUpdateInterval
-                val noFetchErrors = if (needToFetchRss) {
-                    val result = fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600).errors.isEmpty()
-                    settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
-
-                    true
-                } else {
-                    true
-                }
+                settingsManager.saveString(MewsRepository.UPDATING_STATE, "parsing")
+                val result = fetcher.fetchAndStoreAll(messAliveTime = titlesUpdatePeriod.toLong() * 3600).errors.isEmpty()
+                settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
 
                 if (isStopped) return@withContext
 
-                if (noFetchErrors) {
+                if (true) {
 //                    val titles = db.getTitles()
 //                    if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
 //                        db.titlesTimeKill(0)
@@ -100,7 +99,7 @@ class TitlesUpdateWorker(
                     while (settingsManager.getBoolean(MewsRepository.UPDATING_TITLES, false) && iter <= 5 && !isStopped) {
                         res = summarizer.summarizeTopics(
                             maxTopics = titlesNum,
-                            messageSeconds = titlesPeriod.toLong() * 3600,
+                            messageSeconds = titlesUpdatePeriod.toLong() * 3600,
                             readyFunc = {
                                 settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
                             },

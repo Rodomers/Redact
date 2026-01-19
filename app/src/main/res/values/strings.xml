@@ -35,8 +35,7 @@
     <string name="settings_system_theme">System</string>
     <string name="settings_light_theme">Light</string>
     <string name="settings_dark_theme">Dark</string>
-    <string name="settings_show_dates">Show dates</string>
-    <string name="settings_monet_colors">Monet colors</string>
+    <string name="settings_monet_colors">Adaptive colors</string>
     <string name="settings_color_scheme">Color scheme</string>
     <string name="settings_compact_tab">Compact tab</string>
     <string name="settings_endure_time">Inner timestamps</string>
@@ -49,7 +48,7 @@
     <string name="settings_titles_update_time">Update time</string>
     <string name="settings_titles_update_frequency">Update interval</string>
     <string name="settings_maximum_headers">Maximum headers</string>
-    <string name="settings_news_period">News period</string>
+    <string name="settings_news_period">Time range</string>
     <string name="settings_news_update_frequency">Sources update frequency</string>
     <string name="settings_gemini_api_key">Gemini API key</string>
     <string name="settings_sheet_current_key">API key change</string>
@@ -72,6 +71,7 @@
     <string name="settings_notification_sheet_cancel">Maybe later</string>
     <string name="settings_notification_sheet_conf">Grant</string>
     <string name="settings_close">Close</string>
+    <string name="setup">Setup</string>
 
     <plurals name="titles">
         <item quantity="one">%d title</item>
@@ -85,6 +85,8 @@
         <item quantity="one">%d minute</item>
         <item quantity="other">%d minutes</item>
     </plurals>
+
+    <string name="adaptive">Adaptive</string>
 
     <string name="custom_card_with_menu_icon_desc">Menu</string>
     <string name="sources_add_text">Add</string>
@@ -108,6 +110,7 @@
 
     <string name="update">Update</string>
     <string name="updating">Updating…</string>
+    <string name="parsing">Checking originals…</string>
     <string name="extracting_topics">Extracting topics…</string>
     <string name="filtering_topics">Filtering topics…</string>
     <string name="summarizing">Summarizing…</string>
