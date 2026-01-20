@@ -3,6 +3,7 @@ package com.rds.mews.localcore
 import android.content.Context
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.rds.mews.MainActivity
+import com.rds.mews.settings_manager.SummarizationErrorType
 
 data class Message(var id: Long, var time: Long, var link: String, var source: String, var mess: String)
 data class RSS(var id: Long, var source: String, var link: String)
@@ -14,22 +15,6 @@ data class TitleCardStates(
     var sources: List<SourceMessages>? = null,
     val read: Boolean = false
 )
-
-enum class SummarizationErrorType {
-    EXTRACT_TOPICS_FAILED,
-    SUMMARIZE_TOPICS_FAILED,
-    CRITICAL_SUMMARIZATION_ERROR,
-    JSON_PARSING_FAILED,
-    NETWORK_TIMEOUT,
-    EMPTY_ANSWER,
-    NO_NEWS_TO_ANALYZE,
-    FILTER_FAILED,
-    JOB_CANCELLED,
-    RATE_LIMIT_EXCEEDED,
-    NO_NETWORK,
-    UNPROCESSED_ITEMS,
-    UNKNOWN_ERROR
-}
 
 enum class SourceType {
     RSS_FEED,

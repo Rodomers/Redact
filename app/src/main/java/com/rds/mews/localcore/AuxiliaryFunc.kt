@@ -28,6 +28,7 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.rds.mews.R
+import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.workers.RssUpdateWorker
 import com.rds.mews.workers.TitlesUpdateService
 import com.rds.mews.workers.TitlesUpdateWorker

@@ -7,14 +7,14 @@ import com.rds.mews.core.DbHelper
 import com.rds.mews.core.LLMClient
 import com.rds.mews.core.NewsSummarizer
 import com.rds.mews.core.RssFetcher
-import com.rds.mews.localcore.SettingsManager
-import com.rds.mews.localcore.SummarizationErrorType
+import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -24,18 +24,20 @@ class RssUpdateWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        val db = DbHelper(applicationContext)
-        val settingsManager = SettingsManager(applicationContext)
-        val enableProxy = settingsManager.getBoolean(MewsRepository.ENABLE_PROXY, false)
-        val fetcher = RssFetcher(db, settingsManager, enableProxy)
+        if (!MewsRepository.isInitialized) {
+            return Result.retry()
+        }
 
-        val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
-        val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
+        val db = DbHelper(applicationContext)
+        val enableProxy = MewsRepository.proxyEnabled.first()
+        val fetcher = RssFetcher(db, enableProxy)
+
+        val titlesPeriod = MewsRepository.titlesPeriod.first()
 
         return try {
             withContext(Dispatchers.IO) {
                 fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600)
-                settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
+                MewsRepository.setLastRssUpdate(System.currentTimeMillis())
                 println("RssUpdateWorker: parsing finished successfully.")
             }
 
@@ -52,39 +54,41 @@ class TitlesUpdateWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result {
-        val settingsManager = SettingsManager(applicationContext)
+        if (!MewsRepository.isInitialized) {
+            return Result.retry()
+        }
         val db = DbHelper(applicationContext)
 
-        val currentLLM = settingsManager.getString(MewsRepository.CURRENT_LLM_MODEL, MewsRepository.defaultModel.key)
-        val llmApiKey = settingsManager.getString(MewsRepository.USER_API_KEY, MewsRepository.DEFAULT_GEMINI_API_KEY)
-        val rssLastUpdate = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
-        val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
-        val titlesPeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
-        val titlesNum = settingsManager.getInt(MewsRepository.TITLES_NUM, 10)
-        val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
-        val enableProxy = settingsManager.getBoolean(MewsRepository.ENABLE_PROXY, false)
+        val currentLLM = MewsRepository.currentLlmModel.first()
+        val llmApiKey = MewsRepository.userApiKey.first()
+        val rssLastUpdate = MewsRepository.lastRssUpdate.first()
+        val rssUpdateInterval = MewsRepository.rssUpdateInterval.first()
+        val titlesPeriod = MewsRepository.titlesPeriod.first()
+        val titlesNum = MewsRepository.titlesNum.first()
+        val filterTopics = MewsRepository.filterTopics.first()
+        val enableProxy = MewsRepository.proxyEnabled.first()
 
-        val updateDeltaMills = System.currentTimeMillis() - settingsManager.getLong(MewsRepository.LAST_TITLES_UPDATE, 0L)
+        val updateDeltaMills = System.currentTimeMillis() - MewsRepository.lastTitlesUpdate.first()
         val titlesUpdatePeriod = if (titlesPeriod == 0) {
             updateDeltaMills / 3600000L + 1
         } else titlesPeriod
 
-        val fetcher = RssFetcher(db, settingsManager)
+        val fetcher = RssFetcher(db)
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
         val summarizer = NewsSummarizer(db, llm)
 
-        settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, true)
-        settingsManager.saveString(MewsRepository.UPDATING_STATE, "updating")
+        MewsRepository.setUpdatingTitles(true)
+        MewsRepository.setUpdatingState("updating")
 
         try {
             withContext(Dispatchers.IO) {
                 if (isStopped) return@withContext
 
-                settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.1f)
+                MewsRepository.setUpdatingProgress(0.1f)
 
-                settingsManager.saveString(MewsRepository.UPDATING_STATE, "parsing")
+                MewsRepository.setUpdatingState("parsing")
                 val result = fetcher.fetchAndStoreAll(messAliveTime = titlesUpdatePeriod.toLong() * 3600).errors.isEmpty()
-                settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
+                MewsRepository.setLastRssUpdate(System.currentTimeMillis())
 
                 if (isStopped) return@withContext
 
@@ -96,15 +100,14 @@ class TitlesUpdateWorker(
                     var iter = 0
                     var res: SummarizationResult = SummarizationResult.Failure(
                         SummarizationErrorType.UNKNOWN_ERROR)
-                    while (settingsManager.getBoolean(MewsRepository.UPDATING_TITLES, false) && iter <= 5 && !isStopped) {
+                    while (MewsRepository.updatingTitles.first() && iter <= 3 && !isStopped) {
                         res = summarizer.summarizeTopics(
                             maxTopics = titlesNum,
                             messageSeconds = titlesUpdatePeriod.toLong() * 3600,
                             readyFunc = {
-                                settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
+                                MewsRepository.setUpdatingTitles(false)
                             },
-                            filterTopics = filterTopics,
-                            settingsManager = settingsManager
+                            filterTopics = filterTopics
                         )
                         if (res is SummarizationResult.Success) break
                         iter++
@@ -112,25 +115,25 @@ class TitlesUpdateWorker(
 
                     when (res) {
                         is SummarizationResult.Success -> {
-                            settingsManager.clearLastError()
+                            MewsRepository.clearError()
                             MewsRepository.triggerTitlesRefresh()
                         }
-                        is SummarizationResult.Failure -> settingsManager.saveLastError(res)
+                        is SummarizationResult.Failure -> MewsRepository.saveLastError(res)
                     }
                 }
             }
 
             return Result.success()
         } catch (e: CancellationException) {
-            settingsManager.clearLastError()
-            settingsManager.saveLastError(SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED))
+            MewsRepository.clearError()
+            MewsRepository.saveLastError(SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED))
             println("TitlesUpdateWorker: Пойман CancellationException. Работа была отменена системой.")
             throw e
         } catch (e: Exception) {
             println("TitlesUpdateWorker: Поймана ошибка. Тип: ${e.javaClass.simpleName}, Сообщение: ${e.message}")
             e.printStackTrace()
             val errorResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
-            settingsManager.saveLastError(errorResult)
+            MewsRepository.saveLastError(errorResult)
             return Result.retry()
         }  finally {
             if (!MewsRepository.isInitialized) {
@@ -141,11 +144,11 @@ class TitlesUpdateWorker(
             MewsRepository.triggerTitlesRefresh()
 
             println("TitlesUpdateWorker: Вход в блок FINALLY. isStopped = $isStopped")
-            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 1f)
-            settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
+            MewsRepository.setUpdatingProgress(1f)
+            MewsRepository.setUpdatingTitles(false)
             delay(500L)
-            settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
-            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0f)
+            MewsRepository.setUpdatingState("off")
+            MewsRepository.setUpdatingProgress(0f)
             println("TitlesUpdateWorker: Состояние обновлено на 'off'.")
         }
     }

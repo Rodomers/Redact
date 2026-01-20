@@ -1,10 +1,7 @@
 package com.rds.mews.core
 
-import com.rds.mews.localcore.SettingsManager
 import com.rds.mews.repositories.MewsRepository
-import io.ktor.client.call.body
-import io.ktor.client.request.get
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -13,25 +10,21 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 
-// --- Парсер RSS-потоков ---`
 class RssFetcher(
     private val db: DbHelper,
-    private val settingsManager: SettingsManager,
     enableProxy: Boolean = false
 ) {
-    // Получаем экземпляр общего HTTP-клиента
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.HUB_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
 
-    // Основной запуск — парсит все RSS-каналы и сохраняет новые сообщения
     suspend fun fetchAndStoreAll(messAliveTime: Long, maxTimeHours: Int = 168): FetchResult {
         val rssList = try {
-            db.getRSS() // --- ИСПРАВЛЕНО: Получаем RSS из БД только один раз ---
+            db.getRSS()
         } catch (e: Exception) {
             println("Ошибка при получении списка RSS из БД: ${e.message}")
             return FetchResult(0, 0, 0, listOf(e.message ?: "unknown"))
         }
 
-        val lastUpdated = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
+        val lastUpdated = MewsRepository.lastRssUpdate.first()
         val newsUpdateDelta: Long? = when (lastUpdated) {
             0L -> null
             else -> (System.currentTimeMillis() - lastUpdated) / 1000
@@ -132,14 +125,12 @@ class RssFetcher(
 
 
     private fun elementText(parent: Element, tagName: String): String? {
-        // пытаемся прямой поиск по тэгу
         val nList = parent.select(tagName)
         if (nList.isNotEmpty()) {
             val node = nList[nList.lastIndex]// nList.item(0)
             val text = node?.text()// node?.textContent
             if (!text.isNullOrBlank()) return text.trim()
         }
-        // пробуем искать без двоеточия (на случай content:encoded -> encoded)
         if (tagName.contains(":")) {
             val after = tagName.substringAfter(":")
             val nList2 = parent.select(after)
@@ -152,7 +143,6 @@ class RssFetcher(
         return null
     }
 
-    // --- Построение сообщения для сохранения в messages.message ---
     private fun buildMessageText(item: RssItem): String {
         val sb = StringBuilder()
         if (!item.title.isNullOrBlank()) {
@@ -166,11 +156,9 @@ class RssFetcher(
         return sb.toString()
     }
 
-    // --- Парсинг даты pubDate в миллисекунды (попытаться несколько форматов) ---
     private fun tryParseDate(dateStr: String?): Long? {
         if (dateStr.isNullOrBlank()) return null
         val s = dateStr.trim()
-        // Список возможных шаблонов (обычные варианты для RSS)
         val patterns = listOf(
             "EEE, dd MMM yyyy HH:mm:ss Z",
             "dd MMM yyyy HH:mm:ss Z",
@@ -186,17 +174,13 @@ class RssFetcher(
                 val d = df.parse(s)
                 if (d != null) return d.time
             } catch (_: ParseException) {
-                // пробуем следующий формат
             } catch (_: IllegalArgumentException) {
             }
         }
-        // Попытка устранить лишние части (например: "Tue, 01 Jan 2019 12:34:56 +0000 (GMT)")
         val noParen = s.replace(Regex("\\(.*?\\)"), "").trim()
         if (noParen != s) return tryParseDate(noParen)
-        // если не получилось - вернуть null
         return null
     }
-    // тип для возвращения релузьтата парсиинга
     data class FetchResult(
         val feedsProcessed: Int,
         val itemsAdded: Int,

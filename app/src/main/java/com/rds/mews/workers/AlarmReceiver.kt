@@ -8,8 +8,11 @@ import android.content.Intent
 import android.os.Build
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.rds.mews.localcore.SettingsManager
 import com.rds.mews.repositories.MewsRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Date
 
@@ -85,40 +88,54 @@ class RSSAlarmReceiver: BroadcastReceiver() {
     }
 }
 
-class BootCompletedReceiver: BroadcastReceiver() {
+class BootCompletedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) {
-            return
-        }
-        println(intent.action)
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
 
-        val settingsManager = SettingsManager(context)
+        println("BootCompletedReceiver: Boot completed received")
 
-        val autoUpdateEnabled = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
-        if (autoUpdateEnabled) {
-            val titlesUpdatePeriodHrs = settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
-            val titlesUpdateTimeMins = settingsManager.getInt(MewsRepository.TITLES_ALARM_MINS, 540)
+        val pendingResult = goAsync()
 
-            val nextRunTime = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, titlesUpdateTimeMins / 60)
-                set(Calendar.MINUTE, titlesUpdateTimeMins % 60)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                if (!MewsRepository.isInitialized) {
+                    println("BootCompletedReceiver: Repository not initialized, attempting manual init (fallback)")
+                    return@launch
+                }
+
+                val isAutoUpdateEnabled = MewsRepository.titlesAlarmUpdate.first()
+
+                if (isAutoUpdateEnabled) {
+                    val titlesUpdatePeriodHrs = MewsRepository.titlesAutoUpdateFrequency.first()
+                    val titlesUpdateTimeMins = MewsRepository.titlesAlarmTimeMins.first()
+
+                    val nextRunTime = Calendar.getInstance().apply {
+                        set(Calendar.HOUR_OF_DAY, titlesUpdateTimeMins / 60)
+                        set(Calendar.MINUTE, titlesUpdateTimeMins % 60)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+
+                    val now = Calendar.getInstance()
+                    while (nextRunTime.before(now)) {
+                        val addHours = if (titlesUpdatePeriodHrs == 12) 12 else 24
+                        nextRunTime.add(Calendar.HOUR_OF_DAY, addHours)
+                    }
+
+                    val nextRunTimeMillis = nextRunTime.timeInMillis
+
+                    AlarmScheduler.schedule(context, nextRunTimeMillis)
+
+                    println("BootCompletedReceiver: Следующее обновление восстановлено на ${Date(nextRunTimeMillis)}")
+                } else {
+                    println("BootCompletedReceiver: Автообновление отключено в настройках.")
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                pendingResult.finish()
             }
-
-            while (nextRunTime.before(Calendar.getInstance())) {
-                nextRunTime.add(Calendar.HOUR_OF_DAY, titlesUpdatePeriodHrs)
-            }
-
-            val nextRunTimeMillis = nextRunTime.timeInMillis
-
-            AlarmScheduler.schedule(context, nextRunTimeMillis)
-
-            println("BootCompletedReceiver: Следующее обновление запланировано на ${
-                Date(
-                    nextRunTimeMillis
-                )
-            }")
         }
     }
 }

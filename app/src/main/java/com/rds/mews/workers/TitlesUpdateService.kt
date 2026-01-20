@@ -19,12 +19,12 @@ import com.rds.mews.MainActivity
 import com.rds.mews.core.NewsSummarizer
 import com.rds.mews.R
 import com.rds.mews.core.RssFetcher
-import com.rds.mews.localcore.SettingsManager
-import com.rds.mews.localcore.SummarizationErrorType
+import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.CancellationException
@@ -59,12 +59,9 @@ class TitlesUpdateService : Service() {
 
     private suspend fun doWork(oneTimeUpdate: Boolean) {
         val applicationContext = this.applicationContext
-        val settingsManager = SettingsManager(applicationContext)
         val db = DbHelper(applicationContext)
-        val updateDeltaMills = System.currentTimeMillis() - settingsManager.getLong(MewsRepository.LAST_TITLES_UPDATE, 0L)
-        val enableProxy = settingsManager.getBoolean(MewsRepository.ENABLE_PROXY, false)
 
-        if (!isNetworkAvailable(applicationContext)) {
+        if (!isNetworkAvailable(applicationContext) || !MewsRepository.isInitialized) {
             AlarmScheduler.schedule(applicationContext, System.currentTimeMillis() + 300000L)
             println("TitlesUpdateService: задача перепланирована на ${System.currentTimeMillis() + 300000L} unix")
             return
@@ -72,36 +69,39 @@ class TitlesUpdateService : Service() {
 
         if (!oneTimeUpdate) AlarmScheduler.cancel(applicationContext)
 
-        val currentLLM = settingsManager.getString(MewsRepository.CURRENT_LLM_MODEL, MewsRepository.defaultModel.key)
-        val llmApiKey = settingsManager.getString(MewsRepository.USER_API_KEY, MewsRepository.DEFAULT_GEMINI_API_KEY)
-        val rssLastUpdate = settingsManager.getLong(MewsRepository.LAST_RSS_UPDATE, 0L)
-        val rssUpdateInterval = settingsManager.getInt(MewsRepository.RSS_UPDATE_INTERVAL, 30)
-        val titlesUpdatePeriod = settingsManager.getInt(MewsRepository.TITLES_PERIOD, 24)
+        val updateDeltaMills = System.currentTimeMillis() - MewsRepository.lastTitlesUpdate.first()
+        val enableProxy = MewsRepository.proxyEnabled.first()
+
+        val currentLLM = MewsRepository.currentLlmModel.first()
+        val llmApiKey = MewsRepository.userApiKey.first()
+        val rssLastUpdate = MewsRepository.lastRssUpdate.first()
+        val rssUpdateInterval = MewsRepository.rssUpdateInterval.first()
+        val titlesUpdatePeriod = MewsRepository.titlesPeriod.first()
         val titlesPeriod = if (!oneTimeUpdate || titlesUpdatePeriod == 0) {
             updateDeltaMills / 3600000L + 1
         } else titlesUpdatePeriod
-        val titlesNum = settingsManager.getInt(MewsRepository.TITLES_NUM, 10)
-        val filterTopics = settingsManager.getBoolean(MewsRepository.FILTER_TOPICS, false)
+        val titlesNum = MewsRepository.titlesNum.first()
+        val filterTopics = MewsRepository.filterTopics.first()
 
-        val fetcher = RssFetcher(db, settingsManager)
+        val fetcher = RssFetcher(db)
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
         val summarizer = NewsSummarizer(db, llm)
 
         val startTitlesNum = db.getTitles().filter { it.text != "<промежуточный текст>" }.size
 
-        settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, true)
-        settingsManager.saveString(MewsRepository.UPDATING_STATE, "updating")
+        MewsRepository.setUpdatingTitles(true)
+        MewsRepository.setUpdatingState("updating")
 
         try {
             if (!currentCoroutineContext().isActive) return
 
             // надо вызывать ошибку парсинга, но не прекращать обновление
 
-            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0.1f)
+            MewsRepository.setUpdatingProgress(0.1f)
 
-            settingsManager.saveString(MewsRepository.UPDATING_STATE, "parsing")
+            MewsRepository.setUpdatingState("parsing")
             val result = fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600).errors.isEmpty()
-            settingsManager.saveLong(MewsRepository.LAST_RSS_UPDATE, System.currentTimeMillis())
+            MewsRepository.setLastRssUpdate(System.currentTimeMillis())
 
             if (!currentCoroutineContext().isActive) return
 
@@ -112,15 +112,14 @@ class TitlesUpdateService : Service() {
 //                }
                 var iter = 0
                 var res: SummarizationResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
-                while (settingsManager.getBoolean(MewsRepository.UPDATING_TITLES, false) && iter <= 3 && currentCoroutineContext().isActive) {
+                while (MewsRepository.updatingTitles.first() && iter <= 3 && currentCoroutineContext().isActive) {
                     res = summarizer.summarizeTopics(
                         maxTopics = titlesNum,
                         messageSeconds = titlesPeriod.toLong() * 3600,
                         readyFunc = {
-                            settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
+                            MewsRepository.setUpdatingTitles(false)
                         },
-                        filterTopics = filterTopics,
-                        settingsManager = settingsManager
+                        filterTopics = filterTopics
                     )
                     if (res is SummarizationResult.Success) break
                     iter++
@@ -137,18 +136,18 @@ class TitlesUpdateService : Service() {
 
                 when (res) {
                     is SummarizationResult.Success -> {
-                        settingsManager.clearLastError()
+                        MewsRepository.clearError()
 
                         if (!oneTimeUpdate) sendSuccessNotification()
                     }
-                    is SummarizationResult.Failure -> settingsManager.saveLastError(res)
+                    is SummarizationResult.Failure -> MewsRepository.saveLastError(res)
                 }
             }
 
-            val autoUpdateEnabled = settingsManager.getBoolean(MewsRepository.TITLES_AUTO_UPDATE, false)
+            val autoUpdateEnabled = MewsRepository.titlesAlarmUpdate.first()
             if (autoUpdateEnabled && !oneTimeUpdate) {
-                val titlesUpdatePeriodHours = settingsManager.getInt(MewsRepository.TITLES_AUTO_UPDATE_FREQUENCY, 24)
-                val titlesUpdateTimeMins = settingsManager.getInt(MewsRepository.TITLES_ALARM_MINS, 540)
+                val titlesUpdatePeriodHours = MewsRepository.titlesAutoUpdateFrequency.first()
+                val titlesUpdateTimeMins = MewsRepository.titlesAlarmTimeMins.first()
 
                 val nextRunTime = Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, titlesUpdateTimeMins / 60)
@@ -172,14 +171,14 @@ class TitlesUpdateService : Service() {
             println("TitlesUpdateService: Поймана ошибка. Тип: ${e.javaClass.simpleName}, Сообщение: ${e.message}")
             e.printStackTrace()
             val errorResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
-            settingsManager.saveLastError(errorResult)
+            MewsRepository.saveLastError(errorResult)
         } finally {
             println("TitlesUpdateService: Вход в блок FINALLY.")
-            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 1f)
-            settingsManager.saveBoolean(MewsRepository.UPDATING_TITLES, false)
+            MewsRepository.setUpdatingProgress(1f)
+            MewsRepository.setUpdatingTitles(false)
             delay(500L)
-            settingsManager.saveString(MewsRepository.UPDATING_STATE, "off")
-            settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, 0f)
+            MewsRepository.setUpdatingState("off")
+            MewsRepository.setUpdatingProgress(0f)
             println("TitlesUpdateService: Состояние обновлено на 'off'.")
         }
     }

@@ -2,8 +2,7 @@ package com.rds.mews.core
 
 import android.util.Log
 import com.rds.mews.localcore.Message
-import com.rds.mews.localcore.SettingsManager
-import com.rds.mews.localcore.SummarizationErrorType
+import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.repositories.MewsRepository
 import org.json.JSONArray
@@ -20,6 +19,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import java.io.Closeable
 import kotlin.math.pow
+import kotlinx.coroutines.flow.first
 
 class LLMClient(
     val apiKey: String = "",
@@ -120,7 +120,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         maxTopics: Int = 20,
         messageSeconds: Long = 14515200,
         readyFunc: () -> Unit,
-        settingsManager: SettingsManager,
         filterTopics: Boolean = false
     ): SummarizationResult {
         try {
@@ -130,11 +129,11 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
 
             val unfinishedTitles = db.getTitles().filter { it.text == "<промежуточный текст>" && it.time.toInt() == 0 }
             if (unfinishedTitles.isEmpty()) {
-                val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
-                if (!processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics, settingsManager)) {
+                val currentLanguage = MewsRepository.currentLanguage.first() ?: "english"
+                if (!processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics)) {
                     readyFunc(); return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
                 }
-                settingsManager.saveLong(MewsRepository.LAST_TITLES_UPDATE, System.currentTimeMillis())
+                MewsRepository.setLastTitlesUpdate(System.currentTimeMillis())
             }
 
             val titlesToSummarize = db.getTitles().filter { it.text == "<промежуточный текст>" }
@@ -146,7 +145,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             var processedBatches = 0
             val totalBatches = titleBatches.size
             val semaphore = Semaphore(1)
-            val currentProgress = settingsManager.getFloat(MewsRepository.UPDATING_PROGRESS, 0f)
+            val currentProgress = MewsRepository.updatingProgress.first()
             val remainingProgress = 0.95f - currentProgress
             var successCount = 0
             var wasEmptyAnswer = false
@@ -158,10 +157,10 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                             try {
                                 processedBatches++
                                 if (processedBatches > 1) delay(4000L)
-                                settingsManager.saveString(MewsRepository.UPDATING_STATE, "summarizing_topics")
-                                settingsManager.saveFloat(MewsRepository.UPDATING_PROGRESS, (currentProgress + remainingProgress * processedBatches / totalBatches).coerceIn(0f, 0.95f))
+                                MewsRepository.setUpdatingState("summarizing_topics")
+                                MewsRepository.setUpdatingProgress((currentProgress + remainingProgress * processedBatches / totalBatches).coerceIn(0f, 0.95f))
 
-                                val currentLanguage = settingsManager.getString(MewsRepository.CURRENT_LANGUAGE, "russian")
+                                val currentLanguage = MewsRepository.currentLanguage.first() ?: "english"
                                 val topicsData = batch.mapNotNull { topic ->
                                     val suitableMessages = topic.ids?.mapNotNull { id -> messages.find { it.id == id } ?: db.getMessage(id) } ?: emptyList()
                                     if (suitableMessages.isEmpty()) null else Triple(topic, suitableMessages, suitableMessages.joinToString("\n") { "— ${it.mess}" })
@@ -206,21 +205,21 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         }
     }
 
-    private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, lang: String, filter: Boolean, sm: SettingsManager): Boolean {
+    private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, lang: String, filter: Boolean): Boolean {
         val batches = messages.distinctBy { it.id }.chunked(NEWS_BATCH_SIZE)
         val allExtracted = mutableListOf<Topics>()
         val semaphore = Semaphore(1)
         try {
-            sm.saveString(MewsRepository.UPDATING_STATE, "extracting_topics")
-            sm.saveFloat(MewsRepository.UPDATING_PROGRESS, (sm.getFloat(MewsRepository.UPDATING_PROGRESS, 0.1f) + 0.1f).coerceIn(0f, 0.2f))
+            MewsRepository.setUpdatingState("extracting_topics")
+            MewsRepository.setUpdatingProgress((MewsRepository.updatingProgress.first() + 0.1f).coerceIn(0f, 0.2f))
             coroutineScope {
                 batches.map { batch -> async(Dispatchers.IO) { semaphore.withPermit { extractTopicsFromBatch(batch, maxTopics, lang) } } }
                     .forEach { it.await()?.let { allExtracted.addAll(it) } }
             }
             if (allExtracted.isEmpty()) return false
             return if (filter) {
-                sm.saveString(MewsRepository.UPDATING_STATE, "filtering_topics")
-                sm.saveFloat(MewsRepository.UPDATING_PROGRESS, (sm.getFloat(MewsRepository.UPDATING_PROGRESS, 0.1f) + 0.1f).coerceIn(0f, 0.3f))
+                MewsRepository.setUpdatingState("filtering_topics")
+                MewsRepository.setUpdatingProgress((MewsRepository.updatingProgress.first() + 0.1f).coerceIn(0f, 0.3f))
                 mergeAndFilterTopics(allExtracted, maxTopics, lang)
             } else {
                 allExtracted

@@ -91,6 +91,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.ui)
     implementation(libs.compose.markdown)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.datastore)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

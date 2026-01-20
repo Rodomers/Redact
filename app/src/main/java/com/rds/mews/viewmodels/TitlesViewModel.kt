@@ -20,7 +20,7 @@ import com.rds.mews.MainActivity
 import com.rds.mews.localcore.Message
 import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.repositories.MewsRepository
-import com.rds.mews.localcore.SummarizationErrorType
+import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.TimeDate
 import com.rds.mews.localcore.Title
@@ -301,7 +301,7 @@ class TitlesViewModel(
     }
 
     fun lastTitlesUpdateExists(): Boolean {
-        return repository.containsSetting(MewsRepository.LAST_TITLES_UPDATE)
+        return repository.lastTitlesUpdate.value != 0L
     }
 
     fun getDateFromUnix(timeUnix: Long, today: LocalDate = LocalDate.now()): TimeDate {
