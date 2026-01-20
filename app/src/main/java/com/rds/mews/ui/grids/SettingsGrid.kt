@@ -1,5 +1,6 @@
 package com.rds.mews.ui.grids
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -50,7 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rds.mews.MainActivity
 import com.rds.mews.R
-import com.rds.mews.localcore.* // Import Enums
+import com.rds.mews.localcore.*
 import com.rds.mews.ui.custom_elements.ApiKeyBottomSheet
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
@@ -88,27 +89,26 @@ fun SettingsScreen(
 
     val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
 
-    // --- State Collectors (Adapted types) ---
     val showDates by viewModel.showDates.collectAsStateWithLifecycle()
     val compactTab by viewModel.compactTabBar.collectAsStateWithLifecycle()
-    val appTheme by viewModel.appTheme.collectAsStateWithLifecycle() // Enum AppTheme
+    val appTheme by viewModel.appTheme.collectAsStateWithLifecycle()
     val filterTopics by viewModel.filterTopics.collectAsStateWithLifecycle()
-    val titlesNum by viewModel.titlesNum.collectAsStateWithLifecycle() // Enum HeadersNum
+    val titlesNum by viewModel.titlesNum.collectAsStateWithLifecycle()
     val geminiApiText by viewModel.userApi.collectAsStateWithLifecycle()
-    val currentLlmModel by viewModel.currentLlm.collectAsStateWithLifecycle() // Enum GeminiModelOption
-    val titlesPeriod by viewModel.titlesPeriod.collectAsStateWithLifecycle() // Enum TitlesPeriod
+    val currentLlmModel by viewModel.currentLlm.collectAsStateWithLifecycle()
+    val titlesPeriod by viewModel.titlesPeriod.collectAsStateWithLifecycle()
     val rssUpdateInterval by viewModel.rssUpdateInterval.collectAsStateWithLifecycle()
     val innerTime by viewModel.innerTime.collectAsStateWithLifecycle()
     val showSnippets by viewModel.showSnippets.collectAsStateWithLifecycle()
     val titlesAlarmUpdate by viewModel.titlesAlarmUpdate.collectAsStateWithLifecycle()
     val alarmMins by viewModel.titlesAlarmMins.collectAsStateWithLifecycle()
-    val alarmFrequency by viewModel.titlesUpdateFrequency.collectAsStateWithLifecycle() // Enum AutoUpdateFrequency
+    val alarmFrequency by viewModel.titlesUpdateFrequency.collectAsStateWithLifecycle()
     val bannedNews by viewModel.bannedNews.collectAsStateWithLifecycle()
     val proxyEnabled by viewModel.proxyEnabled.collectAsStateWithLifecycle()
     val showAlarmsSheet by viewModel.showAlarmsSheet.collectAsStateWithLifecycle()
     val showNotificationsSheet by viewModel.showNotificationSheet.collectAsStateWithLifecycle()
     val isApiKeyDefault by viewModel.isKeyDefault.collectAsStateWithLifecycle()
-    val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle() // Enum DarkTheme
+    val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
 
     val state = SettingsUiState(
         autoUpdateScreenOpened = autoupdateScreenOpened,
@@ -138,8 +138,6 @@ fun SettingsScreen(
         defaultGeminiModel = defaultGeminiModel,
         geminiApiBuffer = geminiBuffer,
         isApiKeyCorrect = isApiKeyValid,
-        // Восстановил параметры списков, как ты просил
-        // (предполагается, что в SettingsUiState типы полей обновлены на List<Enum>)
         darkThemes = DarkTheme.entries,
         appThemes = AppTheme.entries,
         headersNumList = HeadersNum.entries,
@@ -154,23 +152,23 @@ fun SettingsScreen(
             setGeminiScreenOpened = viewModel::setGeminiScreen,
             setCompactTab = viewModel::setCompactTab,
             setAppTheme = viewModel::setAppTheme,
-            setDarkTheme = viewModel::setDarkTheme, // Функция принимает DarkTheme
+            setDarkTheme = viewModel::setDarkTheme,
             setShowDates = viewModel::setShowDates,
             setInnerTime = viewModel::setInnerTime,
             setShowSnippets = viewModel::setShowSnippets,
-            setTitlesNum = viewModel::setTitlesNum, // Функция принимает HeadersNum
-            setTitlesPeriod = viewModel::setTitlesPeriod, // Функция принимает TitlesPeriod
+            setTitlesNum = viewModel::setTitlesNum,
+            setTitlesPeriod = viewModel::setTitlesPeriod,
             setRssUpdateInterval = viewModel::setRssUpdateInterval,
             setFilterTopics = viewModel::setFilterTopics,
             setBannedNews = viewModel::setBannedNews,
             delBannedNews = viewModel::delBannedNews,
-            setCurrentLlm = viewModel::setCurrentLlm, // Функция принимает GeminiModelOption
+            setCurrentLlm = viewModel::setCurrentLlm,
             setUserGeminiApi = viewModel::setUserGeminiApi,
             resetUserGeminiApi = viewModel::resetApiKey,
             setProxyEnabled = viewModel::setProxyEnabled,
             setTitlesAlarmUpdate = viewModel::setTitlesAlarmUpdate,
             setTitlesAlarmMins = viewModel::setTitlesAlarmMins,
-            setTitlesUpdFrequency = viewModel::setTitlesUpdFrequency, // Функция принимает AutoUpdateFrequency
+            setTitlesUpdFrequency = viewModel::setTitlesUpdFrequency,
             setAlarmsAllowed = viewModel::setAlarmsAllowed,
             planTitlesAutoUpdate = viewModel::planTitlesAutoUpdate,
             setShowAlarmsSheet = viewModel::setShowAlarmsSheet,
@@ -193,6 +191,7 @@ fun SettingsScreen(
     )
 }
 
+@SuppressLint("MutableCollectionMutableState")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsGrid(
@@ -272,7 +271,6 @@ fun SettingsGrid(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Обновил вызовы функций на Enum-значения, сохранив структуру списка
     val colorSchemeDropdownItems = mutableListOf(
         stringResource(R.string.settings_system_theme) to { functions.setDarkTheme(DarkTheme.SYSTEM) },
         stringResource(R.string.settings_light_theme) to { functions.setDarkTheme(DarkTheme.LIGHT) },
@@ -290,7 +288,6 @@ fun SettingsGrid(
             pluralStringResource(R.plurals.titles, count = 50, 50) to { functions.setTitlesNum(HeadersNum.NUM_50) })
         )
     }
-    // Используем .num для проверки числового значения Enum
     else if (state.headersNum.num > 20) functions.setTitlesNum(HeadersNum.NUM_20)
 
     val limitationDropdownItems = listOf(
@@ -303,15 +300,8 @@ fun SettingsGrid(
         pluralStringResource(R.plurals.hours, count = 120, 120) to { functions.setTitlesPeriod(TitlesPeriod.HRS_120) }
     )
 
-    val rssUpdateDropdownItems = listOf(
-        pluralStringResource(R.plurals.minutes, count = 15, 15) to { functions.setRssUpdateInterval(context, 15) },
-        pluralStringResource(R.plurals.minutes, count = 30, 30) to { functions.setRssUpdateInterval(context, 30) },
-        pluralStringResource(R.plurals.minutes, count = 60, 60) to { functions.setRssUpdateInterval(context, 60) }
-    )
-
     val modelListItemsBuffer = mutableListOf<Pair<String, () -> Unit>>()
     state.geminiModels.forEach {
-        // Передаем сам объект Enum (it), а не ключ
         modelListItemsBuffer += it.displayedName to { functions.setCurrentLlm(it) }
     }
     val geminiModelDropdownItems by remember { mutableStateOf(modelListItemsBuffer) }
@@ -345,7 +335,6 @@ fun SettingsGrid(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         DropdownButton(
                             buttons = alarmHrsItems.mapNotNull { (text, action) ->
-                                // Сравниваем с .num значения Enum
                                 if (!(state.alarmFrequency.num == 12 && text.toInt() > 12)) text to { action() } else null
                             },
                             density = density,
@@ -381,7 +370,6 @@ fun SettingsGrid(
                     },
                     density = density,
                     cornerShape = Shapes.large,
-                    // Ищем индекс Enum в списке опций
                     initialSelectedIndex = titlesFrequencyItems.indexOfFirst { it.first.contains(state.alarmFrequency.num.toString()) },
                     width = 160.dp
                 )
@@ -627,7 +615,6 @@ fun SettingsGrid(
                                 modifier = Modifier.padding(vertical = verticalArrangement),
                             ) {
                                 CustomSwitch(
-                                    // Теперь state.appTheme - это Enum
                                     checked = state.appTheme == AppTheme.MATERIAL,
                                     onCheckedChange = { functions.setAppTheme(if (it) AppTheme.MATERIAL else AppTheme.DEFAULT) }
                                 )
@@ -675,7 +662,6 @@ fun SettingsGrid(
                                 density = density,
                                 cornerShape = Shapes.large,
                                 initialSelectedIndex = titlesDropdownItems.indexOfFirst {
-                                    // Сравниваем числовые значения (.num)
                                     it.first.contains(state.headersNum.num.toString())
                                 }.coerceAtLeast(0)
                             )
@@ -690,25 +676,9 @@ fun SettingsGrid(
                                 },
                                 density = density,
                                 cornerShape = Shapes.large,
-                                // Теперь titlesPeriod это Enum, а не Int, ищем индекс в Entries
                                 initialSelectedIndex = TitlesPeriod.entries.indexOf(state.titlesPeriod).coerceAtLeast(0)
                             )
                         }
-//                        SettingsItem(
-//                            text = stringResource(R.string.settings_news_update_frequency),
-//                            modifier = Modifier.padding(vertical = verticalArrangement)
-//                        ) {
-//                            DropdownButton(
-//                                buttons = rssUpdateDropdownItems,
-//                                density = density,
-//                                cornerShape = Shapes.large,
-//                                initialSelectedIndex = rssUpdateDropdownItems.indexOfFirst {
-//                                    it.first.contains(
-//                                        state.rssUpdateInterval.toString()
-//                                    )
-//                                }
-//                            )
-//                        }
                         SettingsItem(
                             text = stringResource(R.string.settings_titles_auto_update),
                             modifier = Modifier.padding(vertical = verticalArrangement)
@@ -761,7 +731,6 @@ fun SettingsGrid(
                                     density = density,
                                     cornerShape = Shapes.large,
                                     initialSelectedIndex = geminiModelDropdownItems.indexOfFirst { item ->
-                                        // Сравниваем Enum
                                         state.geminiModels.find { it.displayedName == item.first } == state.currentLlmModel
                                     }.coerceAtLeast(0)
                                 )

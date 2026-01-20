@@ -68,7 +68,7 @@ private val Context.dataStore: DataStore<AppSettings> by dataStore(
                     titlesAlarmTimeMins = sharedPrefs.getInt(MewsRepository.TITLES_ALARM_MINS, currentData.titlesAlarmTimeMins),
                     alarmsAllowed = sharedPrefs.getBoolean(MewsRepository.ALARMS_ALLOWED, currentData.alarmsAllowed),
                     notificationsGranted = sharedPrefs.getBoolean(MewsRepository.NOTIFICATIONS_GRANTED, currentData.notificationsGranted),
-                    currentLanguage = sharedPrefs.getString(MewsRepository.CURRENT_LANGUAGE, null),
+                    currentLanguage = sharedPrefs.getString(MewsRepository.CURRENT_LANGUAGE, null) ?: "english",
 
                     lastError = migratedError
                 )

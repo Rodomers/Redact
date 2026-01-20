@@ -174,14 +174,12 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
 
                 SummarizationErrorType.SUMMARIZE_TOPICS_FAILED ->
                     intListOf(R.string.err_header_summarizing, R.string.err_text_summarizing, R.string.err_btn_summarizing)
+
                 SummarizationErrorType.EMPTY_ANSWER ->
                     intListOf(R.string.err_header_empty_answer, R.string.err_text_empty_answer, R.string.err_btn_empty_answer)
 
                 SummarizationErrorType.NETWORK_TIMEOUT ->
                     intListOf(R.string.err_header_network_timeout, R.string.err_text_network_timeout, R.string.err_btn_network_timeout)
-
-                SummarizationErrorType.CRITICAL_SUMMARIZATION_ERROR ->
-                    intListOf(R.string.err_header_sumCritical, R.string.err_text_sumCritical, R.string.err_btn_sumCritical)
 
                 SummarizationErrorType.JSON_PARSING_FAILED ->
                     intListOf(R.string.err_header_parsing, R.string.err_text_parsing, R.string.err_btn_parsing)
@@ -191,19 +189,30 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
 
                 SummarizationErrorType.FILTER_FAILED ->
                     intListOf(R.string.err_header_filter_failed, R.string.err_text_filter_failed, R.string.err_btn_filter_failed)
+
                 SummarizationErrorType.JOB_CANCELLED ->
                     intListOf(R.string.err_header_job_cancelled, R.string.err_text_job_cancelled, R.string.err_btn_job_cancelled)
+
                 SummarizationErrorType.RATE_LIMIT_EXCEEDED ->
                     intListOf(R.string.err_header_rate_limit_exceeded, R.string.err_text_rate_limit_exceeded, R.string.err_btn_rate_limit_exceeded)
+
                 SummarizationErrorType.NO_NETWORK ->
                     intListOf(R.string.err_header_no_network, R.string.err_text_no_network, R.string.err_btn_no_network)
+
                 SummarizationErrorType.UNPROCESSED_ITEMS ->
                     intListOf(R.string.err_header_unprocessed_items, R.string.err_text_unprocessed_items, R.string.err_btn_unprocessed_items)
 
-                SummarizationErrorType.UNKNOWN_ERROR ->
-                {
-                    println(result.cause)
+                SummarizationErrorType.API_KEY_INVALID ->
+                    intListOf(R.string.err_header_api_key, R.string.err_text_api_key, R.string.err_btn_api_key)
 
+                SummarizationErrorType.QUOTA_EXCEEDED ->
+                    intListOf(R.string.err_header_quota, R.string.err_text_quota, R.string.err_btn_quota)
+
+                SummarizationErrorType.CONTENT_BLOCKED ->
+                    intListOf(R.string.err_header_blocked, R.string.err_text_blocked, R.string.err_btn_blocked)
+
+                SummarizationErrorType.UNKNOWN_ERROR -> {
+                    println(result.cause)
                     intListOf(
                         R.string.err_header_interpreter,
                         R.string.err_text_interpreter,

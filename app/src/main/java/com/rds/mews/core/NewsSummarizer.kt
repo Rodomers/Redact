@@ -2,9 +2,10 @@ package com.rds.mews.core
 
 import android.util.Log
 import com.rds.mews.localcore.Message
-import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.repositories.MewsRepository
+import com.rds.mews.settings_manager.GeminiException
+import com.rds.mews.settings_manager.SummarizationErrorType
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONException
@@ -33,13 +34,25 @@ class LLMClient(
     private val jsonParser = SharedHttpClient.jsonParser
     private val MAX_RETRIES = 3
 
-    suspend fun sendPrompt(prompt: String): String? {
+    // Change: Возвращает String (не null), кидает GeminiException
+    suspend fun sendPrompt(prompt: String): String {
         val requestBodyObj = GeminiRequest(
             contents = listOf(ContentInput(parts = listOf(PartInput(prompt)))),
             generationConfig = GenerationConfig(temperature = 0.5, maxOutputTokens = 8192)
         )
-        val requestBodyString = jsonParser.encodeToString(requestBodyObj)
+        // Change: Обработка ошибки сериализации
+        val requestBodyString = try {
+            jsonParser.encodeToString(requestBodyObj)
+        } catch (e: Exception) {
+            throw GeminiException(
+                SummarizationErrorType.JSON_PARSING_FAILED,
+                "Request serialization failed"
+            )
+        }
+
         var attempt = 0
+        var lastException: Exception? = null
+
         while (attempt <= MAX_RETRIES) {
             try {
                 val response = httpClient.post(
@@ -47,42 +60,81 @@ class LLMClient(
                     body = requestBodyString,
                     headers = mapOf("x-goog-api-key" to apiKey, "Content-Type" to "application/json")
                 )
-                if (response.status == 429) {
-                    attempt++
-                    if (attempt > MAX_RETRIES) return null
-                    val waitTime = 2000L * (2.0.pow(attempt - 1).toLong())
-                    delay(waitTime)
-                    continue
-                }
+
+                // Change: Обработка HTTP кодов
                 if (response.status != 200) {
-                    Log.e("LLMClient", "Error response status: ${response.status}")
-                    return null
+                    when (response.status) {
+                        429 -> {
+                            attempt++
+                            if (attempt > MAX_RETRIES) throw GeminiException(SummarizationErrorType.RATE_LIMIT_EXCEEDED)
+                            val waitTime = 2000L * (2.0.pow(attempt - 1).toLong())
+                            delay(waitTime)
+                            continue
+                        }
+                        400, 403 -> throw GeminiException(SummarizationErrorType.API_KEY_INVALID, "HTTP ${response.status}")
+                        else -> {
+                            Log.e("LLMClient", "Error response status: ${response.status}")
+                            if (attempt >= MAX_RETRIES) throw GeminiException(SummarizationErrorType.UNKNOWN_ERROR, "HTTP ${response.status}")
+                        }
+                    }
                 }
+
                 val responseString = response.body
-                val geminiResponse = jsonParser.decodeFromString<GeminiResponse>(responseString)
+                // Change: Обработка ошибки парсинга ответа
+                val geminiResponse = try {
+                    jsonParser.decodeFromString<GeminiResponse>(responseString)
+                } catch (e: Exception) {
+                    throw GeminiException(SummarizationErrorType.JSON_PARSING_FAILED, "Response parsing failed")
+                }
+
                 if (geminiResponse.error != null) {
                     Log.e("LLMClient", "Gemini API error: ${geminiResponse.error.message}")
-                    if (geminiResponse.error.message?.contains("quota", true) == true) {
-                        attempt++
-                        if (attempt > MAX_RETRIES) return null
-                        delay(5000L)
-                        continue
+                    val msg = geminiResponse.error.message ?: ""
+
+                    // Change: Распознавание Quota и Key ошибок в теле ответа
+                    if (msg.contains("quota", true)) {
+                        throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, msg)
                     }
-                    return null
+                    if (msg.contains("key", true) || geminiResponse.error.code == 400) {
+                        throw GeminiException(SummarizationErrorType.API_KEY_INVALID, msg)
+                    }
+
+                    attempt++
+                    if (attempt > MAX_RETRIES) throw GeminiException(SummarizationErrorType.UNKNOWN_ERROR, msg)
+                    delay(5000L)
+                    continue
                 }
+
+                // Change: Обработка фильтров безопасности
                 if (geminiResponse.promptFeedback?.blockReason != null) {
                     Log.w("LLMClient", "Blocked reason: ${geminiResponse.promptFeedback.blockReason}")
-                    return null
+                    throw GeminiException(SummarizationErrorType.CONTENT_BLOCKED, geminiResponse.promptFeedback.blockReason)
                 }
-                return geminiResponse.candidates?.takeIf { it.isNotEmpty() }
+
+                val resultText = geminiResponse.candidates?.takeIf { it.isNotEmpty() }
                     ?.flatMap { it.content?.parts ?: emptyList() }
                     ?.joinToString("\n") { it.text }
+
+                // Change: Если вернулся null/пустота при 200 OK
+                if (resultText.isNullOrBlank()) {
+                    throw GeminiException(SummarizationErrorType.EMPTY_ANSWER)
+                }
+
+                return resultText
+
+            } catch (e: GeminiException) {
+                throw e // Пробрасываем наши ошибки
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                throw GeminiException(SummarizationErrorType.NETWORK_TIMEOUT)
             } catch (e: Exception) {
                 Log.e("LLMClient", "Exception sending prompt", e)
-                return null
+                lastException = e
+                attempt++
+                if (attempt <= MAX_RETRIES) delay(1000L)
             }
         }
-        return null
+        // Change: Если вышли из цикла по ретраям - значит проблемы с сетью
+        throw GeminiException(SummarizationErrorType.NO_NETWORK, lastException?.message)
     }
 
     override fun close() { httpClient.close() }
@@ -130,10 +182,18 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             val unfinishedTitles = db.getTitles().filter { it.text == "<промежуточный текст>" && it.time.toInt() == 0 }
             if (unfinishedTitles.isEmpty()) {
                 val currentLanguage = MewsRepository.currentLanguage.first() ?: "english"
-                if (!processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics)) {
-                    readyFunc(); return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED)
+                try {
+                    // Change: processNewsInBatches теперь void и кидает исключения
+                    processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics)
+                    MewsRepository.setLastTitlesUpdate(System.currentTimeMillis())
+                } catch (e: GeminiException) {
+                    readyFunc()
+                    return SummarizationResult.Failure(e.errorType, e)
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    readyFunc()
+                    return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED, e)
                 }
-                MewsRepository.setLastTitlesUpdate(System.currentTimeMillis())
             }
 
             val titlesToSummarize = db.getTitles().filter { it.text == "<промежуточный текст>" }
@@ -148,7 +208,9 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             val currentProgress = MewsRepository.updatingProgress.first()
             val remainingProgress = 0.95f - currentProgress
             var successCount = 0
-            var wasEmptyAnswer = false
+
+            // Change: Хранение последней ошибки для возврата
+            var lastError: SummarizationErrorType? = null
 
             coroutineScope {
                 titleBatches.map { batch ->
@@ -167,10 +229,14 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                                 }
                                 if (topicsData.isEmpty()) return@withPermit
 
-                                val response = withTimeout(150000L) { sumTopicsBatch(llm, topicsData, MewsRepository.bannedNewsFlow.value.joinToString("'; '"), currentLanguage) }
-                                if (response.isBlank()) { wasEmptyAnswer = true; return@withPermit }
+                                val response = withTimeout(150000L) {
+                                    // Change: LLMClient может кинуть ошибку, withTimeout может кинуть ошибку
+                                    sumTopicsBatch(llm, topicsData, MewsRepository.bannedNewsFlow.value.joinToString("'; '"), currentLanguage)
+                                }
 
+                                // Change: safeParseJsonArray теперь кидает ошибку
                                 val jsonArray = safeParseJsonArray(response)
+
                                 for (i in 0 until jsonArray.length()) {
                                     try {
                                         val obj = jsonArray.getJSONObject(i)
@@ -190,102 +256,124 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                                         }
                                     } catch (e: Exception) { Log.e(TAG, "Error parsing summary item", e) }
                                 }
-                            } catch (e: Exception) { Log.e(TAG, "Error in batch processing", e) }
+                            } catch (e: GeminiException) {
+                                Log.e(TAG, "Batch failed: ${e.errorType}")
+                                lastError = e.errorType
+                            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                                lastError = SummarizationErrorType.NETWORK_TIMEOUT
+                            } catch (e: Exception) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e
+                                Log.e(TAG, "Error in batch processing", e)
+                                lastError = SummarizationErrorType.UNKNOWN_ERROR
+                            }
                         }
                     }
                 }.awaitAll()
             }
+
             if (successCount == 0 && titlesToSummarize.isNotEmpty()) {
-                return if (wasEmptyAnswer) SummarizationResult.Failure(SummarizationErrorType.EMPTY_ANSWER) else SummarizationResult.Failure(SummarizationErrorType.SUMMARIZE_TOPICS_FAILED)
+                // Change: Возвращаем конкретную ошибку (если была), иначе общую
+                val error = lastError ?: SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
+                readyFunc()
+                return SummarizationResult.Failure(error)
             }
             readyFunc(); return SummarizationResult.Success
         } catch (e: Exception) {
+            // Change: Обработка CancellationException для Job Cancelled
+            if (e is kotlinx.coroutines.CancellationException) {
+                Log.d(TAG, "Summarization cancelled")
+                readyFunc()
+                return SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED)
+            }
             Log.e(TAG, "Global error in summarizeTopics", e)
             readyFunc(); return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
         }
     }
 
-    private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, lang: String, filter: Boolean): Boolean {
+    // Change: Возвращает Unit, кидает GeminiException, не глотает ошибки
+    private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, lang: String, filter: Boolean) {
         val batches = messages.distinctBy { it.id }.chunked(NEWS_BATCH_SIZE)
         val allExtracted = mutableListOf<Topics>()
         val semaphore = Semaphore(1)
-        try {
-            MewsRepository.setUpdatingState("extracting_topics")
-            MewsRepository.setUpdatingProgress((MewsRepository.updatingProgress.first() + 0.1f).coerceIn(0f, 0.2f))
-            coroutineScope {
-                batches.map { batch -> async(Dispatchers.IO) { semaphore.withPermit { extractTopicsFromBatch(batch, maxTopics, lang) } } }
-                    .forEach { it.await()?.let { allExtracted.addAll(it) } }
-            }
-            if (allExtracted.isEmpty()) return false
-            return if (filter) {
-                MewsRepository.setUpdatingState("filtering_topics")
-                MewsRepository.setUpdatingProgress((MewsRepository.updatingProgress.first() + 0.1f).coerceIn(0f, 0.3f))
-                mergeAndFilterTopics(allExtracted, maxTopics, lang)
-            } else {
-                allExtracted
-                    .sortedByDescending { it.weight }
-                    .take(maxTopics).forEach { batch ->
-                        db.addTitle(0, batch.title, "<промежуточный текст>", "<промежуточный текст>", db.dbPack(*(batch.ids?.map { it.toString() } ?: emptyList()).toTypedArray()))
-                    }
-                true
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in processNewsInBatches", e)
-            return false
+
+        MewsRepository.setUpdatingState("extracting_topics")
+        MewsRepository.setUpdatingProgress((MewsRepository.updatingProgress.first() + 0.1f).coerceIn(0f, 0.2f))
+
+        coroutineScope {
+            batches.map { batch -> async(Dispatchers.IO) { semaphore.withPermit { extractTopicsFromBatch(batch, maxTopics, lang) } } }
+                .forEach {
+                    // Change: Если внутри async была ошибка, await() её выбросит
+                    it.await().let { allExtracted.addAll(it) }
+                }
+        }
+
+        if (allExtracted.isEmpty()) {
+            throw GeminiException(SummarizationErrorType.EXTRACT_TOPICS_FAILED, "No topics found")
+        }
+
+        if (filter) {
+            MewsRepository.setUpdatingState("filtering_topics")
+            MewsRepository.setUpdatingProgress((MewsRepository.updatingProgress.first() + 0.1f).coerceIn(0f, 0.3f))
+            mergeAndFilterTopics(allExtracted, maxTopics, lang)
+        } else {
+            allExtracted
+                .sortedByDescending { it.weight }
+                .take(maxTopics).forEach { batch ->
+                    db.addTitle(0, batch.title, "<промежуточный текст>", "<промежуточный текст>", db.dbPack(*(batch.ids?.map { it.toString() } ?: emptyList()).toTypedArray()))
+                }
         }
     }
 
-    private suspend fun extractTopicsFromBatch(batch: List<Message>, max: Int, lang: String): List<Topics>? {
+    // Change: Возвращает List<Topics> (не nullable), кидает исключения
+    private suspend fun extractTopicsFromBatch(batch: List<Message>, max: Int, lang: String): List<Topics> {
         val prompt = "Сгруппируй новости по событиям (макс $max). Верни ТОЛЬКО JSON массив: [{\"title\": \"Заголовок\", \"id\": [101, 105], \"weight\": 8}]. Где weight - важность события от 1 до 10. Язык: $lang. Новости:\n${batch.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }}"
-        return try {
-            val response = withTimeout(60000L) { llm.sendPrompt(prompt) ?: "" }
-            if (response.isBlank()) return null
-            val jsonArray = safeParseJsonArray(response)
-            val topics = mutableListOf<Topics>()
-            for (i in 0 until jsonArray.length()) {
-                try {
-                    val obj = jsonArray.getJSONObject(i)
-                    val idsArr = obj.getJSONArray("id")
-                    val w = obj.optInt("weight", 5)
-                    topics.add(Topics(obj.getString("title"), (0 until idsArr.length()).map { idsArr.getLong(it) }, w))
-                } catch (e: Exception) { continue }
-            }
-            topics
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in extractTopicsFromBatch", e)
-            null
+
+        // Change: withTimeout пропустит GeminiException
+        val response = withTimeout(60000L) { llm.sendPrompt(prompt) }
+
+        // Change: safeParseJsonArray кинет ошибку если JSON битый
+        val jsonArray = safeParseJsonArray(response)
+
+        val topics = mutableListOf<Topics>()
+        for (i in 0 until jsonArray.length()) {
+            try {
+                val obj = jsonArray.getJSONObject(i)
+                val idsArr = obj.getJSONArray("id")
+                val w = obj.optInt("weight", 5)
+                topics.add(Topics(obj.getString("title"), (0 until idsArr.length()).map { idsArr.getLong(it) }, w))
+            } catch (e: Exception) { continue }
         }
+        return topics
     }
 
-    private suspend fun mergeAndFilterTopics(topics: List<Topics>, max: Int, lang: String): Boolean {
+    // Change: Не возвращает Boolean, кидает исключения
+    private suspend fun mergeAndFilterTopics(topics: List<Topics>, max: Int, lang: String) {
         val jsonInput = JSONArray(topics.map { t -> JSONObject().apply { put("title", t.title); put("ids", JSONArray(t.ids)); put("weight", t.weight) } }).toString()
         val prompt = "Объедини дублирующиеся темы (макс $max). Верни JSON: [{\"title\": \"Заголовок\", \"ids\": [1, 2, 3], \"weight\": 9}]. weight - итоговая важность темы от 1 до 10. Язык: $lang. Данные:\n$jsonInput"
-        return try {
-            val response = withTimeout(60000L) { llm.sendPrompt(prompt) ?: "" }
-            if (response.isBlank()) return false
-            val jsonArray = safeParseJsonArray(response)
-            val toAdd = mutableListOf<Topics>()
-            for (i in 0 until jsonArray.length()) {
-                try {
-                    val obj = jsonArray.getJSONObject(i)
-                    val idsArr = obj.getJSONArray("ids")
-                    val w = obj.optInt("weight", 5)
-                    toAdd.add(Topics(obj.getString("title"), (0 until idsArr.length()).map { idsArr.getLong(it) }, w))
-                } catch (e: Exception) {}
-            }
-            if (toAdd.isEmpty()) return false
-            db.titlesTimeKill(0)
-            toAdd.sortedByDescending { it.weight }
-                .take(max)
-                .forEach { t -> db.addTitle(0, t.title, "<промежуточный текст>", "<промежуточный текст>", db.dbPack(*(t.ids?.map { it.toString() } ?: emptyList()).toTypedArray())) }
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in mergeAndFilterTopics", e)
-            false
+
+        val response = withTimeout(60000L) { llm.sendPrompt(prompt) }
+        val jsonArray = safeParseJsonArray(response)
+
+        val toAdd = mutableListOf<Topics>()
+        for (i in 0 until jsonArray.length()) {
+            try {
+                val obj = jsonArray.getJSONObject(i)
+                val idsArr = obj.getJSONArray("ids")
+                val w = obj.optInt("weight", 5)
+                toAdd.add(Topics(obj.getString("title"), (0 until idsArr.length()).map { idsArr.getLong(it) }, w))
+            } catch (e: Exception) {}
         }
+
+        if (toAdd.isEmpty()) throw GeminiException(SummarizationErrorType.FILTER_FAILED)
+
+        db.titlesTimeKill(0)
+        toAdd.sortedByDescending { it.weight }
+            .take(max)
+            .forEach { t -> db.addTitle(0, t.title, "<промежуточный текст>", "<промежуточный текст>", db.dbPack(*(t.ids?.map { it.toString() } ?: emptyList()).toTypedArray())) }
     }
 
     private suspend fun sumTopicsBatch(llm: LLMClient, data: List<Triple<Topics, List<Message>, String>>, banned: String, lang: String): String {
+        // ... prompt logic same ...
         val jsonInput = JSONArray(data.map { (t, _, txt) ->
             JSONObject().apply {
                 put("id", t.ids?.firstOrNull() ?: 0L)
@@ -312,14 +400,25 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         $jsonInput
     """.trimIndent()
 
-        return llm.sendPrompt(prompt) ?: ""
+        // Change: sendPrompt кидает исключение
+        return llm.sendPrompt(prompt)
     }
 
+    // Change: Бросает JSON_PARSING_FAILED вместо возврата пустого массива
     private fun safeParseJsonArray(str: String): JSONArray {
         val clean = str.trim().removePrefix("```json").removeSuffix("```").trim()
-        return try { JSONArray(clean) } catch (e: JSONException) {
+        try {
+            return JSONArray(clean)
+        } catch (e: JSONException) {
             val last = clean.lastIndexOf('}')
-            if (last != -1) try { JSONArray(clean.take(last + 1) + "]") } catch (e2: Exception) { JSONArray() } else JSONArray()
+            if (last != -1) {
+                try {
+                    return JSONArray(clean.take(last + 1) + "]")
+                } catch (e2: Exception) {
+                    throw GeminiException(SummarizationErrorType.JSON_PARSING_FAILED, "Repair failed")
+                }
+            }
+            throw GeminiException(SummarizationErrorType.JSON_PARSING_FAILED, "Invalid structure")
         }
     }
 }

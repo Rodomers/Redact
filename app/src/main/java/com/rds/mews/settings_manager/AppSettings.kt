@@ -17,18 +17,22 @@ import java.io.OutputStream
 enum class SummarizationErrorType {
     EXTRACT_TOPICS_FAILED,
     SUMMARIZE_TOPICS_FAILED,
-    CRITICAL_SUMMARIZATION_ERROR,
     JSON_PARSING_FAILED,
     NETWORK_TIMEOUT,
     EMPTY_ANSWER,
     NO_NEWS_TO_ANALYZE,
+    UNPROCESSED_ITEMS,
     FILTER_FAILED,
     JOB_CANCELLED,
     RATE_LIMIT_EXCEEDED,
     NO_NETWORK,
-    UNPROCESSED_ITEMS,
+    API_KEY_INVALID,
+    QUOTA_EXCEEDED,
+    CONTENT_BLOCKED,
     UNKNOWN_ERROR
 }
+
+class GeminiException(val errorType: SummarizationErrorType, message: String? = null) : Exception(message)
 
 @Serializable
 data class SavedError(
@@ -39,21 +43,21 @@ data class SavedError(
 @Serializable
 data class AppSettings(
     // Theme
-    val darkTheme: DarkTheme = DarkTheme.SYSTEM, // Было String "current_theme"
-    val appTheme: AppTheme = AppTheme.DEFAULT,   // Было Boolean "is_monet"
+    val darkTheme: DarkTheme = DarkTheme.SYSTEM,
+    val appTheme: AppTheme = AppTheme.DEFAULT,
 
     // Content
-    val titlesNum: HeadersNum = HeadersNum.NUM_10, // Было Int
-    val titlesPeriod: TitlesPeriod = TitlesPeriod.ADAPTIVE, // Было Int
+    val titlesNum: HeadersNum = HeadersNum.NUM_10,
+    val titlesPeriod: TitlesPeriod = TitlesPeriod.ADAPTIVE,
 
     // Network & AI
     val userApiKey: String = "",
-    val llmModel: GeminiModelOption = GeminiModelOption.FLASH_LITE_LATEST, // Было String
+    val llmModel: GeminiModelOption = GeminiModelOption.FLASH_LITE_LATEST,
     val enableProxy: Boolean = false,
 
     // Updates
     val titlesAutoUpdate: Boolean = false,
-    val titlesAutoUpdateFrequency: AutoUpdateFrequency = AutoUpdateFrequency.FREQ_24, // Было Int
+    val titlesAutoUpdateFrequency: AutoUpdateFrequency = AutoUpdateFrequency.FREQ_24,
     val titlesAlarmTimeMins: Int = 540,
     val alarmsAllowed: Boolean = false,
     val notificationsGranted: Boolean = false,
@@ -66,7 +70,7 @@ data class AppSettings(
     val innerTimestamps: Boolean = false,
     val showSnippets: Boolean = false,
     val showDates: Boolean = false,
-    val currentLanguage: String? = null,
+    val currentLanguage: String = "english",
 
     // Technical State
     val updatingTitles: Boolean = false,

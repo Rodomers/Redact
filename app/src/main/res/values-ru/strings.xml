@@ -113,7 +113,7 @@
 
     <string name="update">Обновить</string>
     <string name="updating">Обновление…</string>
-    <string name="parsing">Проверка источников…</string>
+    <string name="parsing">Разнюхиваю оригиналы…</string>
     <string name="extracting_topics">Выделяю темы…</string>
     <string name="filtering_topics">Фильтрую базар…</string>
     <string name="summarizing">Резюмирую…</string>
@@ -139,15 +139,15 @@
     <string name="err_header_interpreter">Ошибка интерпретатора</string>
     <string name="err_text_interpreter">Страшно, очень страшно. Мы не знаем, что это такое…\nВы можете скопировать текст ошибки и отправить его разработчику.</string>
     <string name="err_btn_interpreter">Скопировать</string>
-    <string name="err_header_parsing">Ошибка парсинга</string>
-    <string name="err_text_parsing">Произошла ошибка парсинга одного или нескольких каналов.</string>
+    <string name="err_header_parsing">Ошибка данных</string>
+    <string name="err_text_parsing">Не удалось разобрать ответ сервера. Возможно, пришли некорректные данные.</string>
     <string name="err_btn_parsing">Ок</string>
     <string name="err_header_network_timeout">Таймаут</string>
     <string name="err_text_network_timeout">Проблемы с подключением к серверу: истекло время ожидания.
         \nПерезапустить процесс обновления?</string>
     <string name="err_btn_network_timeout">Перезапуск</string>
     <string name="err_header_no_news">Нет новостей</string>
-    <string name="err_text_no_news">Список новостей пуст. Видимо, ничего не произошло.</string>
+    <string name="err_text_no_news">Список новостей пуст. Видимо, ничего не произошло… и слава богу.</string>
     <string name="err_btn_no_news">Ок</string>
     <string name="err_header_filter_failed">Ошибка фильтрации</string>
     <string name="err_text_filter_failed">Во время филтрации тем произошла ошибка.\nПерезапустить?</string>
@@ -156,8 +156,8 @@
     <string name="err_text_job_cancelled">Выполнение фоновой работы было отменено системой. Чтобы этого не происходило, вы можете выдать приложению разрешение на отправку уведомлений.
     \nВыдать разрешение?</string>
     <string name="err_btn_job_cancelled">Выдать</string>
-    <string name="err_header_rate_limit_exceeded">Достигнут лимит</string>
-    <string name="err_text_rate_limit_exceeded">Достигнут лимит запросов к нейросети. Вы можете заменить ключ Gemini или подождать восполнения лимита.</string>
+    <string name="err_header_rate_limit_exceeded">Сбавьте обороты</string>
+    <string name="err_text_rate_limit_exceeded">Слишком много запросов за короткое время. Даже нейросетям иногда нужен отдых.</string>
     <string name="err_btn_rate_limit_exceeded">Ок</string>
     <string name="err_header_no_network">Нет сети</string>
     <string name="err_text_no_network">Нет связи с сервером. Проверьте своё подключение к интернету (и текущий IP).</string>
@@ -165,6 +165,15 @@
     <string name="err_header_unprocessed_items">Скрытые элементы</string>
     <string name="err_text_unprocessed_items">Обнаружены черновые записи. Список неполный.\nОбновить?</string>
     <string name="err_btn_unprocessed_items">Обновить</string>
+    <string name="err_header_api_key">Ошибка ключа</string>
+    <string name="err_text_api_key">Ваш API ключ Gemini недействителен или отозван. Проверьте настройки.</string>
+    <string name="err_btn_api_key">Ок</string>
+    <string name="err_header_quota">В С Ё</string>
+    <string name="err_text_quota">Исчерпан дневной лимит использования Gemini API. Попробуйте завтра или смените ключ.</string>
+    <string name="err_btn_quota">Ок</string>
+    <string name="err_header_blocked">Цензура</string>
+    <string name="err_text_blocked">Нейросеть отказалась обрабатывать эту тему из соображений безопасности.</string>
+    <string name="err_btn_blocked">Ясно</string>
 
     <string name="date_01">%d января</string>
     <string name="date_02">%d февраля</string>

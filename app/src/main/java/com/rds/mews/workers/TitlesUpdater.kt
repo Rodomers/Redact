@@ -29,9 +29,9 @@ class TitlesUpdater(private val context: Context) {
         val llmApiKey = MewsRepository.userApiKey.first()
         val titlesUpdatePeriodSetting = MewsRepository.titlesPeriod.first().num
 
-        val titlesPeriod = if (!isOneTime || titlesUpdatePeriodSetting == 0) {
+        val titlesPeriod = if (!isOneTime || titlesUpdatePeriodSetting == null) {
             updateDeltaMills / 3600000L + 1
-        } else titlesUpdatePeriodSetting ?: 0L
+        } else titlesUpdatePeriodSetting
 
         val titlesNum = MewsRepository.titlesNum.first().num
         val filterTopics = MewsRepository.filterTopics.first()
@@ -40,7 +40,7 @@ class TitlesUpdater(private val context: Context) {
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
         val summarizer = NewsSummarizer(db, llm)
 
-        val startTitlesNum = db.getTitles().filter { it.text != "<промежуточный текст>" }.size
+        val startTitles = db.getTitles().filter { it.text != "<промежуточный текст>" }.map { it.id }
 
         MewsRepository.setUpdatingTitles(true)
         MewsRepository.setUpdatingState("updating")
@@ -53,7 +53,9 @@ class TitlesUpdater(private val context: Context) {
             MewsRepository.setUpdatingProgress(0.1f)
             MewsRepository.setUpdatingState("parsing")
 
-            fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600)
+            if (System.currentTimeMillis() - MewsRepository.lastRssUpdate.first() > 900000L) fetcher.fetchAndStoreAll(
+                messAliveTime = titlesPeriod.toLong() * 3600
+            )
             MewsRepository.setLastRssUpdate(System.currentTimeMillis())
 
             currentCoroutineContext().ensureActive()
@@ -73,8 +75,8 @@ class TitlesUpdater(private val context: Context) {
                     iter++
                 }
 
-                val currentTitlesNum = db.getTitles().filter { it.text != "<промежуточный текст>" }.size
-                if (startTitlesNum != currentTitlesNum && currentTitlesNum != 0) {
+                val currentTitles = db.getTitles().filter { it.text != "<промежуточный текст>" }.map { it.id }
+                if (currentTitles.sum() != startTitles.sum() && currentTitles.isNotEmpty()) {
                     MewsRepository.triggerTitlesRefresh()
                 }
 

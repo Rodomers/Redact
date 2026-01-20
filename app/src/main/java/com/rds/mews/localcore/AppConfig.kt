@@ -99,7 +99,7 @@ enum class GeminiModelOption(val displayedName: String, val apiModelName: String
     PRO_2_5("2.5 Pro", "gemini-2.5-pro"),
     FLASH_3_PREVIEW("3.0 Flash Preview", "gemini-3-flash-preview"),
     PRO_3_PREVIEW("3.0 Pro Preview", "gemini-3-pro-preview"),
-    FLASH_LITE_LATEST("Flash Lite Latest", "gemini-flash-lite_latest"),
+    FLASH_LITE_LATEST("Flash Lite Latest", "gemini-flash-lite-latest"),
     FLASH_LATEST("Flash Latest", "gemini-flash-latest"),
     PRO_LATEST("Pro Latest", "gemini-pro-latest");
 
