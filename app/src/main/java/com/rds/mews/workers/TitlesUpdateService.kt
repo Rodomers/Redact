@@ -10,15 +10,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import kotlinx.coroutines.currentCoroutineContext
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.rds.mews.core.DbHelper
-import com.rds.mews.core.LLMClient
 import com.rds.mews.MainActivity
-import com.rds.mews.core.NewsSummarizer
 import com.rds.mews.R
-import com.rds.mews.core.RssFetcher
 import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.isNotificationPermissionGranted
@@ -44,142 +39,56 @@ class TitlesUpdateService : Service() {
         startForeground(NOTIFICATION_ID, createNotification())
 
         scope.launch {
-            try {
-                doWork(oneTimeUpdate)
-            } catch (e: Exception) {
-                println("TitlesUpdateService: Глобальная ошибка в корутине: ${e.message}")
-                e.printStackTrace()
-            } finally {
+            if (!isNetworkAvailable(applicationContext) || !MewsRepository.isInitialized) {
+                AlarmScheduler.schedule(applicationContext, System.currentTimeMillis() + 300000L)
                 stopSelf(startId)
+                return@launch
             }
+
+            if (!oneTimeUpdate) AlarmScheduler.cancel(applicationContext)
+
+            val updater = TitlesUpdater(applicationContext)
+            val result = try {
+                updater.performUpdate(oneTimeUpdate)
+            } catch (e: CancellationException) {
+                SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED)
+            }
+
+            if (result is SummarizationResult.Success && !oneTimeUpdate) {
+                sendSuccessNotification()
+            }
+
+            if (!oneTimeUpdate) {
+                scheduleNextUpdate()
+            }
+
+            stopSelf(startId)
         }
 
         return START_NOT_STICKY
     }
 
-    private suspend fun doWork(oneTimeUpdate: Boolean) {
-        val applicationContext = this.applicationContext
-        val db = DbHelper(applicationContext)
+    private suspend fun scheduleNextUpdate() {
+        val autoUpdateEnabled = MewsRepository.titlesAlarmUpdate.first()
+        if (autoUpdateEnabled) {
+            val titlesUpdatePeriodHours = MewsRepository.titlesAutoUpdateFrequency.first().num
+            val titlesUpdateTimeMins = MewsRepository.titlesAlarmTimeMins.first()
 
-        if (!isNetworkAvailable(applicationContext) || !MewsRepository.isInitialized) {
-            AlarmScheduler.schedule(applicationContext, System.currentTimeMillis() + 300000L)
-            println("TitlesUpdateService: задача перепланирована на ${System.currentTimeMillis() + 300000L} unix")
-            return
-        }
-
-        if (!oneTimeUpdate) AlarmScheduler.cancel(applicationContext)
-
-        val updateDeltaMills = System.currentTimeMillis() - MewsRepository.lastTitlesUpdate.first()
-        val enableProxy = MewsRepository.proxyEnabled.first()
-
-        val currentLLM = MewsRepository.llmModel.first().apiModelName
-        val llmApiKey = MewsRepository.userApiKey.first()
-        val rssLastUpdate = MewsRepository.lastRssUpdate.first()
-        val rssUpdateInterval = MewsRepository.rssUpdateInterval.first()
-        val titlesUpdatePeriod = MewsRepository.titlesPeriod.first().num
-        val titlesPeriod = if (!oneTimeUpdate || titlesUpdatePeriod == 0) {
-            updateDeltaMills / 3600000L + 1
-        } else titlesUpdatePeriod ?: 0L
-        val titlesNum = MewsRepository.titlesNum.first().num
-        val filterTopics = MewsRepository.filterTopics.first()
-
-        val fetcher = RssFetcher(db)
-        val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
-        val summarizer = NewsSummarizer(db, llm)
-
-        val startTitlesNum = db.getTitles().filter { it.text != "<промежуточный текст>" }.size
-
-        MewsRepository.setUpdatingTitles(true)
-        MewsRepository.setUpdatingState("updating")
-
-        try {
-            if (!currentCoroutineContext().isActive) return
-
-            // надо вызывать ошибку парсинга, но не прекращать обновление
-
-            MewsRepository.setUpdatingProgress(0.1f)
-
-            MewsRepository.setUpdatingState("parsing")
-            val result = fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600).errors.isEmpty()
-            MewsRepository.setLastRssUpdate(System.currentTimeMillis())
-
-            if (!currentCoroutineContext().isActive) return
-
-            if ((oneTimeUpdate || updateDeltaMills >= 7200000L)) {
-//                val titles = db.getTitles()
-//                if (titles.none { it.text.contains("<промежуточный текст>") || it.time == 0L || it.sources.contains("<промежуточный текст>") }) {
-//                    db.titlesTimeKill(0)
-//                }
-                var iter = 0
-                var res: SummarizationResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
-                while (MewsRepository.updatingTitles.first() && iter <= 3 && currentCoroutineContext().isActive) {
-                    res = summarizer.summarizeTopics(
-                        maxTopics = titlesNum,
-                        messageSeconds = titlesPeriod.toLong() * 3600,
-                        readyFunc = {
-                            MewsRepository.setUpdatingTitles(false)
-                        },
-                        filterTopics = filterTopics
-                    )
-                    if (res is SummarizationResult.Success) break
-                    iter++
-                }
-
-                val currentTitlesNum = db.getTitles().filter { it.text != "<промежуточный текст>" }.size
-                if (startTitlesNum != currentTitlesNum && currentTitlesNum != 0) {
-                    if (!MewsRepository.isInitialized) {
-                        val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-                        MewsRepository.initialize(applicationContext, appScope)
-                    }
-                    MewsRepository.triggerTitlesRefresh()
-                }
-
-                when (res) {
-                    is SummarizationResult.Success -> {
-                        MewsRepository.clearError()
-
-                        if (!oneTimeUpdate) sendSuccessNotification()
-                    }
-                    is SummarizationResult.Failure -> MewsRepository.saveLastError(res)
-                }
+            val nextRunTime = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, titlesUpdateTimeMins / 60)
+                set(Calendar.MINUTE, titlesUpdateTimeMins % 60)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
             }
 
-            val autoUpdateEnabled = MewsRepository.titlesAlarmUpdate.first()
-            if (autoUpdateEnabled && !oneTimeUpdate) {
-                val titlesUpdatePeriodHours = MewsRepository.titlesAutoUpdateFrequency.first().num
-                val titlesUpdateTimeMins = MewsRepository.titlesAlarmTimeMins.first()
-
-                val nextRunTime = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, titlesUpdateTimeMins / 60)
-                    set(Calendar.MINUTE, titlesUpdateTimeMins % 60)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-
-                while (nextRunTime.before(Calendar.getInstance())) {
-                    nextRunTime.add(Calendar.HOUR_OF_DAY, titlesUpdatePeriodHours)
-                }
-
-                val nextRunTimeMillis = nextRunTime.timeInMillis
-                AlarmScheduler.schedule(applicationContext, nextRunTimeMillis)
-
-                println("TitlesUpdateService: Следующее обновление запланировано на ${Date(nextRunTimeMillis)}")
+            while (nextRunTime.before(Calendar.getInstance())) {
+                nextRunTime.add(Calendar.HOUR_OF_DAY, titlesUpdatePeriodHours)
             }
-        } catch (e: CancellationException) {
-            println("TitlesUpdateService: Корутина отменена.")
-        } catch (e: Exception) {
-            println("TitlesUpdateService: Поймана ошибка. Тип: ${e.javaClass.simpleName}, Сообщение: ${e.message}")
-            e.printStackTrace()
-            val errorResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
-            MewsRepository.saveLastError(errorResult)
-        } finally {
-            println("TitlesUpdateService: Вход в блок FINALLY.")
-            MewsRepository.setUpdatingProgress(1f)
-            MewsRepository.setUpdatingTitles(false)
-            delay(500L)
-            MewsRepository.setUpdatingState("off")
-            MewsRepository.setUpdatingProgress(0f)
-            println("TitlesUpdateService: Состояние обновлено на 'off'.")
+
+            val nextRunTimeMillis = nextRunTime.timeInMillis
+            AlarmScheduler.schedule(applicationContext, nextRunTimeMillis)
+
+            println("TitlesUpdateService: Следующее обновление запланировано на ${Date(nextRunTimeMillis)}")
         }
     }
 
