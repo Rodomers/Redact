@@ -95,18 +95,20 @@ fun MainScreen(mainActivity: MainActivity) {
     val titlesViewModel: TitlesViewModel = viewModel(factory = TitlesViewModelFactory(LocalContext.current.applicationContext as Application))
     val sourcesViewModel: SourcesViewModel = viewModel(factory = SourcesViewModelFactory())
 
-    val currentTheme by settingsViewModel.currentTheme.collectAsStateWithLifecycle()
-    val isMonetColors by settingsViewModel.isMonetColors.collectAsStateWithLifecycle()
+    val currentTheme by settingsViewModel.darkTheme.collectAsStateWithLifecycle()
+    val appTheme by settingsViewModel.appTheme.collectAsStateWithLifecycle()
 
     val currentLangResource = stringResource(R.string.current_language)
     LaunchedEffect(currentLangResource) {
         MewsRepository.setCurrentLanguage(currentLangResource)
     }
 
-    MewsTheme(settingsTheme = currentTheme, monetTheme = isMonetColors) {
+    MewsTheme(settingsTheme = currentTheme, appTheme = appTheme) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
         val scope = rememberCoroutineScope()
+
+        MewsRepository.setLastTitlesUpdate(1792388640000)
 
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()

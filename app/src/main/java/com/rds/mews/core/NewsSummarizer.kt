@@ -23,12 +23,12 @@ import kotlinx.coroutines.flow.first
 
 class LLMClient(
     val apiKey: String = "",
-    val MODEL: String = MewsRepository.defaultModel.key,
+    val MODEL: String = MewsRepository.defaultModel.apiModelName,
     private val URL_TEMPLATE: String = "https://generativelanguage.googleapis.com/v1beta/models/%MODEL%:generateContent",
     enableProxy: Boolean = false
 ) : Closeable {
 
-    private val finalUrl = URL_TEMPLATE.replace("%MODEL%", MODEL.ifBlank { MewsRepository.defaultModel.key })
+    private val finalUrl = URL_TEMPLATE.replace("%MODEL%", MODEL.ifBlank { MewsRepository.defaultModel.apiModelName })
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.PROXY_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
     private val jsonParser = SharedHttpClient.jsonParser
     private val MAX_RETRIES = 3

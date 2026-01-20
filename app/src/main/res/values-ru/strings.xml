@@ -33,6 +33,7 @@
     <string name="settings_system_theme">Системная</string>
     <string name="settings_light_theme">Светлая</string>
     <string name="settings_dark_theme">Тёмная</string>
+    <string name="settings_theme_classic">Классическая</string>
     <string name="settings_monet_colors">Адаптивные цвета</string>
     <string name="settings_color_scheme">Тема оформления</string>
     <string name="settings_compact_tab">Компактная навигация</string>

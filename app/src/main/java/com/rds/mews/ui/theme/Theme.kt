@@ -20,6 +20,8 @@ import android.os.Build
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.ui.platform.LocalContext
+import com.rds.mews.localcore.AppTheme
+import com.rds.mews.localcore.DarkTheme
 
 private val LightColorScheme = lightColorScheme(
     secondaryContainer = Color.LightGray,
@@ -61,18 +63,18 @@ val typography = Typography(
 @Composable
 fun MewsTheme(
     systemDarkTheme: Boolean = isSystemInDarkTheme(),
-    settingsTheme: String,
-    monetTheme: Boolean,
+    settingsTheme: DarkTheme,
+    appTheme: AppTheme,
     // Динамические цвета доступны на Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val turnDynamicColor = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) && monetTheme
+    val turnDynamicColor = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) && appTheme == AppTheme.MATERIAL
     val context = LocalContext.current
 
     val colorScheme = when (settingsTheme) {
-        "light" -> if (turnDynamicColor) dynamicLightColorScheme(context) else LightColorScheme
-        "dark" -> if (turnDynamicColor) dynamicDarkColorScheme(context) else DarkColorScheme
+        DarkTheme.LIGHT -> if (turnDynamicColor) dynamicLightColorScheme(context) else LightColorScheme
+        DarkTheme.DARK -> if (turnDynamicColor) dynamicDarkColorScheme(context) else DarkColorScheme
         else -> when {
             turnDynamicColor -> if (systemDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             else -> if (systemDarkTheme) DarkColorScheme else LightColorScheme
@@ -103,8 +105,8 @@ fun MewsTheme(
             // Устанавливаем цвет иконок в строке состояния
             val insetsController = WindowCompat.getInsetsController(window, view)
             when (settingsTheme) {
-                "dark" -> insetsController.isAppearanceLightStatusBars = false
-                "light" -> insetsController.isAppearanceLightStatusBars = true
+                DarkTheme.DARK -> insetsController.isAppearanceLightStatusBars = false
+                DarkTheme.LIGHT -> insetsController.isAppearanceLightStatusBars = true
                 else -> insetsController.isAppearanceLightStatusBars = !systemDarkTheme
             }
         }

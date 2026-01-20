@@ -5,11 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.rds.mews.MainActivity
-import com.rds.mews.localcore.SettingsGroupState
+import com.rds.mews.localcore.* // Импортируем все наши Enums
 import com.rds.mews.repositories.MewsRepository
-import com.rds.mews.localcore.handleNotificationsPermissionRequest
-import com.rds.mews.localcore.isNotificationPermissionGranted
-import com.rds.mews.localcore.isScheduleExactAlarm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +19,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
+class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     private val _scrollEvents = Channel<SettingsScrollEvent>(Channel.CONFLATED)
     val scrollEvents = _scrollEvents.receiveAsFlow()
 
@@ -50,6 +47,77 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     private val _isApiKeyCorrect = MutableStateFlow(false)
     val isApiKeyCorrect = _isApiKeyCorrect
 
+    val darkThemes: List<DarkTheme> = repository.darkThemeList
+    val appThemes: List<AppTheme> = repository.appThemeList
+    val headersNumList: List<HeadersNum> = repository.headersNumList
+    val titlesPeriods: List<TitlesPeriod> = repository.titlesPeriodList
+    val autoUpdateFrequencies: List<AutoUpdateFrequency> = repository.autoUpdateFrequencyList
+    val geminiModels: List<GeminiModelOption> = repository.geminiModelsList
+    val defaultGeminiModel: GeminiModelOption = repository.defaultModel
+
+    val compactTabBar: StateFlow<Boolean> = repository.compactTabBar
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val appTheme: StateFlow<AppTheme> = repository.appTheme
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppTheme.DEFAULT)
+
+    val darkTheme: StateFlow<DarkTheme> = repository.darkTheme
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DarkTheme.SYSTEM)
+
+    val showDates: StateFlow<Boolean> = repository.showDates
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val titlesNum: StateFlow<HeadersNum> = repository.titlesNum
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HeadersNum.NUM_10)
+
+    val titlesPeriod: StateFlow<TitlesPeriod> = repository.titlesPeriod
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TitlesPeriod.HRS_24)
+
+    val rssUpdateInterval: StateFlow<Int> = repository.rssUpdateInterval
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 15)
+
+    val filterTopics: StateFlow<Boolean> = repository.filterTopics
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val currentLlm: StateFlow<GeminiModelOption> = repository.llmModel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultGeminiModel)
+
+    val userApi: StateFlow<String> = repository.userApiKey
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    val innerTime: StateFlow<Boolean> = repository.innerTimestamps
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val showSnippets: StateFlow<Boolean> = repository.showSnippets
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val titlesAlarmUpdate: StateFlow<Boolean> = repository.titlesAlarmUpdate
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val titlesAlarmMins: StateFlow<Int> = repository.titlesAlarmTimeMins
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 540)
+
+    val titlesUpdateFrequency: StateFlow<AutoUpdateFrequency> = repository.titlesAutoUpdateFrequency
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AutoUpdateFrequency.FREQ_24)
+
+    val exactAlarmsAllowed: StateFlow<Boolean> = repository.exactAlarmsAllowed
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val proxyEnabled: StateFlow<Boolean> = repository.proxyEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    private val _defaultApiKey = repository.DEFAULT_GEMINI_API_KEY
+
+    val isKeyDefault: StateFlow<Boolean> = userApi.map { apiKey ->
+        apiKey == _defaultApiKey
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = isApiKeyDefault(repository.userApiKey.value)
+    )
+
+    val bannedNews = repository.bannedNewsFlow
+
     fun setGeminiKeyBuffer(value: String) {
         val default = value == _defaultApiKey
 
@@ -74,43 +142,6 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
         _groupStates.value = current
     }
 
-    val geminiModels = repository.geminiModelsList
-    val defaultGeminiModel = repository.defaultModel
-
-    val compactTabBar: StateFlow<Boolean> = repository.compactTabBar.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val isMonetColors: StateFlow<Boolean> = repository.monetColors.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val currentTheme: StateFlow<String> = repository.currentTheme.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "system")
-    val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    val titlesNum: StateFlow<Int> = repository.titlesNum.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 20)
-    val titlesPeriod: StateFlow<Int> = repository.titlesPeriod.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 24)
-    val rssUpdateInterval: StateFlow<Int> = repository.rssUpdateInterval.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 15)
-    val filterTopics: StateFlow<Boolean> = repository.filterTopics.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val currentLlm: StateFlow<String> = repository.currentLlmModel.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "gemini-2.0-flash")
-    val userApi: StateFlow<String> = repository.userApiKey.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
-    val innerTime: StateFlow<Boolean> = repository.innerTimestamps.stateIn(viewModelScope,
-        SharingStarted.WhileSubscribed(5000), false)
-    val showSnippets: StateFlow<Boolean> = repository.showSnippets.stateIn(viewModelScope,
-        SharingStarted.WhileSubscribed(5000), false)
-    val titlesAlarmUpdate: StateFlow<Boolean> = repository.titlesAlarmUpdate.stateIn(viewModelScope,
-        SharingStarted.WhileSubscribed(5000), false)
-    val titlesAlarmMins: StateFlow<Int> = repository.titlesAlarmTimeMins.stateIn(viewModelScope,
-        SharingStarted.WhileSubscribed(5000), 540)
-    val titlesUpdateFrequency: StateFlow<Int> = repository.titlesAutoUpdateFrequency.stateIn(viewModelScope,
-        SharingStarted.WhileSubscribed(5000), 24)
-    val exactAlarmsAllowed: StateFlow<Boolean> = repository.exactAlarmsAllowed.stateIn(viewModelScope,
-        SharingStarted.WhileSubscribed(5000), false)
-    val proxyEnabled: StateFlow<Boolean> = repository.proxyEnabled.stateIn(viewModelScope,
-        SharingStarted.WhileSubscribed(5000), false)
-    private val _defaultApiKey = repository.DEFAULT_GEMINI_API_KEY
-    val isKeyDefault: StateFlow<Boolean> = userApi.map { apiKey ->
-        apiKey == _defaultApiKey
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = isApiKeyDefault(repository.userApiKey.value)
-    )
-    val bannedNews = repository.bannedNewsFlow
-
     fun setAutoupdateScreen(value: Boolean) {
         _autoUpdateScreenOpened.value = value
     }
@@ -127,30 +158,42 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
     }
 
     fun setCompactTab(value: Boolean) = viewModelScope.launch { repository.setCompactTab(value) }
-    fun setMonetColors(value: Boolean) = viewModelScope.launch { repository.setMonetColors(value) }
-    fun setCurrentTheme(value: String) = viewModelScope.launch { repository.setCurrentTheme(value) }
+
+    fun setAppTheme(value: AppTheme) = viewModelScope.launch { repository.setAppTheme(value) }
+
+    fun setDarkTheme(value: DarkTheme) = viewModelScope.launch { repository.setDarkTheme(value) }
+
     fun setShowDates(value: Boolean) = viewModelScope.launch { repository.setShowDates(value) }
-    fun setTitlesNum(value: Int) = viewModelScope.launch { repository.setTitlesNum(value) }
-    fun setTitlesPeriod(value: Int) = viewModelScope.launch { repository.setTitlesPeriod(value) }
+
+    fun setTitlesNum(value: HeadersNum) = viewModelScope.launch { repository.setTitlesNum(value) }
+
+    fun setTitlesPeriod(value: TitlesPeriod) = viewModelScope.launch { repository.setTitlesPeriod(value) }
+
     fun setRssUpdateInterval(context: Context, value: Int) {
         viewModelScope.launch {
-            repository.setRssUpdateInterval(context,value)
+            repository.setRssUpdateInterval(context, value)
         }
     }
+
     fun setFilterTopics(value: Boolean) = viewModelScope.launch { repository.setFilterTopics(value) }
-    fun setCurrentLlm(value: String) = viewModelScope.launch { repository.setCurrentLlmModel(value) }
+
+    fun setCurrentLlm(value: GeminiModelOption) = viewModelScope.launch { repository.setLlmModel(value) }
+
     fun setUserGeminiApi(value: String) = viewModelScope.launch {
         repository.setUserApiKey(value)
     }
+
     fun resetApiKey() = viewModelScope.launch {
         repository.setUserApiKey(_defaultApiKey)
-        repository.setCurrentLlmModel(defaultGeminiModel.key)
-        repository.setTitlesNum(titlesNum.value.coerceIn(0, 20))
+        repository.setLlmModel(defaultGeminiModel)
+        if (repository.titlesNum.value.num > 20) repository.setTitlesNum(HeadersNum.NUM_10)
     }
+
     fun setInnerTime(value: Boolean) = viewModelScope.launch { repository.setInnerTimestamps(value) }
     fun setShowSnippets(value: Boolean) = viewModelScope.launch { repository.setShowSnippets(value) }
     fun setBannedNews(value: Set<String>) = viewModelScope.launch { repository.setBannedNews(value) }
     fun delBannedNews(value: String) = viewModelScope.launch { repository.delBannedNew(value) }
+
     fun setTitlesAlarmUpdate(
         context: Context,
         onShowNotificationsSheet: () -> Unit,
@@ -165,21 +208,24 @@ class SettingsViewModel(private val repository: MewsRepository): ViewModel() {
                     onShouldShowDialog = onShowNotificationsSheet
                 )
             }
-            !isScheduleExactAlarm(context) -> onShowAlarmsSheet
+            !isScheduleExactAlarm(context) -> onShowAlarmsSheet()
             else -> {
                 repository.setTitlesAlarmUpdate(value)
                 repository.planTitlesUpdate(context)
             }
         }
     }
-    fun setTitlesAlarmMins (context: Context, value: Int) = viewModelScope.launch {
+
+    fun setTitlesAlarmMins(context: Context, value: Int) = viewModelScope.launch {
         repository.setTitlesAlarmMins(value)
         repository.planTitlesUpdate(context)
     }
-    fun setTitlesUpdFrequency (context: Context, value: Int) = viewModelScope.launch {
+
+    fun setTitlesUpdFrequency(context: Context, value: AutoUpdateFrequency) = viewModelScope.launch {
         repository.setTitlesAutoUpdateFrequency(value)
         repository.planTitlesUpdate(context)
     }
+
     fun setAlarmsAllowed(value: Boolean) = viewModelScope.launch { repository.setExactAlarmsAllowed(value) }
     fun planTitlesAutoUpdate(context: Context) = viewModelScope.launch { repository.planTitlesUpdate(context) }
     fun setProxyEnabled(value: Boolean) = viewModelScope.launch { repository.setProxyEnabled(value) }

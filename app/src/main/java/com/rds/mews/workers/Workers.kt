@@ -32,7 +32,7 @@ class RssUpdateWorker(
         val enableProxy = MewsRepository.proxyEnabled.first()
         val fetcher = RssFetcher(db, enableProxy)
 
-        val titlesPeriod = MewsRepository.titlesPeriod.first()
+        val titlesPeriod = MewsRepository.titlesPeriod.first().num ?: 0L
 
         return try {
             withContext(Dispatchers.IO) {
@@ -59,19 +59,19 @@ class TitlesUpdateWorker(
         }
         val db = DbHelper(applicationContext)
 
-        val currentLLM = MewsRepository.currentLlmModel.first()
+        val currentLLM = MewsRepository.llmModel.first().apiModelName
         val llmApiKey = MewsRepository.userApiKey.first()
         val rssLastUpdate = MewsRepository.lastRssUpdate.first()
         val rssUpdateInterval = MewsRepository.rssUpdateInterval.first()
-        val titlesPeriod = MewsRepository.titlesPeriod.first()
-        val titlesNum = MewsRepository.titlesNum.first()
+        val titlesPeriod = MewsRepository.titlesPeriod.first().num
+        val titlesNum = MewsRepository.titlesNum.first().num
         val filterTopics = MewsRepository.filterTopics.first()
         val enableProxy = MewsRepository.proxyEnabled.first()
 
         val updateDeltaMills = System.currentTimeMillis() - MewsRepository.lastTitlesUpdate.first()
         val titlesUpdatePeriod = if (titlesPeriod == 0) {
             updateDeltaMills / 3600000L + 1
-        } else titlesPeriod
+        } else titlesPeriod ?: 0L
 
         val fetcher = RssFetcher(db)
         val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)

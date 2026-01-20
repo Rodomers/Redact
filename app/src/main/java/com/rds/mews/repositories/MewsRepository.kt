@@ -29,7 +29,7 @@ object MewsRepository {
     private lateinit var settingsManager: SettingsManager
     private lateinit var externalScope: CoroutineScope
 
-    // Flows
+    // --- StateFlows (Status & Technical) ---
     lateinit var lastError: StateFlow<SummarizationResult.Failure?>
     lateinit var lastTitlesUpdate: StateFlow<Long>
     lateinit var updatingTitles: StateFlow<Boolean>
@@ -37,13 +37,16 @@ object MewsRepository {
     lateinit var updatingProgress: StateFlow<Float>
     lateinit var bannedNewsFlow: StateFlow<Set<String>>
 
-    // UI Flows backed by DataStore
-    lateinit var currentTheme: StateFlow<String>
-    lateinit var monetColors: StateFlow<Boolean>
-    lateinit var titlesNum: StateFlow<Int>
-    lateinit var titlesPeriod: StateFlow<Int>
+    // --- StateFlows (User Settings / Enums) ---
+    lateinit var darkTheme: StateFlow<DarkTheme>           // Было String currentTheme
+    lateinit var appTheme: StateFlow<AppTheme>             // Было Boolean monetColors
+    lateinit var titlesNum: StateFlow<HeadersNum>          // Было Int
+    lateinit var titlesPeriod: StateFlow<TitlesPeriod>     // Было Int
+    lateinit var llmModel: StateFlow<GeminiModelOption>    // Было String currentLlmModel
+    lateinit var titlesAutoUpdateFrequency: StateFlow<AutoUpdateFrequency> // Было Int
+
+    // --- StateFlows (User Settings / Primitives) ---
     lateinit var userApiKey: StateFlow<String>
-    lateinit var currentLlmModel: StateFlow<String>
     lateinit var showDates: StateFlow<Boolean>
     lateinit var rssUpdateInterval: StateFlow<Int>
     lateinit var lastRssUpdate: StateFlow<Long>
@@ -54,7 +57,6 @@ object MewsRepository {
     lateinit var showSnippets: StateFlow<Boolean>
     lateinit var titlesAlarmUpdate: StateFlow<Boolean>
     lateinit var titlesAlarmTimeMins: StateFlow<Int>
-    lateinit var titlesAutoUpdateFrequency: StateFlow<Int>
     lateinit var exactAlarmsAllowed: StateFlow<Boolean>
     lateinit var notificationsGranted: StateFlow<Boolean>
     lateinit var currentLanguage: StateFlow<String?>
@@ -72,7 +74,7 @@ object MewsRepository {
     var PROXY_ADDRESS: String = ""
     var HUB_ADDRESS: String = ""
 
-    // Constants (Keys kept for legacy refs if needed, but mostly unused now)
+    // Legacy Keys (kept for compatibility with old code refs, if any)
     const val CURRENT_THEME = "current_theme"
     const val IS_MONET = "is_monet"
     const val TITLES_NUM = "titles_num"
@@ -113,29 +115,38 @@ object MewsRepository {
 
         setContext(appContext)
 
+        // Подключаемся к Flow настроек
         val settingsFlow = settingsManager.settings
 
+        // Хелпер для создания StateFlow
         fun <T> createSettingFlow(mapBlock: (AppSettings) -> T, default: T): StateFlow<T> {
             return settingsFlow.map(mapBlock)
                 .stateIn(externalScope, SharingStarted.Eagerly, default)
         }
 
+        // --- MAPPING (AppSettings -> Repo StateFlows) ---
+
+        // Status
         updatingTitles = createSettingFlow({ it.updatingTitles }, false)
         updatingState = createSettingFlow({ it.updatingState }, "off")
         updatingProgress = createSettingFlow({ it.updatingProgress }, 0f)
         lastTitlesUpdate = createSettingFlow({ it.lastTitlesUpdate }, 0L)
         bannedNewsFlow = createSettingFlow({ it.bannedNews }, emptySet())
 
-        currentTheme = createSettingFlow({ it.currentTheme }, "system")
-        monetColors = createSettingFlow({ it.isMonet }, false)
-        titlesNum = createSettingFlow({ it.titlesNum }, 10)
-        titlesPeriod = createSettingFlow({ it.titlesPeriod }, 24)
+        // Enums mapping
+        darkTheme = createSettingFlow({ it.darkTheme }, DarkTheme.SYSTEM)
+        appTheme = createSettingFlow({ it.appTheme }, AppTheme.DEFAULT)
+        titlesNum = createSettingFlow({ it.titlesNum }, HeadersNum.NUM_10)
+        titlesPeriod = createSettingFlow({ it.titlesPeriod }, TitlesPeriod.HRS_24)
+        titlesAutoUpdateFrequency = createSettingFlow({ it.titlesAutoUpdateFrequency }, AutoUpdateFrequency.FREQ_24)
+        llmModel = createSettingFlow({ it.llmModel }, GeminiModelOption.FLASH_LATEST)
 
+        // API Key Logic
         userApiKey = createSettingFlow({
             it.userApiKey.ifBlank { DEFAULT_GEMINI_API_KEY }
         }, DEFAULT_GEMINI_API_KEY)
 
-        currentLlmModel = createSettingFlow({ it.currentLlmModel }, "gemini-2.0-flash")
+        // Primitives
         showDates = createSettingFlow({ it.showDates }, false)
         rssUpdateInterval = createSettingFlow({ it.rssUpdateInterval }, 30)
         lastRssUpdate = createSettingFlow({ it.lastRssUpdate }, 0L)
@@ -144,16 +155,15 @@ object MewsRepository {
         filterTopics = createSettingFlow({ it.filterTopics }, false)
         innerTimestamps = createSettingFlow({ it.innerTimestamps }, false)
         showSnippets = createSettingFlow({ it.showSnippets }, false)
-
         titlesAlarmUpdate = createSettingFlow({ it.titlesAutoUpdate }, false)
         titlesAlarmTimeMins = createSettingFlow({ it.titlesAlarmTimeMins }, 540)
-        titlesAutoUpdateFrequency = createSettingFlow({ it.titlesAutoUpdateFrequency }, 24)
         exactAlarmsAllowed = createSettingFlow({ it.alarmsAllowed }, false)
         notificationsGranted = createSettingFlow({ it.notificationsGranted }, false)
 
         val defaultLang = getStringResource(R.string.current_language)
         currentLanguage = createSettingFlow({ it.currentLanguage ?: defaultLang }, defaultLang)
 
+        // Error Mapping
         lastError = settingsFlow.map { settings ->
             settings.lastError?.let { saved ->
                 SummarizationResult.Failure(
@@ -166,18 +176,14 @@ object MewsRepository {
         isInitialized = true
     }
 
-    val geminiModelsList: List<GeminiModel> = listOf(
-        GeminiModel("2.5 Flash Lite", "gemini-2.5-flash-lite"),
-        GeminiModel("2.5 Flash", "gemini-2.5-flash"),
-        GeminiModel("2.5 Pro", "gemini-2.5-pro"),
-        GeminiModel("3.0 Flash Preview", "gemini-3-flash-preview"),
-        GeminiModel("3.0 Pro Preview", "gemini-3-pro-preview"),
-        GeminiModel("Flash Lite Latest", "gemini-flash-lite-latest"),
-        GeminiModel("Flash Latest", "gemini-flash-latest"),
-        GeminiModel("Pro Latest", "gemini-pro-latest")
-    )
+    val darkThemeList: List<DarkTheme> get() = DarkTheme.entries
+    val appThemeList: List<AppTheme> get() = AppTheme.entries
+    val headersNumList: List<HeadersNum> get() = HeadersNum.entries
+    val titlesPeriodList: List<TitlesPeriod> get() = TitlesPeriod.entries
+    val autoUpdateFrequencyList: List<AutoUpdateFrequency> get() = AutoUpdateFrequency.entries
 
-    val defaultModel = geminiModelsList[5]
+    val geminiModelsList: List<GeminiModelOption> get() = GeminiModelOption.entries
+    val defaultModel: GeminiModelOption get() = GeminiModelOption.FLASH_LITE_LATEST
 
     suspend fun checkGeminiApiKey(key: String): Boolean {
         return validateGeminiKey(
@@ -242,21 +248,29 @@ object MewsRepository {
         return getRssName(link, proxyEnabled.value)
     }
 
-    // --- Setters (Using External Scope for Safe Writes) ---
+    // --- Setters (Now accepting Enums) ---
 
     fun setCurrentTab(newTab: TabScreen) { _selectedTab.value = newTab }
 
-    fun setCurrentTheme(newValue: String) = updateSetting { it.copy(currentTheme = newValue) }
+    // Theme (DarkTheme Enum)
+    fun setDarkTheme(newValue: DarkTheme) = updateSetting { it.copy(darkTheme = newValue) }
 
-    fun setMonetColors(newValue: Boolean) = updateSetting { it.copy(isMonet = newValue) }
+    // App Theme (AppTheme Enum)
+    fun setAppTheme(newValue: AppTheme) = updateSetting { it.copy(appTheme = newValue) }
 
-    fun setTitlesNum(newValue: Int) = updateSetting { it.copy(titlesNum = newValue) }
+    // Headers Num (HeadersNum Enum)
+    fun setTitlesNum(newValue: HeadersNum) = updateSetting { it.copy(titlesNum = newValue) }
 
-    fun setTitlesPeriod(newValue: Int) = updateSetting { it.copy(titlesPeriod = newValue) }
+    // Titles Period (TitlesPeriod Enum)
+    fun setTitlesPeriod(newValue: TitlesPeriod) = updateSetting { it.copy(titlesPeriod = newValue) }
+
+    // LLM Model (GeminiModelOption Enum)
+    fun setLlmModel(newValue: GeminiModelOption) = updateSetting { it.copy(llmModel = newValue) }
+
+    // Auto Update Frequency (AutoUpdateFrequency Enum)
+    fun setTitlesAutoUpdateFrequency(newValue: AutoUpdateFrequency) = updateSetting { it.copy(titlesAutoUpdateFrequency = newValue) }
 
     fun setUserApiKey(newValue: String) = updateSetting { it.copy(userApiKey = newValue) }
-
-    fun setCurrentLlmModel(newValue: String) = updateSetting { it.copy(currentLlmModel = newValue) }
 
     fun setShowDates(newValue: Boolean) = updateSetting { it.copy(showDates = newValue) }
 
@@ -306,8 +320,6 @@ object MewsRepository {
 
     fun setTitlesAlarmMins(newValue: Int) = updateSetting { it.copy(titlesAlarmTimeMins = newValue) }
 
-    fun setTitlesAutoUpdateFrequency(newValue: Int) = updateSetting { it.copy(titlesAutoUpdateFrequency = newValue) }
-
     fun setExactAlarmsAllowed(newValue: Boolean) {
         externalScope.launch {
             settingsManager.updateSettings { it.copy(alarmsAllowed = newValue, titlesAutoUpdate = if(!newValue) false else it.titlesAutoUpdate) }
@@ -339,9 +351,10 @@ object MewsRepository {
     }
 
     fun planTitlesUpdate(context: Context) {
-        // Берем значения напрямую из StateFlows, которые уже синхронизированы с DataStore
+        // Берем значения напрямую из StateFlows (ENUMS)
         if (titlesAlarmUpdate.value) {
-            val updateFrequencyHours = titlesAutoUpdateFrequency.value
+            // Извлекаем числовое значение из Enum (.num)
+            val updateFrequencyHours = titlesAutoUpdateFrequency.value.num
             val updateTimeMins = titlesAlarmTimeMins.value
 
             val nextRunTime = Calendar.getInstance().apply {
@@ -351,9 +364,9 @@ object MewsRepository {
                 set(Calendar.MILLISECOND, 0)
             }
 
+            // Логика планирования
             while (nextRunTime.before(Calendar.getInstance())) {
-                if (updateFrequencyHours == 12) nextRunTime.add(Calendar.HOUR_OF_DAY, 12)
-                else nextRunTime.add(Calendar.HOUR_OF_DAY, 24)
+                nextRunTime.add(Calendar.HOUR_OF_DAY, updateFrequencyHours)
             }
 
             val nextRunTimeMillis = nextRunTime.timeInMillis

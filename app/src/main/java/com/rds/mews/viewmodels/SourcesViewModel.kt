@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
     private val _scrollEvents = Channel<SourcesScrollEvent>(Channel.CONFLATED)

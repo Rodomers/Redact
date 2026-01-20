@@ -106,7 +106,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 val isAutoUpdateEnabled = MewsRepository.titlesAlarmUpdate.first()
 
                 if (isAutoUpdateEnabled) {
-                    val titlesUpdatePeriodHrs = MewsRepository.titlesAutoUpdateFrequency.first()
+                    val titlesUpdatePeriodHrs = MewsRepository.titlesAutoUpdateFrequency.first().num
                     val titlesUpdateTimeMins = MewsRepository.titlesAlarmTimeMins.first()
 
                     val nextRunTime = Calendar.getInstance().apply {

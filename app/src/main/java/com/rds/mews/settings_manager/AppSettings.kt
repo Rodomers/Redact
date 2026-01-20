@@ -4,10 +4,15 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import androidx.datastore.core.Serializer
+import com.rds.mews.localcore.AppTheme
+import com.rds.mews.localcore.AutoUpdateFrequency
+import com.rds.mews.localcore.DarkTheme
+import com.rds.mews.localcore.GeminiModelOption
+import com.rds.mews.localcore.HeadersNum
+import com.rds.mews.localcore.TitlesPeriod
 import java.io.InputStream
 import java.io.OutputStream
 
-// 1. Помечаем Enum как сериализуемый
 @Serializable
 enum class SummarizationErrorType {
     EXTRACT_TOPICS_FAILED,
@@ -25,43 +30,50 @@ enum class SummarizationErrorType {
     UNKNOWN_ERROR
 }
 
-// 2. Вложенный класс для ошибки теперь хранит ТИП, а не строку
 @Serializable
 data class SavedError(
-    val type: SummarizationErrorType, // Прямая типизация
+    val type: SummarizationErrorType,
     val message: String
 )
 
 @Serializable
 data class AppSettings(
-    // ... остальные поля без изменений (currentTheme, isMonet и т.д.) ...
-    val currentTheme: String = "system",
-    val isMonet: Boolean = false,
-    val compactTabBar: Boolean = false,
-    val showDates: Boolean = false,
-    val innerTimestamps: Boolean = false,
-    val showSnippets: Boolean = false,
-    val currentLanguage: String? = null,
-    val titlesNum: Int = 10,
-    val titlesPeriod: Int = 24,
-    val filterTopics: Boolean = false,
-    val bannedNews: Set<String> = emptySet(),
+    // Theme
+    val darkTheme: DarkTheme = DarkTheme.SYSTEM, // Было String "current_theme"
+    val appTheme: AppTheme = AppTheme.DEFAULT,   // Было Boolean "is_monet"
+
+    // Content
+    val titlesNum: HeadersNum = HeadersNum.NUM_10, // Было Int
+    val titlesPeriod: TitlesPeriod = TitlesPeriod.ADAPTIVE, // Было Int
+
+    // Network & AI
     val userApiKey: String = "",
-    val currentLlmModel: String = "gemini-2.0-flash",
+    val llmModel: GeminiModelOption = GeminiModelOption.FLASH_LITE_LATEST, // Было String
     val enableProxy: Boolean = false,
-    val rssUpdateInterval: Int = 30,
-    val lastRssUpdate: Long = 0L,
+
+    // Updates
     val titlesAutoUpdate: Boolean = false,
-    val titlesAutoUpdateFrequency: Int = 24,
+    val titlesAutoUpdateFrequency: AutoUpdateFrequency = AutoUpdateFrequency.FREQ_24, // Было Int
     val titlesAlarmTimeMins: Int = 540,
     val alarmsAllowed: Boolean = false,
     val notificationsGranted: Boolean = false,
+    val rssUpdateInterval: Int = 30,
+    val lastRssUpdate: Long = 0L,
+
+    // UI Toggles
+    val compactTabBar: Boolean = false,
+    val filterTopics: Boolean = false,
+    val innerTimestamps: Boolean = false,
+    val showSnippets: Boolean = false,
+    val showDates: Boolean = false,
+    val currentLanguage: String? = null,
+
+    // Technical State
     val updatingTitles: Boolean = false,
     val updatingState: String = "off",
     val updatingProgress: Float = 0f,
     val lastTitlesUpdate: Long = 0L,
-
-    // 3. Храним типизированный объект ошибки
+    val bannedNews: Set<String> = emptySet(),
     val lastError: SavedError? = null
 )
 

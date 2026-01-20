@@ -72,15 +72,15 @@ class TitlesUpdateService : Service() {
         val updateDeltaMills = System.currentTimeMillis() - MewsRepository.lastTitlesUpdate.first()
         val enableProxy = MewsRepository.proxyEnabled.first()
 
-        val currentLLM = MewsRepository.currentLlmModel.first()
+        val currentLLM = MewsRepository.llmModel.first().apiModelName
         val llmApiKey = MewsRepository.userApiKey.first()
         val rssLastUpdate = MewsRepository.lastRssUpdate.first()
         val rssUpdateInterval = MewsRepository.rssUpdateInterval.first()
-        val titlesUpdatePeriod = MewsRepository.titlesPeriod.first()
+        val titlesUpdatePeriod = MewsRepository.titlesPeriod.first().num
         val titlesPeriod = if (!oneTimeUpdate || titlesUpdatePeriod == 0) {
             updateDeltaMills / 3600000L + 1
-        } else titlesUpdatePeriod
-        val titlesNum = MewsRepository.titlesNum.first()
+        } else titlesUpdatePeriod ?: 0L
+        val titlesNum = MewsRepository.titlesNum.first().num
         val filterTopics = MewsRepository.filterTopics.first()
 
         val fetcher = RssFetcher(db)
@@ -146,7 +146,7 @@ class TitlesUpdateService : Service() {
 
             val autoUpdateEnabled = MewsRepository.titlesAlarmUpdate.first()
             if (autoUpdateEnabled && !oneTimeUpdate) {
-                val titlesUpdatePeriodHours = MewsRepository.titlesAutoUpdateFrequency.first()
+                val titlesUpdatePeriodHours = MewsRepository.titlesAutoUpdateFrequency.first().num
                 val titlesUpdateTimeMins = MewsRepository.titlesAlarmTimeMins.first()
 
                 val nextRunTime = Calendar.getInstance().apply {

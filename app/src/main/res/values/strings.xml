@@ -35,6 +35,8 @@
     <string name="settings_system_theme">System</string>
     <string name="settings_light_theme">Light</string>
     <string name="settings_dark_theme">Dark</string>
+    <string name="settings_theme_classic">Classic</string>
+    <string name="settings_theme_material" translatable="false">Material</string>
     <string name="settings_monet_colors">Adaptive colors</string>
     <string name="settings_color_scheme">Color scheme</string>
     <string name="settings_compact_tab">Compact tab</string>
