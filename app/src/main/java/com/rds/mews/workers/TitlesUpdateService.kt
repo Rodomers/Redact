@@ -52,6 +52,9 @@ class TitlesUpdateService : Service() {
                 updater.performUpdate(oneTimeUpdate)
             } catch (e: CancellationException) {
                 SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED)
+            } catch (e: Exception) {
+                android.util.Log.e("TitlesUpdateService", "Fatal error in service", e)
+                SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
             }
 
             if (result is SummarizationResult.Success && !oneTimeUpdate) {

@@ -1,6 +1,7 @@
 package com.rds.mews.workers
 
 import android.content.Context
+import android.util.Log
 import com.rds.mews.core.DbHelper
 import com.rds.mews.core.LLMClient
 import com.rds.mews.core.NewsSummarizer
@@ -11,69 +12,92 @@ import com.rds.mews.settings_manager.SummarizationErrorType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.ensureActive
 
 class TitlesUpdater(private val context: Context) {
     suspend fun performUpdate(isOneTime: Boolean): SummarizationResult {
         if (!MewsRepository.isInitialized) {
-            return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, Exception("Repository not initialized"))
+            return SummarizationResult.Failure(
+                SummarizationErrorType.UNKNOWN_ERROR,
+                Exception("Repository not initialized")
+            )
         }
 
-        val db = DbHelper(context)
-
-        val updateDeltaMills = System.currentTimeMillis() - MewsRepository.lastTitlesUpdate.first()
-        val enableProxy = MewsRepository.proxyEnabled.first()
-        val currentLLM = MewsRepository.llmModel.first().apiModelName
-        val llmApiKey = MewsRepository.userApiKey.first()
-        val titlesUpdatePeriodSetting = MewsRepository.titlesPeriod.first().num
-
-        val titlesPeriod = if (!isOneTime || titlesUpdatePeriodSetting == null) {
-            updateDeltaMills / 3600000L + 1
-        } else titlesUpdatePeriodSetting
-
-        val titlesNum = MewsRepository.titlesNum.first().num
-        val filterTopics = MewsRepository.filterTopics.first()
-
-        val fetcher = RssFetcher(db)
-        val llm = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
-        val summarizer = NewsSummarizer(db, llm)
-
-        val startTitles = db.getTitles().filter { it.text != "<промежуточный текст>" }.map { it.id }
-
-        MewsRepository.setUpdatingTitles(true)
-        MewsRepository.setUpdatingState("updating")
-
+        // Объявляем переменные снаружи try, чтобы иметь к ним доступ в finally
+        var llmClient: LLMClient? = null
         var finalResult: SummarizationResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
 
         try {
+            val lastUpdate = MewsRepository.lastTitlesUpdate.first()
+            val updateDeltaMills = System.currentTimeMillis() - lastUpdate
+            val enableProxy = MewsRepository.proxyEnabled.first()
+            val currentLLM = MewsRepository.llmModel.first().apiModelName
+            val llmApiKey = MewsRepository.userApiKey.first()
+            val titlesUpdatePeriodSetting = MewsRepository.titlesPeriod.first().num
+
+            val titlesPeriod = if (!isOneTime || titlesUpdatePeriodSetting == null) {
+                updateDeltaMills / 3600000L + 1
+            } else {
+                titlesUpdatePeriodSetting
+            }
+
+            val titlesNum = MewsRepository.titlesNum.first().num
+            val filterTopics = MewsRepository.filterTopics.first()
+
+            val db = DbHelper(context)
+            val fetcher = RssFetcher(db)
+
+            llmClient = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
+            val summarizer = NewsSummarizer(db, llmClient)
+
+            val startTitles = db.getTitles()
+                .filter { it.text != "<промежуточный текст>" }
+                .map { it.id }
+
+            MewsRepository.setUpdatingTitles(true)
+            MewsRepository.setUpdatingState("updating")
+
             currentCoroutineContext().ensureActive()
 
             MewsRepository.setUpdatingProgress(0.1f)
             MewsRepository.setUpdatingState("parsing")
 
-            if (System.currentTimeMillis() - MewsRepository.lastRssUpdate.first() > 900000L) fetcher.fetchAndStoreAll()
+            val lastRssTime = MewsRepository.lastRssUpdate.first()
+            if (System.currentTimeMillis() - lastRssTime > 900000L) {
+                fetcher.fetchAndStoreAll()
+            }
             MewsRepository.setLastRssUpdate(System.currentTimeMillis())
 
             currentCoroutineContext().ensureActive()
 
             if (isOneTime || updateDeltaMills >= 7200000L) {
                 var iter = 0
-                while (MewsRepository.updatingTitles.first() && iter <= 3) {
+
+                var continueUpdate = true
+
+                while (continueUpdate && iter <= 3) {
                     currentCoroutineContext().ensureActive()
 
                     finalResult = summarizer.summarizeTopics(
                         maxTopics = titlesNum,
                         messageSeconds = titlesPeriod.toLong() * 3600,
-                        readyFunc = { MewsRepository.setUpdatingTitles(false) },
+                        readyFunc = {
+                            continueUpdate = false
+                            MewsRepository.setUpdatingTitles(false)
+                        },
                         filterTopics = filterTopics
                     )
+
                     if (finalResult is SummarizationResult.Success) break
                     iter++
                 }
 
-                val currentTitles = db.getTitles().filter { it.text != "<промежуточный текст>" }.map { it.id }
+                val currentTitles = db.getTitles()
+                    .filter { it.text != "<промежуточный текст>" }
+                    .map { it.id }
+
                 if (currentTitles.sum() != startTitles.sum() && currentTitles.isNotEmpty()) {
                     MewsRepository.triggerTitlesRefresh()
                 }
@@ -89,22 +113,32 @@ class TitlesUpdater(private val context: Context) {
 
         } catch (e: Exception) {
             val error = if (e is kotlinx.coroutines.CancellationException) {
-                println("TitlesUpdater: Задача отменена")
+                Log.d("TitlesUpdater", "Задача отменена")
                 SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED)
             } else {
-                println("TitlesUpdater: Ошибка ${e.message}")
-                e.printStackTrace()
+                Log.e("TitlesUpdater", "Критическая ошибка обновления: ${e.message}", e)
                 SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
             }
+
             MewsRepository.saveLastError(error)
             finalResult = error
+
             if (e is kotlinx.coroutines.CancellationException) throw e
 
         } finally {
-            println("TitlesUpdater: FINALLY block")
+            Log.d("TitlesUpdater", "FINALLY block executed")
+
+            try {
+                llmClient?.close()
+            } catch (e: Exception) {
+                Log.e("TitlesUpdater", "Error closing LLMClient", e)
+            }
+
             MewsRepository.setUpdatingProgress(1f)
             MewsRepository.setUpdatingTitles(false)
+
             withContext(Dispatchers.IO) { delay(500L) }
+
             MewsRepository.setUpdatingState("off")
             MewsRepository.setUpdatingProgress(0f)
         }

@@ -167,21 +167,35 @@ object MewsRepository {
         currentLanguage = createSettingFlow({ it.currentLanguage }, defaultLang)
 
         lastError = settingsFlow.map { settings ->
-            try {
-                settings.lastError?.let { saved ->
+            val saved = settings.lastError
+            if (saved != null) {
+                try {
+                    // 1. Защита: Проверяем, что сообщение не пустое
+                    val msg = saved.message.takeIf { it.isNotBlank() } ?: "Unknown saved error"
+
+                    // 2. Защита: Enum может быть null или битым после обновлений
+                    // (хотя Kotlin Serialization должен был упасть раньше, но перестрахуемся)
+                    val type = saved.type
+
                     SummarizationResult.Failure(
-                        type = saved.type,
-                        cause = Exception(saved.message)
+                        type = type,
+                        cause = Exception(msg) // Создаем Exception безопасно
                     )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to restore lastError: ${e.message}")
+                    // Если не смогли восстановить ошибку — просто игнорируем её, а не крашимся
+                    null
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error mapping lastError", e)
+            } else {
                 null
             }
-        }.catch { e ->
-            Log.e(TAG, "Error in lastError flow", e)
-            emit(null)
-        }.stateIn(externalScope, SharingStarted.Eagerly, null)
+        }
+            .catch { e ->
+                Log.e(TAG, "Critical error in lastError flow", e)
+                emit(null)
+            }
+            .flowOn(Dispatchers.IO) // 3. Уводим с главного потока
+            .stateIn(externalScope, SharingStarted.Eagerly, null)
 
         isInitialized = true
     }
