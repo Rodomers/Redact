@@ -62,6 +62,9 @@
     <string name="settings_ignore_optimization">Ignore battery optimization</string>
     <string name="settings_gemini_model">Gemini model</string>
     <string name="settings_enable_proxy">Built-in proxy</string>
+    <string name="settings_db_clear">Clear feed</string>
+    <string name="settings_db_clear_btn">Clear</string>
+    <string name="settings_db_cleared">The feed was cleared. Sorry.</string>
     <string name="settings_footnote_text">Feedback (Telegram): @mewsapp\nVersion %s</string>
     <string name="settings_alarms_sheet_title">Exact Alarm Permission</string>
     <string name="settings_alarms_sheet_text">To ensure timely background updates, the app requires permission to set exact alarms. Would you like to grant it?</string>

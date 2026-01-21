@@ -16,7 +16,7 @@ class RssFetcher(
 ) {
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.HUB_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
 
-    suspend fun fetchAndStoreAll(messAliveTime: Long, maxTimeHours: Int = 168): FetchResult {
+    suspend fun fetchAndStoreAll(messAliveTime: Long = 0L, maxTimeHours: Int = 168): FetchResult {
         val rssList = try {
             db.getRSS()
         } catch (e: Exception) {
@@ -24,8 +24,7 @@ class RssFetcher(
             return FetchResult(0, 0, 0, listOf(e.message ?: "unknown"))
         }
 
-        val lastUpdated = MewsRepository.lastRssUpdate.first()
-        val newsUpdateDelta: Long? = when (lastUpdated) {
+        val newsUpdateDelta: Long? = when (val lastUpdated = MewsRepository.lastRssUpdate.first()) {
             0L -> null
             else -> (System.currentTimeMillis() - lastUpdated) / 1000
         }
@@ -96,7 +95,7 @@ class RssFetcher(
                 e.printStackTrace()
                 errors.add(msg)
             } finally {
-                db.messageTimeKill(messAliveTime * 3)
+                db.messageTimeKill(864000)
             }
         }
         return FetchResult(feedsProcessed, itemsAdded, itemsSkipped, errors)

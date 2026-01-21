@@ -106,7 +106,8 @@ data class SettingsUiFunctions(
     val setShowNotificationsSheet: (Boolean) -> Unit,
     val addGroupState: (Int, Boolean) -> Unit,
     val changeGroupState: (Int) -> Unit,
-    val setGeminiBuffer: (String) -> Unit
+    val setGeminiBuffer: (String) -> Unit,
+    val clearFeed: () -> Unit
 )
 
 data class SourcesGroupState(val group: SourceType, val expanded: Boolean)

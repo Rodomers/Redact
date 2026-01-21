@@ -53,9 +53,7 @@ class TitlesUpdater(private val context: Context) {
             MewsRepository.setUpdatingProgress(0.1f)
             MewsRepository.setUpdatingState("parsing")
 
-            if (System.currentTimeMillis() - MewsRepository.lastRssUpdate.first() > 900000L) fetcher.fetchAndStoreAll(
-                messAliveTime = titlesPeriod.toLong() * 3600
-            )
+            if (System.currentTimeMillis() - MewsRepository.lastRssUpdate.first() > 900000L) fetcher.fetchAndStoreAll()
             MewsRepository.setLastRssUpdate(System.currentTimeMillis())
 
             currentCoroutineContext().ensureActive()

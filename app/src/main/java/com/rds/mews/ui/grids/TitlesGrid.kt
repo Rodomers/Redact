@@ -1,6 +1,7 @@
 package com.rds.mews.ui.grids
 
 import TimelineMarker
+import android.annotation.SuppressLint
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -144,6 +145,7 @@ fun TitlesScreen(
     )
 }
 
+@SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun TitlesGrid(

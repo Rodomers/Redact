@@ -59,6 +59,9 @@
     <string name="settings_ignore_optimization">Работа в фоне</string>
     <string name="settings_gemini_model">Модель Gemini</string>
     <string name="settings_enable_proxy">Встроенный прокси</string>
+    <string name="settings_db_clear">Очистка ленты</string>
+    <string name="settings_db_clear_btn">Очистить</string>
+    <string name="settings_db_cleared">Лента очищена. Увы.</string>
     <string name="settings_footnote_text">Обратная связь (Telegram): @mewsapp\nВерсия %s</string>
     <string name="settings_alarms_sheet_title">Разрешение на установку будильников</string>
     <string name="settings_alarms_sheet_text">Для корректной работы фонового обновления необходимо выдать приложению разрешение на установку будильников.

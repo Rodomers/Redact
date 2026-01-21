@@ -351,8 +351,6 @@ class TitlesViewModel(
 
                     _titles.value = actualTitles
 
-                    _titles.value = actualTitles
-
                     _titleCardStates.update { currentStates ->
                         val oldStatesMap = currentStates.associateBy { it.id }
                         actualTitles.map { title ->

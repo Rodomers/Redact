@@ -212,7 +212,10 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
                     intListOf(R.string.err_header_blocked, R.string.err_text_blocked, R.string.err_btn_blocked)
 
                 SummarizationErrorType.UNKNOWN_ERROR -> {
-                    println(result.cause)
+                    println("========= CRASH REPORT START =========")
+                    result.cause?.printStackTrace()
+                    println("========= CRASH REPORT END =========")
+
                     intListOf(
                         R.string.err_header_interpreter,
                         R.string.err_text_interpreter,

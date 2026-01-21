@@ -234,6 +234,10 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
         return apiKey == _defaultApiKey
     }
 
+    fun clearFeed() {
+        repository.delTitles()
+    }
+
     fun setShowAlarmsSheet(value: Boolean) {
         _showAlarmsSheet.value = value
     }

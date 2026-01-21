@@ -34,13 +34,11 @@ class LLMClient(
     private val jsonParser = SharedHttpClient.jsonParser
     private val MAX_RETRIES = 3
 
-    // Change: Возвращает String (не null), кидает GeminiException
     suspend fun sendPrompt(prompt: String): String {
         val requestBodyObj = GeminiRequest(
             contents = listOf(ContentInput(parts = listOf(PartInput(prompt)))),
             generationConfig = GenerationConfig(temperature = 0.5, maxOutputTokens = 8192)
         )
-        // Change: Обработка ошибки сериализации
         val requestBodyString = try {
             jsonParser.encodeToString(requestBodyObj)
         } catch (e: Exception) {
@@ -61,7 +59,6 @@ class LLMClient(
                     headers = mapOf("x-goog-api-key" to apiKey, "Content-Type" to "application/json")
                 )
 
-                // Change: Обработка HTTP кодов
                 if (response.status != 200) {
                     when (response.status) {
                         429 -> {
@@ -80,7 +77,7 @@ class LLMClient(
                 }
 
                 val responseString = response.body
-                // Change: Обработка ошибки парсинга ответа
+                Log.d("LLMClient", "Raw response: $responseString") // <-- Добавить это
                 val geminiResponse = try {
                     jsonParser.decodeFromString<GeminiResponse>(responseString)
                 } catch (e: Exception) {
@@ -91,7 +88,6 @@ class LLMClient(
                     Log.e("LLMClient", "Gemini API error: ${geminiResponse.error.message}")
                     val msg = geminiResponse.error.message ?: ""
 
-                    // Change: Распознавание Quota и Key ошибок в теле ответа
                     if (msg.contains("quota", true)) {
                         throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, msg)
                     }
@@ -105,7 +101,6 @@ class LLMClient(
                     continue
                 }
 
-                // Change: Обработка фильтров безопасности
                 if (geminiResponse.promptFeedback?.blockReason != null) {
                     Log.w("LLMClient", "Blocked reason: ${geminiResponse.promptFeedback.blockReason}")
                     throw GeminiException(SummarizationErrorType.CONTENT_BLOCKED, geminiResponse.promptFeedback.blockReason)
@@ -115,7 +110,6 @@ class LLMClient(
                     ?.flatMap { it.content?.parts ?: emptyList() }
                     ?.joinToString("\n") { it.text }
 
-                // Change: Если вернулся null/пустота при 200 OK
                 if (resultText.isNullOrBlank()) {
                     throw GeminiException(SummarizationErrorType.EMPTY_ANSWER)
                 }
@@ -123,7 +117,7 @@ class LLMClient(
                 return resultText
 
             } catch (e: GeminiException) {
-                throw e // Пробрасываем наши ошибки
+                throw e
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                 throw GeminiException(SummarizationErrorType.NETWORK_TIMEOUT)
             } catch (e: Exception) {
@@ -133,8 +127,8 @@ class LLMClient(
                 if (attempt <= MAX_RETRIES) delay(1000L)
             }
         }
-        // Change: Если вышли из цикла по ретраям - значит проблемы с сетью
-        throw GeminiException(SummarizationErrorType.NO_NETWORK, lastException?.message)
+        val errorMsg = lastException?.message ?: "Empty message in ${lastException?.javaClass?.name}"
+        throw GeminiException(SummarizationErrorType.NO_NETWORK, errorMsg)
     }
 
     override fun close() { httpClient.close() }
@@ -168,6 +162,10 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
     private val NEWS_BATCH_SIZE = 40
     private val TAG = "NewsSummarizer"
 
+    private fun safeReadyFunc(func: () -> Unit) {
+        try { func() } catch (e: Exception) { Log.e(TAG, "readyFunc failed", e) }
+    }
+
     suspend fun summarizeTopics(
         maxTopics: Int = 20,
         messageSeconds: Long = 14515200,
@@ -177,21 +175,25 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         try {
             Log.d(TAG, "Starting summarizeTopics")
             val messages = db.getMessages(messageSeconds).sortedBy { it.time }
-            if (messages.isEmpty()) { readyFunc(); return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE) }
+            if (messages.isEmpty()) { safeReadyFunc(readyFunc); return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE) }
 
             val unfinishedTitles = db.getTitles().filter { it.text == "<промежуточный текст>" && it.time.toInt() == 0 }
+
+            // Безопасное получение языка
+            val currentLanguage = try {
+                MewsRepository.currentLanguage.first() ?: "english"
+            } catch (e: Exception) { "english" }
+
             if (unfinishedTitles.isEmpty()) {
-                val currentLanguage = MewsRepository.currentLanguage.first() ?: "english"
                 try {
-                    // Change: processNewsInBatches теперь void и кидает исключения
                     processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics)
                     MewsRepository.setLastTitlesUpdate(System.currentTimeMillis())
                 } catch (e: GeminiException) {
-                    readyFunc()
+                    safeReadyFunc(readyFunc)
                     return SummarizationResult.Failure(e.errorType, e)
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
-                    readyFunc()
+                    safeReadyFunc(readyFunc)
                     return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED, e)
                 }
             }
@@ -199,17 +201,27 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             val titlesToSummarize = db.getTitles().filter { it.text == "<промежуточный текст>" }
                 .map { Topics(it.title, db.dbUnpack(it.ids).mapNotNull { id -> id.toLongOrNull() }) }
 
-            if (titlesToSummarize.isEmpty()) { readyFunc(); return SummarizationResult.Success }
+            if (titlesToSummarize.isEmpty()) { safeReadyFunc(readyFunc); return SummarizationResult.Success }
 
             val titleBatches = titlesToSummarize.chunked(SUMMARY_BATCH_SIZE)
             var processedBatches = 0
             val totalBatches = titleBatches.size
             val semaphore = Semaphore(1)
-            val currentProgress = MewsRepository.updatingProgress.first()
+
+            // Безопасное получение прогресса
+            val currentProgress = try { MewsRepository.updatingProgress.first() } catch(e: Exception) { 0f }
             val remainingProgress = 0.95f - currentProgress
             var successCount = 0
 
-            // Change: Хранение последней ошибки для возврата
+            // ФИКС: Получаем список забаненных слов ДО цикла и безопасно.
+            // Если репозиторий упадет тут, мы просто будем работать без фильтра, а не крашить весь процесс.
+            val bannedWords = try {
+                MewsRepository.bannedNewsFlow.value.joinToString("'; '")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get banned words, continuing without filter", e)
+                ""
+            }
+
             var lastError: SummarizationErrorType? = null
 
             coroutineScope {
@@ -219,10 +231,16 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                             try {
                                 processedBatches++
                                 if (processedBatches > 1) delay(4000L)
-                                MewsRepository.setUpdatingState("summarizing_topics")
-                                MewsRepository.setUpdatingProgress((currentProgress + remainingProgress * processedBatches / totalBatches).coerceIn(0f, 0.95f))
 
-                                val currentLanguage = MewsRepository.currentLanguage.first() ?: "english"
+                                // ФИКС: Оборачиваем обновление UI в try-catch.
+                                // Ошибка обновления прогрессбара не должна останавливать саммаризацию.
+                                try {
+                                    MewsRepository.setUpdatingState("summarizing_topics")
+                                    MewsRepository.setUpdatingProgress((currentProgress + remainingProgress * processedBatches / totalBatches).coerceIn(0f, 0.95f))
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to update UI progress", e)
+                                }
+
                                 val topicsData = batch.mapNotNull { topic ->
                                     val suitableMessages = topic.ids?.mapNotNull { id -> messages.find { it.id == id } ?: db.getMessage(id) } ?: emptyList()
                                     if (suitableMessages.isEmpty()) null else Triple(topic, suitableMessages, suitableMessages.joinToString("\n") { "— ${it.mess}" })
@@ -230,11 +248,9 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                                 if (topicsData.isEmpty()) return@withPermit
 
                                 val response = withTimeout(150000L) {
-                                    // Change: LLMClient может кинуть ошибку, withTimeout может кинуть ошибку
-                                    sumTopicsBatch(llm, topicsData, MewsRepository.bannedNewsFlow.value.joinToString("'; '"), currentLanguage)
+                                    sumTopicsBatch(llm, topicsData, bannedWords, currentLanguage)
                                 }
 
-                                // Change: safeParseJsonArray теперь кидает ошибку
                                 val jsonArray = safeParseJsonArray(response)
 
                                 for (i in 0 until jsonArray.length()) {
@@ -259,11 +275,18 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                             } catch (e: GeminiException) {
                                 Log.e(TAG, "Batch failed: ${e.errorType}")
                                 lastError = e.errorType
+                                // Если ошибка критическая (квота, ключ) — прерываем всё сразу
+                                if (e.errorType == SummarizationErrorType.API_KEY_INVALID ||
+                                    e.errorType == SummarizationErrorType.QUOTA_EXCEEDED ||
+                                    e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED ||
+                                    e.errorType == SummarizationErrorType.NO_NETWORK) {
+                                    throw e
+                                }
                             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                                 lastError = SummarizationErrorType.NETWORK_TIMEOUT
                             } catch (e: Exception) {
                                 if (e is kotlinx.coroutines.CancellationException) throw e
-                                Log.e(TAG, "Error in batch processing", e)
+                                Log.e(TAG, "CRITICAL ERROR in batch processing. Type: ${e.javaClass.name}", e)
                                 lastError = SummarizationErrorType.UNKNOWN_ERROR
                             }
                         }
@@ -272,37 +295,42 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             }
 
             if (successCount == 0 && titlesToSummarize.isNotEmpty()) {
-                // Change: Возвращаем конкретную ошибку (если была), иначе общую
                 val error = lastError ?: SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
-                readyFunc()
+                safeReadyFunc(readyFunc)
                 return SummarizationResult.Failure(error)
             }
-            readyFunc(); return SummarizationResult.Success
+            safeReadyFunc(readyFunc)
+            return SummarizationResult.Success
+        } catch (e: GeminiException) {
+            Log.e(TAG, "Summarization aborted: ${e.errorType}")
+            safeReadyFunc(readyFunc)
+            return SummarizationResult.Failure(e.errorType, e)
         } catch (e: Exception) {
-            // Change: Обработка CancellationException для Job Cancelled
             if (e is kotlinx.coroutines.CancellationException) {
                 Log.d(TAG, "Summarization cancelled")
-                readyFunc()
+                safeReadyFunc(readyFunc)
                 return SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED)
             }
             Log.e(TAG, "Global error in summarizeTopics", e)
-            readyFunc(); return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
+            safeReadyFunc(readyFunc)
+            return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
         }
     }
 
-    // Change: Возвращает Unit, кидает GeminiException, не глотает ошибки
     private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, lang: String, filter: Boolean) {
         val batches = messages.distinctBy { it.id }.chunked(NEWS_BATCH_SIZE)
         val allExtracted = mutableListOf<Topics>()
         val semaphore = Semaphore(1)
 
-        MewsRepository.setUpdatingState("extracting_topics")
-        MewsRepository.setUpdatingProgress((MewsRepository.updatingProgress.first() + 0.1f).coerceIn(0f, 0.2f))
+        try {
+            val current = try { MewsRepository.updatingProgress.first() } catch (e:Exception) { 0f }
+            MewsRepository.setUpdatingState("extracting_topics")
+            MewsRepository.setUpdatingProgress((current + 0.1f).coerceIn(0f, 0.2f))
+        } catch (e: Exception) { Log.e(TAG, "Repo update failed", e) }
 
         coroutineScope {
             batches.map { batch -> async(Dispatchers.IO) { semaphore.withPermit { extractTopicsFromBatch(batch, maxTopics, lang) } } }
                 .forEach {
-                    // Change: Если внутри async была ошибка, await() её выбросит
                     it.await().let { allExtracted.addAll(it) }
                 }
         }
@@ -312,8 +340,11 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         }
 
         if (filter) {
-            MewsRepository.setUpdatingState("filtering_topics")
-            MewsRepository.setUpdatingProgress((MewsRepository.updatingProgress.first() + 0.1f).coerceIn(0f, 0.3f))
+            try {
+                val current = try { MewsRepository.updatingProgress.first() } catch(e:Exception) { 0f }
+                MewsRepository.setUpdatingState("filtering_topics")
+                MewsRepository.setUpdatingProgress((current + 0.1f).coerceIn(0f, 0.3f))
+            } catch(e: Exception) {}
             mergeAndFilterTopics(allExtracted, maxTopics, lang)
         } else {
             allExtracted
@@ -324,14 +355,9 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         }
     }
 
-    // Change: Возвращает List<Topics> (не nullable), кидает исключения
     private suspend fun extractTopicsFromBatch(batch: List<Message>, max: Int, lang: String): List<Topics> {
         val prompt = "Сгруппируй новости по событиям (макс $max). Верни ТОЛЬКО JSON массив: [{\"title\": \"Заголовок\", \"id\": [101, 105], \"weight\": 8}]. Где weight - важность события от 1 до 10. Язык: $lang. Новости:\n${batch.joinToString("\n") { "• ${it.mess} (id - ${it.id})" }}"
-
-        // Change: withTimeout пропустит GeminiException
         val response = withTimeout(60000L) { llm.sendPrompt(prompt) }
-
-        // Change: safeParseJsonArray кинет ошибку если JSON битый
         val jsonArray = safeParseJsonArray(response)
 
         val topics = mutableListOf<Topics>()
@@ -346,7 +372,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         return topics
     }
 
-    // Change: Не возвращает Boolean, кидает исключения
     private suspend fun mergeAndFilterTopics(topics: List<Topics>, max: Int, lang: String) {
         val jsonInput = JSONArray(topics.map { t -> JSONObject().apply { put("title", t.title); put("ids", JSONArray(t.ids)); put("weight", t.weight) } }).toString()
         val prompt = "Объедини дублирующиеся темы (макс $max). Верни JSON: [{\"title\": \"Заголовок\", \"ids\": [1, 2, 3], \"weight\": 9}]. weight - итоговая важность темы от 1 до 10. Язык: $lang. Данные:\n$jsonInput"
@@ -373,7 +398,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
     }
 
     private suspend fun sumTopicsBatch(llm: LLMClient, data: List<Triple<Topics, List<Message>, String>>, banned: String, lang: String): String {
-        // ... prompt logic same ...
         val jsonInput = JSONArray(data.map { (t, _, txt) ->
             JSONObject().apply {
                 put("id", t.ids?.firstOrNull() ?: 0L)
@@ -381,6 +405,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 put("news_content", txt)
             }
         })
+
+        Log.d(TAG, "Generating summary for ${data.size} items. Json length: ${jsonInput.toString().length}")
 
         val prompt = """
         Ты — профессиональный редактор новостной ленты. Твоя задача — написать живые, вовлекающие саммари для предоставленных тем.
@@ -400,11 +426,9 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         $jsonInput
     """.trimIndent()
 
-        // Change: sendPrompt кидает исключение
         return llm.sendPrompt(prompt)
     }
 
-    // Change: Бросает JSON_PARSING_FAILED вместо возврата пустого массива
     private fun safeParseJsonArray(str: String): JSONArray {
         val clean = str.trim().removePrefix("```json").removeSuffix("```").trim()
         try {
