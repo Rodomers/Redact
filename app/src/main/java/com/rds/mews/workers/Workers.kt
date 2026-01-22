@@ -17,11 +17,16 @@ class RssUpdateWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
+    companion object {
+        const val KEY_SOURCES = "sources"
+    }
 
     override suspend fun doWork(): Result {
         if (!MewsRepository.isInitialized) {
             return Result.retry()
         }
+
+        val sources = inputData.getBoolean(KEY_SOURCES, false)
 
         val db = DbHelper(applicationContext)
         val enableProxy = MewsRepository.proxyEnabled.first()
@@ -32,7 +37,7 @@ class RssUpdateWorker(
         return try {
             withContext(Dispatchers.IO) {
                 fetcher.fetchAndStoreAll(messAliveTime = titlesPeriod.toLong() * 3600)
-                MewsRepository.setLastRssUpdate(System.currentTimeMillis())
+                if (!sources) MewsRepository.setLastRssUpdate(System.currentTimeMillis())
                 println("RssUpdateWorker: parsing finished successfully.")
             }
 

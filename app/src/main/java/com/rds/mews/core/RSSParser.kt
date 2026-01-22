@@ -37,7 +37,7 @@ class RssFetcher(
         for (rss in rssList) {
             try {
                 var fetchUrl = rss.link
-                println("Fetching RSS: $fetchUrl")
+//                println("Fetching RSS: $fetchUrl")
 
                 if (fetchUrl.contains("t.me")) {
                     val channelName = fetchUrl.split("/").last().trim()

@@ -227,7 +227,7 @@ object MewsRepository {
         db.addRSS(name, linkTransform(link))
         _sourcesUpdateTrigger.value++
         AlarmScheduler.cancel(context, true)
-        setLastRssUpdate(0L)
+//        setLastRssUpdate(0L)
         setRssUpdate(context, true, rssUpdateInterval.value)
     }
 

@@ -27,6 +27,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import com.rds.mews.R
 import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.workers.RssUpdateWorker
@@ -121,9 +122,12 @@ fun setRssUpdate(context: Context, sources: Boolean = false, intervalMin: Int = 
         .setRequiredNetworkType(NetworkType.CONNECTED)
         .build()
 
+    val inputData = workDataOf(RssUpdateWorker.KEY_SOURCES to sources)
     val periodicWorkRequestBuilder = PeriodicWorkRequestBuilder<RssUpdateWorker>(
         intervalMin.toLong(), TimeUnit.MINUTES
-    ).setConstraints(constraints)
+    )
+        .setConstraints(constraints)
+        .setInputData(inputData)
     if (sources) {
         periodicWorkRequestBuilder.setInitialDelay(40, TimeUnit.SECONDS)
     }
