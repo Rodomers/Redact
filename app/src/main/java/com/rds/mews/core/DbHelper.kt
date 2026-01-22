@@ -358,6 +358,7 @@ class DbHelper(val context: Context) :
 
     @Synchronized
     fun updateTitle(
+        id: Long,
         name: String,
         newText: String,
         newSources: String,
@@ -366,13 +367,14 @@ class DbHelper(val context: Context) :
     ): Boolean {
         val db = this.writableDatabase
         val values = ContentValues().apply {
+            put(TITLES_NAME, name)
             put(TITLES_TEXT, newText)
             put(TITLES_SOURCES, newSources)
             put(TITLES_LINKS, newLinks)
             put(TITLES_TIME, newTime)
         }
 
-        return db.update(TITLES_NAME, values, "$TITLE = ?", arrayOf(name)) > 0
+        return db.update(TITLES_NAME, values, "$TITLES_ID = ?", arrayOf(id.toString())) > 0
     }
 
     @Synchronized

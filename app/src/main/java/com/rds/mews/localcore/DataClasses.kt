@@ -127,5 +127,3 @@ data class IconButtonInputs(
     override val action: () -> Unit,
     override val toast: String? = null
 ) : ButtonInputs
-
-data class GeminiModel(val name: String, val key: String)
