@@ -362,10 +362,11 @@ object MewsRepository {
         AlarmScheduler.cancel(context)
     }
 
-    fun planTitlesUpdate(context: Context) {
+    fun planTitlesUpdate(context: Context, explicitTimeMins: Int? = null) {
         if (titlesAlarmUpdate.value) {
             val updateFrequencyHours = titlesAutoUpdateFrequency.value.num
-            val updateTimeMins = titlesAlarmTimeMins.value
+
+            val updateTimeMins = explicitTimeMins ?: titlesAlarmTimeMins.value
 
             val nextRunTime = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, updateTimeMins / 60)

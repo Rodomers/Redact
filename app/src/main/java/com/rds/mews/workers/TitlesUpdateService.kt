@@ -50,7 +50,7 @@ class TitlesUpdateService : Service() {
             val updater = TitlesUpdater(applicationContext)
             val result = try {
                 updater.performUpdate(oneTimeUpdate)
-            } catch (e: CancellationException) {
+            } catch (_: CancellationException) {
                 SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED)
             } catch (e: Exception) {
                 android.util.Log.e("TitlesUpdateService", "Fatal error in service", e)

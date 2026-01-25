@@ -1,4 +1,4 @@
-package com.rds.mews.ui
+package com.rds.mews.ui.custom_elements
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.rds.mews.MainActivity
-import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.ui.grids.SettingsScreen
 import com.rds.mews.ui.grids.SourcesScreen
 import com.rds.mews.ui.grids.TitlesScreen

@@ -31,7 +31,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.localcore.isScheduleExactAlarm
 import com.rds.mews.repositories.MewsRepository
-import com.rds.mews.ui.MainContentPager
+import com.rds.mews.ui.custom_elements.MainContentPager
 import com.rds.mews.ui.custom_elements.MyBottomBar
 import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.ui.theme.MewsTheme
@@ -116,26 +116,38 @@ fun MainScreen(mainActivity: MainActivity) {
         val settingsGridState = rememberLazyGridState()
 
         val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)
-        val pagerState = rememberPagerState(pageCount = { tabs.size })
+        val initialIndex = remember {
+            val idx = tabs.indexOf(MewsRepository.selectedTab.value)
+            if (idx >= 0) idx else 0
+        }
 
-        var isProgrammaticScroll by remember { mutableStateOf(false) }
-        LaunchedEffect(pagerState) {
-            snapshotFlow { pagerState.currentPage }.collect { page ->
-                if (!isProgrammaticScroll) {
-                    val currentTabFromPager = tabs[page]
-                    if (MewsRepository.selectedTab.value != currentTabFromPager) {
-                        MewsRepository.setCurrentTab(currentTabFromPager)
-                    }
+        val pagerState = rememberPagerState(
+            initialPage = initialIndex,
+            pageCount = { tabs.size }
+        )
+
+        var isTabClick by remember { mutableStateOf(false) }
+
+        LaunchedEffect(selectedTab) {
+            val targetIndex = tabs.indexOf(selectedTab)
+            if (targetIndex >= 0 && pagerState.currentPage != targetIndex) {
+                isTabClick = true
+                try {
+                    pagerState.animateScrollToPage(targetIndex)
+                } finally {
+                    isTabClick = false
                 }
             }
         }
 
-        LaunchedEffect(selectedTab) {
-            val targetIndex = tabs.indexOf(selectedTab)
-            if (pagerState.currentPage != targetIndex) {
-                isProgrammaticScroll = true
-                pagerState.animateScrollToPage(targetIndex)
-                isProgrammaticScroll = false
+        LaunchedEffect(pagerState) {
+            snapshotFlow { pagerState.currentPage }.collect { page ->
+                if (!isTabClick) {
+                    val currentTabFromPager = tabs.getOrNull(page)
+                    if (currentTabFromPager != null && MewsRepository.selectedTab.value != currentTabFromPager) {
+                        MewsRepository.setCurrentTab(currentTabFromPager)
+                    }
+                }
             }
         }
 

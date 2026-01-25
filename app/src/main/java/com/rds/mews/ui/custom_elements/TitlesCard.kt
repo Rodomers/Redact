@@ -15,6 +15,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -109,6 +110,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import dev.jeziellago.compose.markdowntext.MarkdownText
 
 @Composable
@@ -153,7 +155,7 @@ fun TitlesCard(
         }
     }
 
-    val showPopup = expansionAnim.value > 0.001f || isExpanded
+    val showPopup = expansionAnim.value > 0f || isExpanded
 
     Surface(
         modifier = modifier
@@ -663,20 +665,6 @@ private fun ExpandedCardContent(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .combinedClickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                        onClick = {},
-                                        onLongClick = {
-                                            copyText()
-                                            Toast.makeText(
-                                                context,
-                                                R.string.titles_card_copied,
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        }
-                                    )
                                     .padding(horizontal = 16.dp)
                             ) {
                                 MarkdownText(
@@ -686,6 +674,24 @@ private fun ExpandedCardContent(
                                         lineHeight = 22.2.sp,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .combinedClickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = {},
+                                            onLongClick = {
+                                                copyText()
+                                                Toast.makeText(
+                                                    context,
+                                                    R.string.titles_card_copied,
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            }
+                                        )
                                 )
                             }
                             Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))

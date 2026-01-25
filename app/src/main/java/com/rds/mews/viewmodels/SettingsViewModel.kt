@@ -218,7 +218,7 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     fun setTitlesAlarmMins(context: Context, value: Int) = viewModelScope.launch {
         repository.setTitlesAlarmMins(value)
-        repository.planTitlesUpdate(context)
+        repository.planTitlesUpdate(context, explicitTimeMins = value)
     }
 
     fun setTitlesUpdFrequency(context: Context, value: AutoUpdateFrequency) = viewModelScope.launch {

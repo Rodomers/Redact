@@ -246,7 +246,7 @@ private fun NPDropdown(
     arrowPosition: ArrowPosition = ArrowPosition.None,
     surfaceColor: Color = MaterialTheme.colorScheme.surfaceContainerLow
 ) {
-    val surfaceWidth = if (timeList) 70.dp else 150.dp
+    val surfaceWidth = if (timeList) 70.dp else 200.dp
     val maxHeight = if (timeList) 180.dp else 360.dp
     val arrowHeight = 8.dp
     val arrowWidth = 16.dp
