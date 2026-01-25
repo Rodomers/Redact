@@ -1,5 +1,6 @@
 package com.rds.mews.core
 
+import android.content.Context
 import android.util.Log
 import com.rds.mews.localcore.Message
 import com.rds.mews.localcore.SummarizationResult
@@ -19,6 +20,7 @@ import java.io.Closeable
 import kotlin.math.pow
 import kotlinx.coroutines.flow.first
 import java.util.regex.Pattern
+import kotlin.math.max
 
 class SmartRateLimiter(private val minIntervalMs: Long = 4000L) {
     private val mutex = Mutex()
@@ -233,14 +235,31 @@ suspend fun validateGeminiKey(apiKey: String, proxyIp: String, proxyKey: String,
     } finally { client.close() }
 }
 
-class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
-    data class Topics(val title: String, val ids: List<Long>?, val weight: Int = 0, val id: Long = 0)
+class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, private val context: Context) {
+    data class Topics(
+        val title: String,
+        val ids: List<Long>?, // Список ID всех сообщений, входящих в тему
+        val weight: Int = 0,
+        val id: Long = 0,
+        var snippet: String = "" // Контекст (топ-3 предложения) для мерджинга
+    )
+
+    // Вспомогательный класс для группировки дублей
+    data class GroupedMessage(
+        val representative: Message, // Самое "полное" сообщение
+        val allIds: MutableList<Long> // Список ID всех дубликатов
+    )
 
     private val SUMMARY_START_BATCH_SIZE = 10
-    private val EXTRACT_START_BATCH_SIZE = 60
+    private val EXTRACT_START_BATCH_SIZE = 70
+
+    // Порог схожести для пре-дедупликации (85%)
+    private val DEDUP_THRESHOLD = 0.85
+
+    // Порог схожести для локального мерджинга по сниппетам (65%)
+    private val MERGE_SNIPPET_THRESHOLD = 0.65
 
     private val TAG = "NewsSummarizer"
-
     private val rateLimiter = SmartRateLimiter(minIntervalMs = 4000L)
 
     private var totalItemsToProcess = 0
@@ -255,14 +274,25 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         maxTopics: Int = 20,
         messageSeconds: Long = 14515200,
         readyFunc: () -> Unit,
-        filterTopics: Boolean = false
+        filterTopics: Boolean = true // Флаг: True = Smart AI Merge, False = Local Algo Merge
     ): SummarizationResult {
         try {
-            Log.d(TAG, "Starting summarizeTopics")
-            val messages = db.getMessages(messageSeconds).sortedBy { it.time }
-            if (messages.isEmpty()) { safeReadyFunc(readyFunc); return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE) }
+            Log.d(TAG, "Starting summarizeTopics. Filter enabled: $filterTopics")
 
+            // 1. Проверяем незавершенную работу
             val unfinishedTitles = db.getTitles().filter { it.text == "<промежуточный текст>" && it.time.toInt() == 0 }
+
+            // 2. Загружаем сообщения только если нужно (нет незавершенной работы)
+            val rawMessages = if (unfinishedTitles.isEmpty()) {
+                val msgs = db.getMessages(messageSeconds).sortedBy { it.time }
+                if (msgs.isEmpty()) {
+                    safeReadyFunc(readyFunc)
+                    return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE)
+                }
+                msgs
+            } else {
+                emptyList()
+            }
 
             val currentLanguage = try {
                 MewsRepository.currentLanguage.first() ?: "english"
@@ -270,10 +300,18 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
 
             baseProgress = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { 0f }
 
+            // === ЭТАП 1: ЭКСТРАКЦИЯ И МЕРДЖИНГ ===
             if (unfinishedTitles.isEmpty()) {
                 try {
                     val extractionTime = System.currentTimeMillis()
-                    processNewsInBatches(maxTopics, messages, currentLanguage, filterTopics)
+
+                    // А. Жесткая дедупликация "на лету"
+                    val groupedMessages = deduplicateMessages(rawMessages)
+                    Log.d(TAG, "Dedup: Input ${rawMessages.size} -> Unique Groups ${groupedMessages.size}")
+
+                    // Б. Обработка батчами + Мердж (AI или Локальный, зависит от флага)
+                    processNewsInBatches(maxTopics, groupedMessages, currentLanguage, filterTopics)
+
                     MewsRepository.setLastTitlesUpdate(extractionTime)
                     baseProgress = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress }
                 } catch (e: GeminiException) {
@@ -286,6 +324,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 }
             }
 
+            // === ЭТАП 2: ФИНАЛЬНАЯ СУММАРИЗАЦИЯ ===
             val titlesToSummarize = db.getTitles().filter { it.text == "<промежуточный текст>" }
                 .map { Topics(it.title, db.dbUnpack(it.ids).mapNotNull { id -> id.toLongOrNull() }, 0, it.id) }
 
@@ -295,7 +334,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             processedItemsCount = 0
 
             val availableProgressSpace = 0.95f - baseProgress
-
             var successCount = 0
             var lastError: SummarizationErrorType? = null
 
@@ -309,12 +347,17 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 batches.forEach { batch ->
                     MewsRepository.setUpdatingState("summarizing_topics")
                     val topicsData = batch.mapNotNull { topic ->
-                        val suitableMessages = topic.ids?.mapNotNull { id -> messages.find { it.id == id } ?: db.getMessage(id) } ?: emptyList()
+                        val suitableMessages = topic.ids?.mapNotNull { id ->
+                            rawMessages.find { it.id == id } ?: db.getMessage(id)
+                        } ?: emptyList()
+
                         if (suitableMessages.isEmpty()) {
                             try { db.delTitle(name = topic.title) } catch (e: Exception) { Log.e(TAG, "Del empty title error", e) }
                             null
                         } else {
-                            Triple(topic, suitableMessages, suitableMessages.joinToString("\n") { "— ${it.mess}" })
+                            val uniqueTextsForSummary = deduplicateForSummaryPayload(suitableMessages)
+                            val contentPayload = uniqueTextsForSummary.joinToString("\n") { "— ${it.mess}" }
+                            Triple(topic, suitableMessages, contentPayload)
                         }
                     }
 
@@ -328,15 +371,18 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                                     val (summary, newTitle) = resultData
                                     val (topic, suitableMessages, _) = originalData
 
-                                    val newSources = db.dbPack(*suitableMessages.map { it.source }.distinct().toTypedArray())
-                                    val newLinks = db.dbPack(*suitableMessages.map { it.id.toString() }.distinct().toTypedArray())
+                                    val allSources = suitableMessages.map { it.source }.distinct()
+                                    val allLinks = suitableMessages.map { it.id.toString() }.distinct()
+
+                                    val newSourcesPack = db.dbPack(*allSources.toTypedArray())
+                                    val newLinksPack = db.dbPack(*allLinks.toTypedArray())
                                     val newTimeVal = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
 
                                     if (newTitle != topic.title) {
                                         db.delTitle(name = topic.title)
-                                        db.addTitle(newTimeVal, newTitle, summary, newSources, newLinks)
+                                        db.addTitle(newTimeVal, newTitle, summary, newSourcesPack, newLinksPack)
                                     } else {
-                                        db.updateTitle(topic.id, topic.title, summary, newSources, newLinks, newTimeVal)
+                                        db.updateTitle(topic.id, topic.title, summary, newSourcesPack, newLinksPack, newTimeVal)
                                     }
                                     successCount++
                                 } catch(e: Exception) { Log.e(TAG, "Save error", e) }
@@ -347,8 +393,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
 
                         topicsData.forEach { (topic, _, _) ->
                             if (!successIds.contains(topic.id)) {
-                                Log.w(TAG, "Topic '${topic.title}' failed summarization. Cleanup zombie.")
-                                try { db.delTitle(name = topic.title) } catch(e: Exception) { Log.e(TAG, "Zombie kill fail", e) }
+                                try { db.delTitle(name = topic.title) } catch(_: Exception) {}
                             }
                         }
                     }
@@ -369,8 +414,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             }
             safeReadyFunc(readyFunc)
             return SummarizationResult.Success
+
         } catch (e: GeminiException) {
-            Log.e(TAG, "Summarization aborted: ${e.errorType}")
             safeReadyFunc(readyFunc)
             return SummarizationResult.Failure(e.errorType, e)
         } catch (e: Exception) {
@@ -378,11 +423,302 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 safeReadyFunc(readyFunc)
                 return SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED)
             }
-            Log.e(TAG, "Global error in summarizeTopics", e)
             safeReadyFunc(readyFunc)
             return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
         }
     }
+
+    // --- ЛОГИКА ДЕДУПЛИКАЦИИ ---
+
+    private fun deduplicateMessages(raw: List<Message>): List<GroupedMessage> {
+        val groups = mutableListOf<GroupedMessage>()
+
+        raw.forEach { msg ->
+            val existingGroup = groups.find { group ->
+                TextComparator.areSimilar(msg.mess, group.representative.mess, DEDUP_THRESHOLD)
+            }
+
+            if (existingGroup != null) {
+                existingGroup.allIds.add(msg.id)
+            } else {
+                groups.add(GroupedMessage(msg, mutableListOf(msg.id)))
+            }
+        }
+        return groups
+    }
+
+    private fun deduplicateForSummaryPayload(messages: List<Message>): List<Message> {
+        val unique = mutableListOf<Message>()
+        messages.forEach { msg ->
+            val exists = unique.any { TextComparator.areSimilar(it.mess, msg.mess, 0.95) }
+            if (!exists) unique.add(msg)
+        }
+        return unique
+    }
+
+    // --- ЛОГИКА ЭКСТРАКЦИИ И МЕРДЖА ---
+
+    private suspend fun processNewsInBatches(maxTopics: Int, uniqueGroups: List<GroupedMessage>, lang: String, filterEnabled: Boolean) {
+        totalItemsToProcess = uniqueGroups.size
+        processedItemsCount = 0
+        val availableSpace = 0.4f
+
+        try { MewsRepository.setUpdatingState("extracting_topics") } catch (_: Exception) {}
+
+        val allExtracted = mutableListOf<Topics>()
+        val batches = uniqueGroups.chunked(EXTRACT_START_BATCH_SIZE)
+
+        coroutineScope {
+            batches.forEach { batch ->
+                // Динамический лимит для экстракции
+                val batchLimit = (batch.size * 0.6).toInt().coerceAtLeast(5)
+
+                // Извлекаем темы и генерируем для них сниппеты
+                val result = adaptiveExtractTopics(batch, batchLimit, lang)
+                allExtracted.addAll(result)
+
+                processedItemsCount += batch.size
+                try {
+                    val relativeProgress = processedItemsCount.toFloat() / totalItemsToProcess.toFloat()
+                    val newProgress = baseProgress + (relativeProgress * availableSpace)
+                    MewsRepository.setUpdatingProgress(newProgress)
+                } catch(_: Exception) {}
+            }
+        }
+
+        if (allExtracted.isEmpty()) {
+            throw GeminiException(SummarizationErrorType.EXTRACT_TOPICS_FAILED, "No topics found")
+        }
+
+        // === ГЛАВНАЯ РАЗВИЛКА МЕРДЖИНГА ===
+
+        val finalTopicsCandidate: List<Topics> = if (filterEnabled) {
+            // ВАРИАНТ А: AI Merge (Если включен фильтр)
+            try {
+                val current = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress + availableSpace }
+                MewsRepository.setUpdatingState("filtering_topics")
+                MewsRepository.setUpdatingProgress(current)
+
+                // Пробуем умный мерджинг
+                smartMergeTopics(allExtracted, lang)
+            } catch (e: Exception) {
+                Log.e(TAG, "Smart merge failed, falling back to algo merge", e)
+                // Если LLM не справилась (сеть, квота) — фолбэк на локальный
+                simpleAlgorithmicMerge(allExtracted)
+            }
+        } else {
+            // ВАРИАНТ Б: Local Merge (Если фильтр выключен)
+            // Используем только алгоритмическое сравнение сниппетов
+            simpleAlgorithmicMerge(allExtracted)
+        }
+
+        // === ФИНАЛЬНАЯ ОБРЕЗКА И СОХРАНЕНИЕ ===
+
+        db.titlesTimeKill(0) // Чистим старое
+
+        finalTopicsCandidate
+            .sortedByDescending { it.weight }
+            .take(maxTopics) // Соблюдаем лимит пользователя
+            .forEach { t -> saveTopicToDb(t) }
+    }
+
+    /**
+     * Быстрый локальный мердж. Склеивает топики, если их сниппеты или заголовки похожи.
+     */
+    private fun simpleAlgorithmicMerge(rawTopics: List<Topics>): List<Topics> {
+        val merged = mutableListOf<Topics>()
+
+        rawTopics.sortedByDescending { it.weight }.forEach { candidate ->
+            val existingIndex = merged.indexOfFirst { existing ->
+                // 1. Сравниваем сниппеты (самый надежный способ)
+                if (existing.snippet.isNotBlank() && candidate.snippet.isNotBlank()) {
+                    TextComparator.areSimilar(existing.snippet, candidate.snippet, MERGE_SNIPPET_THRESHOLD)
+                } else {
+                    // 2. Фолбэк на заголовки
+                    TextComparator.areSimilar(existing.title, candidate.title, 0.75)
+                }
+            }
+
+            if (existingIndex != -1) {
+                val existing = merged[existingIndex]
+                val combinedIds = (existing.ids.orEmpty() + candidate.ids.orEmpty()).distinct()
+                val maxWeight = max(existing.weight, candidate.weight)
+                val bestSnippet = if (existing.snippet.length > candidate.snippet.length) existing.snippet else candidate.snippet
+
+                merged[existingIndex] = existing.copy(
+                    ids = combinedIds,
+                    weight = maxWeight,
+                    snippet = bestSnippet
+                )
+            } else {
+                merged.add(candidate)
+            }
+        }
+        return merged
+    }
+
+    /**
+     * Умный мерджинг с использованием LLM (восстановленный).
+     */
+    private suspend fun smartMergeTopics(topics: List<Topics>, lang: String): List<Topics> {
+        // Рекурсия, если слишком много тем
+        if (topics.size > 150) {
+            val mid = topics.size / 2
+            val left = smartMergeTopics(topics.subList(0, mid), lang)
+            val right = smartMergeTopics(topics.subList(mid, topics.size), lang)
+            return smartMergeTopics(left + right, lang)
+        }
+
+        val indexedInput = topics.mapIndexed { index, t ->
+            JSONObject().apply {
+                put("ix", index)
+                put("t", t.title)
+                put("ctx", t.snippet.take(400)) // Берем достаточно контекста для LLM
+                put("w", t.weight)
+            }
+        }
+        val jsonInput = JSONArray(indexedInput).toString()
+
+        val prompt = """
+            Задача: Объедини дублирующиеся новости в кластеры.
+            Используй поле "ctx" (контекст) чтобы понять, об одном ли событии речь.
+            Если события разные — НЕ объединяй.
+            
+            Ввод: [{"ix": 0, "t": "...", "ctx": "...", "w": 5}].
+            
+            Верни JSON массив:
+            [{"title": "Общий заголовок", "src": [0, 5], "weight": 9}]
+            Где src - это список индексов (ix) из ввода.
+            Язык: $lang.
+            
+            Данные:
+            $jsonInput
+        """.trimIndent()
+
+        rateLimiter.waitIfNeeded()
+        val response = withTimeout(120000L) { llm.sendPrompt(prompt) }
+        val (jsonArray, _) = safeParseJsonArrayLenient(response)
+
+        val mergedResults = mutableListOf<Topics>()
+        // Чтобы не потерять те темы, которые LLM могла "забыть", можно отслеживать использованные индексы,
+        // но для простоты полагаемся на то, что модель вернет всё сгруппированное.
+
+        for (i in 0 until jsonArray.length()) {
+            try {
+                val obj = jsonArray.getJSONObject(i)
+                val sourcesIndices = obj.getJSONArray("src")
+                val mergedIds = mutableSetOf<Long>()
+
+                for (j in 0 until sourcesIndices.length()) {
+                    val idx = sourcesIndices.getInt(j)
+                    if (idx in topics.indices) {
+                        topics[idx].ids?.let { mergedIds.addAll(it) }
+                    }
+                }
+
+                if (mergedIds.isNotEmpty()) {
+                    val w = obj.optInt("weight", 5)
+                    mergedResults.add(Topics(obj.getString("title"), mergedIds.toList(), w))
+                }
+            } catch (_: Exception) {}
+        }
+
+        if (mergedResults.isEmpty()) throw GeminiException(SummarizationErrorType.FILTER_FAILED)
+        return mergedResults
+    }
+
+    private suspend fun adaptiveExtractTopics(batch: List<GroupedMessage>, maxLimit: Int, lang: String): List<Topics> {
+        if (batch.isEmpty()) return emptyList()
+
+        try {
+            rateLimiter.waitIfNeeded()
+
+            val sanitizedBatch = batch.joinToString("\n") { grp ->
+                "• ${grp.representative.mess.replace("\"", "'").replace("`", "").take(400)} (id - ${grp.representative.id})"
+            }
+
+            val prompt = """
+                Проанализируй список новостей. Сгруппируй их по конкретным инфоповодам.
+                Лимит: не более $maxLimit событий (выбирай самые важные).
+                Верни JSON массив: [{"title": "Заголовок", "id": [101, 105], "weight": 8}].
+                weight - важность (1-10). Язык: $lang.
+                Новости:
+                $sanitizedBatch
+            """.trimIndent()
+
+            val response = try {
+                withTimeout(120000L) { llm.sendPrompt(prompt) }
+            } catch (e: GeminiException) {
+                if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
+                if (e.errorType == SummarizationErrorType.NO_NETWORK || e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) throw e
+                throw RuntimeException("Trigger split", e)
+            }
+
+            val (jsonArray, isBroken) = safeParseJsonArrayLenient(response)
+            val topics = mutableListOf<Topics>()
+            val coveredIds = mutableSetOf<Long>()
+
+            for (i in 0 until jsonArray.length()) {
+                try {
+                    val obj = jsonArray.getJSONObject(i)
+                    val idsArr = obj.getJSONArray("id")
+                    val extractedRepIds = (0 until idsArr.length()).map { idsArr.getLong(it) }
+
+                    val fullIdList = mutableListOf<Long>()
+                    extractedRepIds.forEach { repId ->
+                        val group = batch.find { it.representative.id == repId }
+                        if (group != null) {
+                            fullIdList.addAll(group.allIds)
+                            coveredIds.add(repId)
+                        } else {
+                            fullIdList.add(repId)
+                        }
+                    }
+
+                    val w = obj.optInt("weight", 5)
+                    val title = obj.getString("title")
+
+                    // --- ГЕНЕРАЦИЯ СНИППЕТА ---
+                    val representativeMsg = batch.find { it.representative.id == extractedRepIds.firstOrNull() }?.representative
+                    val snippet = if (representativeMsg != null) {
+                            SnippetExtractor.extractSnippet(context, representativeMsg.mess)
+                    } else {
+                        title
+                    }
+
+                    topics.add(Topics(title, fullIdList, w, snippet = snippet))
+
+                } catch (_: Exception) { continue }
+            }
+
+            if (isBroken) {
+                val victimGroups = batch.filter { !coveredIds.contains(it.representative.id) }
+                if (victimGroups.isNotEmpty() && victimGroups.size < batch.size) {
+                    val mid = victimGroups.size / 2
+                    val left = adaptiveExtractTopics(victimGroups.subList(0, mid), maxLimit, lang)
+                    val right = adaptiveExtractTopics(victimGroups.subList(mid, victimGroups.size), maxLimit, lang)
+                    topics.addAll(left + right)
+                }
+            }
+            return topics
+
+        } catch (e: Exception) {
+            if (batch.size > 2 && e !is GeminiException) {
+                val mid = batch.size / 2
+                val left = adaptiveExtractTopics(batch.subList(0, mid), maxLimit / 2, lang)
+                val right = adaptiveExtractTopics(batch.subList(mid, batch.size), maxLimit / 2, lang)
+                return left + right
+            }
+            return emptyList()
+        }
+    }
+
+    private fun saveTopicToDb(t: Topics) {
+        val idsPack = db.dbPack(*(t.ids?.map { it.toString() } ?: emptyList()).toTypedArray())
+        db.addTitle(0, t.title, "<промежуточный текст>", "<промежуточный текст>", idsPack)
+    }
+
+    // --- МЕТОДЫ ГЕНЕРАЦИИ САММАРИ ---
 
     private suspend fun adaptiveSummarizeBatch(
         batch: List<Triple<Topics, List<Message>, String>>,
@@ -402,16 +738,11 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 if (e.errorType == SummarizationErrorType.NO_NETWORK) throw e
                 if (e.errorType == SummarizationErrorType.API_KEY_INVALID) throw e
                 if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) throw e
-
                 if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
 
                 if (e.errorType == SummarizationErrorType.CONTENT_BLOCKED) {
                     if (batch.size <= 1) {
-                        val item = batch.firstOrNull()
-                        item?.let {
-                            Log.e(TAG, "Content blocked for title: '${it.first.title}'. Deleting from DB.")
-                            try { db.delTitle(name = it.first.title) } catch (_: Exception) {}
-                        }
+                        try { db.delTitle(name = batch.first().first.title) } catch (_: Exception) {}
                         return emptyList()
                     }
                     throw RuntimeException("Trigger split due to Blocked Content", e)
@@ -420,7 +751,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             }
 
             val results = mutableListOf<Triple<Long, Pair<String, String>, Triple<Topics, List<Message>, String>>>()
-            val (jsonArray, isBroken) = safeParseJsonArrayLenient(response)
+            val (jsonArray, _) = safeParseJsonArrayLenient(response)
             val processedIds = mutableSetOf<Long>()
 
             for (i in 0 until jsonArray.length()) {
@@ -432,8 +763,10 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
 
                     val original = batch.find { it.first.ids?.contains(id) == true }
                     if (original != null) {
-                        val finalTitle = if (newTitle.isNotBlank()) newTitle else original.first.title
-                        results.add(Triple(id, Pair(summary, finalTitle), original))
+                        val finalTitle = newTitle.ifBlank { original.first.title }
+                        if (summary.isNotBlank()) {
+                            results.add(Triple(id, Pair(summary, finalTitle), original))
+                        }
                         processedIds.add(id)
                     }
                 } catch (_: Exception) {}
@@ -445,232 +778,25 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             }
 
             if (victims.isNotEmpty()) {
-                Log.w(TAG, "Summarization incomplete. Survivors: ${results.size}, Victims: ${victims.size}")
                 val mid = victims.size / 2
                 val left = adaptiveSummarizeBatch(victims.subList(0, mid), bannedWords, lang)
                 val right = adaptiveSummarizeBatch(victims.subList(mid, victims.size), bannedWords, lang)
                 results.addAll(left + right)
             }
-
             return results
 
         } catch (e: Exception) {
-            if (e is GeminiException) {
-                if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED ||
-                    e.errorType == SummarizationErrorType.API_KEY_INVALID ||
-                    e.errorType == SummarizationErrorType.NO_NETWORK) {
-                    throw e
-                }
+            if (e is GeminiException && (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED || e.errorType == SummarizationErrorType.API_KEY_INVALID)) {
+                throw e
             }
-
-            if (batch.size <= 1) {
-                val item = batch.firstOrNull()
-                Log.e(TAG, "Item failed summary completely: ${item?.first?.title}. Error: $e")
-                return emptyList()
+            if (batch.size > 1) {
+                val mid = batch.size / 2
+                val left = adaptiveSummarizeBatch(batch.subList(0, mid), bannedWords, lang)
+                val right = adaptiveSummarizeBatch(batch.subList(mid, batch.size), bannedWords, lang)
+                return left + right
             }
-
-            Log.w(TAG, "Batch summary failed, splitting ${batch.size} items SEQUENTIALLY...")
-
-            val mid = batch.size / 2
-            val left = adaptiveSummarizeBatch(batch.subList(0, mid), bannedWords, lang)
-            val right = adaptiveSummarizeBatch(batch.subList(mid, batch.size), bannedWords, lang)
-            return left + right
+            return emptyList()
         }
-    }
-
-    private suspend fun processNewsInBatches(maxTopics: Int, messages: List<Message>, lang: String, filter: Boolean) {
-        val uniqueMessages = messages.distinctBy { it.id }
-        totalItemsToProcess = uniqueMessages.size
-        processedItemsCount = 0
-
-        val availableSpace = 0.4f
-
-        try {
-            MewsRepository.setUpdatingState("extracting_topics")
-        } catch (_: Exception) {}
-
-        val allExtracted = mutableListOf<Topics>()
-        val batches = uniqueMessages.chunked(EXTRACT_START_BATCH_SIZE)
-
-        coroutineScope {
-            batches.forEach { batch ->
-                val result = adaptiveExtractTopics(batch, maxTopics, lang)
-                allExtracted.addAll(result)
-
-                processedItemsCount += batch.size
-                try {
-                    val relativeProgress = processedItemsCount.toFloat() / totalItemsToProcess.toFloat()
-                    val newProgress = baseProgress + (relativeProgress * availableSpace)
-                    MewsRepository.setUpdatingProgress(newProgress)
-                } catch(_: Exception) {}
-            }
-        }
-
-        if (allExtracted.isEmpty()) {
-            throw GeminiException(SummarizationErrorType.EXTRACT_TOPICS_FAILED, "No topics found")
-        }
-
-        if (filter) {
-            try {
-                val current = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress + availableSpace }
-                MewsRepository.setUpdatingState("filtering_topics")
-                MewsRepository.setUpdatingProgress(current)
-            } catch(_: Exception) {}
-            mergeAndFilterTopics(allExtracted, maxTopics, lang)
-        } else {
-            allExtracted
-                .sortedByDescending { it.weight }
-                .take(maxTopics).forEach { batch ->
-                    db.addTitle(0, batch.title, "<промежуточный текст>", "<промежуточный текст>", db.dbPack(*(batch.ids?.map { it.toString() } ?: emptyList()).toTypedArray()))
-                }
-        }
-    }
-
-    private suspend fun adaptiveExtractTopics(batch: List<Message>, max: Int, lang: String): List<Topics> {
-        if (batch.isEmpty()) return emptyList()
-
-        try {
-            rateLimiter.waitIfNeeded()
-
-            val sanitizedBatch = batch.joinToString("\n") {
-                "• ${it.mess.replace("\"", "'").replace("`", "")} (id - ${it.id})"
-            }
-            val prompt = "Сгруппируй новости по событиям (макс $max). Верни ТОЛЬКО JSON массив: [{\"title\": \"Заголовок\", \"id\": [101, 105], \"weight\": 8}]. Где weight - важность события от 1 до 10. Язык: $lang. Новости:\n$sanitizedBatch"
-
-            val response = try {
-                withTimeout(120000L) { llm.sendPrompt(prompt) }
-            } catch (e: GeminiException) {
-                if (e.errorType == SummarizationErrorType.NO_NETWORK) throw e
-                if (e.errorType == SummarizationErrorType.API_KEY_INVALID) throw e
-                if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) throw e
-
-                if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
-
-                throw RuntimeException("Trigger split", e)
-            }
-
-            val (jsonArray, isBroken) = safeParseJsonArrayLenient(response)
-
-            val topics = mutableListOf<Topics>()
-            val coveredIds = mutableSetOf<Long>()
-
-            for (i in 0 until jsonArray.length()) {
-                try {
-                    val obj = jsonArray.getJSONObject(i)
-                    val idsArr = obj.getJSONArray("id")
-                    val idsList = (0 until idsArr.length()).map { idsArr.getLong(it) }
-                    val w = obj.optInt("weight", 5)
-                    topics.add(Topics(obj.getString("title"), idsList, w))
-                    coveredIds.addAll(idsList)
-                } catch (_: Exception) { continue }
-            }
-
-            if (isBroken) {
-                val victimMessages = batch.filter { !coveredIds.contains(it.id) }
-
-                if (victimMessages.isNotEmpty()) {
-                    if (victimMessages.size < batch.size) {
-                        Log.w(TAG, "Extraction: ${victimMessages.size} victims lost due to broken JSON. Retrying them...")
-                        val mid = victimMessages.size / 2
-                        val left = adaptiveExtractTopics(victimMessages.subList(0, mid), max, lang)
-                        val right = adaptiveExtractTopics(victimMessages.subList(mid, victimMessages.size), max, lang)
-                        topics.addAll(left + right)
-                    } else {
-                        throw RuntimeException("JSON broken and no topics extracted")
-                    }
-                }
-            }
-
-            return topics
-
-        } catch (e: Exception) {
-            if (e is GeminiException) {
-                if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED ||
-                    e.errorType == SummarizationErrorType.API_KEY_INVALID ||
-                    e.errorType == SummarizationErrorType.NO_NETWORK) {
-                    throw e
-                }
-            }
-
-            if (batch.size <= 2) {
-                Log.e(TAG, "Extraction failed for small batch: ${e.message}")
-                return emptyList()
-            }
-
-            Log.w(TAG, "Batch extraction failed, splitting ${batch.size} items SEQUENTIALLY. Reason: ${e.message}")
-            val mid = batch.size / 2
-
-            val left = adaptiveExtractTopics(batch.subList(0, mid), max, lang)
-            val right = adaptiveExtractTopics(batch.subList(mid, batch.size), max, lang)
-            return left + right
-        }
-    }
-
-    private suspend fun mergeAndFilterTopics(topics: List<Topics>, max: Int, lang: String) {
-        val indexedInput = topics.mapIndexed { index, t ->
-            JSONObject().apply {
-                put("ix", index)
-                put("t", t.title)
-                put("w", t.weight)
-            }
-        }
-        val jsonInput = JSONArray(indexedInput).toString()
-
-        val prompt = """
-            Задача: Объедини дублирующиеся новости.
-            На входе: [{"ix": 0, "t": "Заголовок", "w": 5}].
-            Верни JSON массив:
-            [{"title": "Общий заголовок", "src": [0, 5], "weight": 9}]
-            Где src - это список индексов (ix) исходных тем.
-            Язык: $lang.
-            Данные:
-            $jsonInput
-        """.trimIndent()
-
-        try {
-            rateLimiter.waitIfNeeded()
-            val response = withTimeout(60000L) { llm.sendPrompt(prompt) }
-            val (jsonArray, _) = safeParseJsonArrayLenient(response)
-
-            val toAdd = mutableListOf<Topics>()
-            for (i in 0 until jsonArray.length()) {
-                try {
-                    val obj = jsonArray.getJSONObject(i)
-                    val sourcesIndices = obj.getJSONArray("src")
-
-                    val mergedIds = mutableSetOf<Long>()
-                    for (j in 0 until sourcesIndices.length()) {
-                        val idx = sourcesIndices.getInt(j)
-                        if (idx in topics.indices) {
-                            topics[idx].ids?.let { mergedIds.addAll(it) }
-                        }
-                    }
-
-                    if (mergedIds.isNotEmpty()) {
-                        val w = obj.optInt("weight", 5)
-                        toAdd.add(Topics(obj.getString("title"), mergedIds.toList(), w))
-                    }
-                } catch (_: Exception) {}
-            }
-
-            if (toAdd.isEmpty()) throw GeminiException(SummarizationErrorType.FILTER_FAILED)
-
-            db.titlesTimeKill(0)
-            toAdd.sortedByDescending { it.weight }
-                .take(max)
-                .forEach { t -> saveTopicToDb(t) }
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Merge failed, falling back to originals", e)
-            db.titlesTimeKill(0)
-            topics.sortedByDescending { it.weight }
-                .take(max)
-                .forEach { t -> saveTopicToDb(t) }
-        }
-    }
-
-    private fun saveTopicToDb(t: Topics) {
-        db.addTitle(0, t.title, "<промежуточный текст>", "<промежуточный текст>", db.dbPack(*(t.ids?.map { it.toString() } ?: emptyList()).toTypedArray()))
     }
 
     private suspend fun sumTopicsBatch(llm: LLMClient, data: List<Triple<Topics, List<Message>, String>>, banned: String, lang: String): String {
@@ -682,22 +808,19 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             }
         })
 
-        Log.d(TAG, "Generating summary for ${data.size} items. Json length: ${jsonInput.toString().length}")
-
         val prompt = """
-        Ты — профессиональный редактор новостной ленты. Твоя задача — написать живые, вовлекающие саммари для предоставленных тем.
+        Ты — профессиональный редактор новостной ленты. Твоя задача — написать живые, вовлекающие саммари.
         
-        Правила работы:
-        1. **Адаптивный объем (ВАЖНО):** Проанализируй количество фактов в исходном тексте "news_content".
-           - Если информации много и тема сложная: пиши подробно, раскрывай детали, не "комкай" повествование. Целевой объем: до 500 слов.
-           - Если новость стандартная или короткая: пиши емко. Целевой объем: до 300 слов.
-        2. **Стиль:** Smart Casual. Пиши увлекательно, но сохраняй экспертность. Без кликбейта и воды.
-        3. **Фильтр:** Если тема или контент касаются '$banned', поле summary должно быть пустой строкой "".
-        4. **Язык вывода:** $lang.
-        5. **Заголовок:** Проанализируй текущий заголовок "title". Если он плохо отражает суть текста "news_content", сгенерируй новый, более подходящий заголовок. Если старый хорош — оставь его.
+        Правила:
+        1. **Адаптивный объем:** - Сложная тема: до 500 слов, подробно.
+           - Короткая новость: до 300 слов, емко.
+        2. **Стиль:** Smart Casual. Без кликбейта.
+        3. **Фильтр:** Если тема касается '$banned', summary должно быть "".
+        4. **Язык:** $lang.
+        5. **Заголовок:** Если 'title' не отражает суть 'news_content', придумай новый.
         
-        Формат вывода строго JSON (список объектов): 
-        [{"id": 123, "title": "Заголовок темы (новый или старый)", "summary": "Текст саммари..."}]
+        Формат JSON: 
+        [{"id": 123, "title": "Заголовок", "summary": "Текст..."}]
         
         Ввод:
         $jsonInput
@@ -754,8 +877,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             }
 
             if (foundAny) return Pair(rescued, true)
-
-            throw GeminiException(SummarizationErrorType.JSON_PARSING_FAILED, "Structure invalid and irrecoverable")
+            throw GeminiException(SummarizationErrorType.JSON_PARSING_FAILED, "Structure invalid")
         }
     }
 }
