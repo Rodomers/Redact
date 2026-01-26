@@ -21,7 +21,7 @@ object TextComparator {
             return getMd5(text1) == getMd5(text2)
         }
 
-        val score = calculateJaccardSimilarity(text1, text2)
+        val score = calculateJacquardSimilarity(text1, text2)
         return score >= threshold
     }
 
@@ -29,7 +29,7 @@ object TextComparator {
      * Алгоритм Жаккара: (Пересечение слов) / (Объединение слов)
      * Понимает, что "Мама мыла раму" и "Раму мыла мама" — это очень похожие тексты.
      */
-    fun calculateJaccardSimilarity(s1: String, s2: String): Double {
+    fun calculateJacquardSimilarity(s1: String, s2: String): Double {
         val tokens1 = tokenize(s1)
         val tokens2 = tokenize(s2)
 

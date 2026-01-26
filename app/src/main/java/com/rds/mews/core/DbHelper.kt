@@ -15,22 +15,22 @@ class DbHelper(val context: Context) :
             private const val DB_VERSION = 1
             private const val DB_NAME = "MainDB"
 
-            private const val MESS_NAME = "messages"
+            private const val MESSAGES = "messages"
             private const val MESS_ID = "id"
             private const val MESS_TIME = "time"
             private const val MESS_LINK = "link"
             private const val MESS_SOURCE = "source"
-            private const val MESS = "message"
+            private const val MESS_TEXT = "message"
 
-            private const val TITLES_NAME = "titles"
+            private const val TITLES = "titles"
             private const val TITLES_ID = "id"
             private const val TITLES_TIME = "time"
-            private const val TITLE = "title"
+            private const val TITLE_NAME = "title"
             private const val TITLES_TEXT = "text"
             private const val TITLES_SOURCES = "sources"
             private const val TITLES_LINKS = "messages"
 
-            private const val RSS_NAME = "rss"
+            private const val RSS = "rss"
             private const val RSS_ID = "id"
             private const val RSS_SOURCE = "source"
             private const val RSS_LINK = "link"
@@ -38,14 +38,14 @@ class DbHelper(val context: Context) :
 
     override fun onCreate(db: SQLiteDatabase?) {
         db.let {
-            db!!.execSQL("CREATE TABLE IF NOT EXISTS $MESS_NAME ($MESS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
-                    " $MESS_TIME INTEGER, $MESS_SOURCE TEXT, $MESS_LINK TEXT, $MESS TEXT)")
-            db.execSQL("CREATE TABLE IF NOT EXISTS $TITLES_NAME ($TITLES_ID INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                    "$TITLES_TIME INTEGER, $TITLE TEXT, $TITLES_TEXT TEXT, $TITLES_SOURCES TEXT, $TITLES_LINKS TEXT)")
-            db.execSQL("CREATE TABLE IF NOT EXISTS $RSS_NAME ($RSS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
+            db!!.execSQL("CREATE TABLE IF NOT EXISTS $MESSAGES ($MESS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    " $MESS_TIME INTEGER, $MESS_SOURCE TEXT, $MESS_LINK TEXT, $MESS_TEXT TEXT)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS $TITLES ($TITLES_ID INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "$TITLES_TIME INTEGER, $TITLE_NAME TEXT, $TITLES_TEXT TEXT, $TITLES_SOURCES TEXT, $TITLES_LINKS TEXT)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS $RSS ($RSS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
                     " $RSS_SOURCE TEXT, $RSS_LINK TEXT)")
 
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_mess_source ON $MESS_NAME($MESS_SOURCE)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_mess_source ON $MESSAGES($MESS_SOURCE)")
         }
     }
 
@@ -54,8 +54,8 @@ class DbHelper(val context: Context) :
         p1: Int,
         p2: Int
     ) {
-        db!!.execSQL("DROP TABLE IF EXISTS $MESS_NAME")
-        db.execSQL("DROP TABLE IF EXISTS $TITLES_NAME")
+        db!!.execSQL("DROP TABLE IF EXISTS $MESSAGES")
+        db.execSQL("DROP TABLE IF EXISTS $TITLES")
         onCreate(db)
     }
 
@@ -80,7 +80,7 @@ class DbHelper(val context: Context) :
     @Synchronized
     fun findMessage(sourceName: String, mess: String): Message? {
         val db = this.readableDatabase
-        val query = "SELECT * FROM $MESS_NAME WHERE $MESS_SOURCE = ? AND $MESS = ?"
+        val query = "SELECT * FROM $MESSAGES WHERE $MESS_SOURCE = ? AND $MESS_TEXT = ?"
         val args = arrayOf(sourceName, mess)
 
         return db.rawQuery(query, args).use {
@@ -90,7 +90,7 @@ class DbHelper(val context: Context) :
                 val messageTime = cursor.getLong(cursor.getColumnIndexOrThrow(MESS_TIME))
                 val messageLink = cursor.getString(cursor.getColumnIndexOrThrow(MESS_LINK))
                 val messageSource = cursor.getString(cursor.getColumnIndexOrThrow(MESS_SOURCE))
-                val messageText = cursor.getString(cursor.getColumnIndexOrThrow(MESS))
+                val messageText = cursor.getString(cursor.getColumnIndexOrThrow(MESS_TEXT))
 
                 Message(messageId, messageTime, messageLink, messageSource, messageText)
             }
@@ -101,7 +101,7 @@ class DbHelper(val context: Context) :
     @Synchronized
     fun findRSS(sourceName: String = "", sourceLink: String = "", id: Long? = null): RSS? {
         val db = this.readableDatabase
-        val query = "SELECT * FROM $RSS_NAME WHERE $RSS_SOURCE = ? OR $RSS_LINK = ? OR $RSS_ID = ?"
+        val query = "SELECT * FROM $RSS WHERE $RSS_SOURCE = ? OR $RSS_LINK = ? OR $RSS_ID = ?"
         val args = arrayOf(sourceName, sourceLink, id.toString())
 
         return db.rawQuery(query, args).use { cursor ->
@@ -118,7 +118,7 @@ class DbHelper(val context: Context) :
     @Synchronized
     fun getMessage(id: Long?): Message? {
         val db = this.readableDatabase
-        val query = "SELECT * FROM $MESS_NAME WHERE $MESS_ID = ?"
+        val query = "SELECT * FROM $MESSAGES WHERE $MESS_ID = ?"
         val args = arrayOf(id.toString())
 
         return db.rawQuery(query, args).use {
@@ -128,7 +128,7 @@ class DbHelper(val context: Context) :
                 val messageTime = cursor.getLong(cursor.getColumnIndexOrThrow(MESS_TIME))
                 val messageLink = cursor.getString(cursor.getColumnIndexOrThrow(MESS_LINK))
                 val messageSource = cursor.getString(cursor.getColumnIndexOrThrow(MESS_SOURCE))
-                val messageText = cursor.getString(cursor.getColumnIndexOrThrow(MESS))
+                val messageText = cursor.getString(cursor.getColumnIndexOrThrow(MESS_TEXT))
 
                 Message(messageId, messageTime, messageLink, messageSource, messageText)
             } else {
@@ -141,7 +141,7 @@ class DbHelper(val context: Context) :
     fun getMessages(timeSeconds: Long? = null): List<Message> {
         val db = this.readableDatabase
         val list = mutableListOf<Message>()
-        var query = "SELECT * FROM $MESS_NAME"
+        var query = "SELECT * FROM $MESSAGES"
         var args: Array<String>?
         if (timeSeconds != null) {
             query = "$query WHERE $MESS_TIME > ?"
@@ -157,7 +157,7 @@ class DbHelper(val context: Context) :
                     val time = cursor.getLong(cursor.getColumnIndexOrThrow(MESS_TIME))
                     val link = cursor.getString(cursor.getColumnIndexOrThrow(MESS_LINK))
                     val source = cursor.getString(cursor.getColumnIndexOrThrow(MESS_SOURCE))
-                    val mess = cursor.getString(cursor.getColumnIndexOrThrow(MESS))
+                    val mess = cursor.getString(cursor.getColumnIndexOrThrow(MESS_TEXT))
 
                     list.add(Message(id, time, link, source, mess))
                 } while (cursor.moveToNext())
@@ -171,7 +171,7 @@ class DbHelper(val context: Context) :
     fun getTitles(timeSeconds: Long? = null, earlier: Boolean = false): List<Title> {
         val db = this.readableDatabase
         val list = mutableListOf<Title>()
-        var query = "SELECT * FROM $TITLES_NAME"
+        var query = "SELECT * FROM $TITLES"
         var args: Array<String>?
         if (timeSeconds != null) {
             query = when (earlier) {
@@ -189,7 +189,7 @@ class DbHelper(val context: Context) :
                 do {
                     val id = cursor.getLong(cursor.getColumnIndexOrThrow(TITLES_ID))
                     val time = cursor.getLong(cursor.getColumnIndexOrThrow(TITLES_TIME))
-                    val title = cursor.getString(cursor.getColumnIndexOrThrow(TITLE))
+                    val title = cursor.getString(cursor.getColumnIndexOrThrow(TITLE_NAME))
                     val text = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_TEXT))
                     val sources = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_SOURCES))
                     val links = cursor.getString(cursor.getColumnIndexOrThrow(TITLES_LINKS))
@@ -206,7 +206,7 @@ class DbHelper(val context: Context) :
     fun getRSS(id: Long? = null): List<RSS> {
         val db = this.readableDatabase
         val list = mutableListOf<RSS>()
-        var query = "SELECT * FROM $RSS_NAME"
+        var query = "SELECT * FROM $RSS"
         if (id != null) query = "$query WHERE id = $id"
 
         db.rawQuery(query, null).use {
@@ -228,7 +228,7 @@ class DbHelper(val context: Context) :
     @Synchronized
     fun findTitleByID(id: Long): Boolean {
         val db = this.readableDatabase
-        val cursor = db.rawQuery("SELECT $TITLES_ID FROM $TITLES_NAME WHERE $TITLES_ID = ?", arrayOf(id.toString()))
+        val cursor = db.rawQuery("SELECT $TITLES_ID FROM $TITLES WHERE $TITLES_ID = ?", arrayOf(id.toString()))
 
         return cursor.use {
             it.moveToFirst()
@@ -242,12 +242,12 @@ class DbHelper(val context: Context) :
             put(MESS_TIME, messageTime)
             put(MESS_LINK, link)
             put(MESS_SOURCE, source)
-            put(MESS, messageText)
+            put(MESS_TEXT, messageText)
         }
 
         val mess = findMessage(source, messageText)
         val result = when (mess) {
-            null -> db.insert(MESS_NAME, null, values)
+            null -> db.insert(MESSAGES, null, values)
             else -> mess.id
         }
 
@@ -259,14 +259,14 @@ class DbHelper(val context: Context) :
         val db = this.writableDatabase
         val values = ContentValues().apply {
             put(TITLES_TIME , titleTime)
-            put(TITLE, title)
+            put(TITLE_NAME, title)
             put(TITLES_TEXT, text)
             put(TITLES_SOURCES, sources)
             put(TITLES_LINKS, links)
         }
 
         println("$title\n$text")
-        return db.insert(TITLES_NAME, null, values)
+        return db.insert(TITLES, null, values)
     }
 
     @Synchronized
@@ -278,7 +278,7 @@ class DbHelper(val context: Context) :
         }
 
         val result = when(val rssItem = findRSS(source, link)) {
-            null -> db.insert(RSS_NAME, null, values)
+            null -> db.insert(RSS, null, values)
             else -> rssItem.id
         }
 
@@ -289,7 +289,7 @@ class DbHelper(val context: Context) :
     @Synchronized
     fun delMessage(id: Long): Boolean {
         val db = this.writableDatabase
-        val flag = db.delete(MESS_NAME, "$MESS_ID = ?", arrayOf(id.toString())) > 0
+        val flag = db.delete(MESSAGES, "$MESS_ID = ?", arrayOf(id.toString())) > 0
 
         return flag
     }
@@ -297,10 +297,10 @@ class DbHelper(val context: Context) :
     @Synchronized
     fun delTitle(id: Long? = null, name: String? = null): Boolean {
         val db = this.writableDatabase
-        val qPart = if (id != null) "$TITLES_ID = ?" else "$TITLE = ?"
+        val qPart = if (id != null) "$TITLES_ID = ?" else "$TITLE_NAME = ?"
         return when (id) {
-            null -> if (name != null) db.delete(TITLES_NAME, qPart, arrayOf(name)) > 0 else false
-            else -> db.delete(TITLES_NAME, qPart, arrayOf(id.toString())) > 0
+            null -> if (name != null) db.delete(TITLES, qPart, arrayOf(name)) > 0 else false
+            else -> db.delete(TITLES, qPart, arrayOf(id.toString())) > 0
         }
     }
 
@@ -309,8 +309,8 @@ class DbHelper(val context: Context) :
         val db = this.writableDatabase
         val flag = if (source == null && id == null) false
         else {
-            if (source != null) db.delete(RSS_NAME, "$RSS_SOURCE = ?", arrayOf(source)) > 0
-            else db.delete(RSS_NAME, "$RSS_ID = ?", arrayOf(id.toString())) > 0
+            if (source != null) db.delete(RSS, "$RSS_SOURCE = ?", arrayOf(source)) > 0
+            else db.delete(RSS, "$RSS_ID = ?", arrayOf(id.toString())) > 0
         }
 
         return flag
@@ -323,7 +323,7 @@ class DbHelper(val context: Context) :
         val rss = findRSS(id = id) ?: return false
         val oldSource = rss.source
 
-        val queryTitles = "SELECT $TITLES_ID, $TITLES_SOURCES FROM $TITLES_NAME WHERE $TITLES_SOURCES LIKE ?"
+        val queryTitles = "SELECT $TITLES_ID, $TITLES_SOURCES FROM $TITLES WHERE $TITLES_SOURCES LIKE ?"
         val cursor = db.rawQuery(queryTitles, arrayOf("%$oldSource%"))
 
         cursor.use { c ->
@@ -341,7 +341,7 @@ class DbHelper(val context: Context) :
                         val titleValues = ContentValues().apply {
                             put(TITLES_SOURCES, newPackedSources)
                         }
-                        db.update(TITLES_NAME, titleValues, "$TITLES_ID = ?", arrayOf(tId.toString()))
+                        db.update(TITLES, titleValues, "$TITLES_ID = ?", arrayOf(tId.toString()))
                     }
                 } while (c.moveToNext())
             }
@@ -352,8 +352,8 @@ class DbHelper(val context: Context) :
             put(MESS_SOURCE, newSource)
         }
 
-        db.update(MESS_NAME, values, "$MESS_SOURCE = ?", arrayOf(oldSource))
-        return db.update(RSS_NAME, values, "$RSS_SOURCE = ?", arrayOf(oldSource)) > 0
+        db.update(MESSAGES, values, "$MESS_SOURCE = ?", arrayOf(oldSource))
+        return db.update(RSS, values, "$RSS_SOURCE = ?", arrayOf(oldSource)) > 0
     }
 
     @Synchronized
@@ -367,14 +367,14 @@ class DbHelper(val context: Context) :
     ): Boolean {
         val db = this.writableDatabase
         val values = ContentValues().apply {
-            put(TITLES_NAME, name)
+            put(TITLE_NAME, name)
             put(TITLES_TEXT, newText)
             put(TITLES_SOURCES, newSources)
             put(TITLES_LINKS, newLinks)
             put(TITLES_TIME, newTime)
         }
 
-        return db.update(TITLES_NAME, values, "$TITLES_ID = ?", arrayOf(id.toString())) > 0
+        return db.update(TITLES, values, "$TITLES_ID = ?", arrayOf(id.toString())) > 0
     }
 
     @Synchronized
@@ -382,7 +382,7 @@ class DbHelper(val context: Context) :
         val db = this.writableDatabase
         val killTime = System.currentTimeMillis() - timeSeconds * 1000
 
-        return db.delete(MESS_NAME,
+        return db.delete(MESSAGES,
             "$MESS_TIME < ?",
             arrayOf(killTime.toString()))
     }
@@ -392,7 +392,7 @@ class DbHelper(val context: Context) :
         val db = this.writableDatabase
         val killTime = System.currentTimeMillis() - timeSeconds * 1000
 
-        return db.delete(TITLES_NAME,
+        return db.delete(TITLES,
             "$TITLES_TIME < ?",
             arrayOf(killTime.toString()))
     }
@@ -401,13 +401,13 @@ class DbHelper(val context: Context) :
     fun getMessagesForSource(sourceName: String): List<String> {
         val db = this.readableDatabase
         val descriptions = mutableListOf<String>()
-        val query = "SELECT $MESS FROM $MESS_NAME WHERE $MESS_SOURCE = ?"
+        val query = "SELECT $MESS_TEXT FROM $MESSAGES WHERE $MESS_SOURCE = ?"
         val args = arrayOf(sourceName)
 
         db.rawQuery(query, args).use { cursor ->
             if (cursor.moveToFirst()) {
                 do {
-                    val description = cursor.getString(cursor.getColumnIndexOrThrow(MESS))
+                    val description = cursor.getString(cursor.getColumnIndexOrThrow(MESS_TEXT))
                     descriptions.add(description)
                 } while (cursor.moveToNext())
             }

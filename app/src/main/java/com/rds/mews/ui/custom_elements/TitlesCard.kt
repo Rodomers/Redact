@@ -219,7 +219,7 @@ private fun SnippetText(
     alpha: Float = 1f
 ) {
     Text(
-        text = text,
+        text = text.replace(Regex("[*_]"), ""),
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
@@ -549,7 +549,10 @@ private fun ExpandedCardContent(
 
     val shouldAnimateHeader = headerStartColor != headerEndColor
 
-    val copiedText = "${title.title}\n\n${title.text}\n\n${source}: Mews, ${title.sources}"
+    val copiedText = "${title.title}\n\n${title.text}\n\n${source}: Mews, ${title.sources}".replace(
+        Regex("[*_]"),
+        ""
+    )
     fun copyText() {
         clipboardManager.setText(AnnotatedString(copiedText))
     }
