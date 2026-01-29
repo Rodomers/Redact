@@ -79,8 +79,7 @@ fun SourcesCard(
                     text = source,
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                    maxLines = 2
                 )
             }
             CustomIconButton(

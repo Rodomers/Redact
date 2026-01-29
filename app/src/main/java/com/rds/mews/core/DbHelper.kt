@@ -30,7 +30,7 @@ class DbHelper(val context: Context) :
             private const val TITLES_SOURCES = "sources"
             private const val TITLES_LINKS = "messages"
 
-            private const val RSS = "rss"
+            private const val RSS_NAME = "rss"
             private const val RSS_ID = "id"
             private const val RSS_SOURCE = "source"
             private const val RSS_LINK = "link"
@@ -42,7 +42,7 @@ class DbHelper(val context: Context) :
                     " $MESS_TIME INTEGER, $MESS_SOURCE TEXT, $MESS_LINK TEXT, $MESS_TEXT TEXT)")
             db.execSQL("CREATE TABLE IF NOT EXISTS $TITLES ($TITLES_ID INTEGER PRIMARY KEY AUTOINCREMENT, " +
                     "$TITLES_TIME INTEGER, $TITLE_NAME TEXT, $TITLES_TEXT TEXT, $TITLES_SOURCES TEXT, $TITLES_LINKS TEXT)")
-            db.execSQL("CREATE TABLE IF NOT EXISTS $RSS ($RSS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
+            db.execSQL("CREATE TABLE IF NOT EXISTS $RSS_NAME ($RSS_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
                     " $RSS_SOURCE TEXT, $RSS_LINK TEXT)")
 
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_mess_source ON $MESSAGES($MESS_SOURCE)")
@@ -101,7 +101,7 @@ class DbHelper(val context: Context) :
     @Synchronized
     fun findRSS(sourceName: String = "", sourceLink: String = "", id: Long? = null): RSS? {
         val db = this.readableDatabase
-        val query = "SELECT * FROM $RSS WHERE $RSS_SOURCE = ? OR $RSS_LINK = ? OR $RSS_ID = ?"
+        val query = "SELECT * FROM $RSS_NAME WHERE $RSS_SOURCE = ? OR $RSS_LINK = ? OR $RSS_ID = ?"
         val args = arrayOf(sourceName, sourceLink, id.toString())
 
         return db.rawQuery(query, args).use { cursor ->
@@ -206,7 +206,7 @@ class DbHelper(val context: Context) :
     fun getRSS(id: Long? = null): List<RSS> {
         val db = this.readableDatabase
         val list = mutableListOf<RSS>()
-        var query = "SELECT * FROM $RSS"
+        var query = "SELECT * FROM $RSS_NAME"
         if (id != null) query = "$query WHERE id = $id"
 
         db.rawQuery(query, null).use {
@@ -278,7 +278,7 @@ class DbHelper(val context: Context) :
         }
 
         val result = when(val rssItem = findRSS(source, link)) {
-            null -> db.insert(RSS, null, values)
+            null -> db.insert(RSS_NAME, null, values)
             else -> rssItem.id
         }
 
@@ -309,8 +309,8 @@ class DbHelper(val context: Context) :
         val db = this.writableDatabase
         val flag = if (source == null && id == null) false
         else {
-            if (source != null) db.delete(RSS, "$RSS_SOURCE = ?", arrayOf(source)) > 0
-            else db.delete(RSS, "$RSS_ID = ?", arrayOf(id.toString())) > 0
+            if (source != null) db.delete(RSS_NAME, "$RSS_SOURCE = ?", arrayOf(source)) > 0
+            else db.delete(RSS_NAME, "$RSS_ID = ?", arrayOf(id.toString())) > 0
         }
 
         return flag
@@ -353,7 +353,7 @@ class DbHelper(val context: Context) :
         }
 
         db.update(MESSAGES, values, "$MESS_SOURCE = ?", arrayOf(oldSource))
-        return db.update(RSS, values, "$RSS_SOURCE = ?", arrayOf(oldSource)) > 0
+        return db.update(RSS_NAME, values, "$RSS_SOURCE = ?", arrayOf(oldSource)) > 0
     }
 
     @Synchronized

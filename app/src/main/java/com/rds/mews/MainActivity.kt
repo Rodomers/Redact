@@ -2,7 +2,6 @@ package com.rds.mews
 
 import android.app.Application
 import android.app.NotificationManager
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -65,7 +64,7 @@ class MainActivity : ComponentActivity() {
         if (notificationsAllowed != MewsRepository.notificationsGranted.value) {
             MewsRepository.setNotificationsGranted(notificationsAllowed)
         }
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(1)
     }
 
@@ -110,6 +109,7 @@ fun MainScreen(mainActivity: MainActivity) {
 
 //        MewsRepository.setUpdatingTitles(false)
 //        MewsRepository.setLastTitlesUpdate(1768896120000)
+        MewsRepository.setLastTitlesUpdate(1769651400000)
 
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()

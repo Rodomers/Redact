@@ -18,9 +18,9 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.Closeable
-import java.util.regex.Pattern
 import kotlin.math.max
 import kotlin.math.pow
+import java.util.regex.Pattern
 
 class SmartRateLimiter(private val minIntervalMs: Long = 4000L) {
     private val mutex = Mutex()
@@ -245,11 +245,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             Log.d(TAG, "Starting summarizeTopics. Filter enabled: $filterTopics")
 
             val unfinishedTitles = db.getTitles().filter { it.text == "<промежуточный текст>" && it.time.toInt() == 0 }
-
-            // Если есть черновики, значит это повторная попытка (Retry Mode)
             val isRetryMode = unfinishedTitles.isNotEmpty()
 
-            // Загружаем сообщения только для первого прогона
             val rawMessages = if (!isRetryMode) {
                 val msgs = db.getMessages(messageSeconds).sortedBy { it.time }
                 if (msgs.isEmpty()) {
@@ -267,7 +264,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
             baseProgress = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { 0f }
 
-            // === ЭТАП 1: ЭКСТРАКЦИЯ И МЕРДЖИНГ (ТОЛЬКО ЕСЛИ НЕ RETRY) ===
             if (!isRetryMode) {
                 try {
                     val extractionTime = System.currentTimeMillis()
@@ -289,7 +285,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                 }
             }
 
-            // === ЭТАП 2: ФИНАЛЬНАЯ СУММАРИЗАЦИЯ ===
             val titlesToSummarize = db.getTitles().filter { it.text == "<промежуточный текст>" }
                 .map { Topics(it.title, db.dbUnpack(it.ids).mapNotNull { id -> id.toLongOrNull() }, 0, it.id) }
 
@@ -352,7 +347,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                             if (lastError == null) lastError = SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
                         }
 
-                        // Удаляем зомби ТОЛЬКО если это режим повторной попытки (isRetryMode)
                         if (isRetryMode) {
                             topicsData.forEach { (topic, _, _) ->
                                 if (!successIds.contains(topic.id)) {
@@ -518,7 +512,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         val prompt = """
             Задача: Объедини дублирующиеся новости в кластеры.
             Ввод: [{"ix": 0, "t": "...", "ctx": "...", "w": 5}].
-            Верни JSON массив: [{"title": "Общий заголовок", "src": [0, 5], "weight": 9}]
+            Верни ТОЛЬКО JSON массив без Markdown разметки и пояснений:
+            [{"title": "Общий заголовок", "src": [0, 5], "weight": 9}]
             Где src - это список индексов (ix). Язык: $lang.
             Данные: $jsonInput
         """.trimIndent()

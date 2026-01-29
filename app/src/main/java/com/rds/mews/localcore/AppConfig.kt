@@ -5,9 +5,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 enum class DarkTheme(val displayedName: Int, val isDark: Boolean?) {
+    SYSTEM(R.string.settings_system_theme, null),
     LIGHT(R.string.settings_light_theme, false),
-    DARK(R.string.settings_dark_theme, true),
-    SYSTEM(R.string.settings_system_theme, null);
+    DARK(R.string.settings_dark_theme, true);
 
     companion object {
         fun fromName(key: Int): DarkTheme {
@@ -31,13 +31,25 @@ enum class DarkTheme(val displayedName: Int, val isDark: Boolean?) {
 @Serializable
 enum class AppTheme(val themeName: Int, val id: Int) {
     DEFAULT(R.string.settings_theme_classic, 0),
-    MATERIAL(R.string.settings_theme_material, 1);
+    MATERIAL(R.string.settings_theme_material, 1),
+
+    // Новые темы
+    SLATE(R.string.settings_theme_slate, 2),
+    PISTACHIO(R.string.settings_theme_pistachio, 3),
+    SWISS(R.string.settings_theme_swiss, 4),
+    INDUSTRIAL(R.string.settings_theme_industrial, 5),
+    PAPER(R.string.settings_theme_paper, 6),
+    STORM(R.string.settings_theme_storm, 7),
+    COFFEE(R.string.settings_theme_coffee, 8),
+    VIOLET(R.string.settings_theme_violet, 9),
+    PEACH(R.string.settings_theme_peach, 10),
+    INTERNATIONAL(R.string.settings_theme_international, 11);
 
     companion object {
         fun fromId(key: Int): AppTheme {
             return entries.find { it.id == key } ?: DEFAULT
         }
-        
+
         fun fromMonet(isMonet: Boolean): AppTheme {
             return if (isMonet) MATERIAL else DEFAULT
         }
@@ -46,7 +58,9 @@ enum class AppTheme(val themeName: Int, val id: Int) {
 
 @Serializable
 enum class HeadersNum(val stringId: Int, val num: Int) {
+    NUM_5(R.plurals.titles, 5),
     NUM_10(R.plurals.titles, 10),
+    NUM_15(R.plurals.titles, 15),
     NUM_20(R.plurals.titles, 20),
     NUM_30(R.plurals.titles, 30),
     NUM_40(R.plurals.titles, 40),

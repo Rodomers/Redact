@@ -272,34 +272,33 @@ fun SettingsGrid(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val colorSchemeDropdownItems = mutableListOf(
-        stringResource(R.string.settings_system_theme) to { functions.setDarkTheme(DarkTheme.SYSTEM) },
-        stringResource(R.string.settings_light_theme) to { functions.setDarkTheme(DarkTheme.LIGHT) },
-        stringResource(R.string.settings_dark_theme) to { functions.setDarkTheme(DarkTheme.DARK) }
-    )
-
-    val titlesDropdownItems = mutableListOf(
-        pluralStringResource(R.plurals.titles, count = 10, 10) to { functions.setTitlesNum(HeadersNum.NUM_10) },
-        pluralStringResource(R.plurals.titles, count = 20, 20) to { functions.setTitlesNum(HeadersNum.NUM_20) },
-    )
-    if (!state.defaultApiCheck) {
-        titlesDropdownItems.addAll(listOf(
-            pluralStringResource(R.plurals.titles, count = 30, 30) to { functions.setTitlesNum(HeadersNum.NUM_30) },
-            pluralStringResource(R.plurals.titles, count = 40, 40) to { functions.setTitlesNum(HeadersNum.NUM_40) },
-            pluralStringResource(R.plurals.titles, count = 50, 50) to { functions.setTitlesNum(HeadersNum.NUM_50) })
-        )
+    val themesDropdownItems = state.appThemes
+        .filter { theme ->
+            !(theme == AppTheme.MATERIAL && Build.VERSION.SDK_INT < Build.VERSION_CODES.S)
+        }
+        .map { theme ->
+            stringResource(theme.themeName) to { functions.setAppTheme(theme) }
     }
-    else if (state.headersNum.num > 20) functions.setTitlesNum(HeadersNum.NUM_20)
 
-    val limitationDropdownItems = listOf(
-        stringResource(R.string.adaptive) to { functions.setTitlesPeriod(TitlesPeriod.ADAPTIVE) },
-        pluralStringResource(R.plurals.hours, count = 12, 12) to { functions.setTitlesPeriod(TitlesPeriod.HRS_12) },
-        pluralStringResource(R.plurals.hours, count = 24, 24) to { functions.setTitlesPeriod(TitlesPeriod.HRS_24) },
-        pluralStringResource(R.plurals.hours, count = 48, 48) to { functions.setTitlesPeriod(TitlesPeriod.HRS_48) },
-        pluralStringResource(R.plurals.hours, count = 72, 72) to { functions.setTitlesPeriod(TitlesPeriod.HRS_72) },
-        pluralStringResource(R.plurals.hours, count = 96, 96) to { functions.setTitlesPeriod(TitlesPeriod.HRS_96) },
-        pluralStringResource(R.plurals.hours, count = 120, 120) to { functions.setTitlesPeriod(TitlesPeriod.HRS_120) }
-    )
+    val colorSchemeDropdownItems = state.darkThemes.map { theme ->
+        stringResource(theme.displayedName) to { functions.setDarkTheme(theme) }
+    }
+
+    var titlesDropdownItems = state.headersNumList.map { num ->
+        pluralStringResource(num.stringId, num.num, num.num) to { functions.setTitlesNum(num) }
+    }
+    if (state.defaultApiCheck) {
+        titlesDropdownItems = titlesDropdownItems.subList(0, 4)
+        if (state.headersNum.num > 20) functions.setTitlesNum(HeadersNum.NUM_20)
+    }
+
+    val limitationDropdownItems = state.titlesPeriods.map { period ->
+        val text = when (period) {
+            TitlesPeriod.ADAPTIVE -> stringResource(R.string.adaptive)
+            else -> pluralStringResource(period.stringId, period.num ?: 0, period.num ?: 0)
+        }
+        text to { functions.setTitlesPeriod(period) }
+    }
 
     val modelListItemsBuffer = mutableListOf<Pair<String, () -> Unit>>()
     state.geminiModels.forEach {
@@ -320,14 +319,9 @@ fun SettingsGrid(
         }
     }
 
-    val titlesFrequencyItems = listOf (
-        pluralStringResource(R.plurals.hours, count = 12, 12) to { functions.setTitlesUpdFrequency(context, AutoUpdateFrequency.FREQ_12) },
-        pluralStringResource(R.plurals.hours, count = 24, 24) to { functions.setTitlesUpdFrequency(context, AutoUpdateFrequency.FREQ_24) },
-        pluralStringResource(R.plurals.hours, count = 48, 48) to { functions.setTitlesUpdFrequency(context, AutoUpdateFrequency.FREQ_48) },
-        pluralStringResource(R.plurals.hours, count = 72, 72) to { functions.setTitlesUpdFrequency(context, AutoUpdateFrequency.FREQ_72) },
-        pluralStringResource(R.plurals.hours, count = 96, 96) to { functions.setTitlesUpdFrequency(context, AutoUpdateFrequency.FREQ_96) },
-        pluralStringResource(R.plurals.hours, count = 120, 120) to { functions.setTitlesUpdFrequency(context, AutoUpdateFrequency.FREQ_120) }
-    )
+    val titlesFrequencyItems = state.autoUpdateFrequencies.map { freq ->
+        pluralStringResource(freq.stringId, freq.num, freq.num) to { functions.setTitlesUpdFrequency(context, freq) }
+    }
 
     val autoUpdateItems: List<@Composable () -> Unit> = listOf(
         {
@@ -366,12 +360,10 @@ fun SettingsGrid(
         {
             SettingsItem(text = stringResource(R.string.settings_titles_update_frequency), modifier = Modifier.padding(vertical = 8.dp)) {
                 DropdownButton(
-                    buttons = titlesFrequencyItems.map { (text, action) ->
-                        text to { action() }
-                    },
+                    buttons = titlesFrequencyItems,
                     density = density,
                     cornerShape = Shapes.large,
-                    initialSelectedIndex = titlesFrequencyItems.indexOfFirst { it.first.contains(state.alarmFrequency.num.toString()) },
+                    initialSelectedIndex = state.autoUpdateFrequencies.indexOfFirst(state.alarmFrequency::equals),
                     width = 160.dp
                 )
             }
@@ -610,32 +602,37 @@ fun SettingsGrid(
                                 onCheckedChange = { functions.setInnerTime(it) }
                             )
                         }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            SettingsItem(
-                                text = stringResource(R.string.settings_monet_colors),
-                                modifier = Modifier.padding(vertical = verticalArrangement),
-                            ) {
-                                CustomSwitch(
-                                    checked = state.appTheme == AppTheme.MATERIAL,
-                                    onCheckedChange = { functions.setAppTheme(if (it) AppTheme.MATERIAL else AppTheme.DEFAULT) }
-                                )
-                            }
+                        SettingsItem(
+                            text = stringResource(R.string.settings_app_themes),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        ) {
+                            DropdownButton(
+                                buttons = themesDropdownItems,
+                                density = density,
+                                cornerShape = Shapes.large,
+                                initialSelectedIndex = state.appThemes.indexOfFirst(state.appTheme::equals)
+                            )
                         }
+//                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+//                            SettingsItem(
+//                                text = stringResource(R.string.settings_monet_colors),
+//                                modifier = Modifier.padding(vertical = verticalArrangement),
+//                            ) {
+//                                CustomSwitch(
+//                                    checked = state.appTheme == AppTheme.MATERIAL,
+//                                    onCheckedChange = { functions.setAppTheme(if (it) AppTheme.MATERIAL else AppTheme.DEFAULT) }
+//                                )
+//                            }
+//                        }
                         SettingsItem(
                             text = stringResource(R.string.settings_color_scheme),
                             modifier = Modifier.padding(vertical = verticalArrangement)
                         ) {
                             DropdownButton(
-                                buttons = colorSchemeDropdownItems.map { (text, action) ->
-                                    text to { action() }
-                                },
+                                buttons = colorSchemeDropdownItems,
                                 density = density,
                                 cornerShape = Shapes.large,
-                                initialSelectedIndex = when (state.darkTheme) {
-                                    DarkTheme.LIGHT -> 1
-                                    DarkTheme.DARK -> 2
-                                    else -> 0
-                                }
+                                initialSelectedIndex = state.darkThemes.indexOfFirst(state.darkTheme::equals)
                             )
                         }
                     }
@@ -657,14 +654,10 @@ fun SettingsGrid(
                             modifier = Modifier.padding(vertical = verticalArrangement)
                         ) {
                             DropdownButton(
-                                buttons = titlesDropdownItems.map { (text, action) ->
-                                    text to { action() }
-                                },
+                                buttons = titlesDropdownItems,
                                 density = density,
                                 cornerShape = Shapes.large,
-                                initialSelectedIndex = titlesDropdownItems.indexOfFirst {
-                                    it.first.contains(state.headersNum.num.toString())
-                                }.coerceAtLeast(0)
+                                initialSelectedIndex = state.headersNumList.indexOfFirst(state.headersNum::equals)
                             )
                         }
                         SettingsItem(
@@ -672,12 +665,10 @@ fun SettingsGrid(
                             modifier = Modifier.padding(vertical = verticalArrangement)
                         ) {
                             DropdownButton(
-                                buttons = limitationDropdownItems.map { (text, action) ->
-                                    text to { action() }
-                                },
+                                buttons = limitationDropdownItems,
                                 density = density,
                                 cornerShape = Shapes.large,
-                                initialSelectedIndex = TitlesPeriod.entries.indexOf(state.titlesPeriod).coerceAtLeast(0)
+                                initialSelectedIndex = state.titlesPeriods.indexOfFirst(state.titlesPeriod::equals)
                             )
                         }
                         SettingsItem(
@@ -802,21 +793,21 @@ fun SettingsGrid(
                                 onCheckedChange = { functions.setProxyEnabled(it) }
                             )
                         }
-                        SettingsItem(
-                            text = stringResource(R.string.settings_db_clear),
-                            modifier = Modifier.padding(vertical = verticalArrangement)
-                        ) {
-                            CustomTextButton(
-                                inputs = clearBtnInputs,
-                                modifier = Modifier
-                                    .wrapContentSize()
-                                    .widthIn(min = 150.dp, max = 250.dp),
-                                shape = Shapes.large,
-                                defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(
-                                    alpha = 0.98f
-                                )
-                            )
-                        }
+//                        SettingsItem(
+//                            text = stringResource(R.string.settings_db_clear),
+//                            modifier = Modifier.padding(vertical = verticalArrangement)
+//                        ) {
+//                            CustomTextButton(
+//                                inputs = clearBtnInputs,
+//                                modifier = Modifier
+//                                    .wrapContentSize()
+//                                    .widthIn(min = 150.dp, max = 250.dp),
+//                                shape = Shapes.large,
+//                                defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(
+//                                    alpha = 0.98f
+//                                )
+//                            )
+//                        }
                     }
                 }
             }

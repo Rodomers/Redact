@@ -1,6 +1,7 @@
 package com.rds.mews.core
 
 import android.util.Log
+import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
@@ -61,7 +62,8 @@ object SharedHttpClient {
 
             builder.addInterceptor { chain ->
                 val request = chain.request()
-                Log.d("API_LOG", "--> ${request.method} ${request.url}")
+                Log.d("API_LOG", "--> ${request.method} ${request.url.toString().replace(
+                    MewsRepository.SERVER_KEY, "server key")}")
                 try {
                     val response = chain.proceed(request)
                     Log.d("API_LOG", "<-- ${response.code} ${if (response.isSuccessful) "OK" else "FAIL"}")

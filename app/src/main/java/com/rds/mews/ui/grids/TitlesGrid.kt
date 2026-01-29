@@ -345,7 +345,8 @@ fun TitlesGrid(
                     ) else context.getString(date.date)
                         .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
                     isExpanded = groupStates.find { it.group == date }?.expanded ?: true,
-                    onHeaderClick = { changeGroupState(date) }
+                    onHeaderClick = { changeGroupState(date) },
+                    expandable = (!lastTitlesUpdateExists() && groupedItems.isEmpty())
                 )
                 globalIndex++
                 val currentGroupStartIndex = globalIndex

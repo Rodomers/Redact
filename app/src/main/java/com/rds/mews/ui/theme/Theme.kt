@@ -47,6 +47,206 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerLow = MediumGray
 )
 
+// --- 1. Slate Navy ---
+val SlateLightScheme = lightColorScheme(
+    background = SlateLightBg, surface = SlateLightBg,
+    surfaceContainerLow = SlateLightFloat,
+    secondaryContainer = SlateLightContainer,
+    onSecondaryContainer = TextBlack,
+    onSurface = TextBlack, onBackground = TextBlack,
+    primary = SlateLightContainer, onPrimary = TextBlack
+)
+
+val SlateDarkScheme = darkColorScheme(
+    background = SlateDarkBg, surface = SlateDarkBg,
+    surfaceContainerLow = SlateDarkFloat,
+    secondaryContainer = SlateDarkContainer,
+    onSecondaryContainer = TextWhite,
+    onSurface = TextWhite, onBackground = TextWhite,
+    primary = SlateDarkContainer, onPrimary = TextWhite
+)
+
+// --- 2. Pistachio ---
+val PistachioLightScheme = lightColorScheme(
+    background = PistachioLightBg, surface = PistachioLightBg,
+    surfaceContainerLow = PistachioLightFloat,
+    secondaryContainer = PistachioLightContainer,
+    onSecondaryContainer = TextBlack,
+    onSurface = TextBlack, onBackground = TextBlack,
+    primary = PistachioLightContainer, onPrimary = TextBlack
+)
+
+val PistachioDarkScheme = darkColorScheme(
+    background = PistachioDarkBg, surface = PistachioDarkBg,
+    surfaceContainerLow = PistachioDarkFloat,
+    secondaryContainer = PistachioDarkContainer,
+    onSecondaryContainer = TextWhite,
+    onSurface = TextWhite, onBackground = TextWhite,
+    primary = PistachioDarkContainer, onPrimary = TextWhite
+)
+
+// --- 3. Editorial (Swiss) ---
+val SwissLightScheme = lightColorScheme(
+    background = SwissLightBg, surface = SwissLightBg,
+    surfaceContainerLow = SwissLightFloat,
+    secondaryContainer = SwissLightContainer,
+    onSecondaryContainer = TextBlack,
+    onSurface = TextBlack, onBackground = TextBlack,
+    primary = SwissLightContainer, onPrimary = TextBlack
+)
+
+val SwissDarkScheme = darkColorScheme(
+    background = SwissDarkBg, surface = SwissDarkBg,
+    surfaceContainerLow = SwissDarkFloat,
+    secondaryContainer = SwissDarkContainer,
+    onSecondaryContainer = TextWhite,
+    onSurface = TextWhite, onBackground = TextWhite,
+    primary = SwissDarkContainer, onPrimary = TextWhite
+)
+
+// --- 4. Concrete (Industrial) ---
+val ConcreteLightScheme = lightColorScheme(
+    background = ConcreteLightBg, surface = ConcreteLightBg,
+    surfaceContainerLow = ConcreteLightFloat,
+    secondaryContainer = ConcreteLightContainer,
+    onSecondaryContainer = TextBlack,
+    onSurface = TextBlack, onBackground = TextBlack,
+    primary = ConcreteLightContainer, onPrimary = TextBlack
+)
+
+val ConcreteDarkScheme = darkColorScheme(
+    background = ConcreteDarkBg, surface = ConcreteDarkBg,
+    surfaceContainerLow = ConcreteDarkFloat,
+    secondaryContainer = ConcreteDarkContainer,
+    onSecondaryContainer = TextWhite,
+    onSurface = TextWhite, onBackground = TextWhite,
+    primary = ConcreteDarkContainer, onPrimary = TextWhite
+)
+
+// --- 5. Paper ---
+val PaperLightScheme = lightColorScheme(
+    background = PaperLightBg, surface = PaperLightBg,
+    surfaceContainerLow = PaperLightFloat,
+    secondaryContainer = PaperLightContainer,
+    onSecondaryContainer = TextBlack,
+    onSurface = TextBlack, onBackground = TextBlack,
+    primary = PaperLightContainer, onPrimary = TextBlack
+)
+
+val PaperDarkScheme = darkColorScheme(
+    background = PaperDarkBg, surface = PaperDarkBg,
+    surfaceContainerLow = PaperDarkFloat,
+    secondaryContainer = PaperDarkContainer,
+    onSecondaryContainer = TextWhite,
+    onSurface = TextWhite, onBackground = TextWhite,
+    primary = PaperDarkContainer, onPrimary = TextWhite
+)
+
+// --- 6. Storm ---
+val StormLightScheme = lightColorScheme(
+    background = StormLightBg, surface = StormLightBg,
+    surfaceContainerLow = StormLightFloat,
+    secondaryContainer = StormLightContainer,
+    onSecondaryContainer = TextBlack,
+    onSurface = TextBlack, onBackground = TextBlack,
+    primary = StormLightContainer, onPrimary = TextBlack
+)
+
+val StormDarkScheme = darkColorScheme(
+    background = StormDarkBg, surface = StormDarkBg,
+    surfaceContainerLow = StormDarkFloat,
+    secondaryContainer = StormDarkContainer,
+    onSecondaryContainer = TextWhite,
+    onSurface = TextWhite, onBackground = TextWhite,
+    primary = StormDarkContainer, onPrimary = TextWhite
+)
+
+// --- 7. Coffee ---
+val CoffeeLightScheme = lightColorScheme(
+    background = CoffeeLightBg, surface = CoffeeLightBg,
+    surfaceContainerLow = CoffeeLightFloat,
+    secondaryContainer = CoffeeLightContainer,
+    onSecondaryContainer = TextBlack,
+    onSurface = TextBlack, onBackground = TextBlack,
+    primary = CoffeeLightContainer, onPrimary = TextBlack
+)
+
+val CoffeeDarkScheme = darkColorScheme(
+    background = CoffeeDarkBg, surface = CoffeeDarkBg,
+    surfaceContainerLow = CoffeeDarkFloat,
+    secondaryContainer = CoffeeDarkContainer,
+    onSecondaryContainer = TextWhite,
+    onSurface = TextWhite, onBackground = TextWhite,
+    primary = CoffeeDarkContainer, onPrimary = TextWhite
+)
+
+// --- 8. Violet ---
+val VioletLightScheme = lightColorScheme(
+    background = VioletLightBg, surface = VioletLightBg,
+    surfaceContainerLow = VioletLightFloat,
+    secondaryContainer = VioletLightContainer,
+    onSecondaryContainer = TextBlack,
+    onSurface = TextBlack, onBackground = TextBlack,
+    primary = VioletLightContainer, onPrimary = TextBlack
+)
+
+val VioletDarkScheme = darkColorScheme(
+    background = VioletDarkBg, surface = VioletDarkBg,
+    surfaceContainerLow = VioletDarkFloat,
+    secondaryContainer = VioletDarkContainer,
+    onSecondaryContainer = TextWhite,
+    onSurface = TextWhite, onBackground = TextWhite,
+    primary = VioletDarkContainer, onPrimary = TextWhite
+)
+
+// --- 10. Peach Scheme ---
+val PeachLightScheme = lightColorScheme(
+    background = PeachLightBg, surface = PeachLightBg,
+    surfaceContainerLow = PeachLightFloat,
+    secondaryContainer = PeachLightContainer,
+    onSecondaryContainer = TextBlack, // Черный текст (как просил)
+    onSurface = TextBlack, onBackground = TextBlack,
+    primary = PeachLightContainer, onPrimary = TextBlack
+)
+
+val PeachDarkScheme = darkColorScheme(
+    background = PeachDarkBg, surface = PeachDarkBg,
+    surfaceContainerLow = PeachDarkFloat,
+    secondaryContainer = PeachDarkContainer,
+    onSecondaryContainer = TextWhite, // Белый текст (как просил)
+    onSurface = TextWhite, onBackground = TextWhite,
+    primary = PeachDarkContainer, onPrimary = TextWhite
+)
+
+// --- 11. International Scheme ---
+val InterLightScheme = lightColorScheme(
+    background = InterLightBg, surface = InterLightBg,
+    surfaceContainerLow = InterLightFloat,
+
+    // Активные элементы (Свитчи, Табы) -> Красный на Бисквите
+    secondaryContainer = InterLightContainer,
+    onSecondaryContainer = InterLightContent, // <--- ТЕПЕРЬ КРАСНЫЙ ИСПОЛЬЗУЕТСЯ ТУТ
+
+    // Основной текст -> Темно-коричневый (Тинт)
+    onSurface = InterLightText,
+    onBackground = InterLightText,
+
+    primary = InterLightContainer, onPrimary = InterLightText
+)
+
+val InterDarkScheme = darkColorScheme(
+    background = InterDarkBg, surface = InterDarkBg,
+    surfaceContainerLow = InterDarkFloat,
+
+    secondaryContainer = InterDarkContainer,
+    onSecondaryContainer = InterDarkContent,
+
+    onSurface = InterDarkText,
+    onBackground = InterDarkText,
+
+    primary = InterDarkContainer, onPrimary = InterDarkText
+)
+
 // Добавленный объект Typography, который отсутствовал
 val typography = Typography(
     bodyLarge = TextStyle(
@@ -65,50 +265,63 @@ fun MewsTheme(
     systemDarkTheme: Boolean = isSystemInDarkTheme(),
     settingsTheme: DarkTheme,
     appTheme: AppTheme,
-    // Динамические цвета доступны на Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val turnDynamicColor = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) && appTheme == AppTheme.MATERIAL
     val context = LocalContext.current
 
-    val colorScheme = when (settingsTheme) {
-        DarkTheme.LIGHT -> if (turnDynamicColor) dynamicLightColorScheme(context) else LightColorScheme
-        DarkTheme.DARK -> if (turnDynamicColor) dynamicDarkColorScheme(context) else DarkColorScheme
-        else -> when {
-            turnDynamicColor -> if (systemDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-            else -> if (systemDarkTheme) DarkColorScheme else LightColorScheme
+    // 1. Определяем, включен ли сейчас реально темный режим
+    // (на основе настроек приложения ИЛИ системы)
+    val useDarkTheme = when (settingsTheme) {
+        DarkTheme.LIGHT -> false
+        DarkTheme.DARK -> true
+        else -> systemDarkTheme // FOLLOW_SYSTEM
+    }
+
+    // 2. Проверяем доступность Dynamic Color (Android 12+)
+    val useDynamicColor = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) &&
+            dynamicColor &&
+            appTheme == AppTheme.MATERIAL
+
+    // 3. Выбираем цветовую схему
+    val colorScheme = when {
+        useDynamicColor -> {
+            if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        else -> when (appTheme) {
+            // Стандартные и Material (если dynamicColor выключен или старый Android)
+            AppTheme.DEFAULT, AppTheme.MATERIAL -> if (useDarkTheme) DarkColorScheme else LightColorScheme
+
+            // Двухрежимные темы (Светлая + Темная)
+            AppTheme.SLATE -> if (useDarkTheme) SlateDarkScheme else SlateLightScheme
+            AppTheme.PISTACHIO -> if (useDarkTheme) PistachioDarkScheme else PistachioLightScheme
+            AppTheme.SWISS -> if (useDarkTheme) SwissDarkScheme else SwissLightScheme
+            AppTheme.INDUSTRIAL -> if (useDarkTheme) ConcreteDarkScheme else ConcreteLightScheme
+
+            // Специфические (Fallback логика)
+            AppTheme.PAPER -> if (useDarkTheme) PaperDarkScheme else PaperLightScheme
+
+            // Темные атмосферные (Днем -> дефолт светлая, чтобы не слепло)
+            AppTheme.STORM -> if (useDarkTheme) StormDarkScheme else StormLightScheme
+            AppTheme.COFFEE -> if (useDarkTheme) CoffeeDarkScheme else CoffeeLightScheme
+            AppTheme.VIOLET -> if (useDarkTheme) VioletDarkScheme else VioletLightScheme
+            AppTheme.PEACH -> if (useDarkTheme) PeachDarkScheme else PeachLightScheme
+            AppTheme.INTERNATIONAL -> if (useDarkTheme) InterDarkScheme else InterLightScheme
         }
     }
-//    val colorScheme = when {
-//        // Если динамический цвет включен и поддерживается, используем его
-//        dynamicColor && supportsDynamicColor -> {
-//            if (systemDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-//        }
-//        // В противном случае используем вашу логику выбора темы
-//        settingsTheme == "dark" -> DarkColorScheme
-//        settingsTheme == "light" -> LightColorScheme
-//        else -> if (systemDarkTheme) DarkColorScheme else LightColorScheme
-//    }
 
-    // Добавлен SideEffect для управления цветом и иконками системной строки состояния
+    // 4. Настройка системных баров (Status Bar)
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Устанавливаем цвет строки состояния в соответствии с фоном темы
             window.statusBarColor = Color.Transparent.toArgb()
-
-            // Указываем, что контент будет рисоваться под системными панелями
             WindowCompat.setDecorFitsSystemWindows(window, false)
 
-            // Устанавливаем цвет иконок в строке состояния
             val insetsController = WindowCompat.getInsetsController(window, view)
-            when (settingsTheme) {
-                DarkTheme.DARK -> insetsController.isAppearanceLightStatusBars = false
-                DarkTheme.LIGHT -> insetsController.isAppearanceLightStatusBars = true
-                else -> insetsController.isAppearanceLightStatusBars = !systemDarkTheme
-            }
+
+            // Если тема темная -> иконки светлые (false), и наоборот
+            insetsController.isAppearanceLightStatusBars = !useDarkTheme
         }
     }
 

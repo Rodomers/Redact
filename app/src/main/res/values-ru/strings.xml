@@ -36,13 +36,14 @@
     <string name="settings_theme_classic">Классическая</string>
     <string name="settings_monet_colors">Адаптивные цвета</string>
     <string name="settings_color_scheme">Тема оформления</string>
+    <string name="settings_app_themes">Цветовая схема</string>
     <string name="settings_compact_tab">Компактная навигация</string>
     <string name="settings_endure_time">Компактное время</string>
     <string name="settings_show_snippets">Предпросмотр новостей</string>
     <string name="settings_filter_topics">Фильтровать темы</string>
     <string name="settings_titles_auto_update">Автообновление ленты</string>
-    <string name="settings_banned_news">Заблокированные заголовки</string>
-    <string name="settings_unban_new_button">Разбанить заголовок</string>
+    <string name="settings_banned_news">Заблокированные темы</string>
+    <string name="settings_unban_new_button">Разблокировать тему</string>
     <string name="settings_titles_alarm_update">Включить автообновление</string>
     <string name="settings_titles_update_time">Время обновления</string>
     <string name="settings_titles_update_frequency">Интервал обновления</string>
@@ -204,4 +205,15 @@
     <string name="greeting_1">Больше — никакой воды.</string>
     <string name="greeting_2">Мы убрали всё лишнее. Оставили только факты и суть событий.</string>
     <string name="greeting_3">Добавьте источники, потяните экран вниз - и лента оживёт.</string>
+
+    <string name="settings_theme_slate">Графит</string>
+    <string name="settings_theme_pistachio">Фисташка</string>
+    <string name="settings_theme_swiss">Журнал</string>
+    <string name="settings_theme_industrial">Бетон</string>
+    <string name="settings_theme_paper">Газета</string>
+    <string name="settings_theme_storm">Шторм</string>
+    <string name="settings_theme_coffee">Кофе</string>
+    <string name="settings_theme_violet">Фиолетовая</string>
+    <string name="settings_theme_international">Плакат</string>
+    <string name="settings_theme_peach">Персик</string>
 </resources>

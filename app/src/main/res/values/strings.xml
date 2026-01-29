@@ -39,6 +39,7 @@
     <string name="settings_theme_material" translatable="false">Material</string>
     <string name="settings_monet_colors">Adaptive colors</string>
     <string name="settings_color_scheme">Color scheme</string>
+    <string name="settings_app_themes">App theme</string>
     <string name="settings_compact_tab">Compact tab</string>
     <string name="settings_endure_time">Inner timestamps</string>
     <string name="settings_show_snippets">Show snippets</string>
@@ -199,4 +200,15 @@
     <string name="greeting_1">No more noise.</string>
     <string name="greeting_2">We stripped away the clutter. Just facts and the core story.</string>
     <string name="greeting_3">Add sources, pull down to refresh — and your feed will come to life.</string>
+
+    <string name="settings_theme_slate">Slate</string>
+    <string name="settings_theme_pistachio">Pistachio</string>
+    <string name="settings_theme_swiss">Magazine</string>
+    <string name="settings_theme_industrial">Concrete</string>
+    <string name="settings_theme_paper">Newspaper</string>
+    <string name="settings_theme_storm">Storm</string>
+    <string name="settings_theme_coffee">Coffee</string>
+    <string name="settings_theme_violet">Violet</string>
+    <string name="settings_theme_international">Poster</string>
+    <string name="settings_theme_peach">Peach</string>
 </resources>
