@@ -109,7 +109,6 @@ fun MainScreen(mainActivity: MainActivity) {
 
 //        MewsRepository.setUpdatingTitles(false)
 //        MewsRepository.setLastTitlesUpdate(1768896120000)
-        MewsRepository.setLastTitlesUpdate(1769651400000)
 
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()

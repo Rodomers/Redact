@@ -186,6 +186,7 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     fun resetApiKey() = viewModelScope.launch {
         repository.setUserApiKey(_defaultApiKey)
         repository.setLlmModel(defaultGeminiModel)
+        repository.setFilterTopics(false)
         if (repository.titlesNum.value.num > 20) repository.setTitlesNum(HeadersNum.NUM_10)
     }
 

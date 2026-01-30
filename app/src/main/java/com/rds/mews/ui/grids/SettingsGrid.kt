@@ -610,7 +610,7 @@ fun SettingsGrid(
                                 buttons = themesDropdownItems,
                                 density = density,
                                 cornerShape = Shapes.large,
-                                initialSelectedIndex = state.appThemes.indexOfFirst(state.appTheme::equals)
+                                initialSelectedIndex = themesDropdownItems.indexOfFirst{ it.first == stringResource(state.appTheme.themeName) }
                             )
                         }
 //                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

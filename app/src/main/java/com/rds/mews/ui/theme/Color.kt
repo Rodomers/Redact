@@ -117,7 +117,7 @@ val PeachLightContainer = Color(0xFFFDDCC6) // Чистый пастельный
 
 val PeachDarkBg = Color(0xFF1C1412) // Темный с красным подтоном
 val PeachDarkFloat = Color(0xFF261B19)
-val PeachDarkContainer = Color(0xFF4A3028) // Темная терракота
+val PeachDarkContainer = Color(0xFF4B302B) // Темная терракота
 
 // ==========================================
 // 11. International (Интернациональная) - FINAL WARM
