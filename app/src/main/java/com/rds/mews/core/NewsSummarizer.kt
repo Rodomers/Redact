@@ -18,9 +18,9 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.Closeable
+import java.util.regex.Pattern
 import kotlin.math.max
 import kotlin.math.pow
-import java.util.regex.Pattern
 
 class SmartRateLimiter(private val minIntervalMs: Long = 4000L) {
     private val mutex = Mutex()
@@ -28,17 +28,17 @@ class SmartRateLimiter(private val minIntervalMs: Long = 4000L) {
 
     suspend fun waitIfNeeded() {
         mutex.withLock {
-            val now = System.currentTimeMillis()
+            val now = System.nanoTime() / 1_000_000
             if (now < nextAllowedTime) {
                 delay(nextAllowedTime - now)
             }
-            nextAllowedTime = System.currentTimeMillis() + minIntervalMs
+            nextAllowedTime = (System.nanoTime() / 1_000_000) + minIntervalMs
         }
     }
 
     suspend fun penalize() {
         mutex.withLock {
-            val now = System.currentTimeMillis()
+            val now = System.nanoTime() / 1_000_000
             val penaltyTarget = now + 10000L
             if (penaltyTarget > nextAllowedTime) {
                 nextAllowedTime = penaltyTarget
@@ -58,6 +58,8 @@ class LLMClient(
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.PROXY_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
     private val jsonParser = SharedHttpClient.jsonParser
     private val MAX_RETRIES = 3
+
+    private val JSON_ARRAY_PATTERN = Pattern.compile("\\[.*?]", Pattern.DOTALL)
 
     suspend fun sendPrompt(prompt: String): String {
         val requestBodyObj = GeminiRequest(
@@ -178,8 +180,33 @@ class LLMClient(
                 val seconds = matcher.group(1)?.toDoubleOrNull()
                 if (seconds != null) return (seconds * 1000).toLong()
             }
-        } catch (e: Exception) { }
+        } catch (_: Exception) { }
         return 0L
+    }
+
+    // Новый надежный парсер с Regex
+    fun safeParseJsonArrayLenient(str: String): Pair<JSONArray, Boolean> {
+        // Пытаемся найти самый внешний массив [...]
+        val matcher = JSON_ARRAY_PATTERN.matcher(str)
+        if (matcher.find()) {
+            val jsonCandidate = matcher.group()
+            try {
+                return Pair(JSONArray(jsonCandidate), false)
+            } catch (_: JSONException) {
+                // Если не вышло, пробуем старый метод обрезки
+            }
+        }
+
+        // Фолбэк на старую логику обрезки
+        val clean = str.trim().removePrefix("```json").removeSuffix("```").trim()
+        try { return Pair(JSONArray(clean), false) } catch (_: JSONException) {
+            val lastObjEnd = clean.lastIndexOf(']')
+            val start = clean.indexOf('[')
+            if (start != -1 && lastObjEnd != -1 && lastObjEnd > start) {
+                try { return Pair(JSONArray(clean.substring(start, lastObjEnd + 1)), true) } catch (_: Exception) {}
+            }
+            return Pair(JSONArray(), true)
+        }
     }
 
     override fun close() { httpClient.close() }
@@ -201,7 +228,7 @@ suspend fun validateGeminiKey(apiKey: String, proxyIp: String, proxyKey: String,
     return try {
         val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
         client.get(url).status == 200
-    } catch (e: Exception) { false } finally { client.close() }
+    } catch (_: Exception) { false } finally { client.close() }
 }
 
 class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, private val context: Context) {
@@ -219,8 +246,16 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         val allIds: MutableList<Long>
     )
 
-    private val SUMMARY_START_BATCH_SIZE = 10
-    private val EXTRACT_START_BATCH_SIZE = 80
+    // Внутренний класс для оптимизации дедупликации (Pre-calculated sanitized text)
+    private data class PreparedMessage(
+        val msg: Message,
+        val cleanText: String
+    )
+
+    // Token Bucket Limits
+    private val BATCH_CHAR_LIMIT = 25000
+    private val SINGLE_NEWS_CHAR_LIMIT = 3000
+
     private val DEDUP_THRESHOLD = 0.85
     private val MERGE_SNIPPET_THRESHOLD = 0.65
 
@@ -254,9 +289,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                     return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE)
                 }
                 msgs
-            } else {
-                emptyList()
-            }
+            } else { emptyList() }
 
             val currentLanguage = try {
                 MewsRepository.currentLanguage.first() ?: "english"
@@ -292,14 +325,11 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
             totalItemsToProcess = titlesToSummarize.size
             processedItemsCount = 0
+            val batches = titlesToSummarize.chunked(10)
             val availableProgressSpace = 0.95f - baseProgress
             var successCount = 0
             var lastError: SummarizationErrorType? = null
-            val bannedWords = try {
-                MewsRepository.bannedNewsFlow.value.joinToString("'; '")
-            } catch (_: Exception) { "" }
-
-            val batches = titlesToSummarize.chunked(SUMMARY_START_BATCH_SIZE)
+            val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
 
             coroutineScope {
                 batches.forEach { batch ->
@@ -310,48 +340,61 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                         } ?: emptyList()
 
                         if (suitableMessages.isEmpty()) {
-                            try { db.delTitle(name = topic.title) } catch (e: Exception) { Log.e(TAG, "Del empty title error", e) }
+                            try { db.delTitle(name = topic.title) } catch (_: Exception) {}
                             null
                         } else {
                             val uniqueTextsForSummary = deduplicateForSummaryPayload(suitableMessages)
-                            val contentPayload = uniqueTextsForSummary.joinToString("\n") { "— ${it.mess}" }
+                            val contentPayload = uniqueTextsForSummary.joinToString("\n") { "— ${it.mess.take(SINGLE_NEWS_CHAR_LIMIT)}" }
                             Triple(topic, suitableMessages, contentPayload)
                         }
                     }
 
                     if (topicsData.isNotEmpty()) {
-                        val results = adaptiveSummarizeBatch(topicsData, bannedWords, currentLanguage)
-                        val successIds = results.map { it.first }.toSet()
+                        try {
+                            // Передаем depth=0 в начало рекурсии
+                            val results = adaptiveSummarizeBatch(topicsData, bannedWords, currentLanguage, 0)
 
-                        if (results.isNotEmpty()) {
-                            results.forEach { (_, resultData, originalData) ->
-                                try {
-                                    val (summary, newTitle) = resultData
-                                    val (topic, suitableMessages, _) = originalData
-                                    val allSources = suitableMessages.map { it.source }.distinct()
-                                    val allLinks = suitableMessages.map { it.id.toString() }.distinct()
-                                    val newSourcesPack = db.dbPack(*allSources.toTypedArray())
-                                    val newLinksPack = db.dbPack(*allLinks.toTypedArray())
-                                    val newTimeVal = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
+                            if (results.isNotEmpty()) {
+                                results.forEach { (_, resultData, originalData) ->
+                                    try {
+                                        val (summary, newTitle) = resultData
+                                        val (topic, suitableMessages, _) = originalData
+                                        val allSources = suitableMessages.map { it.source }.distinct()
+                                        val allLinks = suitableMessages.map { it.id.toString() }.distinct()
+                                        val newSourcesPack = db.dbPack(*allSources.toTypedArray())
+                                        val newLinksPack = db.dbPack(*allLinks.toTypedArray())
+                                        val newTimeVal = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
 
-                                    if (newTitle != topic.title) {
-                                        db.delTitle(name = topic.title)
-                                        db.addTitle(newTimeVal, newTitle, summary, newSourcesPack, newLinksPack)
-                                    } else {
-                                        db.updateTitle(topic.id, topic.title, summary, newSourcesPack, newLinksPack, newTimeVal)
-                                    }
-                                    successCount++
-                                } catch(e: Exception) { Log.e(TAG, "Save error", e) }
-                            }
-                        } else {
-                            if (lastError == null) lastError = SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
-                        }
-
-                        if (isRetryMode) {
-                            topicsData.forEach { (topic, _, _) ->
-                                if (!successIds.contains(topic.id)) {
-                                    try { db.delTitle(name = topic.title) } catch(_: Exception) {}
+                                        if (newTitle != topic.title) {
+                                            db.delTitle(name = topic.title)
+                                            db.addTitle(newTimeVal, newTitle, summary, newSourcesPack, newLinksPack)
+                                        } else {
+                                            db.updateTitle(topic.id, topic.title, summary, newSourcesPack, newLinksPack, newTimeVal)
+                                        }
+                                        successCount++
+                                    } catch(e: Exception) { Log.e(TAG, "Save error", e) }
                                 }
+                            } else {
+                                if (lastError == null) lastError = SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
+                            }
+
+                            if (isRetryMode) {
+                                val successIds = results.map { it.first }.toSet()
+                                topicsData.forEach { (topic, _, _) ->
+                                    if (!successIds.contains(topic.id)) {
+                                        try { db.delTitle(name = topic.title) } catch(_: Exception) {}
+                                    }
+                                }
+                            }
+
+                        } catch (e: GeminiException) {
+                            if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED ||
+                                e.errorType == SummarizationErrorType.NO_NETWORK ||
+                                e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) {
+                                Log.w(TAG, "Transient error: ${e.errorType}. Preserving drafts.")
+                                lastError = e.errorType
+                            } else {
+                                topicsData.forEach { (t, _, _) -> try { db.delTitle(name = t.title) } catch(_: Exception){} }
                             }
                         }
                     }
@@ -385,18 +428,47 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         }
     }
 
+    private fun createBatches(groups: List<GroupedMessage>): List<List<GroupedMessage>> {
+        val batches = mutableListOf<List<GroupedMessage>>()
+        var currentBatch = mutableListOf<GroupedMessage>()
+        var currentBatchLen = 0
+
+        for (group in groups) {
+            val msgLen = group.representative.mess.take(SINGLE_NEWS_CHAR_LIMIT).length
+            if (currentBatchLen + msgLen > BATCH_CHAR_LIMIT && currentBatch.isNotEmpty()) {
+                batches.add(currentBatch)
+                currentBatch = mutableListOf()
+                currentBatchLen = 0
+            }
+            currentBatch.add(group)
+            currentBatchLen += msgLen
+        }
+        if (currentBatch.isNotEmpty()) batches.add(currentBatch)
+        return batches
+    }
+
+    // Оптимизированная дедупликация с одним проходом санитизации
     private fun deduplicateMessages(raw: List<Message>): List<GroupedMessage> {
+        // 1. Pre-calculate sanitized text (O(N))
+        val prepared = raw.map { PreparedMessage(it, TextSanitizer.sanitize(it.mess)) }
         val groups = mutableListOf<GroupedMessage>()
-        raw.forEach { msg ->
-            val cleanMsg = TextSanitizer.sanitize(msg.mess)
+
+        // 2. Compare using pre-calculated strings (O(N^2) but faster)
+        prepared.forEach { pMsg ->
             val existingGroup = groups.find { group ->
+                // ВАЖНО: representative в группе тоже должен быть уже чистым, но мы храним оригинал.
+                // Чтобы не чистить снова, можно хранить структуру группы сложнее, но ради простоты
+                // здесь мы санитизируем representative снова.
+                // Для макс. оптимизации можно было хранить PreparedMessage внутри GroupedMessage,
+                // но это потребует изменения data class.
+                // Пока оставим так, так как мы уже выиграли 50% работы на входном списке.
                 val cleanGroup = TextSanitizer.sanitize(group.representative.mess)
-                TextComparator.areSimilar(cleanMsg, cleanGroup, DEDUP_THRESHOLD)
+                TextComparator.areSimilar(pMsg.cleanText, cleanGroup, DEDUP_THRESHOLD)
             }
             if (existingGroup != null) {
-                existingGroup.allIds.add(msg.id)
+                existingGroup.allIds.add(pMsg.msg.id)
             } else {
-                groups.add(GroupedMessage(msg, mutableListOf(msg.id)))
+                groups.add(GroupedMessage(pMsg.msg, mutableListOf(pMsg.msg.id)))
             }
         }
         return groups
@@ -404,11 +476,10 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
     private fun deduplicateForSummaryPayload(messages: List<Message>): List<Message> {
         val unique = mutableListOf<Message>()
+        // Здесь список маленький (один топик), оптимизация не критична
         messages.forEach { msg ->
             val cleanMsg = TextSanitizer.sanitize(msg.mess)
-            val exists = unique.any {
-                TextComparator.areSimilar(TextSanitizer.sanitize(it.mess), cleanMsg, 0.95)
-            }
+            val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.mess), cleanMsg, 0.95) }
             if (!exists) unique.add(msg)
         }
         return unique
@@ -422,12 +493,13 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         try { MewsRepository.setUpdatingState("extracting_topics") } catch (_: Exception) {}
 
         val allExtracted = mutableListOf<Topics>()
-        val batches = uniqueGroups.chunked(EXTRACT_START_BATCH_SIZE)
+        val batches = createBatches(uniqueGroups)
 
         coroutineScope {
             batches.forEach { batch ->
-                val batchLimit = (batch.size * 0.6).toInt().coerceAtLeast(5)
-                val result = adaptiveExtractTopics(batch, batchLimit, lang)
+                val batchLimit = (batch.size * 0.6).toInt().coerceAtLeast(3)
+                // depth = 0
+                val result = adaptiveExtractTopics(batch, batchLimit, lang, 0)
                 allExtracted.addAll(result)
 
                 processedItemsCount += batch.size
@@ -439,9 +511,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             }
         }
 
-        if (allExtracted.isEmpty()) {
-            throw GeminiException(SummarizationErrorType.EXTRACT_TOPICS_FAILED, "No topics found")
-        }
+        if (allExtracted.isEmpty()) throw GeminiException(SummarizationErrorType.EXTRACT_TOPICS_FAILED, "No topics found")
 
         val finalTopicsCandidate: List<Topics> = if (filterEnabled) {
             try {
@@ -449,7 +519,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                 MewsRepository.setUpdatingState("filtering_topics")
                 MewsRepository.setUpdatingProgress(current)
 
-                val smartMerged = smartMergeTopics(allExtracted, lang)
+                // depth = 0
+                val smartMerged = smartMergeTopics(allExtracted, lang, 0)
                 simpleAlgorithmicMerge(smartMerged)
             } catch (e: Exception) {
                 Log.e(TAG, "Smart merge failed, falling back to algo merge", e)
@@ -484,7 +555,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                 val combinedIds = (existing.ids.orEmpty() + candidate.ids.orEmpty()).distinct()
                 val maxWeight = max(existing.weight, candidate.weight)
                 val bestSnippet = if (existing.snippet.length > candidate.snippet.length) existing.snippet else candidate.snippet
-
                 merged[existingIndex] = existing.copy(ids = combinedIds, weight = maxWeight, snippet = bestSnippet)
             } else {
                 merged.add(candidate)
@@ -493,10 +563,12 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         return merged
     }
 
-    private suspend fun smartMergeTopics(topics: List<Topics>, lang: String): List<Topics> {
-        if (topics.size > 150) {
+    private suspend fun smartMergeTopics(topics: List<Topics>, lang: String, depth: Int): List<Topics> {
+        // Лимит рекурсии (3)
+        if (topics.size > 150 && depth < 3) {
             val mid = topics.size / 2
-            return smartMergeTopics(topics.subList(0, mid), lang) + smartMergeTopics(topics.subList(mid, topics.size), lang)
+            return smartMergeTopics(topics.subList(0, mid), lang, depth + 1) +
+                    smartMergeTopics(topics.subList(mid, topics.size), lang, depth + 1)
         }
 
         val indexedInput = topics.mapIndexed { index, t ->
@@ -512,7 +584,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         val prompt = """
             Задача: Объедини дублирующиеся новости в кластеры.
             Ввод: [{"ix": 0, "t": "...", "ctx": "...", "w": 5}].
-            Верни ТОЛЬКО JSON массив без Markdown разметки и пояснений:
+            Верни ТОЛЬКО JSON массив без Markdown и пояснений:
             [{"title": "Общий заголовок", "src": [0, 5], "weight": 9}]
             Где src - это список индексов (ix). Язык: $lang.
             Данные: $jsonInput
@@ -520,7 +592,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
         rateLimiter.waitIfNeeded()
         val response = withTimeout(120000L) { llm.sendPrompt(prompt) }
-        val (jsonArray, _) = safeParseJsonArrayLenient(response)
+        val (jsonArray, _) = llm.safeParseJsonArrayLenient(response) // Use LLMClient method
 
         val mergedResults = mutableListOf<Topics>()
         for (i in 0 until jsonArray.length()) {
@@ -550,13 +622,13 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         return mergedResults
     }
 
-    private suspend fun adaptiveExtractTopics(batch: List<GroupedMessage>, maxLimit: Int, lang: String): List<Topics> {
+    private suspend fun adaptiveExtractTopics(batch: List<GroupedMessage>, maxLimit: Int, lang: String, depth: Int): List<Topics> {
         if (batch.isEmpty()) return emptyList()
 
         try {
             rateLimiter.waitIfNeeded()
             val sanitizedBatch = batch.joinToString("\n") { grp ->
-                "• ${grp.representative.mess.replace("\"", "'").replace("`", "").take(400)} (id - ${grp.representative.id})"
+                "• ${grp.representative.mess.replace("\"", "'").replace("`", "").take(SINGLE_NEWS_CHAR_LIMIT)} (id - ${grp.representative.id})"
             }
 
             val prompt = """
@@ -570,12 +642,13 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             val response = try {
                 withTimeout(120000L) { llm.sendPrompt(prompt) }
             } catch (e: GeminiException) {
+                // Если ошибка квоты - не делим, а падаем
                 if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
                 if (e.errorType == SummarizationErrorType.NO_NETWORK || e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) throw e
                 throw RuntimeException("Trigger split", e)
             }
 
-            val (jsonArray, isBroken) = safeParseJsonArrayLenient(response)
+            val (jsonArray, isBroken) = llm.safeParseJsonArrayLenient(response)
             val topics = mutableListOf<Topics>()
             val coveredIds = mutableSetOf<Long>()
 
@@ -601,31 +674,29 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
                     val representativeMsg = batch.find { it.representative.id == extractedRepIds.firstOrNull() }?.representative
                     val snippet = if (representativeMsg != null) {
-                        SnippetExtractor.extractSnippet(context, representativeMsg.mess)
-                    } else {
-                        title
-                    }
+                        SnippetExtractor.extractSnippet(context, representativeMsg.mess.take(SINGLE_NEWS_CHAR_LIMIT))
+                    } else { title }
 
                     topics.add(Topics(title, fullIdList, w, snippet = snippet))
                 } catch (_: Exception) { continue }
             }
 
-            if (isBroken) {
+            if (isBroken && depth < 3) {
                 val victimGroups = batch.filter { !coveredIds.contains(it.representative.id) }
                 if (victimGroups.isNotEmpty() && victimGroups.size < batch.size) {
                     val mid = victimGroups.size / 2
-                    val left = adaptiveExtractTopics(victimGroups.subList(0, mid), maxLimit, lang)
-                    val right = adaptiveExtractTopics(victimGroups.subList(mid, victimGroups.size), maxLimit, lang)
+                    val left = adaptiveExtractTopics(victimGroups.subList(0, mid), maxLimit, lang, depth + 1)
+                    val right = adaptiveExtractTopics(victimGroups.subList(mid, victimGroups.size), maxLimit, lang, depth + 1)
                     topics.addAll(left + right)
                 }
             }
             return topics
 
         } catch (e: Exception) {
-            if (batch.size > 2 && e !is GeminiException) {
+            if (batch.size > 2 && e !is GeminiException && depth < 3) {
                 val mid = batch.size / 2
-                val left = adaptiveExtractTopics(batch.subList(0, mid), maxLimit / 2, lang)
-                val right = adaptiveExtractTopics(batch.subList(mid, batch.size), maxLimit / 2, lang)
+                val left = adaptiveExtractTopics(batch.subList(0, mid), maxLimit / 2, lang, depth + 1)
+                val right = adaptiveExtractTopics(batch.subList(mid, batch.size), maxLimit / 2, lang, depth + 1)
                 return left + right
             }
             return emptyList()
@@ -640,7 +711,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
     private suspend fun adaptiveSummarizeBatch(
         batch: List<Triple<Topics, List<Message>, String>>,
         bannedWords: String,
-        lang: String
+        lang: String,
+        depth: Int
     ): List<Triple<Long, Pair<String, String>, Triple<Topics, List<Message>, String>>> {
         if (batch.isEmpty()) return emptyList()
 
@@ -661,7 +733,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             }
 
             val results = mutableListOf<Triple<Long, Pair<String, String>, Triple<Topics, List<Message>, String>>>()
-            val (jsonArray, _) = safeParseJsonArrayLenient(response)
+            val (jsonArray, _) = llm.safeParseJsonArrayLenient(response)
             val processedIds = mutableSetOf<Long>()
 
             for (i in 0 until jsonArray.length()) {
@@ -680,17 +752,18 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             }
 
             val victims = batch.filter { item -> !processedIds.contains(item.first.ids?.firstOrNull() ?: 0L) }
-            if (victims.isNotEmpty() && victims.size < batch.size) {
+            if (victims.isNotEmpty() && victims.size < batch.size && depth < 3) {
                 val mid = victims.size / 2
-                results.addAll(adaptiveSummarizeBatch(victims.subList(0, mid), bannedWords, lang))
-                results.addAll(adaptiveSummarizeBatch(victims.subList(mid, victims.size), bannedWords, lang))
+                results.addAll(adaptiveSummarizeBatch(victims.subList(0, mid), bannedWords, lang, depth + 1))
+                results.addAll(adaptiveSummarizeBatch(victims.subList(mid, victims.size), bannedWords, lang, depth + 1))
             }
             return results
         } catch (e: Exception) {
             if (e is GeminiException && (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED || e.errorType == SummarizationErrorType.API_KEY_INVALID)) throw e
-            if (batch.size > 1) {
+            if (batch.size > 1 && depth < 3) {
                 val mid = batch.size / 2
-                return adaptiveSummarizeBatch(batch.subList(0, mid), bannedWords, lang) + adaptiveSummarizeBatch(batch.subList(mid, batch.size), bannedWords, lang)
+                return adaptiveSummarizeBatch(batch.subList(0, mid), bannedWords, lang, depth + 1) +
+                        adaptiveSummarizeBatch(batch.subList(mid, batch.size), bannedWords, lang, depth + 1)
             }
             return emptyList()
         }
@@ -706,26 +779,17 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         })
 
         val prompt = """
-        Ты — редактор новостей. Напиши живые саммари.
-        1. Объем: до 500 слов (лонгрид), до 300 (заметка).
-        2. Стиль: Smart Casual.
-        3. Фильтр: Если про '$banned', summary = "".
-        4. Язык: $lang.
-         JSON: [{"id": 123, "title": "...", "summary": "..."}]
+        Ты — редактор. Напиши живые саммари (до 500 слов).
+        1. Стиль: Smart Casual.
+        2. Фильтр: Если про '$banned', summary = "".
+        3. Запрещено: Вводные фразы ("В статье говорится", "Автор сообщает"). Сразу к сути.
+        4.Язык: Язык саммари - ${lang}.
+        
+        Пример плохо: "В данной статье рассказывается о росте цен."
+        Пример хорошо: "Цены на бензин выросли на 5% из-за новых акцизов."
+        
         Ввод: $jsonInput
         """.trimIndent()
         return llm.sendPrompt(prompt)
-    }
-
-    private fun safeParseJsonArrayLenient(str: String): Pair<JSONArray, Boolean> {
-        val clean = str.trim().removePrefix("```json").removeSuffix("```").trim()
-        try { return Pair(JSONArray(clean), false) } catch (_: JSONException) {
-            val lastObjEnd = clean.lastIndexOf(']')
-            val start = clean.indexOf('[')
-            if (start != -1 && lastObjEnd != -1 && lastObjEnd > start) {
-                try { return Pair(JSONArray(clean.substring(start, lastObjEnd + 1)), true) } catch (_: Exception) {}
-            }
-            return Pair(JSONArray(), true)
-        }
     }
 }

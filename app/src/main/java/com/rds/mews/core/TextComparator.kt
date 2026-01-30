@@ -2,59 +2,65 @@ package com.rds.mews.core
 
 import java.security.MessageDigest
 import java.util.Locale
+import kotlin.math.max
 
 object TextComparator {
-
-    /**
-     * Главный метод сравнения.
-     * @param text1 Первый текст
-     * @param text2 Второй текст
-     * @param threshold Порог схожести от 0.0 до 1.0.
-     * 1.0 = нужно полное совпадение (используется быстрый MD5).
-     * 0.85 = допускаются небольшие различия (используется Jaccard).
-     */
     fun areSimilar(text1: String, text2: String, threshold: Double): Boolean {
         if (text1.isEmpty() || text2.isEmpty()) return false
         if (text1 == text2) return true
 
-        if (threshold == 1.0) {
+        if (threshold >= 0.99) {
             return getMd5(text1) == getMd5(text2)
         }
 
-        val score = calculateJacquardSimilarity(text1, text2)
-        return score >= threshold
+        return calculateWeightedJacquard(text1, text2) >= threshold
     }
 
-    /**
-     * Алгоритм Жаккара: (Пересечение слов) / (Объединение слов)
-     * Понимает, что "Мама мыла раму" и "Раму мыла мама" — это очень похожие тексты.
-     */
-    fun calculateJacquardSimilarity(s1: String, s2: String): Double {
-        val tokens1 = tokenize(s1)
-        val tokens2 = tokenize(s2)
+    private fun calculateWeightedJacquard(s1: String, s2: String): Double {
+        val tokens1 = tokenizeWithWeights(s1)
+        val tokens2 = tokenizeWithWeights(s2)
 
         if (tokens1.isEmpty() || tokens2.isEmpty()) return 0.0
 
-        val intersection = tokens1.intersect(tokens2).size
-        val union = tokens1.union(tokens2).size
+        var intersectionWeight = 0.0
+        val unionTokens = tokens1.keys.toMutableSet().apply { addAll(tokens2.keys) }
 
-        return if (union == 0) 0.0 else intersection.toDouble() / union.toDouble()
+        tokens1.forEach { (token, weight) ->
+            if (tokens2.containsKey(token)) {
+                intersectionWeight += weight
+            }
+        }
+
+        var unionWeight = 0.0
+        unionTokens.forEach { token ->
+            val w1 = tokens1[token] ?: 0.0
+            val w2 = tokens2[token] ?: 0.0
+            unionWeight += max(w1, w2)
+        }
+
+        return if (unionWeight == 0.0) 0.0 else intersectionWeight / unionWeight
     }
 
-    /**
-     * Разбивает текст на "токены" (слова), очищая от мусора.
-     * Используем Set для уникальности слов.
-     */
-    private fun tokenize(text: String): Set<String> {
-        return text.lowercase(Locale.getDefault())
-            .split(Regex("[^a-zа-я0-9]+"))
-            .filter { it.length > 2 }
-            .toSet()
+    private fun tokenizeWithWeights(text: String): Map<String, Double> {
+        val words = text.trim().split(Regex("[^a-zA-Zа-яА-Я0-9]+")).filter { it.length > 2 }
+        val resultMap = mutableMapOf<String, Double>()
+
+        for (rawWord in words) {
+            val lowerWord = rawWord.lowercase(Locale.getDefault())
+            var weight = 1.0
+
+            if (rawWord.first().isUpperCase() && (rawWord.length < 2 || rawWord[1].isLowerCase())) {
+                weight = 3.0
+            }
+            else if (rawWord.length > 7) {
+                weight = 1.5
+            }
+
+            resultMap[lowerWord] = max(resultMap[lowerWord] ?: 0.0, weight)
+        }
+        return resultMap
     }
 
-    /**
-     * Быстрый хэш для строгого сравнения
-     */
     fun getMd5(input: String): String {
         val normalized = input.trim().lowercase().replace("\\s+".toRegex(), " ")
         val bytes = MessageDigest.getInstance("MD5").digest(normalized.toByteArray())
