@@ -523,35 +523,52 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         val allExtracted = mutableListOf<Topics>()
         val batches = createBatches(uniqueGroups)
 
-        coroutineScope {
-            batches.forEach { batch ->
-                val batchLimit = (batch.size * 0.6).toInt().coerceAtLeast(3)
-                // depth = 0
-                val result = adaptiveExtractTopics(batch, batchLimit, lang, 0, bannedNews)
-                allExtracted.addAll(result)
+        var criticalError: GeminiException? = null
 
-                processedItemsCount += batch.size
+        coroutineScope {
+            for (batch in batches) {
                 try {
-                    val relativeProgress = processedItemsCount.toFloat() / totalItemsToProcess.toFloat()
-                    val newProgress = baseProgress + (relativeProgress * availableSpace)
-                    MewsRepository.setUpdatingProgress(newProgress)
-                } catch(_: Exception) {}
+                    val batchLimit = (batch.size * 0.6).toInt().coerceAtLeast(3)
+                    val result = adaptiveExtractTopics(batch, batchLimit, lang, 2, bannedNews)
+                    allExtracted.addAll(result)
+
+                    processedItemsCount += batch.size
+                    try {
+                        val relativeProgress = processedItemsCount.toFloat() / totalItemsToProcess.toFloat()
+                        val newProgress = baseProgress + (relativeProgress * availableSpace)
+                        MewsRepository.setUpdatingProgress(newProgress)
+                    } catch(_: Exception) {}
+
+                } catch (e: GeminiException) {
+                    if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED || e.errorType == SummarizationErrorType.NO_NETWORK) {
+                        Log.w(TAG, "Critical stop during extraction: ${e.errorType}. Saving partial results.")
+                        criticalError = e
+                        break
+                    }
+                }
             }
         }
 
-        if (allExtracted.isEmpty()) throw GeminiException(SummarizationErrorType.EXTRACT_TOPICS_FAILED, "No topics found")
+        if (allExtracted.isEmpty()) {
+            if (criticalError != null) throw criticalError
+            throw GeminiException(SummarizationErrorType.EXTRACT_TOPICS_FAILED, "No topics found")
+        }
+
 
         val finalTopicsCandidate: List<Topics> = if (filterEnabled) {
             try {
-                val current = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress + availableSpace }
-                MewsRepository.setUpdatingState("filtering_topics")
-                MewsRepository.setUpdatingProgress(current)
+                if (criticalError?.errorType == SummarizationErrorType.QUOTA_EXCEEDED) {
+                    simpleAlgorithmicMerge(allExtracted)
+                } else {
+                    val current = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress + availableSpace }
+                    MewsRepository.setUpdatingState("filtering_topics")
+                    MewsRepository.setUpdatingProgress(current)
 
-                // depth = 0
-                val smartMerged = smartMergeTopics(allExtracted, lang, 0, bannedNews)
-                simpleAlgorithmicMerge(smartMerged)
+                    val smartMerged = smartMergeTopics(allExtracted, lang, 0, bannedNews)
+                    simpleAlgorithmicMerge(smartMerged)
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Smart merge failed, falling back to algo merge", e)
+                Log.e(TAG, "Smart merge failed (possibly due to quota), falling back to algo merge", e)
                 simpleAlgorithmicMerge(allExtracted)
             }
         } else {
