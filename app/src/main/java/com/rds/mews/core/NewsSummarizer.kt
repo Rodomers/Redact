@@ -310,6 +310,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
             val unfinishedTitles = db.getTitles().filter { it.text == "<промежуточный текст>" && it.time.toInt() == 0 }
             val isRetryMode = unfinishedTitles.isNotEmpty()
+            val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
 
             val rawMessages = if (!isRetryMode) {
                 val msgs = db.getMessages(messageSeconds).sortedBy { it.time }
@@ -333,7 +334,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                     val groupedMessages = deduplicateMessages(rawMessages)
                     Log.d(TAG, "Dedup: Input ${rawMessages.size} -> Unique Groups ${groupedMessages.size}")
 
-                    processNewsInBatches(maxTopics, groupedMessages, currentLanguage, filterTopics)
+                    processNewsInBatches(maxTopics, groupedMessages, currentLanguage, filterTopics, bannedWords)
 
                     MewsRepository.setLastTitlesUpdate(extractionTime)
                     baseProgress = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress }
@@ -358,7 +359,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             val availableProgressSpace = 0.95f - baseProgress
             var successCount = 0
             var lastError: SummarizationErrorType? = null
-            val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
 
             coroutineScope {
                 batches.forEach { batch ->
@@ -513,7 +513,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         return unique
     }
 
-    private suspend fun processNewsInBatches(maxTopics: Int, uniqueGroups: List<GroupedMessage>, lang: String, filterEnabled: Boolean) {
+    private suspend fun processNewsInBatches(maxTopics: Int, uniqueGroups: List<GroupedMessage>, lang: String, filterEnabled: Boolean, bannedNews: String) {
         totalItemsToProcess = uniqueGroups.size
         processedItemsCount = 0
         val availableSpace = 0.4f
@@ -527,7 +527,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             batches.forEach { batch ->
                 val batchLimit = (batch.size * 0.6).toInt().coerceAtLeast(3)
                 // depth = 0
-                val result = adaptiveExtractTopics(batch, batchLimit, lang, 0)
+                val result = adaptiveExtractTopics(batch, batchLimit, lang, 0, bannedNews)
                 allExtracted.addAll(result)
 
                 processedItemsCount += batch.size
@@ -548,7 +548,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                 MewsRepository.setUpdatingProgress(current)
 
                 // depth = 0
-                val smartMerged = smartMergeTopics(allExtracted, lang, 0)
+                val smartMerged = smartMergeTopics(allExtracted, lang, 0, bannedNews)
                 simpleAlgorithmicMerge(smartMerged)
             } catch (e: Exception) {
                 Log.e(TAG, "Smart merge failed, falling back to algo merge", e)
@@ -591,12 +591,11 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         return merged
     }
 
-    private suspend fun smartMergeTopics(topics: List<Topics>, lang: String, depth: Int): List<Topics> {
-        // Лимит рекурсии (3)
+    private suspend fun smartMergeTopics(topics: List<Topics>, lang: String, depth: Int, banned: String): List<Topics> {
         if (topics.size > 150 && depth < 3) {
             val mid = topics.size / 2
-            return smartMergeTopics(topics.subList(0, mid), lang, depth + 1) +
-                    smartMergeTopics(topics.subList(mid, topics.size), lang, depth + 1)
+            return smartMergeTopics(topics.subList(0, mid), lang, depth + 1, banned) +
+                    smartMergeTopics(topics.subList(mid, topics.size), lang, depth + 1, banned)
         }
 
         val indexedInput = topics.mapIndexed { index, t ->
@@ -611,8 +610,13 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
         val prompt = """
             Задача: Объедини дублирующиеся новости в кластеры.
+            
+            Важно:
+            1. Если группа новостей относится к запрещенным темам ('$banned') — НЕ включай её в итоговый список. Удали.
+            2. Формируй заголовки в стиле Smart Casual.
+            
             Ввод: [{"ix": 0, "t": "...", "ctx": "...", "w": 5}].
-            Верни ТОЛЬКО JSON массив без Markdown и пояснений:
+            Верни ТОЛЬКО JSON массив:
             [{"title": "Общий заголовок", "src": [0, 5], "weight": 9}]
             Где src - это список индексов (ix). Язык: $lang.
             Данные: $jsonInput
@@ -620,7 +624,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
         rateLimiter.waitIfNeeded()
         val response = withTimeout(120000L) { llm.sendPrompt(prompt) }
-        val (jsonArray, _) = llm.safeParseJsonArrayLenient(response) // Use LLMClient method
+        val (jsonArray, _) = llm.safeParseJsonArrayLenient(response)
 
         val mergedResults = mutableListOf<Topics>()
         for (i in 0 until jsonArray.length()) {
@@ -650,7 +654,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         return mergedResults
     }
 
-    private suspend fun adaptiveExtractTopics(batch: List<GroupedMessage>, maxLimit: Int, lang: String, depth: Int): List<Topics> {
+    private suspend fun adaptiveExtractTopics(batch: List<GroupedMessage>, maxLimit: Int, lang: String, depth: Int, banned: String): List<Topics> {
         if (batch.isEmpty()) return emptyList()
 
         try {
@@ -660,8 +664,15 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             }
 
             val prompt = """
-                Проанализируй новости. Сгруппируй их по инфоповодам.
-                СТРОГИЙ ФИЛЬТР: Игнорируй рекламу, промокоды, erid.
+                Проанализируй новости и сгруппируй их по инфоповодам.
+                
+                ИНСТРУКЦИИ ФИЛЬТРАЦИИ (СТРОГО):
+                1. Мусор: Игнорируй рекламу, промокоды, erid, спам.
+                2. Бан-лист: Игнорируй любые новости, посвященные темам: '$banned'. Если группа сообщений об этом — ПРОПУСТИ ЕЁ, не включай в ответ.
+                
+                ИНСТРУКЦИИ ЗАГОЛОВКОВ:
+                Пиши в стиле Smart Casual: живые, человеческие заголовки без канцелярита.
+                
                 Верни JSON массив: [{"title": "Заголовок", "id": [101, 105], "weight": 8}].
                 weight - важность (1-10). Язык: $lang.
                 Новости: $sanitizedBatch
@@ -670,7 +681,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             val response = try {
                 withTimeout(120000L) { llm.sendPrompt(prompt) }
             } catch (e: GeminiException) {
-                // Если ошибка квоты - не делим, а падаем
                 if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
                 if (e.errorType == SummarizationErrorType.NO_NETWORK || e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) throw e
                 throw RuntimeException("Trigger split", e)
@@ -713,8 +723,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                 val victimGroups = batch.filter { !coveredIds.contains(it.representative.id) }
                 if (victimGroups.isNotEmpty() && victimGroups.size < batch.size) {
                     val mid = victimGroups.size / 2
-                    val left = adaptiveExtractTopics(victimGroups.subList(0, mid), maxLimit, lang, depth + 1)
-                    val right = adaptiveExtractTopics(victimGroups.subList(mid, victimGroups.size), maxLimit, lang, depth + 1)
+                    val left = adaptiveExtractTopics(victimGroups.subList(0, mid), maxLimit, lang, depth + 1, banned)
+                    val right = adaptiveExtractTopics(victimGroups.subList(mid, victimGroups.size), maxLimit, lang, depth + 1, banned)
                     topics.addAll(left + right)
                 }
             }
@@ -723,8 +733,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         } catch (e: Exception) {
             if (batch.size > 2 && e !is GeminiException && depth < 3) {
                 val mid = batch.size / 2
-                val left = adaptiveExtractTopics(batch.subList(0, mid), maxLimit / 2, lang, depth + 1)
-                val right = adaptiveExtractTopics(batch.subList(mid, batch.size), maxLimit / 2, lang, depth + 1)
+                val left = adaptiveExtractTopics(batch.subList(0, mid), maxLimit / 2, lang, depth + 1, banned)
+                val right = adaptiveExtractTopics(batch.subList(mid, batch.size), maxLimit / 2, lang, depth + 1, banned)
                 return left + right
             }
             return emptyList()
@@ -807,19 +817,27 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         })
 
         val prompt = """
-        Ты — редактор. Твоя задача — прочитать новости и выдать JSON ответ.
+        Ты — ведущий обозреватель. Твоя цель — написать глубокий материал, адаптируя объем под значимость события.
         
-        Правила саммари:
-        1. Стиль: Smart Casual, без клише.
-        2. Если тема про '$banned', то summary = "".
-        3. Язык: ${lang}.
+        Инструкции:
+        1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык. Избегай канцеляризмов, пиши как для людей.
+        
+        2. АДАПТИВНЫЙ ОБЪЕМ:
+           — Крупные события (скандалы, релизы, политика): пиши ПОДРОБНЫЙ обзор (ориентир 400-500 слов). Обязательно: контекст, история, цитаты, последствия.
+           — Рядовые новости: пиши ёмко, но детально (200-300 слов). Не лей воду, давай факты.
+        
+        3. УМНАЯ ФИЛЬТРАЦИЯ (Список нежелательных тем: '$banned'):
+           — Твоя задача — извлечь пользу. Если запрещенная тема упоминается вскользь — просто ИГНОРИРУЙ её и пиши об основном событии. Не упоминай, что что-то вырезал.
+           — Если же новость ЦЕЛИКОМ посвящена теме из списка нежелательных (и писать больше не о чем) — summary = "Материал скрыт в соответствии с вашими настройками фильтрации.".
+        
+        4. Язык: ${lang}.
         
         ФОРМАТ ОТВЕТА (СТРОГО JSON):
         [
           {
-            "id": <число, взять из input>,
-            "title": "<новый заголовок или старый>",
-            "summary": "<текст саммари>"
+            "id": <id из input>,
+            "title": "<цепляющий заголовок или 'Тема скрыта'>",
+            "summary": "<текст статьи или заглушка>"
           }
         ]
         
