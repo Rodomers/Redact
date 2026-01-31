@@ -253,7 +253,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
     )
 
     // Token Bucket Limits
-    private val BATCH_CHAR_LIMIT = 25000
+    private val BATCH_CHAR_LIMIT = 45000
     private val SINGLE_NEWS_CHAR_LIMIT = 3000
 
     private val DEDUP_THRESHOLD = 0.85
@@ -779,17 +779,25 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         })
 
         val prompt = """
-        Ты — редактор. Напиши живые саммари (до 500 слов).
-        1. Стиль: Smart Casual.
-        2. Фильтр: Если про '$banned', summary = "".
-        3. Запрещено: Вводные фразы ("В статье говорится", "Автор сообщает"). Сразу к сути.
-        4.Язык: Язык саммари - ${lang}.
+        Ты — редактор. Твоя задача — прочитать новости и выдать JSON ответ.
         
-        Пример плохо: "В данной статье рассказывается о росте цен."
-        Пример хорошо: "Цены на бензин выросли на 5% из-за новых акцизов."
+        Правила саммари:
+        1. Стиль: Smart Casual, без клише.
+        2. Если тема про '$banned', то summary = "".
+        3. Язык: ${lang}.
+        
+        ФОРМАТ ОТВЕТА (СТРОГО JSON):
+        [
+          {
+            "id": <число, взять из input>,
+            "title": "<новый заголовок или старый>",
+            "summary": "<текст саммари>"
+          }
+        ]
         
         Ввод: $jsonInput
         """.trimIndent()
+
         return llm.sendPrompt(prompt)
     }
 }
