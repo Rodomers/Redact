@@ -184,29 +184,58 @@ class LLMClient(
         return 0L
     }
 
-    // Новый надежный парсер с Regex
     fun safeParseJsonArrayLenient(str: String): Pair<JSONArray, Boolean> {
-        // Пытаемся найти самый внешний массив [...]
-        val matcher = JSON_ARRAY_PATTERN.matcher(str)
-        if (matcher.find()) {
-            val jsonCandidate = matcher.group()
-            try {
-                return Pair(JSONArray(jsonCandidate), false)
-            } catch (_: JSONException) {
-                // Если не вышло, пробуем старый метод обрезки
+        val startIndex = str.indexOf('[')
+
+        if (startIndex != -1) {
+            var balance = 0
+            var inString = false
+            var isEscaped = false
+
+            for (i in startIndex until str.length) {
+                val c = str[i]
+
+                if (isEscaped) {
+                    isEscaped = false
+                    continue
+                }
+
+                when (c) {
+                    '\\' -> isEscaped = true
+                    '"' -> inString = !inString
+                    '[' -> if (!inString) balance++
+                    ']' -> if (!inString) {
+                        balance--
+                        if (balance == 0) {
+                            val candidate = str.substring(startIndex, i + 1)
+                            try {
+                                return Pair(JSONArray(candidate), false)
+                            } catch (_: JSONException) {
+                            }
+                            break
+                        }
+                    }
+                }
             }
         }
 
-        // Фолбэк на старую логику обрезки
-        val clean = str.trim().removePrefix("```json").removeSuffix("```").trim()
-        try { return Pair(JSONArray(clean), false) } catch (_: JSONException) {
-            val lastObjEnd = clean.lastIndexOf(']')
-            val start = clean.indexOf('[')
-            if (start != -1 && lastObjEnd != -1 && lastObjEnd > start) {
-                try { return Pair(JSONArray(clean.substring(start, lastObjEnd + 1)), true) } catch (_: Exception) {}
+        try {
+            val clean = str.trim().removePrefix("```json").removeSuffix("```").trim()
+
+            if (clean.startsWith("[")) {
+                try { return Pair(JSONArray(clean), false) } catch(_: Exception) {}
             }
-            return Pair(JSONArray(), true)
+
+            val first = clean.indexOf('[')
+            val last = clean.lastIndexOf(']')
+            if (first != -1 && last > first) {
+                val sub = clean.substring(first, last + 1)
+                return Pair(JSONArray(sub), true)
+            }
+        } catch (_: Exception) {
         }
+
+        return Pair(JSONArray(), true)
     }
 
     override fun close() { httpClient.close() }
@@ -351,7 +380,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
                     if (topicsData.isNotEmpty()) {
                         try {
-                            // Передаем depth=0 в начало рекурсии
                             val results = adaptiveSummarizeBatch(topicsData, bannedWords, currentLanguage, 0)
 
                             if (results.isNotEmpty()) {
