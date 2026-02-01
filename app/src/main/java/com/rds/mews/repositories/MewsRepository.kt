@@ -33,7 +33,6 @@ object MewsRepository {
 
     lateinit var lastError: StateFlow<SummarizationResult.Failure?>
     lateinit var lastTitlesUpdate: StateFlow<Long>
-    lateinit var updatingTitles: StateFlow<Boolean>
     lateinit var updatingState: StateFlow<String?>
     lateinit var updatingProgress: StateFlow<Float>
     lateinit var bannedNewsFlow: StateFlow<Set<String>>
@@ -72,6 +71,9 @@ object MewsRepository {
     var SERVER_KEY: String = ""
     var PROXY_ADDRESS: String = ""
     var HUB_ADDRESS: String = ""
+
+    private val _updatingTitles = MutableStateFlow(false)
+    val updatingTitles = _updatingTitles.asStateFlow()
 
     // Legacy Keys
     const val CURRENT_THEME = "current_theme"
@@ -133,7 +135,6 @@ object MewsRepository {
                 .stateIn(externalScope, SharingStarted.Eagerly, default)
         }
 
-        updatingTitles = createSettingFlow({ it.updatingTitles }, false)
         updatingState = createSettingFlow({ it.updatingState }, "off")
         updatingProgress = createSettingFlow({ it.updatingProgress }, 0f)
         lastTitlesUpdate = createSettingFlow({ it.lastTitlesUpdate }, 0L)
@@ -304,7 +305,7 @@ object MewsRepository {
 
     fun setLastTitlesUpdate(newValue: Long) = updateSetting { it.copy(lastTitlesUpdate = newValue) }
 
-    fun setUpdatingTitles(newValue: Boolean) = updateSetting { it.copy(updatingTitles = newValue) }
+    fun setUpdatingTitles(newValue: Boolean) = { _updatingTitles.value = newValue }
 
     fun setUpdatingState(newValue: String) = updateSetting { it.copy(updatingState = newValue) }
 

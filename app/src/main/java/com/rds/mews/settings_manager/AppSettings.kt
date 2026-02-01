@@ -73,7 +73,7 @@ data class AppSettings(
     val currentLanguage: String = "English",
 
     // Technical State
-    val updatingTitles: Boolean = false,
+//    val updatingTitles: Boolean = false,
     val updatingState: String = "off",
     val updatingProgress: Float = 0f,
     val lastTitlesUpdate: Long = 0L,
