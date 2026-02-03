@@ -1,6 +1,5 @@
 package com.rds.mews.core
 
-import android.content.Context
 import android.util.Log
 import com.rds.mews.localcore.Message
 import com.rds.mews.localcore.SummarizationResult
@@ -20,6 +19,7 @@ import org.json.JSONObject
 import java.io.Closeable
 import java.util.regex.Pattern
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 
 class SmartRateLimiter(private val minIntervalMs: Long = 4000L) {
@@ -58,8 +58,6 @@ class LLMClient(
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.PROXY_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
     private val jsonParser = SharedHttpClient.jsonParser
     private val MAX_RETRIES = 3
-
-    private val JSON_ARRAY_PATTERN = Pattern.compile("\\[.*?]", Pattern.DOTALL)
 
     suspend fun sendPrompt(prompt: String): String {
         val requestBodyObj = GeminiRequest(
@@ -103,7 +101,7 @@ class LLMClient(
                             }
                             attempt++
                             if (attempt > MAX_RETRIES) throw GeminiException(SummarizationErrorType.RATE_LIMIT_EXCEEDED)
-                            val backoff = 2000L * (2.0.pow(attempt - 1).toLong())
+                            val backoff = 2000L * (2.0.pow((attempt - 1).coerceIn(1, Int.MAX_VALUE)).toLong())
                             delay(backoff)
                             continue
                         }
@@ -184,58 +182,66 @@ class LLMClient(
         return 0L
     }
 
-    fun safeParseJsonArrayLenient(str: String): Pair<JSONArray, Boolean> {
-        val startIndex = str.indexOf('[')
+    fun safeParseJsonArray(str: String): Pair<JSONArray, Boolean> {
+        val len = str.length
+        var cursor = 0
 
-        if (startIndex != -1) {
-            var balance = 0
-            var inString = false
-            var isEscaped = false
+        while (cursor < len) {
+            val start = str.indexOf('[', cursor)
+            if (start == -1) break
 
-            for (i in startIndex until str.length) {
-                val c = str[i]
+            val end = findMatchingCloseBracket(str, start)
 
-                if (isEscaped) {
-                    isEscaped = false
-                    continue
+            if (end != -1) {
+                val candidate = str.substring(start, end + 1)
+                try {
+                    val json = JSONArray(candidate)
+                    return Pair(json, candidate.length != str.length)
+                } catch (_: JSONException) {
                 }
+            }
 
-                when (c) {
-                    '\\' -> isEscaped = true
-                    '"' -> inString = !inString
-                    '[' -> if (!inString) balance++
-                    ']' -> if (!inString) {
-                        balance--
-                        if (balance == 0) {
-                            val candidate = str.substring(startIndex, i + 1)
-                            try {
-                                return Pair(JSONArray(candidate), false)
-                            } catch (_: JSONException) {
-                            }
-                            break
-                        }
+            cursor = start + 1
+        }
+
+        return Pair(JSONArray(), true)
+    }
+
+    private fun findMatchingCloseBracket(str: String, start: Int): Int {
+        var balance = 0
+        var inString = false
+        var isEscaped = false
+
+        for (i in start until str.length) {
+            val c = str[i]
+
+            if (isEscaped) {
+                isEscaped = false
+                continue
+            }
+
+            if (c == '\\') {
+                isEscaped = true
+                continue
+            }
+
+            if (c == '"') {
+                inString = !inString
+                continue
+            }
+
+            if (!inString) {
+                if (c == '[') {
+                    balance++
+                } else if (c == ']') {
+                    balance--
+                    if (balance == 0) {
+                        return i
                     }
                 }
             }
         }
-
-        try {
-            val clean = str.trim().removePrefix("```json").removeSuffix("```").trim()
-
-            if (clean.startsWith("[")) {
-                try { return Pair(JSONArray(clean), false) } catch(_: Exception) {}
-            }
-
-            val first = clean.indexOf('[')
-            val last = clean.lastIndexOf(']')
-            if (first != -1 && last > first) {
-                val sub = clean.substring(first, last + 1)
-                return Pair(JSONArray(sub), true)
-            }
-        } catch (_: Exception) {
-        }
-
-        return Pair(JSONArray(), true)
+        return -1
     }
 
     override fun close() { httpClient.close() }
@@ -260,14 +266,14 @@ suspend fun validateGeminiKey(apiKey: String, proxyIp: String, proxyKey: String,
     } catch (_: Exception) { false } finally { client.close() }
 }
 
-class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, private val context: Context) {
+class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
 
     data class Topics(
         val title: String,
         val ids: List<Long>?,
         val weight: Int = 0,
         val id: Long = 0,
-        var snippet: String = ""
+        val keywords: List<String> = emptyList() // Snippet удален, добавлены keywords
     )
 
     data class GroupedMessage(
@@ -275,7 +281,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         val allIds: MutableList<Long>
     )
 
-    // Внутренний класс для оптимизации дедупликации (Pre-calculated sanitized text)
     private data class PreparedMessage(
         val msg: Message,
         val cleanText: String
@@ -286,7 +291,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
     private val SINGLE_NEWS_CHAR_LIMIT = 3000
 
     private val DEDUP_THRESHOLD = 0.85
-    private val MERGE_SNIPPET_THRESHOLD = 0.65
+
+    // Порог сниппетов удален за ненадобностью
 
     private val TAG = "NewsSummarizer"
     private val rateLimiter = SmartRateLimiter(minIntervalMs = 4000L)
@@ -387,6 +393,13 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                                     try {
                                         val (summary, newTitle) = resultData
                                         val (topic, suitableMessages, _) = originalData
+
+                                        // Фильтр спама: если саммари пустое — удаляем тему
+                                        if (summary.isBlank()) {
+                                            db.delTitle(name = topic.title)
+                                            return@forEach
+                                        }
+
                                         val allSources = suitableMessages.map { it.source }.distinct()
                                         val allLinks = suitableMessages.map { it.id.toString() }.distinct()
                                         val newSourcesPack = db.dbPack(*allSources.toTypedArray())
@@ -477,19 +490,11 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
     // Оптимизированная дедупликация с одним проходом санитизации
     private fun deduplicateMessages(raw: List<Message>): List<GroupedMessage> {
-        // 1. Pre-calculate sanitized text (O(N))
         val prepared = raw.map { PreparedMessage(it, TextSanitizer.sanitize(it.mess)) }
         val groups = mutableListOf<GroupedMessage>()
 
-        // 2. Compare using pre-calculated strings (O(N^2) but faster)
         prepared.forEach { pMsg ->
             val existingGroup = groups.find { group ->
-                // ВАЖНО: representative в группе тоже должен быть уже чистым, но мы храним оригинал.
-                // Чтобы не чистить снова, можно хранить структуру группы сложнее, но ради простоты
-                // здесь мы санитизируем representative снова.
-                // Для макс. оптимизации можно было хранить PreparedMessage внутри GroupedMessage,
-                // но это потребует изменения data class.
-                // Пока оставим так, так как мы уже выиграли 50% работы на входном списке.
                 val cleanGroup = TextSanitizer.sanitize(group.representative.mess)
                 TextComparator.areSimilar(pMsg.cleanText, cleanGroup, DEDUP_THRESHOLD)
             }
@@ -504,7 +509,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
     private fun deduplicateForSummaryPayload(messages: List<Message>): List<Message> {
         val unique = mutableListOf<Message>()
-        // Здесь список маленький (один топик), оптимизация не критична
         messages.forEach { msg ->
             val cleanMsg = TextSanitizer.sanitize(msg.mess)
             val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.mess), cleanMsg, 0.95) }
@@ -588,19 +592,54 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
         rawTopics.sortedByDescending { it.weight }.forEach { candidate ->
             val existingIndex = merged.indexOfFirst { existing ->
-                if (existing.snippet.isNotBlank() && candidate.snippet.isNotBlank()) {
-                    TextComparator.areSimilar(existing.snippet, candidate.snippet, MERGE_SNIPPET_THRESHOLD)
-                } else {
-                    TextComparator.areSimilar(existing.title, candidate.title, 0.75)
+                // ЭТАП 1: Проверка по Keywords
+                var isKeywordMatch = false
+
+                // Проверяем только если в обоих списках есть слова (2+)
+                if (existing.keywords.size >= 2 && candidate.keywords.size >= 2) {
+                    var matchCount = 0
+                    for (k1 in existing.keywords) {
+                        for (k2 in candidate.keywords) {
+                            // Используем TextComparator для морфологии (0.85 - высокий порог)
+                            if (TextComparator.areSimilar(k1, k2, 0.85)) {
+                                matchCount++
+                                break
+                            }
+                        }
+                    }
+
+                    val minLen = min(existing.keywords.size, candidate.keywords.size)
+                    // Длинные списки (3+): >= 50% совпадений
+                    if (minLen >= 3) {
+                        if (matchCount >= minLen * 0.5) isKeywordMatch = true
+                    }
+                    // Короткие списки (2): строго 2 совпадения
+                    else if (minLen == 2) {
+                        if (matchCount == 2) isKeywordMatch = true
+                    }
                 }
+
+                if (isKeywordMatch) return@indexOfFirst true
+
+                // ЭТАП 2: Проверка заголовков (Fallback)
+                // Строгий порог 0.8, если теги подвели
+                TextComparator.areSimilar(existing.title, candidate.title, 0.8)
             }
 
             if (existingIndex != -1) {
                 val existing = merged[existingIndex]
                 val combinedIds = (existing.ids.orEmpty() + candidate.ids.orEmpty()).distinct()
                 val maxWeight = max(existing.weight, candidate.weight)
-                val bestSnippet = if (existing.snippet.length > candidate.snippet.length) existing.snippet else candidate.snippet
-                merged[existingIndex] = existing.copy(ids = combinedIds, weight = maxWeight, snippet = bestSnippet)
+                // Объединяем кейворды, сохраняя уникальность
+                val combinedKeywords = (existing.keywords + candidate.keywords)
+                    .distinctBy { it.lowercase() }
+                    .take(8)
+
+                merged[existingIndex] = existing.copy(
+                    ids = combinedIds,
+                    weight = maxWeight,
+                    keywords = combinedKeywords
+                )
             } else {
                 merged.add(candidate)
             }
@@ -619,7 +658,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             JSONObject().apply {
                 put("ix", index)
                 put("t", t.title)
-                put("ctx", t.snippet.take(400))
+                put("kw", t.keywords.joinToString(", ")) // Передаем кейворды как контекст
                 put("w", t.weight)
             }
         }
@@ -632,7 +671,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             1. Если группа новостей относится к запрещенным темам ('$banned') — НЕ включай её в итоговый список. Удали.
             2. Формируй заголовки в стиле Smart Casual.
             
-            Ввод: [{"ix": 0, "t": "...", "ctx": "...", "w": 5}].
+            Ввод: [{"ix": 0, "t": "...", "kw": "...", "w": 5}].
             Верни ТОЛЬКО JSON массив:
             [{"title": "Общий заголовок", "src": [0, 5], "weight": 9}]
             Где src - это список индексов (ix). Язык: $lang.
@@ -641,7 +680,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
 
         rateLimiter.waitIfNeeded()
         val response = withTimeout(120000L) { llm.sendPrompt(prompt) }
-        val (jsonArray, _) = llm.safeParseJsonArrayLenient(response)
+        val (jsonArray, _) = llm.safeParseJsonArray(response)
 
         val mergedResults = mutableListOf<Topics>()
         for (i in 0 until jsonArray.length()) {
@@ -649,20 +688,20 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                 val obj = jsonArray.getJSONObject(i)
                 val sourcesIndices = obj.getJSONArray("src")
                 val mergedIds = mutableSetOf<Long>()
-                var bestSnippet = ""
+                val mergedKeywords = mutableSetOf<String>()
 
                 for (j in 0 until sourcesIndices.length()) {
                     val idx = sourcesIndices.getInt(j)
                     if (idx in topics.indices) {
                         val t = topics[idx]
                         t.ids?.let { mergedIds.addAll(it) }
-                        if (t.snippet.length > bestSnippet.length) bestSnippet = t.snippet
+                        mergedKeywords.addAll(t.keywords)
                     }
                 }
 
                 if (mergedIds.isNotEmpty()) {
                     val w = obj.optInt("weight", 5)
-                    mergedResults.add(Topics(obj.getString("title"), mergedIds.toList(), w, snippet = bestSnippet))
+                    mergedResults.add(Topics(obj.getString("title"), mergedIds.toList(), w, keywords = mergedKeywords.take(8).toList()))
                 }
             } catch (_: Exception) {}
         }
@@ -681,17 +720,21 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             }
 
             val prompt = """
-                Проанализируй новости и сгруппируй их по инфоповодам.
+                Проанализируй новости и выдели ОТДЕЛЬНЫЕ новостные события.
                 
-                ИНСТРУКЦИИ ФИЛЬТРАЦИИ (СТРОГО):
-                1. Мусор: Игнорируй рекламу, промокоды, erid, спам.
-                2. Бан-лист: Игнорируй любые новости, посвященные темам: '$banned'. Если группа сообщений об этом — ПРОПУСТИ ЕЁ, не включай в ответ.
+                Группируй новости по Сюжетным Линиям:
+                1. Цепочка событий (ОСТАВЛЯТЬ ВМЕСТЕ): Например, событие + реакция + последствия = ОДНА тема.
+                2. Дайджесты (РАЗДЕЛЯТЬ): Разные события, произошедшие в разных местах (например, разные ДТП) = РАЗНЫЕ темы.
+                
+                ФИЛЬТРАЦИЯ (СТРОГО):
+                Игнорируй: рекламу, розыгрыши призов, итоги конкурсов, спам, а также темы: '$banned'.
                 
                 ИНСТРУКЦИИ ЗАГОЛОВКОВ:
                 Пиши в стиле Smart Casual: живые, человеческие заголовки без канцелярита.
                 
-                Верни JSON массив: [{"title": "Заголовок", "id": [101, 105], "weight": 8}].
-                weight - важность (1-10). Язык: $lang.
+                Верни JSON массив: 
+                [{"title": "Заголовок", "id": [101, 105], "keywords": ["тег1", "тег2"], "weight": 8}].
+                weight - важность (1-10). keywords - 3-5 ключевых слов. Язык: $lang.
                 Новости: $sanitizedBatch
             """.trimIndent()
 
@@ -703,7 +746,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                 throw RuntimeException("Trigger split", e)
             }
 
-            val (jsonArray, isBroken) = llm.safeParseJsonArrayLenient(response)
+            val (jsonArray, isBroken) = llm.safeParseJsonArray(response)
             val topics = mutableListOf<Topics>()
             val coveredIds = mutableSetOf<Long>()
 
@@ -727,12 +770,16 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                     val w = obj.optInt("weight", 5)
                     val title = obj.getString("title")
 
-                    val representativeMsg = batch.find { it.representative.id == extractedRepIds.firstOrNull() }?.representative
-                    val snippet = if (representativeMsg != null) {
-                        SnippetExtractor.extractSnippet(context, representativeMsg.mess.take(SINGLE_NEWS_CHAR_LIMIT))
-                    } else { title }
+                    // Парсим ключевые слова
+                    val keywordsList = mutableListOf<String>()
+                    val keywordsJson = obj.optJSONArray("keywords")
+                    if (keywordsJson != null) {
+                        for (k in 0 until keywordsJson.length()) {
+                            keywordsList.add(keywordsJson.getString(k))
+                        }
+                    }
 
-                    topics.add(Topics(title, fullIdList, w, snippet = snippet))
+                    topics.add(Topics(title, fullIdList, w, keywords = keywordsList))
                 } catch (_: Exception) { continue }
             }
 
@@ -788,7 +835,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
             }
 
             val results = mutableListOf<Triple<Long, Pair<String, String>, Triple<Topics, List<Message>, String>>>()
-            val (jsonArray, _) = llm.safeParseJsonArrayLenient(response)
+            val (jsonArray, _) = llm.safeParseJsonArray(response)
             val processedIds = mutableSetOf<Long>()
 
             for (i in 0 until jsonArray.length()) {
@@ -799,7 +846,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
                     val newTitle = obj.optString("title").takeIf { it.isNotBlank() } ?: ""
 
                     val original = batch.find { it.first.ids?.contains(id) == true }
-                    if (original != null && summary.isNotBlank()) {
+                    if (original != null) { // summary может быть пустым (спам), но id обработан
                         results.add(Triple(id, Pair(summary, newTitle.ifBlank { original.first.title }), original))
                         processedIds.add(id)
                     }
@@ -837,15 +884,16 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         Ты — ведущий обозреватель. Твоя цель — написать глубокий материал, адаптируя объем под значимость события.
         
         Инструкции:
-        1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык. Избегай канцеляризмов, пиши как для людей.
+        1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык. Избегай канцеляризмов.
         
         2. АДАПТИВНЫЙ ОБЪЕМ:
            — Крупные события (скандалы, релизы, политика): пиши ПОДРОБНЫЙ обзор (ориентир 400-500 слов). Обязательно: контекст, история, цитаты, последствия.
-           — Рядовые новости: пиши ёмко, но детально (200-300 слов). Не лей воду, давай факты.
+           — Рядовые новости: пиши ёмко, но детально (до 200-300 слов). Не лей воду, давай факты.
         
         3. УМНАЯ ФИЛЬТРАЦИЯ (Список нежелательных тем: '$banned'):
-           — Твоя задача — извлечь пользу. Если запрещенная тема упоминается вскользь — просто ИГНОРИРУЙ её и пиши об основном событии. Не упоминай, что что-то вырезал.
-           — Если же новость ЦЕЛИКОМ посвящена теме из списка нежелательных (и писать больше не о чем) — summary = "Материал скрыт в соответствии с вашими настройками фильтрации.".
+           — Твоя задача — извлечь пользу. Если запрещенная тема упоминается вскользь — просто ИГНОРИРУЙ её и пиши об основном событии.
+           — Если же ВЕСЬ текст состоит из рекламы или условий розыгрыша — верни пустую строку (summary: "").
+           — Если новость ЦЕЛИКОМ посвящена теме из списка нежелательных (и писать больше не о чем) — верни пустую строку (summary: "").
         
         4. Язык: ${lang}.
         
@@ -853,8 +901,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient, priva
         [
           {
             "id": <id из input>,
-            "title": "<цепляющий заголовок или 'Тема скрыта'>",
-            "summary": "<текст статьи или заглушка>"
+            "title": "<цепляющий заголовок>",
+            "summary": "<текст статьи или пустая строка \"\">"
           }
         ]
         

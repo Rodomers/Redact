@@ -50,7 +50,7 @@ private val Context.dataStore: DataStore<AppSettings> by dataStore(
                     titlesAutoUpdateFrequency = migratedFreq,
                     llmModel = migratedModel,
 
-                    updatingTitles = sharedPrefs.getBoolean(MewsRepository.UPDATING_TITLES, currentData.updatingTitles),
+//                    updatingTitles = sharedPrefs.getBoolean(MewsRepository.UPDATING_TITLES, currentData.updatingTitles),
                     updatingState = sharedPrefs.getString(MewsRepository.UPDATING_STATE, currentData.updatingState) ?: currentData.updatingState,
                     updatingProgress = sharedPrefs.getFloat(MewsRepository.UPDATING_PROGRESS, currentData.updatingProgress),
                     lastTitlesUpdate = sharedPrefs.getLong(MewsRepository.LAST_TITLES_UPDATE, currentData.lastTitlesUpdate),

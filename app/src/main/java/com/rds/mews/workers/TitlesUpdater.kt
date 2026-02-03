@@ -52,7 +52,7 @@ class TitlesUpdater(private val context: Context) {
             val fetcher = RssFetcher(db)
 
             llmClient = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
-            val summarizer = NewsSummarizer(db, llmClient, context)
+            val summarizer = NewsSummarizer(db, llmClient)
 
             val startTitles = db.getTitles()
                 .filter { it.text != "<промежуточный текст>" }

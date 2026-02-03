@@ -305,7 +305,9 @@ object MewsRepository {
 
     fun setLastTitlesUpdate(newValue: Long) = updateSetting { it.copy(lastTitlesUpdate = newValue) }
 
-    fun setUpdatingTitles(newValue: Boolean) = { _updatingTitles.value = newValue }
+    fun setUpdatingTitles(newValue: Boolean) {
+        _updatingTitles.value = newValue
+    }
 
     fun setUpdatingState(newValue: String) = updateSetting { it.copy(updatingState = newValue) }
 
