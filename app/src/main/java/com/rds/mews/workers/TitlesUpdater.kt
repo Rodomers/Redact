@@ -40,7 +40,7 @@ class TitlesUpdater(private val context: Context) {
 
             val titlesPeriod = if (!isOneTime || titlesUpdatePeriodSetting == null) {
                 if (lastUpdate == 0L) TitlesPeriod.HRS_24.num ?: 24
-                else updateDeltaMills / 3600000L + 1
+                else (updateDeltaMills / 3600000L + 1).coerceIn(12, 120)
             } else {
                 titlesUpdatePeriodSetting
             }

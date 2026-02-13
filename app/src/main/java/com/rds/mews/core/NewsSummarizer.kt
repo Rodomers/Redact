@@ -17,7 +17,6 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.Closeable
-import java.util.regex.Pattern
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -82,10 +81,11 @@ class LLMClient(
                 )
 
                 val responseString = response.body
-                Log.d("LLMClient", "Raw response (Status ${response.status}): $responseString")
+                val responseStatus = response.status
+                Log.d("LLMClient", "Raw response (Status ${responseStatus}): $responseString")
 
-                if (response.status != 200) {
-                    when (response.status) {
+                if (responseStatus != 200) {
+                    when (responseStatus) {
                         429 -> {
                             if (responseString.contains("RequestsPerDay", ignoreCase = true)) {
                                 throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, "Daily quota exceeded")
@@ -101,7 +101,7 @@ class LLMClient(
                             }
                             attempt++
                             if (attempt > MAX_RETRIES) throw GeminiException(SummarizationErrorType.RATE_LIMIT_EXCEEDED)
-                            val backoff = 2000L * (2.0.pow((attempt - 1).coerceIn(1, Int.MAX_VALUE)).toLong())
+                            val backoff = 2000L * (2.0.pow((attempt - 1).coerceAtLeast(1)).toLong())
                             delay(backoff)
                             continue
                         }
@@ -170,16 +170,18 @@ class LLMClient(
         throw GeminiException(SummarizationErrorType.NO_NETWORK, errorMsg)
     }
 
-    private fun extractRetryTime(message: String): Long {
-        try {
-            val pattern = Pattern.compile("retry in\\s+(\\d+(\\.\\d+)?)s")
-            val matcher = pattern.matcher(message)
-            if (matcher.find()) {
-                val seconds = matcher.group(1)?.toDoubleOrNull()
-                if (seconds != null) return (seconds * 1000).toLong()
+    fun extractRetryTime(message: String): Long {
+        val regex = """(\d+(?:\.\d+)?)s""".toRegex()
+
+        val match = regex.find(message)
+        return match?.groupValues?.get(1)?.let { numStr ->
+            try {
+                val seconds = numStr.toDouble()
+                (seconds * 1000).toLong()
+            } catch (_: Exception) {
+                0L
             }
-        } catch (_: Exception) { }
-        return 0L
+        } ?: 0L
     }
 
     fun safeParseJsonArray(str: String): Pair<JSONArray, Boolean> {
@@ -273,7 +275,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         val ids: List<Long>?,
         val weight: Int = 0,
         val id: Long = 0,
-        val keywords: List<String> = emptyList() // Snippet удален, добавлены keywords
+        val keywords: List<String> = emptyList()
     )
 
     data class GroupedMessage(
@@ -287,7 +289,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
     )
 
     // Token Bucket Limits
-    private val BATCH_CHAR_LIMIT = 45000
+    private val BATCH_CHAR_LIMIT = 150000
     private val SINGLE_NEWS_CHAR_LIMIT = 3000
 
     private val DEDUP_THRESHOLD = 0.85
@@ -544,9 +546,12 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                     } catch(_: Exception) {}
 
                 } catch (e: GeminiException) {
-                    if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED || e.errorType == SummarizationErrorType.NO_NETWORK) {
-                        Log.w(TAG, "Critical stop during extraction: ${e.errorType}. Saving partial results.")
-                        criticalError = e
+                    criticalError = e
+                    if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED || e.errorType == SummarizationErrorType.NO_NETWORK || e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) {
+                        Log.w(
+                            TAG,
+                            "Critical stop during extraction: ${e.errorType}. Saving partial results."
+                        )
                         break
                     }
                 }
@@ -601,7 +606,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                     for (k1 in existing.keywords) {
                         for (k2 in candidate.keywords) {
                             // Используем TextComparator для морфологии (0.85 - высокий порог)
-                            if (TextComparator.areSimilar(k1, k2, 0.85)) {
+                            if (TextComparator.areSimilar(k1.lowercase(), k2.lowercase(), 0.85)) {
                                 matchCount++
                                 break
                             }
@@ -722,6 +727,10 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             val prompt = """
                 Проанализируй новости и выдели ОТДЕЛЬНЫЕ новостные события.
                 
+                ЛИМИТЫ (СТРОГО):
+                Максимальное количество тем: $maxLimit.
+                Если событий больше — выбери самые резонансные и значимые. Мелкие, локальные или малозначительные новости ИГНОРИРУЙ, не включай их в отчет.
+                
                 Группируй новости по Сюжетным Линиям:
                 1. Цепочка событий (ОСТАВЛЯТЬ ВМЕСТЕ): Например, событие + реакция + последствия = ОДНА тема.
                 2. Дайджесты (РАЗДЕЛЯТЬ): Разные события, произошедшие в разных местах (например, разные ДТП) = РАЗНЫЕ темы.
@@ -741,8 +750,13 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             val response = try {
                 withTimeout(120000L) { llm.sendPrompt(prompt) }
             } catch (e: GeminiException) {
-                if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
-                if (e.errorType == SummarizationErrorType.NO_NETWORK || e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) throw e
+                if (e.errorType == SummarizationErrorType.NO_NETWORK ||
+                    e.errorType == SummarizationErrorType.QUOTA_EXCEEDED ||
+                    e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) {
+                    if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
+                    throw e
+                }
+
                 throw RuntimeException("Trigger split", e)
             }
 

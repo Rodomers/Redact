@@ -15,7 +15,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -807,8 +806,8 @@ private fun ExpandedCardContent(
                         brush = Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                MaterialTheme.colorScheme.surfaceContainerLow.copy(0.7f),
-                                MaterialTheme.colorScheme.surfaceContainerLow
+                                MaterialTheme.colorScheme.surface.copy(0.7f),
+                                MaterialTheme.colorScheme.surface
                             )
                         )
                     )
