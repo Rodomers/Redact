@@ -8,6 +8,7 @@ import java.io.InputStreamReader
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.Pattern
+import kotlin.math.ceil
 
 /**
  * Менеджер для работы со стоп-словами и определения языка текста
@@ -157,5 +158,32 @@ object TextSanitizer {
             }
         }
         return if (hasChanges) sentences.joinToString(" ") else text
+    }
+}
+
+object TokenEstimator {
+
+    fun estimate(context: Context, text: String): Int {
+        if (text.isEmpty()) return 0
+        val langCode = StopWordsManager.detectLanguage(context, text)
+
+        val charsPerToken = when (langCode) {
+            "zh", "ja", "ko", "vi" -> 1.0
+            "ru", "uk", "bg", "ar", "el", "he", "fa", "hi", "gu", "th" -> 2.5
+            else -> 4.0
+        }
+
+        val tokenCount = ceil(text.length / charsPerToken).toInt()
+        return tokenCount + 10
+    }
+
+    fun truncateToLimit(context: Context, text: String, maxTokens: Int): String {
+        val estimated = estimate(context, text)
+        if (estimated <= maxTokens) return text
+
+        val ratio = maxTokens.toDouble() / estimated.toDouble()
+        val newLength = (text.length * ratio * 0.9).toInt()
+
+        return text.take(newLength) + "..."
     }
 }

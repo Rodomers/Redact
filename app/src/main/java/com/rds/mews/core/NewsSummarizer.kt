@@ -288,8 +288,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         val cleanText: String
     )
 
-    // Token Bucket Limits
     private val BATCH_CHAR_LIMIT = 150000
+    private val MAX_NEWS_LIMIT = 100
     private val SINGLE_NEWS_CHAR_LIMIT = 3000
 
     private val DEDUP_THRESHOLD = 0.85
@@ -474,23 +474,40 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
     private fun createBatches(groups: List<GroupedMessage>): List<List<GroupedMessage>> {
         val batches = mutableListOf<List<GroupedMessage>>()
         var currentBatch = mutableListOf<GroupedMessage>()
-        var currentBatchLen = 0
+
+        var currentBatchCharLen = 0
+        var currentBatchTokens = 0
 
         for (group in groups) {
-            val msgLen = group.representative.mess.take(SINGLE_NEWS_CHAR_LIMIT).length
-            if (currentBatchLen + msgLen > BATCH_CHAR_LIMIT && currentBatch.isNotEmpty()) {
+            val msgText = group.representative.mess.take(SINGLE_NEWS_CHAR_LIMIT)
+            val msgCharLen = msgText.length
+
+            val msgTokens = try {
+                TokenEstimator.estimate(MewsRepository.getAppContext(), msgText)
+            } catch (_: Exception) {
+                msgCharLen / 3
+            }
+
+            val isCharLimitExceeded = currentBatchCharLen + msgCharLen > SINGLE_NEWS_CHAR_LIMIT
+            val isTokenLimitExceeded = currentBatchTokens + msgTokens > BATCH_CHAR_LIMIT
+            val isCountLimitExceeded = currentBatch.size >= MAX_NEWS_LIMIT
+
+            if ((isCharLimitExceeded || isTokenLimitExceeded || isCountLimitExceeded) && currentBatch.isNotEmpty()) {
                 batches.add(currentBatch)
                 currentBatch = mutableListOf()
-                currentBatchLen = 0
+                currentBatchCharLen = 0
+                currentBatchTokens = 0
             }
+
             currentBatch.add(group)
-            currentBatchLen += msgLen
+            currentBatchCharLen += msgCharLen
+            currentBatchTokens += msgTokens
         }
+
         if (currentBatch.isNotEmpty()) batches.add(currentBatch)
         return batches
     }
 
-    // Оптимизированная дедупликация с одним проходом санитизации
     private fun deduplicateMessages(raw: List<Message>): List<GroupedMessage> {
         val prepared = raw.map { PreparedMessage(it, TextSanitizer.sanitize(it.mess)) }
         val groups = mutableListOf<GroupedMessage>()

@@ -365,6 +365,10 @@ object MewsRepository {
         AlarmScheduler.cancel(context)
     }
 
+    fun getAppContext(): Context {
+        return _context.value ?: throw IllegalStateException("MewsRepository not initialized via initialize()")
+    }
+
     fun planTitlesUpdate(context: Context, explicitTimeMins: Int? = null) {
         if (titlesAlarmUpdate.value) {
             val updateFrequencyHours = titlesAutoUpdateFrequency.value.num
