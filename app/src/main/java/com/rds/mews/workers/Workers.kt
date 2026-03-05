@@ -3,7 +3,6 @@ package com.rds.mews.workers
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.rds.mews.core.DbHelper
 import com.rds.mews.core.RssFetcher
 import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.localcore.SummarizationResult
@@ -28,9 +27,8 @@ class RssUpdateWorker(
 
         val sources = inputData.getBoolean(KEY_SOURCES, false)
 
-        val db = DbHelper(applicationContext)
         val enableProxy = MewsRepository.proxyEnabled.first()
-        val fetcher = RssFetcher(db, enableProxy)
+        val fetcher = RssFetcher(enableProxy)
 
         val titlesPeriod = MewsRepository.titlesPeriod.first().num ?: 0L
 
@@ -59,7 +57,7 @@ class TitlesUpdateWorker(
             return Result.retry()
         }
 
-        val updater = TitlesUpdater(applicationContext)
+        val updater = TitlesUpdater()
 
         return try {
             when (val result = updater.performUpdate(isOneTime = true)) {

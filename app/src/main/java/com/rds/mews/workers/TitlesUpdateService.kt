@@ -47,7 +47,7 @@ class TitlesUpdateService : Service() {
 
             if (!oneTimeUpdate) AlarmScheduler.cancel(applicationContext)
 
-            val updater = TitlesUpdater(applicationContext)
+            val updater = TitlesUpdater()
             val result = try {
                 updater.performUpdate(oneTimeUpdate)
             } catch (_: CancellationException) {

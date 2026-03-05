@@ -123,3 +123,17 @@ enum class GeminiModelOption(val displayedName: String, val apiModelName: String
         }
     }
 }
+
+@Serializable
+enum class TitleStatus(val statusId: Int) {
+    DEFAULT(0),
+    PROCESSING(1),
+    ERROR(2),
+    ARCHIVED(3);
+
+    companion object {
+        fun fromId(key: Int): TitleStatus {
+            return entries.find { it.statusId == key } ?: DEFAULT
+        }
+    }
+}

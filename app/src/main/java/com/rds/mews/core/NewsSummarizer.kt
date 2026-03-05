@@ -3,6 +3,7 @@ package com.rds.mews.core
 import android.util.Log
 import com.rds.mews.localcore.Message
 import com.rds.mews.localcore.SummarizationResult
+import com.rds.mews.localcore.TitleStatus
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.settings_manager.GeminiException
 import com.rds.mews.settings_manager.SummarizationErrorType
@@ -268,13 +269,13 @@ suspend fun validateGeminiKey(apiKey: String, proxyIp: String, proxyKey: String,
     } catch (_: Exception) { false } finally { client.close() }
 }
 
-class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
-
+class NewsSummarizer(private val llm: LLMClient) {
     data class Topics(
         val title: String,
         val ids: List<Long>?,
         val weight: Int = 0,
         val id: Long = 0,
+        val status: Int = 0,
         val keywords: List<String> = emptyList()
     )
 
@@ -294,8 +295,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
 
     private val DEDUP_THRESHOLD = 0.85
 
-    // Порог сниппетов удален за ненадобностью
-
     private val TAG = "NewsSummarizer"
     private val rateLimiter = SmartRateLimiter(minIntervalMs = 4000L)
 
@@ -309,19 +308,18 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
 
     suspend fun summarizeTopics(
         maxTopics: Int = 20,
-        messageSeconds: Long = 14515200,
+        messageSeconds: Long = 36000,
         readyFunc: () -> Unit,
         filterTopics: Boolean = true
     ): SummarizationResult {
         try {
             Log.d(TAG, "Starting summarizeTopics. Filter enabled: $filterTopics")
 
-            val unfinishedTitles = db.getTitles().filter { it.text == "<промежуточный текст>" && it.time.toInt() == 0 }
-            val isRetryMode = unfinishedTitles.isNotEmpty()
+            val isRetryMode = MewsRepository.getTitlesToSummarize(TitleStatus.PROCESSING.statusId).isNotEmpty()
             val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
 
             val rawMessages = if (!isRetryMode) {
-                val msgs = db.getMessages(messageSeconds).sortedBy { it.time }
+                val msgs = MewsRepository.getMessagesList(messageSeconds)
                 if (msgs.isEmpty()) {
                     safeReadyFunc(readyFunc)
                     return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE)
@@ -356,8 +354,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 }
             }
 
-            val titlesToSummarize = db.getTitles().filter { it.text == "<промежуточный текст>" }
-                .map { Topics(it.title, db.dbUnpack(it.ids).mapNotNull { id -> id.toLongOrNull() }, 0, it.id) }
+            val titlesToSummarize = MewsRepository.getTitlesToSummarize(TitleStatus.PROCESSING.statusId)
 
             if (titlesToSummarize.isEmpty()) { safeReadyFunc(readyFunc); return SummarizationResult.Success }
 
@@ -372,16 +369,24 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 batches.forEach { batch ->
                     MewsRepository.setUpdatingState("summarizing_topics")
                     val topicsData = batch.mapNotNull { topic ->
-                        val suitableMessages = topic.ids?.mapNotNull { id ->
-                            rawMessages.find { it.id == id } ?: db.getMessage(id)
+                        val messageIds = topic.ids ?: emptyList()
+                        val cachedMessages = messageIds.mapNotNull { id -> rawMessages.find { it.id == id } }
+                        val missingIds = messageIds - cachedMessages.map { it.id }.toSet()
+
+                        val fetchedMessages = if (missingIds.isNotEmpty()) {
+                            MewsRepository.getMessages(missingIds.joinToString(", "))
+                        } else {
+                            emptyList()
                         } ?: emptyList()
 
+                        val suitableMessages = cachedMessages + fetchedMessages
+
                         if (suitableMessages.isEmpty()) {
-                            try { db.delTitle(name = topic.title) } catch (_: Exception) {}
+                            MewsRepository.deleteTitleById(topic.id)
                             null
                         } else {
                             val uniqueTextsForSummary = deduplicateForSummaryPayload(suitableMessages)
-                            val contentPayload = uniqueTextsForSummary.joinToString("\n") { "— ${it.mess.take(SINGLE_NEWS_CHAR_LIMIT)}" }
+                            val contentPayload = uniqueTextsForSummary.joinToString("\n") { "— ${it.originalText.take(SINGLE_NEWS_CHAR_LIMIT)}" }
                             Triple(topic, suitableMessages, contentPayload)
                         }
                     }
@@ -391,31 +396,31 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                             val results = adaptiveSummarizeBatch(topicsData, bannedWords, currentLanguage, 0)
 
                             if (results.isNotEmpty()) {
-                                results.forEach { (_, resultData, originalData) ->
+                                for ((_, resultData, originalData) in results) {
                                     try {
                                         val (summary, newTitle) = resultData
                                         val (topic, suitableMessages, _) = originalData
 
-                                        // Фильтр спама: если саммари пустое — удаляем тему
                                         if (summary.isBlank()) {
-                                            db.delTitle(name = topic.title)
-                                            return@forEach
+                                            MewsRepository.deleteTitleById(topic.id)
+                                            continue
                                         }
 
-                                        val allSources = suitableMessages.map { it.source }.distinct()
-                                        val allLinks = suitableMessages.map { it.id.toString() }.distinct()
-                                        val newSourcesPack = db.dbPack(*allSources.toTypedArray())
-                                        val newLinksPack = db.dbPack(*allLinks.toTypedArray())
                                         val newTimeVal = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
 
-                                        if (newTitle != topic.title) {
-                                            db.delTitle(name = topic.title)
-                                            db.addTitle(newTimeVal, newTitle, summary, newSourcesPack, newLinksPack)
-                                        } else {
-                                            db.updateTitle(topic.id, topic.title, summary, newSourcesPack, newLinksPack, newTimeVal)
-                                        }
+                                        MewsRepository.updateTitle(
+                                            id = topic.id,
+                                            newTimeVal = newTimeVal,
+                                            newTitle = newTitle,
+                                            summary = summary
+                                        )
+
                                         successCount++
-                                    } catch(e: Exception) { Log.e(TAG, "Save error", e) }
+                                    } catch (e: kotlinx.coroutines.CancellationException) {
+                                        throw e
+                                    } catch(e: Exception) {
+                                        Log.e(TAG, "Save error for topic ID: ${originalData.first.id}", e)
+                                    }
                                 }
                             } else {
                                 if (lastError == null) lastError = SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
@@ -423,9 +428,13 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
 
                             if (isRetryMode) {
                                 val successIds = results.map { it.first }.toSet()
-                                topicsData.forEach { (topic, _, _) ->
-                                    if (!successIds.contains(topic.id)) {
-                                        try { db.delTitle(name = topic.title) } catch(_: Exception) {}
+                                for ((topic, _, _) in topicsData) {
+                                    if (topic.id !in successIds) {
+                                        try {
+                                            MewsRepository.deleteTitleById(topic.id)
+                                        } catch (e: kotlinx.coroutines.CancellationException) {
+                                            throw e
+                                        } catch(_: Exception) {}
                                     }
                                 }
                             }
@@ -437,7 +446,13 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                                 Log.w(TAG, "Transient error: ${e.errorType}. Preserving drafts.")
                                 lastError = e.errorType
                             } else {
-                                topicsData.forEach { (t, _, _) -> try { db.delTitle(name = t.title) } catch(_: Exception){} }
+                                for ((t, _, _) in topicsData) {
+                                    try {
+                                        MewsRepository.deleteTitleById(t.id)
+                                    } catch (e: kotlinx.coroutines.CancellationException) {
+                                        throw e
+                                    } catch(_: Exception) {}
+                                }
                             }
                         }
                     }
@@ -457,7 +472,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             }
             safeReadyFunc(readyFunc)
             return SummarizationResult.Success
-
         } catch (e: GeminiException) {
             safeReadyFunc(readyFunc)
             return SummarizationResult.Failure(e.errorType, e)
@@ -479,7 +493,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         var currentBatchTokens = 0
 
         for (group in groups) {
-            val msgText = group.representative.mess.take(SINGLE_NEWS_CHAR_LIMIT)
+            val msgText = group.representative.originalText.take(SINGLE_NEWS_CHAR_LIMIT)
             val msgCharLen = msgText.length
 
             val msgTokens = try {
@@ -488,11 +502,10 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 msgCharLen / 3
             }
 
-            val isCharLimitExceeded = currentBatchCharLen + msgCharLen > SINGLE_NEWS_CHAR_LIMIT
             val isTokenLimitExceeded = currentBatchTokens + msgTokens > BATCH_CHAR_LIMIT
             val isCountLimitExceeded = currentBatch.size >= MAX_NEWS_LIMIT
 
-            if ((isCharLimitExceeded || isTokenLimitExceeded || isCountLimitExceeded) && currentBatch.isNotEmpty()) {
+            if ((isTokenLimitExceeded || isCountLimitExceeded) && currentBatch.isNotEmpty()) {
                 batches.add(currentBatch)
                 currentBatch = mutableListOf()
                 currentBatchCharLen = 0
@@ -504,17 +517,18 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             currentBatchTokens += msgTokens
         }
 
-        if (currentBatch.isNotEmpty()) batches.add(currentBatch)
+        if (currentBatch.isNotEmpty()) {
+            batches.add(currentBatch)
+        }
         return batches
     }
-
     private fun deduplicateMessages(raw: List<Message>): List<GroupedMessage> {
-        val prepared = raw.map { PreparedMessage(it, TextSanitizer.sanitize(it.mess)) }
+        val prepared = raw.map { PreparedMessage(it, TextSanitizer.sanitize(it.originalText)) }
         val groups = mutableListOf<GroupedMessage>()
 
         prepared.forEach { pMsg ->
             val existingGroup = groups.find { group ->
-                val cleanGroup = TextSanitizer.sanitize(group.representative.mess)
+                val cleanGroup = TextSanitizer.sanitize(group.representative.originalText)
                 TextComparator.areSimilar(pMsg.cleanText, cleanGroup, DEDUP_THRESHOLD)
             }
             if (existingGroup != null) {
@@ -529,8 +543,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
     private fun deduplicateForSummaryPayload(messages: List<Message>): List<Message> {
         val unique = mutableListOf<Message>()
         messages.forEach { msg ->
-            val cleanMsg = TextSanitizer.sanitize(msg.mess)
-            val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.mess), cleanMsg, 0.95) }
+            val cleanMsg = TextSanitizer.sanitize(msg.originalText)
+            val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.originalText), cleanMsg, 0.95) }
             if (!exists) unique.add(msg)
         }
         return unique
@@ -601,7 +615,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
             simpleAlgorithmicMerge(allExtracted)
         }
 
-        db.titlesTimeKill(0)
+        MewsRepository.delTitles()
 
         finalTopicsCandidate
             .sortedByDescending { it.weight }
@@ -614,15 +628,12 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
 
         rawTopics.sortedByDescending { it.weight }.forEach { candidate ->
             val existingIndex = merged.indexOfFirst { existing ->
-                // ЭТАП 1: Проверка по Keywords
                 var isKeywordMatch = false
 
-                // Проверяем только если в обоих списках есть слова (2+)
                 if (existing.keywords.size >= 2 && candidate.keywords.size >= 2) {
                     var matchCount = 0
                     for (k1 in existing.keywords) {
                         for (k2 in candidate.keywords) {
-                            // Используем TextComparator для морфологии (0.85 - высокий порог)
                             if (TextComparator.areSimilar(k1.lowercase(), k2.lowercase(), 0.85)) {
                                 matchCount++
                                 break
@@ -631,11 +642,9 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                     }
 
                     val minLen = min(existing.keywords.size, candidate.keywords.size)
-                    // Длинные списки (3+): >= 50% совпадений
                     if (minLen >= 3) {
                         if (matchCount >= minLen * 0.5) isKeywordMatch = true
                     }
-                    // Короткие списки (2): строго 2 совпадения
                     else if (minLen == 2) {
                         if (matchCount == 2) isKeywordMatch = true
                     }
@@ -643,8 +652,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
 
                 if (isKeywordMatch) return@indexOfFirst true
 
-                // ЭТАП 2: Проверка заголовков (Fallback)
-                // Строгий порог 0.8, если теги подвели
                 TextComparator.areSimilar(existing.title, candidate.title, 0.8)
             }
 
@@ -652,7 +659,6 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 val existing = merged[existingIndex]
                 val combinedIds = (existing.ids.orEmpty() + candidate.ids.orEmpty()).distinct()
                 val maxWeight = max(existing.weight, candidate.weight)
-                // Объединяем кейворды, сохраняя уникальность
                 val combinedKeywords = (existing.keywords + candidate.keywords)
                     .distinctBy { it.lowercase() }
                     .take(8)
@@ -738,7 +744,7 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         try {
             rateLimiter.waitIfNeeded()
             val sanitizedBatch = batch.joinToString("\n") { grp ->
-                "• ${grp.representative.mess.replace("\"", "'").replace("`", "").take(SINGLE_NEWS_CHAR_LIMIT)} (id - ${grp.representative.id})"
+                "• ${grp.representative.originalText.replace("\"", "'").replace("`", "").take(SINGLE_NEWS_CHAR_LIMIT)} (id - ${grp.representative.id})"
             }
 
             val prompt = """
@@ -836,9 +842,9 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
         }
     }
 
-    private fun saveTopicToDb(t: Topics) {
-        val idsPack = db.dbPack(*(t.ids?.map { it.toString() } ?: emptyList()).toTypedArray())
-        db.addTitle(0, t.title, "<промежуточный текст>", "<промежуточный текст>", idsPack)
+    private suspend fun saveTopicToDb(t: Topics) {
+        val ids = t.ids ?: emptyList()
+        MewsRepository.addTitle(newTimeVal = 0, newTitle = t.title, summary = "", messageIds = ids)
     }
 
     private suspend fun adaptiveSummarizeBatch(
@@ -857,7 +863,8 @@ class NewsSummarizer(private val db: DbHelper, private val llm: LLMClient) {
                 if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
                 if (e.errorType == SummarizationErrorType.CONTENT_BLOCKED) {
                     if (batch.size <= 1) {
-                        try { db.delTitle(name = batch.first().first.title) } catch (_: Exception) {}
+                        try {
+                            MewsRepository.deleteTitleById(batch.first().first.id) } catch (_: Exception) {}
                         return emptyList()
                     }
                     throw RuntimeException("Trigger split", e)

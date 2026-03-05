@@ -1,0 +1,134 @@
+package com.rds.mews.database
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
+import kotlin.math.max
+import kotlin.math.min
+
+@Dao
+interface SourceDao {
+    @Query("SELECT * FROM sources")
+    fun getAllSourcesFlow(): Flow<List<SourceEntity>>
+
+    @Query("SELECT * FROM sources WHERE id = :id")
+    suspend fun getSourceById(id: Long): SourceEntity?
+
+    @Query("SELECT * FROM sources WHERE feed_url = :feedUrl")
+    suspend fun getSourceByUrl(feedUrl: String): SourceEntity?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(source: SourceEntity): Long
+
+    @Query("DELETE FROM sources WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("UPDATE sources SET custom_name = :newName WHERE id = :id")
+    suspend fun updateCustomName(id: Long, newName: String)
+}
+
+@Dao
+interface MessageDao {
+    @Query("SELECT * FROM messages ORDER BY pub_time DESC")
+    fun getAllMessagesFlow(): Flow<List<MessageEntity>>
+
+    @Query("SELECT * FROM messages WHERE pub_time > :timeMs ORDER BY pub_time ASC")
+    fun getMessagesAfterTimeFlow(timeMs: Long): Flow<List<MessageEntity>>
+
+    @Query("SELECT * FROM messages WHERE link = :link")
+    suspend fun getMessageByLink(link: String): MessageEntity?
+
+    @Query("SELECT * FROM messages WHERE pub_time > :timeMs ORDER BY pub_time ASC")
+    suspend fun getMessagesAfterTimeOneShot(timeMs: Long): List<MessageEntity>
+
+    @Query("SELECT * FROM messages ORDER BY pub_time ASC")
+    suspend fun getAllMessagesOneShot(): List<MessageEntity>
+
+    @Query("SELECT * FROM messages WHERE id IN (:ids)")
+    suspend fun getMessagesByIds(ids: List<Long>): List<MessageEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(message: MessageEntity): Long
+
+    @Query("DELETE FROM messages WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM messages WHERE pub_time < :timeMs")
+    suspend fun deleteBeforeTime(timeMs: Long): Int
+}
+
+@Dao
+interface TitleDao {
+    @Query("SELECT * FROM titles ORDER BY event_time ASC")
+    fun getAllTitlesFlow(): Flow<List<TitleEntity>>
+
+    @Query("SELECT * FROM titles WHERE event_time > :timeMs ORDER BY event_time ASC")
+    fun getTitlesAfterTimeFlow(timeMs: Long): Flow<List<TitleEntity>>
+
+    @Query("SELECT * FROM titles WHERE id = :id")
+    suspend fun getTitleById(id: Long): TitleEntity?
+
+    @Query("""
+        SELECT m.* FROM messages m 
+        INNER JOIN title_message_map map ON m.id = map.message_id 
+        WHERE map.title_id = :titleId
+    """)
+    fun getMessagesForTitleFlow(titleId: Long): Flow<List<MessageEntity>>
+
+    @Query("""
+        SELECT s.* FROM sources s
+        INNER JOIN messages m ON s.id = m.source_id
+        INNER JOIN title_message_map map ON m.id = map.message_id
+        WHERE map.title_id = :titleId
+    """)
+    fun getSourcesForTitleFlow(titleId: Long): Flow<List<SourceEntity>>
+
+    @Query("""
+        SELECT t.* FROM titles t 
+        INNER JOIN title_related_map r ON t.id = r.title_id_2 
+        WHERE r.title_id_1 = :titleId
+    """)
+    fun getRelatedTitlesAsFirstFlow(titleId: Long): Flow<List<TitleEntity>>
+
+    @Query("""
+        SELECT t.* FROM titles t 
+        INNER JOIN title_related_map r ON t.id = r.title_id_1 
+        WHERE r.title_id_2 = :titleId
+    """)
+    fun getRelatedTitlesAsSecondFlow(titleId: Long): Flow<List<TitleEntity>>
+
+    @Query("SELECT * FROM titles WHERE status != :processingStatusId")
+    suspend fun getTitlesNotProcessing(processingStatusId: Int): List<TitleEntity>
+
+    @Query("SELECT message_id FROM title_message_map WHERE title_id = :titleId")
+    suspend fun getMessageIdsForTitle(titleId: Long): List<Long>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(title: TitleEntity): Long
+
+    @Update
+    suspend fun update(title: TitleEntity)
+
+    @Query("DELETE FROM titles WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM titles WHERE event_time < :timeMs")
+    suspend fun deleteBeforeTime(timeMs: Long): Int
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTitleMessageMap(map: TitleMessageMap)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTitleRelatedMap(map: TitleRelatedMap)
+
+    suspend fun insertRelatedMapSafe(id1: Long, id2: Long) {
+        val firstId = min(id1, id2)
+        val secondId = max(id1, id2)
+        if (firstId != secondId) {
+            insertTitleRelatedMap(TitleRelatedMap(firstId, secondId))
+        }
+    }
+}

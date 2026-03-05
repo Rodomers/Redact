@@ -109,7 +109,6 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import dev.jeziellago.compose.markdowntext.MarkdownText
 
 @Composable
@@ -183,7 +182,7 @@ fun TitlesCard(
 
             if (showSnippet && expandable) {
                 SnippetText(
-                    text = title.text,
+                    text = title.summary,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
             }
@@ -443,7 +442,7 @@ private fun MeasureCardCompleteStructure(
         Spacer(modifier = Modifier.height(8.dp))
 
         MarkdownText(
-            markdown = title.text.trim(),
+            markdown = title.summary.trim(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
@@ -486,7 +485,7 @@ private fun TitlesHeaderContent(
             val alpha = (animationProgress * 2f).coerceIn(0f, 1f)
 
             Text(
-                text = getFormattedTimeUnix(title.time),
+                text = getFormattedTimeUnix(title.eventTime),
                 textAlign = TextAlign.Left,
                 modifier = Modifier
                     .layout { measurable, constraints ->
@@ -548,7 +547,7 @@ private fun ExpandedCardContent(
 
     val shouldAnimateHeader = headerStartColor != headerEndColor
 
-    val copiedText = "${title.title}\n\n${title.text}\n\n${source}: Mews, ${title.sources}".replace(
+    val copiedText = "${title.title}\n\n${title.summary}\n\n${source}: Mews, ${title.sources}".replace(
         Regex("[*_]"),
         ""
     )
@@ -626,7 +625,7 @@ private fun ExpandedCardContent(
                 if (showSnippet) {
                     val snippetAlpha = (1f - expansionProgress).coerceIn(0f, 1f)
                     SnippetText(
-                        text = title.text,
+                        text = title.summary,
                         modifier = Modifier
                             .layout { measurable, constraints ->
                                 val placeable = measurable.measure(constraints)
@@ -670,7 +669,7 @@ private fun ExpandedCardContent(
                                     .padding(horizontal = 16.dp)
                             ) {
                                 MarkdownText(
-                                    markdown = title.text.trim(),
+                                    markdown = title.summary.trim(),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontSize = 14.2.sp,
                                         lineHeight = 22.2.sp,
@@ -725,8 +724,8 @@ private fun ExpandedCardContent(
                         } else {
                             val allMessages = remember(sources) { sources.flatMap { it.messages } }
 
-                            val minLength = remember(allMessages) { allMessages.minOfOrNull { it.mess.length } ?: 0 }
-                            val maxLength = remember(allMessages) { allMessages.maxOfOrNull { it.mess.length } ?: 1 }
+                            val minLength = remember(allMessages) { allMessages.minOfOrNull { it.originalText.length } ?: 0 }
+                            val maxLength = remember(allMessages) { allMessages.maxOfOrNull { it.originalText.length } ?: 1 }
 
                             LazyVerticalGrid(
                                 modifier = Modifier
@@ -758,13 +757,13 @@ private fun ExpandedCardContent(
                                                         maxItemsInEachRow = 5
                                                     ) {
                                                         messages.forEach { item ->
-                                                            val padding = remember(item.mess.length, minLength, maxLength) {
+                                                            val padding = remember(item.originalText.length, minLength, maxLength) {
                                                                 if (maxLength == minLength) {
                                                                     val absoluteMaxChars = 200f
-                                                                    val fraction = (item.mess.length / absoluteMaxChars).coerceIn(0f, 1f)
+                                                                    val fraction = (item.originalText.length / absoluteMaxChars).coerceIn(0f, 1f)
                                                                     12.dp + (48.dp * fraction)
                                                                 } else {
-                                                                    val fraction = (item.mess.length - minLength).toFloat() / (maxLength - minLength)
+                                                                    val fraction = (item.originalText.length - minLength).toFloat() / (maxLength - minLength)
                                                                     12.dp + (48.dp * fraction)
                                                                 }
                                                             }

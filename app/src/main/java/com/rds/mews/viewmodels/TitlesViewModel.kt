@@ -50,6 +50,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import com.rds.mews.R
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 
 class TitlesViewModel(
@@ -118,7 +119,7 @@ class TitlesViewModel(
         todayDateFlow
     ) { titles, today ->
         titles.groupBy { title ->
-            getDateFromUnix(title.time, today).copy(time = "00:00")
+            getDateFromUnix(title.eventTime, today).copy(time = "00:00")
         }
     }.stateIn(
         scope = viewModelScope,
@@ -174,18 +175,14 @@ class TitlesViewModel(
         viewModelScope.launch { repository.addBannedNew(value) }
     }
 
-    fun isTitlesNumCorrect(): Boolean {
-        return repository.getTitlesCount() == _titleCardStates.value.size
-    }
-
     fun showGreeting(context: Context) {
         viewModelScope.launch {
             val list = emptyList<Title>().toMutableList()
             list += Title(
                 id = 0L,
-                time = System.currentTimeMillis(),
+                eventTime = System.currentTimeMillis(),
                 title = context.getString(R.string.greeting_1),
-                text = "",
+                summary = "",
                 sources = "",
                 ids = ""
             )
@@ -194,9 +191,9 @@ class TitlesViewModel(
             delay(800L)
             list += Title(
                 id = 1L,
-                time = System.currentTimeMillis(),
+                eventTime = System.currentTimeMillis(),
                 title = context.getString(R.string.greeting_2),
-                text = "",
+                summary = "",
                 sources = "",
                 ids = ""
             )
@@ -204,9 +201,9 @@ class TitlesViewModel(
             delay(800L)
             list += Title(
                 id = 2L,
-                time = System.currentTimeMillis(),
+                eventTime = System.currentTimeMillis(),
                 title = context.getString(R.string.greeting_3),
-                text = "",
+                summary = "",
                 sources = "",
                 ids = ""
             )
@@ -292,8 +289,6 @@ class TitlesViewModel(
         repository.clearError()
     }
 
-    fun getMessages(ids: String): List<Message>? = repository.getMessages(ids)
-
     fun changeGroupState(date: TimeDate) {
         val currentMap = _groupStates.value.toMutableMap()
         currentMap[date] = !(currentMap[date] ?: true)
@@ -334,7 +329,7 @@ class TitlesViewModel(
             repository.titles
                 .distinctUntilChanged()
                 .collect { titleListFromDb ->
-                    val actualTitles = titleListFromDb.filter { it.text != "<промежуточный текст>" }
+                    val actualTitles = titleListFromDb.filter { it.summary != "<промежуточный текст>" }
                     val hasHiddenItems = actualTitles.size != titleListFromDb.size
 
                     val currentErr = _errState.value
@@ -355,7 +350,7 @@ class TitlesViewModel(
                         val oldStatesMap = currentStates.associateBy { it.id }
                         actualTitles.map { title ->
                             val oldState = oldStatesMap[title.id]
-                            val messages = getMessages(title.ids)
+                            val messages = MewsRepository.getMessages(title.ids)
 
                             val newSources = if (messages == null) null else {
                                 val groupedMessages = messages.groupBy { it.source }

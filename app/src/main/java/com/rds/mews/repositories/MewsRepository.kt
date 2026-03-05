@@ -3,14 +3,23 @@ package com.rds.mews.repositories
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
+import androidx.room.Room
 import com.rds.mews.GeminiApiKeyProvider
 import com.rds.mews.ProxyAddressProvider
 import com.rds.mews.R
 import com.rds.mews.RSSHubAddressProvider
 import com.rds.mews.RssHubApiKeyProvider
-import com.rds.mews.core.DbHelper
+import com.rds.mews.core.NewsSummarizer
+import com.rds.mews.database.AppDatabase
 import com.rds.mews.core.getRssName
 import com.rds.mews.core.validateGeminiKey
+import com.rds.mews.database.MessageDao
+import com.rds.mews.database.MessageEntity
+import com.rds.mews.database.SourceDao
+import com.rds.mews.database.SourceEntity
+import com.rds.mews.database.TitleDao
+import com.rds.mews.database.TitleEntity
+import com.rds.mews.database.TitleMessageMap
 import com.rds.mews.localcore.*
 import com.rds.mews.settings_manager.AppSettings
 import com.rds.mews.settings_manager.SettingsManager
@@ -18,14 +27,18 @@ import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.workers.AlarmScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 
 object MewsRepository {
-    private lateinit var db: DbHelper
+    private lateinit var database: AppDatabase
+    private lateinit var sourceDao: SourceDao
+    private lateinit var messageDao: MessageDao
+    private lateinit var titleDao: TitleDao
+
     @SuppressLint("StaticFieldLeak")
     private lateinit var settingsManager: SettingsManager
     private lateinit var externalScope: CoroutineScope
@@ -60,7 +73,6 @@ object MewsRepository {
     lateinit var currentLanguage: StateFlow<String?>
 
     // Runtime state (Not in Settings)
-    private val _sourcesUpdateTrigger = MutableStateFlow(0)
     private val _context = MutableStateFlow<Context?>(null)
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
     var selectedTab: StateFlow<TabScreen> = _selectedTab.asStateFlow()
@@ -86,7 +98,6 @@ object MewsRepository {
     const val RSS_UPDATE_INTERVAL = "rss_update_interval"
     const val LAST_RSS_UPDATE = "last_rss_update"
     const val LAST_TITLES_UPDATE = "last_titles_update"
-    const val UPDATING_TITLES = "updating_titles"
     const val UPDATING_STATE = "updating_state"
     const val UPDATING_PROGRESS = "updating_progress"
     const val COMPACT_TAB_BAR = "compact_tab_bar"
@@ -102,10 +113,20 @@ object MewsRepository {
     const val BANNED_NEWS_SET = "banned_news_set"
     const val ENABLE_PROXY = "enable_proxy"
 
+    lateinit var sources: Flow<List<RSS>>
+    lateinit var titles: Flow<List<Title>>
+
     fun initialize(context: Context, externalScope: CoroutineScope) {
         if (isInitialized) return
         val appContext = context.applicationContext
-        this.db = DbHelper(appContext)
+
+        this.database = Room.databaseBuilder(appContext, AppDatabase::class.java, "MainDB")
+            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .build()
+        this.sourceDao = database.sourceDao()
+        this.messageDao = database.messageDao()
+        this.titleDao = database.titleDao()
+
         this.settingsManager = SettingsManager(appContext)
         this.externalScope = externalScope
 
@@ -171,20 +192,11 @@ object MewsRepository {
             val saved = settings.lastError
             if (saved != null) {
                 try {
-                    // 1. Защита: Проверяем, что сообщение не пустое
                     val msg = saved.message.takeIf { it.isNotBlank() } ?: "Unknown saved error"
-
-                    // 2. Защита: Enum может быть null или битым после обновлений
-                    // (хотя Kotlin Serialization должен был упасть раньше, но перестрахуемся)
                     val type = saved.type
-
-                    SummarizationResult.Failure(
-                        type = type,
-                        cause = Exception(msg) // Создаем Exception безопасно
-                    )
+                    SummarizationResult.Failure(type = type, cause = Exception(msg))
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to restore lastError: ${e.message}")
-                    // Если не смогли восстановить ошибку — просто игнорируем её, а не крашимся
                     null
                 }
             } else {
@@ -195,8 +207,33 @@ object MewsRepository {
                 Log.e(TAG, "Critical error in lastError flow", e)
                 emit(null)
             }
-            .flowOn(Dispatchers.IO) // 3. Уводим с главного потока
+            .flowOn(Dispatchers.IO)
             .stateIn(externalScope, SharingStarted.Eagerly, null)
+
+        sources = sourceDao.getAllSourcesFlow()
+            .map { entities ->
+                entities.map { RSS(it.id, it.customName ?: it.originalName, it.feedUrl) }
+            }
+            .flowOn(Dispatchers.IO)
+
+        titles = titleDao.getAllTitlesFlow()
+            .map { entities ->
+                entities.map { entity ->
+                    val sourcesList = titleDao.getSourcesForTitleFlow(entity.id).first()
+                    val messagesList = titleDao.getMessagesForTitleFlow(entity.id).first()
+                    val sourcesStr = sourcesList.joinToString(", ") { it.customName ?: it.originalName }
+                    val linksStr = messagesList.joinToString(", ") { it.id.toString() }
+                    Title(
+                        entity.id,
+                        eventTime = entity.eventTime,
+                        title = entity.title,
+                        summary = entity.summary,
+                        sources = sourcesStr,
+                        ids = linksStr
+                    )
+                }
+            }
+            .flowOn(Dispatchers.IO)
 
         isInitialized = true
     }
@@ -211,46 +248,46 @@ object MewsRepository {
     val defaultModel: GeminiModelOption get() = GeminiModelOption.FLASH_LITE_LATEST
 
     suspend fun checkGeminiApiKey(key: String): Boolean {
-        return validateGeminiKey(
-            key,
-            PROXY_ADDRESS,
-            SERVER_KEY,
-            proxyEnabled.value
-        )
+        return validateGeminiKey(key, PROXY_ADDRESS, SERVER_KEY, proxyEnabled.value)
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val sources: Flow<List<RSS>> = _sourcesUpdateTrigger.flatMapLatest {
-        flow { emit(db.getRSS()) }
-    }.flowOn(Dispatchers.IO)
-
     fun addSource(context: Context, name: String, link: String) {
-        db.addRSS(name, linkTransform(link))
-        _sourcesUpdateTrigger.value++
+        externalScope.launch(Dispatchers.IO) {
+            val entity = SourceEntity(
+                originalName = name,
+                customName = null,
+                websiteUrl = link,
+                feedUrl = linkTransform(link),
+                sourceType = 0,
+                lastSyncTime = 0,
+                errCount = 0,
+                lastErrMsg = null
+            )
+            sourceDao.insert(entity)
+        }
         AlarmScheduler.cancel(context, true)
-//        setLastRssUpdate(0L)
         setRssUpdate(context, true, rssUpdateInterval.value)
     }
 
+    fun getSource(id: Long): RSS? {
+        var rss: RSS? = null
+        externalScope.launch(Dispatchers.IO) {
+            val source = sourceDao.getSourceById(id)
+            if (source != null) rss = RSS(source.id, source.customName ?: source.originalName, source.feedUrl)
+        }
+        return rss
+    }
+
     fun deleteSource(id: Long) {
-        db.delRSS(id = id)
-        _sourcesUpdateTrigger.value++
+        externalScope.launch(Dispatchers.IO) {
+            sourceDao.deleteById(id)
+        }
     }
 
     fun changeSource(id: Long, newName: String) {
-        db.changeRssSource(id = id, newSource = newName)
-        _sourcesUpdateTrigger.value++
-        _titlesUpdateTrigger.value++
-    }
-
-    private val _titlesUpdateTrigger = MutableStateFlow(0)
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val titles: Flow<List<Title>> = _titlesUpdateTrigger.flatMapLatest {
-        flow { emit(db.getTitles()) }
-    }.flowOn(Dispatchers.IO)
-
-    fun triggerTitlesRefresh() {
-        _titlesUpdateTrigger.value++
+        externalScope.launch(Dispatchers.IO) {
+            sourceDao.updateCustomName(id, newName)
+        }
     }
 
     fun startTitlesUpdate(context: Context) {
@@ -258,16 +295,151 @@ object MewsRepository {
     }
 
     fun delTitles(time: Long? = null) {
-        db.titlesTimeKill(time ?: 0)
+        externalScope.launch(Dispatchers.IO) {
+            titleDao.deleteBeforeTime(time ?: 0)
+        }
     }
 
-    fun getMessages(ids: String): List<Message>? {
-        val arr = db.dbPack(ids).split(", ")
-            .mapNotNull { db.getMessage(it.toLongOrNull()) }
-        return arr.ifEmpty { null }
+
+    suspend fun addMessage(
+        sourceId: Long,
+        messageTime: Long,
+        link: String,
+        messageText: String,
+        title: String = ""
+    ): Long = withContext(Dispatchers.IO) {
+        val existing = messageDao.getMessageByLink(link)
+        if (existing != null) {
+            return@withContext existing.id
+        }
+
+        val entity = MessageEntity(
+            sourceId = sourceId,
+            link = link,
+            pubTime = messageTime,
+            title = title,
+            originalText = messageText,
+            cleanText = messageText,
+            isDuplicate = false,
+            isRead = false,
+            factCheck = null
+        )
+        messageDao.insert(entity)
     }
 
-    fun getTitlesCount(): Int = db.getTitles().size
+    suspend fun messageTimeKill(timeSeconds: Long): Int = withContext(Dispatchers.IO) {
+        val killTimeMs = System.currentTimeMillis() - (timeSeconds * 1000)
+        messageDao.deleteBeforeTime(killTimeMs)
+    }
+
+    suspend fun getMessages(ids: String): List<Message>? = withContext(Dispatchers.IO) {
+        val idList = ids.split(",").mapNotNull { it.trim().toLongOrNull() }
+        if (idList.isEmpty()) return@withContext null
+
+        val targetMsgs = messageDao.getMessagesByIds(idList)
+        val allSources = sourceDao.getAllSourcesFlow().first().associateBy { it.id } // Источников мало, это допустимо
+
+        val result = targetMsgs.map { msg ->
+            val sourceName = allSources[msg.sourceId]?.let { it.customName ?: it.originalName } ?: "Unknown"
+            Message(msg.id, msg.pubTime, msg.link, sourceName, msg.originalText, msg.cleanText)
+        }
+        result.ifEmpty { null }
+    }
+
+    suspend fun getMessagesList(timeSeconds: Long? = null): List<Message> = withContext(Dispatchers.IO) {
+        val entities = if (timeSeconds != null) {
+            val timeMs = System.currentTimeMillis() - (timeSeconds * 1000)
+            messageDao.getMessagesAfterTimeOneShot(timeMs)
+        } else {
+            messageDao.getAllMessagesOneShot()
+        }
+
+        val allSources = sourceDao.getAllSourcesFlow().first().associateBy { it.id }
+
+        entities.map { msg ->
+            val sourceName = allSources[msg.sourceId]?.let { it.customName ?: it.originalName } ?: "Unknown"
+            Message(msg.id, msg.pubTime, msg.link, sourceName, msg.originalText, msg.cleanText)
+        }
+    }
+
+    suspend fun getMessageByLink(link: String): Message? = withContext(Dispatchers.IO) {
+        when (val mess = messageDao.getMessageByLink(link)) {
+            null -> return@withContext null
+            else -> {
+                Message(
+                    mess.id,
+                    mess.pubTime,
+                    mess.link,
+                    getSource(mess.sourceId)?.source ?: "null",
+                    mess.originalText,
+                    mess.cleanText
+                )
+            }
+        }
+    }
+
+    suspend fun addTitle(
+        newTimeVal: Long,
+        newTitle: String,
+        summary: String,
+        messageIds: List<Long>
+    ): Long = withContext(Dispatchers.IO) {
+        val titleEntity = TitleEntity(
+            title = newTitle,
+            summary = summary,
+            eventTime = newTimeVal,
+            updateTime = newTimeVal,
+            status = 0,
+            isRead = false,
+            isPinned = false,
+            importanceWeight = 0,
+            keywords = emptyList()
+        )
+        val titleId = titleDao.insert(titleEntity)
+
+        messageIds.distinct().forEach { msgId ->
+            titleDao.insertTitleMessageMap(TitleMessageMap(titleId, msgId))
+        }
+
+        titleId
+    }
+
+    suspend fun updateTitle(
+        id: Long,
+        newTimeVal: Long,
+        newTitle: String,
+        summary: String
+    ) = withContext(Dispatchers.IO) {
+        val existing = titleDao.getTitleById(id) ?: return@withContext
+        val updatedEntity = existing.copy(
+            title = newTitle,
+            summary = summary,
+            eventTime = newTimeVal,
+            updateTime = System.currentTimeMillis()
+        )
+        titleDao.update(updatedEntity)
+    }
+
+    suspend fun getTitlesToSummarize(processingStatusId: Int): List<NewsSummarizer.Topics> = withContext(Dispatchers.IO) {
+        val validTitles = titleDao.getTitlesNotProcessing(processingStatusId)
+
+        validTitles.map { entity ->
+            val messageIds = titleDao.getMessageIdsForTitle(entity.id)
+            NewsSummarizer.Topics(
+                title = entity.title,
+                ids = messageIds,
+                id = entity.id
+            )
+        }
+    }
+
+    suspend fun getTitlesCount(): Int = withContext(Dispatchers.IO) {
+        titleDao.getAllTitlesFlow().first().size
+    }
+
+    suspend fun deleteTitleById(id: Long) = withContext(Dispatchers.IO) {
+        titleDao.deleteById(id)
+    }
 
     suspend fun getRssName(link: String): String? {
         return getRssName(link, proxyEnabled.value)

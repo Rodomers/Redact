@@ -11,14 +11,13 @@ import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 
 class RssFetcher(
-    private val db: DbHelper,
     enableProxy: Boolean = false
 ) {
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.HUB_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
 
     suspend fun fetchAndStoreAll(messAliveTime: Long = 0L, maxTimeHours: Int = 168): FetchResult {
         val rssList = try {
-            db.getRSS()
+            MewsRepository.sources
         } catch (e: Exception) {
             println("Ошибка при получении списка RSS из БД: ${e.message}")
             return FetchResult(0, 0, 0, listOf(e.message ?: "unknown"))
@@ -34,7 +33,7 @@ class RssFetcher(
         var itemsSkipped = 0
         val errors = mutableListOf<String>()
 
-        for (rss in rssList) {
+        for (rss in rssList.first()) {
             try {
                 var fetchUrl = rss.link
 //                println("Fetching RSS: $fetchUrl")
@@ -68,9 +67,8 @@ class RssFetcher(
 
                 for (item in items) {
                     val link = item.link ?: continue
-                    val desc = item.description ?: continue
 
-                    if (db.findMessage(rss.source, desc) != null) {
+                    if (MewsRepository.getMessageByLink(link) != null) {
                         itemsSkipped++
                         continue
                     }
@@ -84,7 +82,7 @@ class RssFetcher(
                     }
 
                     val text = buildMessageText(item)
-                    db.addMessage(messageTime = time, link = link, source = rss.source, messageText = text)
+                    MewsRepository.addMessage(sourceId = rss.id, messageTime = time, link = link, messageText = text)
                     itemsAdded++
                 }
                 feedsProcessed++
@@ -95,7 +93,7 @@ class RssFetcher(
                 e.printStackTrace()
                 errors.add(msg)
             } finally {
-                db.messageTimeKill(864000)
+                MewsRepository.messageTimeKill(864000)
             }
         }
         return FetchResult(feedsProcessed, itemsAdded, itemsSkipped, errors)

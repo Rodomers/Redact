@@ -1,8 +1,6 @@
 package com.rds.mews.workers
 
-import android.content.Context
 import android.util.Log
-import com.rds.mews.core.DbHelper
 import com.rds.mews.core.LLMClient
 import com.rds.mews.core.NewsSummarizer
 import com.rds.mews.core.RssFetcher
@@ -17,7 +15,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
-class TitlesUpdater(private val context: Context) {
+class TitlesUpdater() {
     suspend fun performUpdate(isOneTime: Boolean): SummarizationResult {
         if (!MewsRepository.isInitialized) {
             return SummarizationResult.Failure(
@@ -48,15 +46,10 @@ class TitlesUpdater(private val context: Context) {
             val titlesNum = MewsRepository.titlesNum.first().num
             val filterTopics = MewsRepository.filterTopics.first()
 
-            val db = DbHelper(context)
-            val fetcher = RssFetcher(db)
+            val fetcher = RssFetcher()
 
             llmClient = LLMClient(MODEL = currentLLM, apiKey = llmApiKey, enableProxy = enableProxy)
-            val summarizer = NewsSummarizer(db, llmClient)
-
-            val startTitles = db.getTitles()
-                .filter { it.text != "<промежуточный текст>" }
-                .map { it.id }
+            val summarizer = NewsSummarizer(llmClient)
 
             MewsRepository.setUpdatingTitles(true)
             MewsRepository.setUpdatingState("updating")
@@ -94,14 +87,6 @@ class TitlesUpdater(private val context: Context) {
 
                     if (finalResult is SummarizationResult.Success) break
                     iter++
-                }
-
-                val currentTitles = db.getTitles()
-                    .filter { it.text != "<промежуточный текст>" }
-                    .map { it.id }
-
-                if (currentTitles.sum() != startTitles.sum() && currentTitles.isNotEmpty()) {
-                    MewsRepository.triggerTitlesRefresh()
                 }
 
                 if (finalResult is SummarizationResult.Success) {

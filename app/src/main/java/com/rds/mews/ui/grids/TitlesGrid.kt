@@ -381,7 +381,7 @@ fun TitlesGrid(
                         ) {
                             if (!innerTime) {
                                 TimelineMarker(
-                                    time = item.time,
+                                    time = item.eventTime,
                                     isFirst = isFirst,
                                     isLast = isLast
                                 )

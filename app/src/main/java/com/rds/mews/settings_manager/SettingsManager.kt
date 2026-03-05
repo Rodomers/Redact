@@ -21,7 +21,7 @@ private val Context.dataStore: DataStore<AppSettings> by dataStore(
                 val migratedError = if (errType != null) {
                     try {
                         SavedError(enumValueOf<SummarizationErrorType>(errType), errMsg ?: "")
-                    } catch (e: Exception) { null }
+                    } catch (_: Exception) { null }
                 } else null
 
                 val oldThemeStr = sharedPrefs.getString(MewsRepository.CURRENT_THEME, "system")
@@ -50,7 +50,6 @@ private val Context.dataStore: DataStore<AppSettings> by dataStore(
                     titlesAutoUpdateFrequency = migratedFreq,
                     llmModel = migratedModel,
 
-//                    updatingTitles = sharedPrefs.getBoolean(MewsRepository.UPDATING_TITLES, currentData.updatingTitles),
                     updatingState = sharedPrefs.getString(MewsRepository.UPDATING_STATE, currentData.updatingState) ?: currentData.updatingState,
                     updatingProgress = sharedPrefs.getFloat(MewsRepository.UPDATING_PROGRESS, currentData.updatingProgress),
                     lastTitlesUpdate = sharedPrefs.getLong(MewsRepository.LAST_TITLES_UPDATE, currentData.lastTitlesUpdate),

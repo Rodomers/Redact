@@ -10,6 +10,8 @@ import com.rds.mews.localcore.DarkTheme
 import com.rds.mews.localcore.GeminiModelOption
 import com.rds.mews.localcore.HeadersNum
 import com.rds.mews.localcore.TitlesPeriod
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -94,6 +96,8 @@ object AppSettingsSerializer : Serializer<AppSettings> {
     }
 
     override suspend fun writeTo(t: AppSettings, output: OutputStream) {
-        output.write(Json.encodeToString(AppSettings.serializer(), t).encodeToByteArray())
+        withContext(Dispatchers.IO) {
+            output.write(Json.encodeToString(AppSettings.serializer(), t).encodeToByteArray())
+        }
     }
 }

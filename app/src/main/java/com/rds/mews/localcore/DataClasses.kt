@@ -4,11 +4,29 @@ import android.content.Context
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.rds.mews.MainActivity
 import com.rds.mews.settings_manager.SummarizationErrorType
-import okhttp3.internal.http2.Header
 
-data class Message(var id: Long, var time: Long, var link: String, var source: String, var mess: String)
+data class Message(
+    var id: Long,
+    var time: Long,
+    var link: String,
+    var source: String,
+    var originalText: String,
+    var cleanText: String
+)
 data class RSS(var id: Long, var source: String, var link: String)
-data class Title(var id: Long, var time: Long, var title: String, var text: String, var sources: String, var ids: String)
+data class Title(
+    var id: Long,
+    var title: String,
+    var summary: String,
+    var eventTime: Long,
+    var updateTime: Long? = null,
+    val status: Int? = null,
+    val isRead: Boolean = false,
+    val isPinned: Boolean = false,
+    var sources: String,
+    var ids: String
+)
+
 data class TitleCardStates(
     var id: Long,
     var expanded: Boolean = false,
