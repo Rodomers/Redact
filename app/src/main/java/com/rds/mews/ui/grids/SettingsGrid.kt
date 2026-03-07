@@ -778,11 +778,11 @@ fun SettingsGrid(
                     visible = groupStates.find { it.group == additionalChapterId }?.expanded ?: true
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        val clearBtnInputs = TextButtonInputs(
-                            text = stringResource(R.string.settings_db_clear_btn),
-                            action = { functions.clearFeed() },
-                            toast = stringResource(R.string.settings_db_cleared)
-                        )
+//                        val clearBtnInputs = TextButtonInputs(
+//                            text = stringResource(R.string.settings_db_clear_btn),
+//                            action = { functions.clearFeed() },
+//                            toast = stringResource(R.string.settings_db_cleared)
+//                        )
 
                         SettingsItem(
                             text = stringResource(R.string.settings_enable_proxy),

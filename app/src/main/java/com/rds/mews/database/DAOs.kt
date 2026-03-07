@@ -100,7 +100,7 @@ interface TitleDao {
     """)
     fun getRelatedTitlesAsSecondFlow(titleId: Long): Flow<List<TitleEntity>>
 
-    @Query("SELECT * FROM titles WHERE status != :processingStatusId")
+    @Query("SELECT * FROM titles WHERE status = :processingStatusId")
     suspend fun getTitlesNotProcessing(processingStatusId: Int): List<TitleEntity>
 
     @Query("SELECT message_id FROM title_message_map WHERE title_id = :titleId")

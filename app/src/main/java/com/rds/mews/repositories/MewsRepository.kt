@@ -382,14 +382,15 @@ object MewsRepository {
         newTimeVal: Long,
         newTitle: String,
         summary: String,
-        messageIds: List<Long>
+        messageIds: List<Long>,
+        status: TitleStatus = TitleStatus.DEFAULT,
     ): Long = withContext(Dispatchers.IO) {
         val titleEntity = TitleEntity(
             title = newTitle,
             summary = summary,
             eventTime = newTimeVal,
             updateTime = newTimeVal,
-            status = 0,
+            status = status.statusId,
             isRead = false,
             isPinned = false,
             importanceWeight = 0,
@@ -420,7 +421,7 @@ object MewsRepository {
         titleDao.update(updatedEntity)
     }
 
-    suspend fun getTitlesToSummarize(processingStatusId: Int): List<NewsSummarizer.Topics> = withContext(Dispatchers.IO) {
+    suspend fun getTitlesWithStatus(processingStatusId: Int): List<NewsSummarizer.Topics> = withContext(Dispatchers.IO) {
         val validTitles = titleDao.getTitlesNotProcessing(processingStatusId)
 
         validTitles.map { entity ->

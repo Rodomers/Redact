@@ -315,7 +315,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         try {
             Log.d(TAG, "Starting summarizeTopics. Filter enabled: $filterTopics")
 
-            val isRetryMode = MewsRepository.getTitlesToSummarize(TitleStatus.PROCESSING.statusId).isNotEmpty()
+            val isRetryMode = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId).isNotEmpty()
             val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
 
             val rawMessages = if (!isRetryMode) {
@@ -354,7 +354,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 }
             }
 
-            val titlesToSummarize = MewsRepository.getTitlesToSummarize(TitleStatus.PROCESSING.statusId)
+            val titlesToSummarize = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId)
 
             if (titlesToSummarize.isEmpty()) { safeReadyFunc(readyFunc); return SummarizationResult.Success }
 
@@ -427,7 +427,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                             }
 
                             if (isRetryMode) {
-                                val successIds = results.map { it.first }.toSet()
+                                val successIds = results.map { (_, _, originalData) -> originalData.first.id }.toSet()
                                 for ((topic, _, _) in topicsData) {
                                     if (topic.id !in successIds) {
                                         try {
@@ -615,7 +615,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             simpleAlgorithmicMerge(allExtracted)
         }
 
-        MewsRepository.delTitles()
+//        MewsRepository.delTitles()
 
         finalTopicsCandidate
             .sortedByDescending { it.weight }
@@ -844,7 +844,7 @@ class NewsSummarizer(private val llm: LLMClient) {
 
     private suspend fun saveTopicToDb(t: Topics) {
         val ids = t.ids ?: emptyList()
-        MewsRepository.addTitle(newTimeVal = 0, newTitle = t.title, summary = "", messageIds = ids)
+        MewsRepository.addTitle(newTimeVal = 0, newTitle = t.title, summary = "", messageIds = ids, status = TitleStatus.PROCESSING)
     }
 
     private suspend fun adaptiveSummarizeBatch(

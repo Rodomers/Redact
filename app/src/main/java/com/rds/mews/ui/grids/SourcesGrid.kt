@@ -243,8 +243,8 @@ fun SourcesGrid(
             }
         }
 
-        item {
-            Spacer(modifier = Modifier.height(bottomSpacer))
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Spacer(modifier = Modifier.height(bottomSpacer + verticalArrangement))
         }
     }
 }
