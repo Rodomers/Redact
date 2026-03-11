@@ -51,6 +51,7 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     val appThemes: List<AppTheme> = repository.appThemeList
     val headersNumList: List<HeadersNum> = repository.headersNumList
     val titlesPeriods: List<TitlesPeriod> = repository.titlesPeriodList
+    val titlesKeepings: List<TitlesKeeping> = repository.titlesKeepingList
     val autoUpdateFrequencies: List<AutoUpdateFrequency> = repository.autoUpdateFrequencyList
     val geminiModels: List<GeminiModelOption> = repository.geminiModelsList
     val defaultGeminiModel: GeminiModelOption = repository.defaultModel
@@ -72,6 +73,8 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     val titlesPeriod: StateFlow<TitlesPeriod> = repository.titlesPeriod
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TitlesPeriod.HRS_24)
+    val titlesKeeping: StateFlow<TitlesKeeping> = repository.titlesKeeping
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TitlesKeeping.DAYS_1)
 
     val rssUpdateInterval: StateFlow<Int> = repository.rssUpdateInterval
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 15)
@@ -168,6 +171,7 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     fun setTitlesNum(value: HeadersNum) = viewModelScope.launch { repository.setTitlesNum(value) }
 
     fun setTitlesPeriod(value: TitlesPeriod) = viewModelScope.launch { repository.setTitlesPeriod(value) }
+    fun setTitlesKeeping(value: TitlesKeeping) = viewModelScope.launch { repository.setTitlesKeeping(value) }
 
     fun setRssUpdateInterval(context: Context, value: Int) {
         viewModelScope.launch {
@@ -212,7 +216,7 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
             !isScheduleExactAlarm(context) -> onShowAlarmsSheet()
             else -> {
                 repository.setTitlesAlarmUpdate(value)
-                repository.planTitlesUpdate(context)
+                repository.planTitlesUpdate(context, alarmUpdateValue = value)
             }
         }
     }

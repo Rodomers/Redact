@@ -108,7 +108,7 @@ fun MainScreen(mainActivity: MainActivity) {
         val scope = rememberCoroutineScope()
 
 //        MewsRepository.setUpdatingTitles(false)
-//        MewsRepository.setLastTitlesUpdate(1768896120000)
+//        MewsRepository.setLastTitlesUpdate(1773212400000)
 
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()

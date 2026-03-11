@@ -48,7 +48,8 @@
     <string name="settings_titles_update_time">Время обновления</string>
     <string name="settings_titles_update_frequency">Интервал обновления</string>
     <string name="settings_maximum_headers">Максимум заголовков</string>
-    <string name="settings_news_period">Период ленты</string>
+    <string name="settings_news_period">Глубина поиска</string>
+    <string name="settings_news_keeping">Срок хранения</string>
     <string name="settings_news_update_frequency">Частота обновления источников</string>
     <string name="settings_gemini_api_key">Ключ Gemini API</string>
     <string name="settings_sheet_current_key">Изменение ключа Gemini</string>
@@ -92,8 +93,13 @@
         <item quantity="few">%d минуты</item>
         <item quantity="many">%d минут</item>
     </plurals>
+    <plurals name="days">
+        <item quantity="one">%d день</item>
+        <item quantity="few">%d дня</item>
+        <item quantity="many">%d дней</item>
+    </plurals>
 
-    <string name="adaptive">Адаптивный</string>
+    <string name="adaptive">Адаптивная</string>
 
     <string name="custom_card_with_menu_icon_desc">Меню</string>
     <string name="sources_add_text">Добавить</string>
@@ -114,6 +120,7 @@
     <string name="moreVert_btn_desc">Ещё</string>
     <string name="share_btn_desc">Поделиться</string>
     <string name="ban_btn_desc">Заблокировать</string>
+    <string name="mark_as_unread_btn_desc">Не прочитано</string>
 
     <string name="update">Обновить</string>
     <string name="updating">Обновление…</string>

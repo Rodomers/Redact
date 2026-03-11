@@ -51,7 +51,8 @@
     <string name="settings_titles_update_time">Update time</string>
     <string name="settings_titles_update_frequency">Update interval</string>
     <string name="settings_maximum_headers">Maximum headers</string>
-    <string name="settings_news_period">Time range</string>
+    <string name="settings_news_period">Search range</string>
+    <string name="settings_news_keeping">Keep history for</string>
     <string name="settings_news_update_frequency">Sources update frequency</string>
     <string name="settings_gemini_api_key">Gemini API key</string>
     <string name="settings_sheet_current_key">API key change</string>
@@ -91,6 +92,10 @@
         <item quantity="one">%d minute</item>
         <item quantity="other">%d minutes</item>
     </plurals>
+    <plurals name="days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
 
     <string name="adaptive">Adaptive</string>
 
@@ -113,6 +118,7 @@
     <string name="moreVert_btn_desc">More</string>
     <string name="share_btn_desc">Share"</string>
     <string name="ban_btn_desc">Block</string>
+    <string name="mark_as_unread_btn_desc">Unread</string>
 
     <string name="update">Update</string>
     <string name="updating">Updating…</string>

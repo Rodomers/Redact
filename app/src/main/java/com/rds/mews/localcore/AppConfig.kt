@@ -1,6 +1,7 @@
 package com.rds.mews.localcore
 
 import com.rds.mews.R
+import com.rds.mews.localcore.TitlesPeriod.ADAPTIVE
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -33,7 +34,6 @@ enum class AppTheme(val themeName: Int, val id: Int) {
     DEFAULT(R.string.settings_theme_classic, 0),
     MATERIAL(R.string.settings_theme_material, 1),
 
-    // Новые темы
     SLATE(R.string.settings_theme_slate, 2),
     PISTACHIO(R.string.settings_theme_pistachio, 3),
     SWISS(R.string.settings_theme_swiss, 4),
@@ -86,6 +86,23 @@ enum class TitlesPeriod(val stringId: Int, val num: Int?) {
     companion object {
         fun fromNum(key: Int?): TitlesPeriod {
             return entries.find { it.num == key } ?: ADAPTIVE
+        }
+    }
+}
+
+@Serializable
+enum class TitlesKeeping(val stringId: Int, val num: Int, val ms: Long) {
+    DAYS_1(R.plurals.days, 1, 24*3600*1000),
+    DAYS_2(R.plurals.days, 2, 48*3600*1000),
+    DAYS_3(R.plurals.days, 3, 72*3600*1000),
+    DAYS_4(R.plurals.days, 4, 96*3600*1000),
+    DAYS_5(R.plurals.days, 5, 120*3600*1000),
+    DAYS_6(R.plurals.days, 6, 144*3600*1000),
+    DAYS_7(R.plurals.days, 7, 168*3600*1000);
+
+    companion object {
+        fun fromNum(key: Int?): TitlesPeriod {
+            return TitlesPeriod.entries.find { it.num == key } ?: ADAPTIVE
         }
     }
 }

@@ -9,6 +9,7 @@ import com.rds.mews.localcore.AutoUpdateFrequency
 import com.rds.mews.localcore.DarkTheme
 import com.rds.mews.localcore.GeminiModelOption
 import com.rds.mews.localcore.HeadersNum
+import com.rds.mews.localcore.TitlesKeeping
 import com.rds.mews.localcore.TitlesPeriod
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -31,6 +32,7 @@ enum class SummarizationErrorType {
     API_KEY_INVALID,
     QUOTA_EXCEEDED,
     CONTENT_BLOCKED,
+    SMALL_INTERVAL,
     UNKNOWN_ERROR
 }
 
@@ -51,6 +53,7 @@ data class AppSettings(
     // Content
     val titlesNum: HeadersNum = HeadersNum.NUM_10,
     val titlesPeriod: TitlesPeriod = TitlesPeriod.ADAPTIVE,
+    val titlesKeeping: TitlesKeeping = TitlesKeeping.DAYS_1,
 
     // Network & AI
     val userApiKey: String = "",
@@ -75,7 +78,6 @@ data class AppSettings(
     val currentLanguage: String = "English",
 
     // Technical State
-//    val updatingTitles: Boolean = false,
     val updatingState: String = "off",
     val updatingProgress: Float = 0f,
     val lastTitlesUpdate: Long = 0L,

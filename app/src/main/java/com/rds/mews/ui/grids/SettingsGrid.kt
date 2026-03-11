@@ -97,6 +97,7 @@ fun SettingsScreen(
     val geminiApiText by viewModel.userApi.collectAsStateWithLifecycle()
     val currentLlmModel by viewModel.currentLlm.collectAsStateWithLifecycle()
     val titlesPeriod by viewModel.titlesPeriod.collectAsStateWithLifecycle()
+    val titlesKeeping by viewModel.titlesKeeping.collectAsStateWithLifecycle()
     val rssUpdateInterval by viewModel.rssUpdateInterval.collectAsStateWithLifecycle()
     val innerTime by viewModel.innerTime.collectAsStateWithLifecycle()
     val showSnippets by viewModel.showSnippets.collectAsStateWithLifecycle()
@@ -123,6 +124,7 @@ fun SettingsScreen(
         geminiApiText = geminiApiText,
         currentLlmModel = currentLlmModel,
         titlesPeriod = titlesPeriod,
+        titlesKeeping = titlesKeeping,
         rssUpdateInterval = rssUpdateInterval,
         innerTime = innerTime,
         showSnippets = showSnippets,
@@ -138,11 +140,12 @@ fun SettingsScreen(
         defaultGeminiModel = defaultGeminiModel,
         geminiApiBuffer = geminiBuffer,
         isApiKeyCorrect = isApiKeyValid,
-        darkThemes = DarkTheme.entries,
-        appThemes = AppTheme.entries,
-        headersNumList = HeadersNum.entries,
-        titlesPeriods = TitlesPeriod.entries,
-        autoUpdateFrequencies = AutoUpdateFrequency.entries,
+        darkThemes = viewModel.darkThemes,
+        appThemes = viewModel.appThemes,
+        headersNumList = viewModel.headersNumList,
+        titlesPeriods = viewModel.titlesPeriods,
+        titlesKeepings = viewModel.titlesKeepings,
+        autoUpdateFrequencies = viewModel.autoUpdateFrequencies,
     )
 
     val functions = remember {
@@ -157,6 +160,7 @@ fun SettingsScreen(
             setInnerTime = viewModel::setInnerTime,
             setShowSnippets = viewModel::setShowSnippets,
             setTitlesNum = viewModel::setTitlesNum,
+            setTitlesKeeping = viewModel::setTitlesKeeping,
             setTitlesPeriod = viewModel::setTitlesPeriod,
             setRssUpdateInterval = viewModel::setRssUpdateInterval,
             setFilterTopics = viewModel::setFilterTopics,
@@ -298,6 +302,10 @@ fun SettingsGrid(
             else -> pluralStringResource(period.stringId, period.num ?: 0, period.num ?: 0)
         }
         text to { functions.setTitlesPeriod(period) }
+    }
+    val keepingsDropdownItems = state.titlesKeepings.map { keeping ->
+        val text = pluralStringResource(keeping.stringId, count = keeping.num, keeping.num)
+        text to { functions.setTitlesKeeping(keeping) }
     }
 
     val modelListItemsBuffer = mutableListOf<Pair<String, () -> Unit>>()
@@ -613,17 +621,6 @@ fun SettingsGrid(
                                 initialSelectedIndex = themesDropdownItems.indexOfFirst{ it.first == stringResource(state.appTheme.themeName) }
                             )
                         }
-//                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-//                            SettingsItem(
-//                                text = stringResource(R.string.settings_monet_colors),
-//                                modifier = Modifier.padding(vertical = verticalArrangement),
-//                            ) {
-//                                CustomSwitch(
-//                                    checked = state.appTheme == AppTheme.MATERIAL,
-//                                    onCheckedChange = { functions.setAppTheme(if (it) AppTheme.MATERIAL else AppTheme.DEFAULT) }
-//                                )
-//                            }
-//                        }
                         SettingsItem(
                             text = stringResource(R.string.settings_color_scheme),
                             modifier = Modifier.padding(vertical = verticalArrangement)
@@ -669,6 +666,17 @@ fun SettingsGrid(
                                 density = density,
                                 cornerShape = Shapes.large,
                                 initialSelectedIndex = state.titlesPeriods.indexOfFirst(state.titlesPeriod::equals)
+                            )
+                        }
+                        SettingsItem(
+                            text = stringResource(R.string.settings_news_keeping),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        ) {
+                            DropdownButton(
+                                buttons = keepingsDropdownItems,
+                                density = density,
+                                cornerShape = Shapes.large,
+                                initialSelectedIndex = state.titlesKeepings.indexOfFirst(state.titlesKeeping::equals)
                             )
                         }
                         SettingsItem(

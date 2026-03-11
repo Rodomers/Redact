@@ -125,6 +125,7 @@ fun TitlesCard(
     showSnippet: Boolean = false,
     backgroundColor: Color = MaterialTheme.colorScheme.secondaryContainer,
     expandable: Boolean = true,
+    markAsUnread: () -> Unit,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
@@ -200,6 +201,7 @@ fun TitlesCard(
                 onDismissRequest = onToggleExpanded,
                 onReady = { isPopupReady = true },
                 onBanTheme = onBanTheme,
+                onMarkAsUnread = markAsUnread,
                 pagerState = pagerState,
                 rememberPage = rememberPage,
                 originalNoTime = noTime,
@@ -296,6 +298,7 @@ private fun HeroExpansionContent(
     onDismissRequest: () -> Unit,
     onReady: () -> Unit,
     onBanTheme: (String) -> Unit,
+    onMarkAsUnread: () -> Unit,
     pagerState: PagerState,
     rememberPage: (Int) -> Unit,
     originalNoTime: Boolean,
@@ -408,6 +411,7 @@ private fun HeroExpansionContent(
                     sources = sources,
                     changeSourceState = changeSourceState,
                     onBanTheme = onBanTheme,
+                    onMarkAsUnread = onMarkAsUnread,
                     pagerState = pagerState,
                     rememberPage = rememberPage,
                     onCollapse = onDismissRequest,
@@ -517,6 +521,7 @@ private fun ExpandedCardContent(
     sources: List<SourceMessages>?,
     changeSourceState: (Long, String) -> Unit,
     onBanTheme: (String) -> Unit,
+    onMarkAsUnread: () -> Unit,
     pagerState: PagerState,
     rememberPage: (Int) -> Unit,
     onCollapse: () -> Unit,
@@ -569,7 +574,8 @@ private fun ExpandedCardContent(
     }
     val buttons = listOf(
         TextButtonInputs(stringResource(R.string.share_btn_desc), ::shareText),
-        TextButtonInputs(stringResource(R.string.ban_btn_desc), ::banNew, stringResource(R.string.titles_card_banned))
+        TextButtonInputs(stringResource(R.string.ban_btn_desc), ::banNew, stringResource(R.string.titles_card_banned)),
+                TextButtonInputs(stringResource(R.string.mark_as_unread_btn_desc), onMarkAsUnread)
     )
 
     val headerAnimProgress = if (originalNoTime) expansionProgress else 1f

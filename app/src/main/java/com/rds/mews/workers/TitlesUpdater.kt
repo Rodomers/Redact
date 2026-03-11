@@ -90,12 +90,13 @@ class TitlesUpdater() {
                 }
 
                 if (finalResult is SummarizationResult.Success) {
+                    MewsRepository.delTitles(MewsRepository.titlesKeeping.value.ms)
                     MewsRepository.clearError()
                 } else if (finalResult is SummarizationResult.Failure) {
                     MewsRepository.saveLastError(finalResult)
                 }
             } else {
-                finalResult = SummarizationResult.Success
+                finalResult = SummarizationResult.Failure(SummarizationErrorType.SMALL_INTERVAL)
             }
 
         } catch (e: Exception) {

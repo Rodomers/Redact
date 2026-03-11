@@ -54,6 +54,7 @@ object MewsRepository {
     lateinit var appTheme: StateFlow<AppTheme>
     lateinit var titlesNum: StateFlow<HeadersNum>
     lateinit var titlesPeriod: StateFlow<TitlesPeriod>
+    lateinit var titlesKeeping: StateFlow<TitlesKeeping>
     lateinit var llmModel: StateFlow<GeminiModelOption>
     lateinit var titlesAutoUpdateFrequency: StateFlow<AutoUpdateFrequency>
 
@@ -165,6 +166,7 @@ object MewsRepository {
         appTheme = createSettingFlow({ it.appTheme }, AppTheme.DEFAULT)
         titlesNum = createSettingFlow({ it.titlesNum }, HeadersNum.NUM_10)
         titlesPeriod = createSettingFlow({ it.titlesPeriod }, TitlesPeriod.HRS_24)
+        titlesKeeping = createSettingFlow({ it.titlesKeeping }, TitlesKeeping.DAYS_1)
         titlesAutoUpdateFrequency = createSettingFlow({ it.titlesAutoUpdateFrequency }, AutoUpdateFrequency.FREQ_24)
         llmModel = createSettingFlow({ it.llmModel }, GeminiModelOption.FLASH_LATEST)
 
@@ -229,7 +231,9 @@ object MewsRepository {
                         title = entity.title,
                         summary = entity.summary,
                         sources = sourcesStr,
-                        ids = linksStr
+                        ids = linksStr,
+                        status = entity.status,
+                        isRead = entity.isRead
                     )
                 }
             }
@@ -242,6 +246,7 @@ object MewsRepository {
     val appThemeList: List<AppTheme> get() = AppTheme.entries
     val headersNumList: List<HeadersNum> get() = HeadersNum.entries
     val titlesPeriodList: List<TitlesPeriod> get() = TitlesPeriod.entries
+    val titlesKeepingList: List<TitlesKeeping> get() = TitlesKeeping.entries
     val autoUpdateFrequencyList: List<AutoUpdateFrequency> get() = AutoUpdateFrequency.entries
 
     val geminiModelsList: List<GeminiModelOption> get() = GeminiModelOption.entries
@@ -292,6 +297,13 @@ object MewsRepository {
 
     fun startTitlesUpdate(context: Context) {
         setTitlesUpdate(context)
+    }
+
+    fun markTitleAsRead(id: Long, read: Boolean = true) {
+        val statusInt = if (read) 1 else 0
+        externalScope.launch(Dispatchers.IO) {
+            titleDao.updateReadStatus(id, statusInt)
+        }
     }
 
     fun delTitles(time: Long? = null) {
@@ -409,14 +421,16 @@ object MewsRepository {
         id: Long,
         newTimeVal: Long,
         newTitle: String,
-        summary: String
+        summary: String,
+        status: Int = 0
     ) = withContext(Dispatchers.IO) {
         val existing = titleDao.getTitleById(id) ?: return@withContext
         val updatedEntity = existing.copy(
             title = newTitle,
             summary = summary,
             eventTime = newTimeVal,
-            updateTime = System.currentTimeMillis()
+            updateTime = System.currentTimeMillis(),
+            status = status
         )
         titleDao.update(updatedEntity)
     }
@@ -455,6 +469,7 @@ object MewsRepository {
     fun setTitlesNum(newValue: HeadersNum) = updateSetting { it.copy(titlesNum = newValue) }
 
     fun setTitlesPeriod(newValue: TitlesPeriod) = updateSetting { it.copy(titlesPeriod = newValue) }
+    fun setTitlesKeeping(newValue: TitlesKeeping) = updateSetting { it.copy(titlesKeeping = newValue) }
 
     fun setLlmModel(newValue: GeminiModelOption) = updateSetting { it.copy(llmModel = newValue) }
 
@@ -542,8 +557,9 @@ object MewsRepository {
         return _context.value ?: throw IllegalStateException("MewsRepository not initialized via initialize()")
     }
 
-    fun planTitlesUpdate(context: Context, explicitTimeMins: Int? = null) {
-        if (titlesAlarmUpdate.value) {
+    fun planTitlesUpdate(context: Context, explicitTimeMins: Int? = null, alarmUpdateValue: Boolean? = null) {
+        val alarmUpdatePlanned = alarmUpdateValue ?: titlesAlarmUpdate.value
+        if (alarmUpdatePlanned) {
             val updateFrequencyHours = titlesAutoUpdateFrequency.value.num
 
             val updateTimeMins = explicitTimeMins ?: titlesAlarmTimeMins.value

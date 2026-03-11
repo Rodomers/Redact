@@ -73,6 +73,7 @@ data class SettingsUiState(
     val geminiApiText: String,
     val currentLlmModel: GeminiModelOption,
     val titlesPeriod: TitlesPeriod,
+    val titlesKeeping: TitlesKeeping,
     val rssUpdateInterval: Int,
     val innerTime: Boolean,
     val showSnippets: Boolean,
@@ -92,6 +93,7 @@ data class SettingsUiState(
     val appThemes: List<AppTheme>,
     val headersNumList: List<HeadersNum>,
     val titlesPeriods: List<TitlesPeriod>,
+    val titlesKeepings: List<TitlesKeeping>,
     val autoUpdateFrequencies: List<AutoUpdateFrequency>,
 )
 
@@ -107,6 +109,7 @@ data class SettingsUiFunctions(
     val setShowSnippets: (Boolean) -> Unit,
     val setTitlesNum: (HeadersNum) -> Unit,
     val setTitlesPeriod: (TitlesPeriod) -> Unit,
+    val setTitlesKeeping: (TitlesKeeping) -> Unit,
     val setRssUpdateInterval: (Context, Int) -> Unit,
     val setFilterTopics: (Boolean) -> Unit,
     val setBannedNews: (Set<String>) -> Unit,

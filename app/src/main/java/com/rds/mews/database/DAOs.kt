@@ -106,6 +106,9 @@ interface TitleDao {
     @Query("SELECT message_id FROM title_message_map WHERE title_id = :titleId")
     suspend fun getMessageIdsForTitle(titleId: Long): List<Long>
 
+    @Query("UPDATE titles SET is_read = :isRead WHERE id = :id")
+    suspend fun updateReadStatus(id: Long, isRead: Int)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(title: TitleEntity): Long
 

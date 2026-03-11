@@ -140,6 +140,7 @@ fun TitlesScreen(
         changeSourceState = viewModel::changeTitleSourceState,
         changeGroupState = viewModel::changeGroupState,
         getDateFromUnix = viewModel::getDateFromUnix,
+        markTitleAsRead = viewModel::markTitleAsRead,
         showGreeting = viewModel::showGreeting,
         lastTitlesUpdateExists = viewModel::lastTitlesUpdateExists,
     )
@@ -178,6 +179,7 @@ fun TitlesGrid(
     changeSourceState: (Long, String) -> Unit,
     changeGroupState: (TimeDate) -> Unit,
     getDateFromUnix: (Long) -> TimeDate,
+    markTitleAsRead: (Long, Boolean) -> Unit,
     showGreeting: (Context) -> Unit,
     lastTitlesUpdateExists: () -> Boolean
 ) {
@@ -393,7 +395,10 @@ fun TitlesGrid(
                                     modifier = Modifier.padding(vertical = verticalArrangement),
                                     isExpanded = isExpanded,
                                     pagerState = pagerState,
-                                    onToggleExpanded = { onToggleExpanded(item.id) },
+                                    onToggleExpanded = {
+                                        onToggleExpanded(item.id)
+                                        markTitleAsRead(item.id, true)
+                                                       },
                                     rememberPage = { page -> rememberCardPage(item.id, page) },
                                     noTime = !innerTime,
                                     showSnippet = showSnippets,
@@ -403,7 +408,11 @@ fun TitlesGrid(
                                     backgroundColor = if (read)
                                         MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.5f)
                                     else MaterialTheme.colorScheme.secondaryContainer,
-                                    expandable = lastTitlesUpdateExists()
+                                    expandable = lastTitlesUpdateExists(),
+                                    markAsUnread = {
+                                        onToggleExpanded(item.id)
+                                        markTitleAsRead(item.id, false)
+                                    }
                                 )
 
                                 if (isPartiallyObscured) {
@@ -413,7 +422,7 @@ fun TitlesGrid(
                                             .clickable(
                                                 interactionSource = remember { MutableInteractionSource() },
                                                 indication = null,
-                                                onClick = {  }
+                                                onClick = { }
                                             )
                                     )
                                 }

@@ -50,6 +50,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import com.rds.mews.R
+import com.rds.mews.localcore.TitleStatus
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 
@@ -118,7 +119,8 @@ class TitlesViewModel(
         titles,
         todayDateFlow
     ) { titles, today ->
-        titles.groupBy { title ->
+        val filtered = titles.filter { it.status == TitleStatus.DEFAULT.statusId }
+        filtered.groupBy { title ->
             getDateFromUnix(title.eventTime, today).copy(time = "00:00")
         }
     }.stateIn(
@@ -258,6 +260,7 @@ class TitlesViewModel(
     }
 
     fun markTitleAsRead(id: Long, read: Boolean = true) {
+        repository.markTitleAsRead(id, read)
         _titleCardStates.update { currentSet ->
             currentSet.map {
                 if (it.id == id) { it.copy(read = read) }
@@ -367,7 +370,7 @@ class TitlesViewModel(
                             TitleCardStates(
                                 id = title.id,
                                 expanded = oldState?.expanded ?: false,
-                                read = oldState?.read ?: false,
+                                read = title.isRead,
                                 currentPage = oldState?.currentPage ?: 0,
                                 sources = newSources
                             )
