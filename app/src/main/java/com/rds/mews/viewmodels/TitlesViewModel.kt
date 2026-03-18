@@ -336,10 +336,8 @@ class TitlesViewModel(
 
     init {
         viewModelScope.launch {
-            // Отслеживаем предыдущее состояние глобального флага
             var lastExpandSources = expandSources.value
 
-            // Объединяем два потока: изменения тайтлов и изменения флага
             combine(
                 repository.titles.distinctUntilChanged(),
                 expandSources
@@ -364,9 +362,8 @@ class TitlesViewModel(
 
                 _titles.value = actualTitles
 
-                // Проверяем, был ли триггер вызван сменой флага
                 val isExpandChanged = lastExpandSources != currentExpandSources
-                lastExpandSources = currentExpandSources // обновляем для следующих проходов
+                lastExpandSources = currentExpandSources
 
                 _titleCardStates.update { currentStates ->
                     val oldStatesMap = currentStates.associateBy { it.id }
@@ -380,8 +377,6 @@ class TitlesViewModel(
                             val sourceMessages = mutableListOf<SourceMessages>()
 
                             groupedMessages.forEach { (source, msgs) ->
-                                // Если глобальная настройка изменилась -> применяем её ко всем.
-                                // Иначе -> пытаемся сохранить локальное состояние карточки (если пользователь раскрыл её вручную).
                                 val sourceState = if (isExpandChanged) {
                                     currentExpandSources
                                 } else {
