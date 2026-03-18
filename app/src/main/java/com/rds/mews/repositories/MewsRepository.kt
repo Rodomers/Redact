@@ -52,6 +52,7 @@ object MewsRepository {
 
     lateinit var darkTheme: StateFlow<DarkTheme>
     lateinit var appTheme: StateFlow<AppTheme>
+    lateinit var expandSources: StateFlow<Boolean>
     lateinit var titleSorting: StateFlow<TitleSorting>
     lateinit var titlesNum: StateFlow<HeadersNum>
     lateinit var titlesPeriod: StateFlow<TitlesPeriod>
@@ -165,6 +166,7 @@ object MewsRepository {
 
         darkTheme = createSettingFlow({ it.darkTheme }, DarkTheme.SYSTEM)
         appTheme = createSettingFlow({ it.appTheme }, AppTheme.DEFAULT)
+        expandSources = createSettingFlow({ it.expandSources }, false)
         titleSorting = createSettingFlow({ it.titlesSorting }, TitleSorting.OLDEST)
         titlesNum = createSettingFlow({ it.titlesNum }, HeadersNum.NUM_10)
         titlesPeriod = createSettingFlow({ it.titlesPeriod }, TitlesPeriod.HRS_24)
@@ -468,6 +470,7 @@ object MewsRepository {
     fun setDarkTheme(newValue: DarkTheme) = updateSetting { it.copy(darkTheme = newValue) }
 
     fun setAppTheme(newValue: AppTheme) = updateSetting { it.copy(appTheme = newValue) }
+    fun setExpandSources(newValue: Boolean) = updateSetting { it.copy(expandSources = newValue) }
 
     fun setTitleSorting(newValue: TitleSorting) = updateSetting { it.copy(titlesSorting = newValue) }
     fun setTitlesNum(newValue: HeadersNum) = updateSetting { it.copy(titlesNum = newValue) }

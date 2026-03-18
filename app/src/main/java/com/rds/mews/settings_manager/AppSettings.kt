@@ -77,6 +77,7 @@ data class AppSettings(
     val innerTimestamps: Boolean = false,
     val showSnippets: Boolean = false,
     val showDates: Boolean = false,
+    val expandSources: Boolean = false,
     val currentLanguage: String = "English",
 
     // Technical State

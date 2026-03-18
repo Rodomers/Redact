@@ -40,6 +40,7 @@
     <string name="settings_compact_tab">Компактная навигация</string>
     <string name="settings_endure_time">Компактное время</string>
     <string name="settings_show_snippets">Предпросмотр новостей</string>
+    <string name="settings_expand_sources">Разворачивать источники</string>
     <string name="settings_filter_topics">Фильтровать темы</string>
     <string name="settings_titles_auto_update">Автообновление ленты</string>
     <string name="settings_banned_news">Заблокированные темы</string>

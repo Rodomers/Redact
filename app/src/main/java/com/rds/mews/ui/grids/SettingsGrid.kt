@@ -111,12 +111,14 @@ fun SettingsScreen(
     val showNotificationsSheet by viewModel.showNotificationSheet.collectAsStateWithLifecycle()
     val isApiKeyDefault by viewModel.isKeyDefault.collectAsStateWithLifecycle()
     val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
+    val expandSources by viewModel.expandSources.collectAsStateWithLifecycle()
 
     val state = SettingsUiState(
         autoUpdateScreenOpened = autoupdateScreenOpened,
         bannedNewsScreenOpened = bannedNewsScreenOpened,
         geminiKeyScreenOpened = geminiScreenOpened,
         showDates = showDates,
+        expandSources = expandSources,
         compactTab = compactTab,
         darkTheme = darkTheme,
         appTheme = appTheme,
@@ -160,6 +162,7 @@ fun SettingsScreen(
             setAppTheme = viewModel::setAppTheme,
             setDarkTheme = viewModel::setDarkTheme,
             setShowDates = viewModel::setShowDates,
+            setExpandSources = viewModel::setExpandSources,
             setInnerTime = viewModel::setInnerTime,
             setShowSnippets = viewModel::setShowSnippets,
             setTitlesSorting = viewModel::setTitlesSorting,
@@ -607,6 +610,15 @@ fun SettingsGrid(
                             CustomSwitch(
                                 checked = state.showSnippets,
                                 onCheckedChange = { functions.setShowSnippets(it) }
+                            )
+                        }
+                        SettingsItem(
+                            text = stringResource(R.string.settings_expand_sources),
+                            modifier = Modifier.padding(vertical = verticalArrangement),
+                        ) {
+                            CustomSwitch(
+                                checked = state.expandSources,
+                                onCheckedChange = { functions.setExpandSources(it) }
                             )
                         }
                         SettingsItem(

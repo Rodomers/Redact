@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -100,6 +101,7 @@ class TitlesViewModel(
     val titles = _titles.asStateFlow()
 
     val isRefreshing: StateFlow<Boolean> = repository.updatingTitles
+    val expandSources: StateFlow<Boolean> = repository.expandSources
     val titleSorting: StateFlow<TitleSorting> = repository.titleSorting
     val updatingState: StateFlow<String?> = repository.updatingState
     val updatingProgress: StateFlow<Float> = repository.updatingProgress
@@ -334,54 +336,73 @@ class TitlesViewModel(
 
     init {
         viewModelScope.launch {
-            repository.titles
-                .distinctUntilChanged()
-                .collect { titleListFromDb ->
-                    val actualTitles = titleListFromDb.filter { it.status == TitleStatus.DEFAULT.statusId }
-                    val hasHiddenItems = actualTitles.size != titleListFromDb.size
+            // Отслеживаем предыдущее состояние глобального флага
+            var lastExpandSources = expandSources.value
 
-                    val currentErr = _errState.value
+            // Объединяем два потока: изменения тайтлов и изменения флага
+            combine(
+                repository.titles.distinctUntilChanged(),
+                expandSources
+            ) { titles, expand ->
+                titles to expand
+            }.collect { (titleListFromDb, currentExpandSources) ->
 
-                    if (hasHiddenItems) {
-                        if (currentErr == null) {
-                            repository.saveLastError(SummarizationResult.Failure(SummarizationErrorType.UNPROCESSED_ITEMS))
-                        }
-                    } else {
-                        if (currentErr?.type == SummarizationErrorType.UNPROCESSED_ITEMS) {
-                            repository.clearError()
-                        }
+                val actualTitles = titleListFromDb.filter { it.status == TitleStatus.DEFAULT.statusId }
+                val hasHiddenItems = actualTitles.size != titleListFromDb.size
+
+                val currentErr = _errState.value
+
+                if (hasHiddenItems) {
+                    if (currentErr == null) {
+                        repository.saveLastError(SummarizationResult.Failure(SummarizationErrorType.UNPROCESSED_ITEMS))
                     }
-
-                    _titles.value = actualTitles
-
-                    _titleCardStates.update { currentStates ->
-                        val oldStatesMap = currentStates.associateBy { it.id }
-                        actualTitles.map { title ->
-                            val oldState = oldStatesMap[title.id]
-                            val messages = MewsRepository.getMessages(title.ids)
-
-                            val newSources = if (messages == null) null else {
-                                val groupedMessages = messages.groupBy { it.source }
-                                val sourceMessages = mutableListOf<SourceMessages>()
-                                groupedMessages.forEach { (source, msgs) ->
-                                    val oldSourceState = oldState?.sources
-                                        ?.find { it.source == source }?.state ?: false
-
-                                    sourceMessages.add(SourceMessages(source, oldSourceState, msgs))
-                                }
-                                sourceMessages.toList()
-                            }
-
-                            TitleCardStates(
-                                id = title.id,
-                                expanded = oldState?.expanded ?: false,
-                                read = title.isRead,
-                                currentPage = oldState?.currentPage ?: 0,
-                                sources = newSources
-                            )
-                        }.toSet()
+                } else {
+                    if (currentErr?.type == SummarizationErrorType.UNPROCESSED_ITEMS) {
+                        repository.clearError()
                     }
                 }
+
+                _titles.value = actualTitles
+
+                // Проверяем, был ли триггер вызван сменой флага
+                val isExpandChanged = lastExpandSources != currentExpandSources
+                lastExpandSources = currentExpandSources // обновляем для следующих проходов
+
+                _titleCardStates.update { currentStates ->
+                    val oldStatesMap = currentStates.associateBy { it.id }
+
+                    actualTitles.map { title ->
+                        val oldState = oldStatesMap[title.id]
+                        val messages = MewsRepository.getMessages(title.ids)
+
+                        val newSources = if (messages == null) null else {
+                            val groupedMessages = messages.groupBy { it.source }
+                            val sourceMessages = mutableListOf<SourceMessages>()
+
+                            groupedMessages.forEach { (source, msgs) ->
+                                // Если глобальная настройка изменилась -> применяем её ко всем.
+                                // Иначе -> пытаемся сохранить локальное состояние карточки (если пользователь раскрыл её вручную).
+                                val sourceState = if (isExpandChanged) {
+                                    currentExpandSources
+                                } else {
+                                    oldState?.sources?.find { it.source == source }?.state ?: currentExpandSources
+                                }
+
+                                sourceMessages.add(SourceMessages(source, sourceState, msgs))
+                            }
+                            sourceMessages.toList()
+                        }
+
+                        TitleCardStates(
+                            id = title.id,
+                            expanded = oldState?.expanded ?: false,
+                            read = title.isRead,
+                            currentPage = oldState?.currentPage ?: 0,
+                            sources = newSources
+                        )
+                    }.toSet()
+                }
+            }
         }
 
         viewModelScope.launch {

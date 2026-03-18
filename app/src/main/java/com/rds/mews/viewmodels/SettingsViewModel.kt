@@ -12,6 +12,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -68,6 +69,8 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     val showDates: StateFlow<Boolean> = repository.showDates
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val expandSources: StateFlow<Boolean> = repository.expandSources
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val titlesSorting: StateFlow<TitleSorting> = repository.titleSorting
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TitleSorting.OLDEST)
@@ -170,6 +173,7 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     fun setDarkTheme(value: DarkTheme) = viewModelScope.launch { repository.setDarkTheme(value) }
 
     fun setShowDates(value: Boolean) = viewModelScope.launch { repository.setShowDates(value) }
+    fun setExpandSources(value: Boolean) = viewModelScope.launch { repository.setExpandSources(value) }
 
     fun setTitlesSorting(value: TitleSorting) = viewModelScope.launch { repository.setTitleSorting(value) }
     fun setTitlesNum(value: HeadersNum) = viewModelScope.launch { repository.setTitlesNum(value) }
