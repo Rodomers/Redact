@@ -52,6 +52,7 @@ object MewsRepository {
 
     lateinit var darkTheme: StateFlow<DarkTheme>
     lateinit var appTheme: StateFlow<AppTheme>
+    lateinit var titleSorting: StateFlow<TitleSorting>
     lateinit var titlesNum: StateFlow<HeadersNum>
     lateinit var titlesPeriod: StateFlow<TitlesPeriod>
     lateinit var titlesKeeping: StateFlow<TitlesKeeping>
@@ -164,6 +165,7 @@ object MewsRepository {
 
         darkTheme = createSettingFlow({ it.darkTheme }, DarkTheme.SYSTEM)
         appTheme = createSettingFlow({ it.appTheme }, AppTheme.DEFAULT)
+        titleSorting = createSettingFlow({ it.titlesSorting }, TitleSorting.OLDEST)
         titlesNum = createSettingFlow({ it.titlesNum }, HeadersNum.NUM_10)
         titlesPeriod = createSettingFlow({ it.titlesPeriod }, TitlesPeriod.HRS_24)
         titlesKeeping = createSettingFlow({ it.titlesKeeping }, TitlesKeeping.DAYS_1)
@@ -244,6 +246,7 @@ object MewsRepository {
 
     val darkThemeList: List<DarkTheme> get() = DarkTheme.entries
     val appThemeList: List<AppTheme> get() = AppTheme.entries
+    val titleSortingList: List<TitleSorting> get() = TitleSorting.entries
     val headersNumList: List<HeadersNum> get() = HeadersNum.entries
     val titlesPeriodList: List<TitlesPeriod> get() = TitlesPeriod.entries
     val titlesKeepingList: List<TitlesKeeping> get() = TitlesKeeping.entries
@@ -308,7 +311,7 @@ object MewsRepository {
 
     fun delTitles(time: Long? = null) {
         externalScope.launch(Dispatchers.IO) {
-            titleDao.deleteBeforeTime(time ?: 0)
+            titleDao.deleteBeforeUpdateTime(time ?: 0)
         }
     }
 
@@ -466,6 +469,7 @@ object MewsRepository {
 
     fun setAppTheme(newValue: AppTheme) = updateSetting { it.copy(appTheme = newValue) }
 
+    fun setTitleSorting(newValue: TitleSorting) = updateSetting { it.copy(titlesSorting = newValue) }
     fun setTitlesNum(newValue: HeadersNum) = updateSetting { it.copy(titlesNum = newValue) }
 
     fun setTitlesPeriod(newValue: TitlesPeriod) = updateSetting { it.copy(titlesPeriod = newValue) }

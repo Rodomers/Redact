@@ -90,7 +90,7 @@ class TitlesUpdater() {
                 }
 
                 if (finalResult is SummarizationResult.Success) {
-                    MewsRepository.delTitles(MewsRepository.titlesKeeping.value.ms)
+                    MewsRepository.delTitles(System.currentTimeMillis() - MewsRepository.titlesKeeping.value.ms)
                     MewsRepository.clearError()
                 } else if (finalResult is SummarizationResult.Failure) {
                     MewsRepository.saveLastError(finalResult)

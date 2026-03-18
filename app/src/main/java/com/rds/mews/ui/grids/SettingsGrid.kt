@@ -93,6 +93,7 @@ fun SettingsScreen(
     val compactTab by viewModel.compactTabBar.collectAsStateWithLifecycle()
     val appTheme by viewModel.appTheme.collectAsStateWithLifecycle()
     val filterTopics by viewModel.filterTopics.collectAsStateWithLifecycle()
+    val titlesSorting by viewModel.titlesSorting.collectAsStateWithLifecycle()
     val titlesNum by viewModel.titlesNum.collectAsStateWithLifecycle()
     val geminiApiText by viewModel.userApi.collectAsStateWithLifecycle()
     val currentLlmModel by viewModel.currentLlm.collectAsStateWithLifecycle()
@@ -120,6 +121,7 @@ fun SettingsScreen(
         darkTheme = darkTheme,
         appTheme = appTheme,
         filterTopics = filterTopics,
+        titlesSorting = titlesSorting,
         headersNum = titlesNum,
         geminiApiText = geminiApiText,
         currentLlmModel = currentLlmModel,
@@ -142,6 +144,7 @@ fun SettingsScreen(
         isApiKeyCorrect = isApiKeyValid,
         darkThemes = viewModel.darkThemes,
         appThemes = viewModel.appThemes,
+        titleSortingList = viewModel.titleSortingList,
         headersNumList = viewModel.headersNumList,
         titlesPeriods = viewModel.titlesPeriods,
         titlesKeepings = viewModel.titlesKeepings,
@@ -159,6 +162,7 @@ fun SettingsScreen(
             setShowDates = viewModel::setShowDates,
             setInnerTime = viewModel::setInnerTime,
             setShowSnippets = viewModel::setShowSnippets,
+            setTitlesSorting = viewModel::setTitlesSorting,
             setTitlesNum = viewModel::setTitlesNum,
             setTitlesKeeping = viewModel::setTitlesKeeping,
             setTitlesPeriod = viewModel::setTitlesPeriod,
@@ -286,6 +290,10 @@ fun SettingsGrid(
 
     val colorSchemeDropdownItems = state.darkThemes.map { theme ->
         stringResource(theme.displayedName) to { functions.setDarkTheme(theme) }
+    }
+
+    val sortingDropdownItems = state.titleSortingList.map { sorting ->
+        stringResource(sorting.stringId) to { functions.setTitlesSorting(sorting) }
     }
 
     var titlesDropdownItems = state.headersNumList.map { num ->
@@ -646,6 +654,17 @@ fun SettingsGrid(
                     visible = groupStates.find { it.group == titlesChapterId }?.expanded ?: true
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
+                        SettingsItem(
+                            text = stringResource(R.string.settings_titles_sorting),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        ) {
+                            DropdownButton(
+                                buttons = sortingDropdownItems,
+                                density = density,
+                                cornerShape = Shapes.large,
+                                initialSelectedIndex = state.titleSortingList.indexOfFirst(state.titlesSorting::equals)
+                            )
+                        }
                         SettingsItem(
                             text = stringResource(R.string.settings_maximum_headers),
                             modifier = Modifier.padding(vertical = verticalArrangement)

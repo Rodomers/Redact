@@ -154,3 +154,15 @@ enum class TitleStatus(val statusId: Int) {
         }
     }
 }
+
+@Serializable
+enum class TitleSorting(val stringId: Int, val id: Int) {
+    OLDEST(R.string.settings_titles_sorting_oldest, 0),
+    NEWEST(R.string.settings_titles_sorting_newest, 1);
+
+    companion object {
+        fun fromId(key: Int): TitleSorting {
+            return entries.find { it.id == key } ?: OLDEST
+        }
+    }
+}

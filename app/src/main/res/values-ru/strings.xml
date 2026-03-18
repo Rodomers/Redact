@@ -47,6 +47,9 @@
     <string name="settings_titles_alarm_update">Включить автообновление</string>
     <string name="settings_titles_update_time">Время обновления</string>
     <string name="settings_titles_update_frequency">Интервал обновления</string>
+    <string name="settings_titles_sorting">Сортировка</string>
+    <string name="settings_titles_sorting_newest">Сначала новые</string>
+    <string name="settings_titles_sorting_oldest">Сначала старые</string>
     <string name="settings_maximum_headers">Максимум заголовков</string>
     <string name="settings_news_period">Глубина поиска</string>
     <string name="settings_news_keeping">Срок хранения</string>

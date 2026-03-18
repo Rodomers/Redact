@@ -49,6 +49,7 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     val darkThemes: List<DarkTheme> = repository.darkThemeList
     val appThemes: List<AppTheme> = repository.appThemeList
+    val titleSortingList: List<TitleSorting> = repository.titleSortingList
     val headersNumList: List<HeadersNum> = repository.headersNumList
     val titlesPeriods: List<TitlesPeriod> = repository.titlesPeriodList
     val titlesKeepings: List<TitlesKeeping> = repository.titlesKeepingList
@@ -68,6 +69,8 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     val showDates: StateFlow<Boolean> = repository.showDates
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val titlesSorting: StateFlow<TitleSorting> = repository.titleSorting
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TitleSorting.OLDEST)
     val titlesNum: StateFlow<HeadersNum> = repository.titlesNum
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HeadersNum.NUM_10)
 
@@ -168,6 +171,7 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     fun setShowDates(value: Boolean) = viewModelScope.launch { repository.setShowDates(value) }
 
+    fun setTitlesSorting(value: TitleSorting) = viewModelScope.launch { repository.setTitleSorting(value) }
     fun setTitlesNum(value: HeadersNum) = viewModelScope.launch { repository.setTitlesNum(value) }
 
     fun setTitlesPeriod(value: TitlesPeriod) = viewModelScope.launch { repository.setTitlesPeriod(value) }

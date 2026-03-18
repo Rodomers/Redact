@@ -50,6 +50,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import com.rds.mews.R
+import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.TitleStatus
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -99,10 +100,10 @@ class TitlesViewModel(
     val titles = _titles.asStateFlow()
 
     val isRefreshing: StateFlow<Boolean> = repository.updatingTitles
+    val titleSorting: StateFlow<TitleSorting> = repository.titleSorting
     val updatingState: StateFlow<String?> = repository.updatingState
     val updatingProgress: StateFlow<Float> = repository.updatingProgress
 
-    val showDates: StateFlow<Boolean> = repository.showDates.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val innerTimestamps: StateFlow<Boolean> = repository.innerTimestamps.stateIn(viewModelScope,
         SharingStarted.WhileSubscribed(5000), false)
     val showSnippets: StateFlow<Boolean> = repository.showSnippets.stateIn(viewModelScope,
@@ -117,9 +118,13 @@ class TitlesViewModel(
 
     val groupedTitles = combine(
         titles,
-        todayDateFlow
-    ) { titles, today ->
-        val filtered = titles.filter { it.status == TitleStatus.DEFAULT.statusId }
+        todayDateFlow,
+        titleSorting
+    ) { titles, today, titleSorting ->
+        val filtered = when (titleSorting) {
+            TitleSorting.NEWEST -> titles.reversed().filter { it.status == TitleStatus.DEFAULT.statusId }
+            else -> titles.filter { it.status == TitleStatus.DEFAULT.statusId }
+        }
         filtered.groupBy { title ->
             getDateFromUnix(title.eventTime, today).copy(time = "00:00")
         }
@@ -332,7 +337,7 @@ class TitlesViewModel(
             repository.titles
                 .distinctUntilChanged()
                 .collect { titleListFromDb ->
-                    val actualTitles = titleListFromDb.filter { it.summary != "<промежуточный текст>" }
+                    val actualTitles = titleListFromDb.filter { it.status == TitleStatus.DEFAULT.statusId }
                     val hasHiddenItems = actualTitles.size != titleListFromDb.size
 
                     val currentErr = _errState.value
