@@ -107,9 +107,6 @@ fun MainScreen(mainActivity: MainActivity) {
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
         val scope = rememberCoroutineScope()
 
-//        MewsRepository.setUpdatingTitles(false)
-//        MewsRepository.setLastTitlesUpdate(1773212400000)
-
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()
         val settingsGridState = rememberLazyGridState()

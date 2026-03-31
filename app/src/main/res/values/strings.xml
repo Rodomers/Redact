@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_version" translatable="false">1.0.0 Beta 1</string>
+    <string name="app_version" translatable="false">1.0.0 Beta 2</string>
     <string name="current_language">English</string>
     <string name="app_name" translatable="false">Mews</string>
 
@@ -9,9 +9,9 @@
     <string name="tabscreen_settings">Settings</string>
 
     <string name="source_type_telegram">Telegram</string>
-    <string name="source_type_rss">RSS-feeds</string>
+    <string name="source_type_rss">Sites and RSS-feeds</string>
     <string name="source_unknown_type">Unknown source</string>
-    <string name="source_change">Change</string>
+    <string name="source_change">About</string>
     <string name="source_delete">Delete</string>
     <string name="delsource_title">Deleting a source</string>
     <string name="delsource_text">Are you sure you want to delete the source \"%s\"?</string>
@@ -112,8 +112,8 @@
     <string name="titles_card_banned">Article text was blocked. It will no longer appear in the list.</string>
     <string name="change_dialog_source">Source name</string>
     <string name="change_dialog_add_source">Add source</string>
-    <string name="change_dialog_change_source">Change source</string>
-    <string name="change_dialog_link">RSS/Telegram link</string>
+    <string name="change_dialog_change_source">About the source</string>
+    <string name="change_dialog_link">Site or Telegram link</string>
     <string name="valid_link">Valid link</string>
     <string name="enter_correct_link">Enter a correct link</string>
     <string name="cancel">Cancel</string>
@@ -123,6 +123,7 @@
     <string name="share_btn_desc">Share"</string>
     <string name="ban_btn_desc">Block</string>
     <string name="mark_as_unread_btn_desc">Unread</string>
+    <string name="source_reset_errors">Reset errors</string>
 
     <string name="update">Update</string>
     <string name="updating">Updating…</string>

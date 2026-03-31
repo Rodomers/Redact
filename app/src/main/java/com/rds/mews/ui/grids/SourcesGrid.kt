@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -24,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -92,7 +90,8 @@ fun SourcesScreen(
         isCorrectLink = isCorrectLink,
         bottomSpacer = bottomSpacer,
         setSourceNameBuffer = viewModel::setSourceNameBuffer,
-        setRssLinkBuffer = viewModel::setRssLinkBuffer
+        setRssLinkBuffer = viewModel::setRssLinkBuffer,
+        resetErrCount = viewModel::resetErrCount
     )
 }
 
@@ -119,7 +118,8 @@ fun SourcesGrid(
     isCorrectLink: Boolean,
     bottomSpacer: Dp,
     setSourceNameBuffer: (String) -> Unit,
-    setRssLinkBuffer: (String) -> Unit
+    setRssLinkBuffer: (String) -> Unit,
+    resetErrCount: (Long) -> Unit
 ) {
     val handler = LocalUriHandler.current
 
@@ -129,7 +129,7 @@ fun SourcesGrid(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(changedSource) {
-        if (sourceNameBuffer == "") setSourceNameBuffer(changedSource?.source ?: "")
+        if (sourceNameBuffer == "") setSourceNameBuffer(changedSource?.currentName ?: "")
     }
 
     if (showAddDialog) {
@@ -152,7 +152,7 @@ fun SourcesGrid(
     if (deletedSource != null) {
         CustomErrorBottomSheet(
             title = stringResource(R.string.delsource_title),
-            text = stringResource(R.string.delsource_text, deletedSource.source),
+            text = stringResource(R.string.delsource_text, deletedSource.currentName ?: deletedSource.originalName),
             onDismissRequest = { setDelSource(null) },
             cancelBtnText = stringResource(R.string.cancel),
             confBtnText = stringResource(R.string.delsource_btntext),
@@ -170,9 +170,15 @@ fun SourcesGrid(
         EditSourceBottomSheet(
             sourceNameValue = sourceNameBuffer,
             onSourceNameChange = setSourceNameBuffer,
-            originalSourceName = changedSource.source,
-            onConfirm = { scope.launch { onSourceChange(changedSource.id, sourceNameBuffer) } },
-            onLinkClick = { handler.openUri(changedSource.link) },
+            originalSourceName = changedSource.originalName,
+            onConfirm = { scope.launch {
+                onSourceChange(changedSource.id, sourceNameBuffer.ifBlank { changedSource.originalName })
+            } },
+            onLinkClick = {
+                try {
+                    handler.openUri(changedSource.websiteUrl)
+                } catch (_: Exception) {}
+                          },
             onDismissRequest = {
                 setChangeSource(null)
                 setSourceNameBuffer("")
@@ -198,7 +204,7 @@ fun SourcesGrid(
             )
         }
 
-        groupedItems.forEach { (source, itemsForSource) ->
+        groupedItems.toSortedMap().forEach { (source, itemsForSource) ->
             val isExpanded = groupStates.find { it.group == source }?.expanded ?: false
 
             customHeader(
@@ -215,18 +221,26 @@ fun SourcesGrid(
                     visible = isExpanded
                 ) {
                     Box(modifier = Modifier.padding(bottom = verticalArrangement * 2)) {
+                        val buttons = listOf(
+                            TextButtonInputs(stringResource(R.string.source_change), {
+                                setChangeSource(
+                                    item
+                                )
+                            }),
+                            TextButtonInputs(
+                                stringResource(R.string.source_delete),
+                                { setDelSource(item) }),
+                        )
+                        val error = item.errCount >= 3
                         SourcesCard(
-                            source = item.source,
-                            listOf(
-                                TextButtonInputs(stringResource(R.string.source_change), {
-                                    setChangeSource(
-                                        item
-                                    )
-                                }),
+                            source = item.currentName ?: item.originalName,
+                            buttons = if (!error) buttons else listOf(
                                 TextButtonInputs(
-                                    stringResource(R.string.source_delete),
-                                    { setDelSource(item) })
-                            )
+                                    stringResource(R.string.source_reset_errors),
+                                    { resetErrCount(item.id) }
+                                )
+                            ) + buttons,
+                            error = error
                         )
                     }
                 }

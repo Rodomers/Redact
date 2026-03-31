@@ -29,6 +29,7 @@ object SharedHttpClient {
     data class HttpResponse(
         val status: Int,
         val body: String,
+        val headers: Map<String, String> = emptyMap(),
         val error: Exception? = null
     )
 
@@ -169,12 +170,13 @@ object SharedHttpClient {
                     }
 
                     client.newCall(requestBuilder.build()).execute().use { response ->
-                        val responseBody = response.body.string()
-                        return@withContext HttpResponse(response.code, responseBody)
+                        val responseBody = response.body?.string() ?: ""
+                        val responseHeaders = response.headers.toMap()
+                        return@withContext HttpResponse(response.code, responseBody, responseHeaders)
                     }
 
                 } catch (e: Exception) {
-                    return@withContext HttpResponse(0, "", e)
+                    return@withContext HttpResponse(status = 0, body = "", error = e)
                 }
             }
         }

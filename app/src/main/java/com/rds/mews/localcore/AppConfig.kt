@@ -1,6 +1,7 @@
 package com.rds.mews.localcore
 
 import com.rds.mews.R
+import com.rds.mews.localcore.TitleSorting.OLDEST
 import com.rds.mews.localcore.TitlesPeriod.ADAPTIVE
 import kotlinx.serialization.Serializable
 
@@ -125,11 +126,14 @@ enum class AutoUpdateFrequency(val stringId: Int, val num: Int) {
 
 @Serializable
 enum class GeminiModelOption(val displayedName: String, val apiModelName: String) {
+    FLASH_LITE_2_0("2.0 Flash Lite", "gemini-2.0-flash-lite"),
+    FLASH_2_0("2.0 Flash", "gemini-2.0-flash"),
     FLASH_LITE_2_5("2.5 Flash Lite", "gemini-2.5-flash-lite"),
     FLASH_2_5("2.5 Flash", "gemini-2.5-flash"),
     PRO_2_5("2.5 Pro", "gemini-2.5-pro"),
     FLASH_3_PREVIEW("3.0 Flash Preview", "gemini-3-flash-preview"),
-    PRO_3_PREVIEW("3.0 Pro Preview", "gemini-3-pro-preview"),
+    FLASH_LITE_3_0("3.1 Flash Lite Preview", "gemini-3.1-flash-lite-preview"),
+    PRO_3_PREVIEW("3.1 Pro Preview", "gemini-3.1-pro-preview"),
     FLASH_LITE_LATEST("Flash Lite Latest", "gemini-flash-lite-latest"),
     FLASH_LATEST("Flash Latest", "gemini-flash-latest"),
     PRO_LATEST("Pro Latest", "gemini-pro-latest");
@@ -163,6 +167,18 @@ enum class TitleSorting(val stringId: Int, val id: Int) {
     companion object {
         fun fromId(key: Int): TitleSorting {
             return entries.find { it.id == key } ?: OLDEST
+        }
+    }
+}
+
+@Serializable
+enum class SourceType(val id: Int) {
+    RSS(0),
+    TELEGRAM(1);
+
+    companion object {
+        fun fromId(key: Int): SourceType {
+            return entries.find { it.id == key } ?: RSS
         }
     }
 }

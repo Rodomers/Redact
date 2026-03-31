@@ -97,6 +97,8 @@ class TitlesViewModel(
         }
     }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(), replay = 1)
 
+    private val _greetingMessages = MutableStateFlow<List<Title>>(emptyList())
+
     private val _titles = MutableStateFlow<List<Title>>(emptyList())
     val titles = _titles.asStateFlow()
 
@@ -123,11 +125,17 @@ class TitlesViewModel(
         todayDateFlow,
         titleSorting
     ) { titles, today, titleSorting ->
-        val filtered = when (titleSorting) {
-            TitleSorting.NEWEST -> titles.reversed().filter { it.status == TitleStatus.DEFAULT.statusId }
-            else -> titles.filter { it.status == TitleStatus.DEFAULT.statusId }
+        val greetings = titles.filter { it.id < 0L }
+        val actuals = titles.filter { it.id >= 0L }
+
+        val filteredActuals = when (titleSorting) {
+            TitleSorting.NEWEST -> actuals.reversed().filter { it.status == TitleStatus.DEFAULT.statusId }
+            else -> actuals.filter { it.status == TitleStatus.DEFAULT.statusId }
         }
-        filtered.groupBy { title ->
+
+        val finalFiltered = greetings + filteredActuals
+
+        finalFiltered.groupBy { title ->
             getDateFromUnix(title.eventTime, today).copy(time = "00:00")
         }
     }.stateIn(
@@ -188,7 +196,7 @@ class TitlesViewModel(
         viewModelScope.launch {
             val list = emptyList<Title>().toMutableList()
             list += Title(
-                id = 0L,
+                id = -1L,
                 eventTime = System.currentTimeMillis(),
                 title = context.getString(R.string.greeting_1),
                 summary = "",
@@ -196,27 +204,27 @@ class TitlesViewModel(
                 ids = ""
             )
             delay(300L)
-            _titles.value = list.toList()
+            _greetingMessages.value = list.toList()
             delay(800L)
             list += Title(
-                id = 1L,
+                id = -2L,
                 eventTime = System.currentTimeMillis(),
                 title = context.getString(R.string.greeting_2),
                 summary = "",
                 sources = "",
                 ids = ""
             )
-            _titles.value = list.toList()
+            _greetingMessages.value = list.toList()
             delay(800L)
             list += Title(
-                id = 2L,
+                id = -3L,
                 eventTime = System.currentTimeMillis(),
                 title = context.getString(R.string.greeting_3),
                 summary = "",
                 sources = "",
                 ids = ""
             )
-            _titles.value = list.toList()
+            _greetingMessages.value = list.toList()
         }
     }
 
@@ -340,10 +348,11 @@ class TitlesViewModel(
 
             combine(
                 repository.titles.distinctUntilChanged(),
-                expandSources
-            ) { titles, expand ->
-                titles to expand
-            }.collect { (titleListFromDb, currentExpandSources) ->
+                expandSources,
+                _greetingMessages
+            ) { titles, expand, greetings ->
+                Triple(titles, expand, greetings)
+            }.collect { (titleListFromDb, currentExpandSources, greetingList) ->
 
                 val actualTitles = titleListFromDb.filter { it.status == TitleStatus.DEFAULT.statusId }
                 val hasHiddenItems = actualTitles.size != titleListFromDb.size
@@ -360,7 +369,8 @@ class TitlesViewModel(
                     }
                 }
 
-                _titles.value = actualTitles
+                val combinedTitles = greetingList + actualTitles
+                _titles.value = combinedTitles
 
                 val isExpandChanged = lastExpandSources != currentExpandSources
                 lastExpandSources = currentExpandSources
@@ -368,9 +378,9 @@ class TitlesViewModel(
                 _titleCardStates.update { currentStates ->
                     val oldStatesMap = currentStates.associateBy { it.id }
 
-                    actualTitles.map { title ->
+                    combinedTitles.map { title ->
                         val oldState = oldStatesMap[title.id]
-                        val messages = MewsRepository.getMessages(title.ids)
+                        val messages = if (title.ids.isBlank()) null else MewsRepository.getMessages(title.ids)
 
                         val newSources = if (messages == null) null else {
                             val groupedMessages = messages.groupBy { it.source }

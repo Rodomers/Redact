@@ -1,4 +1,4 @@
-package com.rds.mews.core
+package com.rds.mews.text_filters
 
 import java.security.MessageDigest
 import java.util.Locale

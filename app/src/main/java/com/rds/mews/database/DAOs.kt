@@ -28,6 +28,21 @@ interface SourceDao {
 
     @Query("UPDATE sources SET custom_name = :newName WHERE id = :id")
     suspend fun updateCustomName(id: Long, newName: String)
+
+    @Query("UPDATE sources SET err_count = err_count + 1 WHERE id = :sourceId")
+    suspend fun incrementErrorCount(sourceId: Long)
+
+    @Query("UPDATE sources SET err_count = 0 WHERE id = :sourceId")
+    suspend fun resetErrorCount(sourceId: Long)
+
+    @Query("UPDATE sources SET err_count = 0")
+    suspend fun resetAllErrorCounts()
+
+    @Query("UPDATE sources SET last_sync_time = :syncTime WHERE id = :sourceId")
+    suspend fun updateLastSyncTime(sourceId: Long, syncTime: Long)
+
+    @Query("UPDATE sources SET etag_hash = :etag WHERE id = :id")
+    suspend fun updateEtag(id: Long, etag: String?)
 }
 
 @Dao
@@ -47,17 +62,38 @@ interface MessageDao {
     @Query("SELECT * FROM messages ORDER BY pub_time ASC")
     suspend fun getAllMessagesOneShot(): List<MessageEntity>
 
+    @Query("SELECT * FROM messages WHERE pub_time > :timeMs AND is_duplicate = 0 ORDER BY pub_time ASC")
+    suspend fun getUniqueMessagesAfterTimeOneShot(timeMs: Long): List<MessageEntity>
+
+    @Query("SELECT * FROM messages WHERE is_duplicate = 0 ORDER BY pub_time ASC")
+    suspend fun getAllUniqueMessagesOneShot(): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE id IN (:ids)")
     suspend fun getMessagesByIds(ids: List<Long>): List<MessageEntity>
 
+    @Query("SELECT * FROM messages WHERE link IN (:links)")
+    suspend fun getMessagesByLinks(links: List<String>): List<MessageEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(message: MessageEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(messages: List<MessageEntity>): List<Long>
+
+    @Update
+    suspend fun updateAll(messages: List<MessageEntity>)
 
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteById(id: Long)
 
     @Query("DELETE FROM messages WHERE pub_time < :timeMs")
     suspend fun deleteBeforeTime(timeMs: Long): Int
+
+    @Query("SELECT MAX(pub_time) FROM messages WHERE source_id = :sourceId")
+    suspend fun getMaxPubTimeForSource(sourceId: Long): Long?
+
+    @Query("SELECT clean_text FROM messages WHERE pub_time BETWEEN :timeStart AND :timeEnd")
+    suspend fun getCleanTextsInWindow(timeStart: Long, timeEnd: Long): List<String>
 }
 
 @Dao

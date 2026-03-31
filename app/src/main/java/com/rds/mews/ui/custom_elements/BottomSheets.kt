@@ -15,7 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -282,6 +284,22 @@ fun EditSourceBottomSheet(
     sheetState: SheetState,
     scope: CoroutineScope
 ) {
+    var textFieldValue by remember {
+        mutableStateOf(
+            TextFieldValue(
+                text = sourceNameValue,
+                selection = TextRange(sourceNameValue.length)
+            )
+        )
+    }
+
+    if (sourceNameValue != textFieldValue.text) {
+        textFieldValue = TextFieldValue(
+            text = sourceNameValue,
+            selection = TextRange(sourceNameValue.length)
+        )
+    }
+
     val textFieldColor = MaterialTheme.colorScheme.secondaryContainer.copy(0.4f)
     val onTextFieldColor = MaterialTheme.colorScheme.onSecondaryContainer
 
@@ -304,8 +322,11 @@ fun EditSourceBottomSheet(
             },
             {
                 TextField(
-                    value = sourceNameValue,
-                    onValueChange = onSourceNameChange,
+                    value = textFieldValue,
+                    onValueChange = {
+                        textFieldValue = it
+                        onSourceNameChange(it.text)
+                    },
                     shape = Shapes.large,
                     label = { Text(stringResource(R.string.change_dialog_source)) },
                     placeholder = { Text(originalSourceName) },
@@ -358,7 +379,7 @@ fun EditSourceBottomSheet(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    val canChange = sourceNameValue.isNotBlank()
+                    val canChange = originalSourceName.isNotBlank()
 
                     CustomTextButton(
                         inputs = TextButtonInputs(
@@ -465,6 +486,22 @@ fun ApiKeyBottomSheet(
     scope: CoroutineScope,
     isApiKeyCorrect: Boolean
 ) {
+    var textFieldValue by remember {
+        mutableStateOf(
+            TextFieldValue(
+                text = apiKeyValue,
+                selection = TextRange(apiKeyValue.length)
+            )
+        )
+    }
+
+    if (apiKeyValue != textFieldValue.text) {
+        textFieldValue = TextFieldValue(
+            text = apiKeyValue,
+            selection = TextRange(apiKeyValue.length)
+        )
+    }
+
     val textFieldColor = MaterialTheme.colorScheme.secondaryContainer.copy(0.4f)
     val onTextFieldColor = MaterialTheme.colorScheme.onSecondaryContainer
 
@@ -487,8 +524,11 @@ fun ApiKeyBottomSheet(
             },
             {
                 TextField(
-                    value = apiKeyValue,
-                    onValueChange = onApiKeyChange,
+                    value = textFieldValue,
+                    onValueChange = {
+                        textFieldValue = it
+                        onApiKeyChange(it.text)
+                    },
                     shape = Shapes.large,
                     label = { Text(stringResource(R.string.settings_sheet_api_key)) },
                     modifier = Modifier

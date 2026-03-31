@@ -654,6 +654,7 @@ private fun ExpandedCardContent(
         ) {
             HorizontalPager(
                 state = pagerState,
+                userScrollEnabled = sources?.isNotEmpty() ?: false,
                 verticalAlignment = Alignment.Top,
                 beyondViewportPageCount = 1,
                 modifier = Modifier
@@ -833,6 +834,7 @@ private fun ExpandedCardContent(
                         selectedIndex = pagerState.currentPage,
                         modifier = Modifier.padding(bottom = 8.dp),
                         backgroundColor = bottomPanelItemsColor,
+                        enabled = sources?.isNotEmpty() ?: false,
                         indicatorColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         itemPadding = 2.dp
                     )

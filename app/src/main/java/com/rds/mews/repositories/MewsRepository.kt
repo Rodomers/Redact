@@ -4,14 +4,17 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import com.rds.mews.GeminiApiKeyProvider
+import com.rds.mews.MinifluxAddressProvider
+import com.rds.mews.MinifluxApiKeyProvider
 import com.rds.mews.ProxyAddressProvider
 import com.rds.mews.R
 import com.rds.mews.RSSHubAddressProvider
 import com.rds.mews.RssHubApiKeyProvider
 import com.rds.mews.core.NewsSummarizer
+import com.rds.mews.core.SourceResolver
 import com.rds.mews.database.AppDatabase
-import com.rds.mews.core.getRssName
 import com.rds.mews.core.validateGeminiKey
 import com.rds.mews.database.MessageDao
 import com.rds.mews.database.MessageEntity
@@ -74,8 +77,8 @@ object MewsRepository {
     lateinit var exactAlarmsAllowed: StateFlow<Boolean>
     lateinit var notificationsGranted: StateFlow<Boolean>
     lateinit var currentLanguage: StateFlow<String?>
+    lateinit var parserBatchSize: StateFlow<Int>
 
-    // Runtime state (Not in Settings)
     private val _context = MutableStateFlow<Context?>(null)
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
     var selectedTab: StateFlow<TabScreen> = _selectedTab.asStateFlow()
@@ -84,13 +87,14 @@ object MewsRepository {
         private set
     var DEFAULT_GEMINI_API_KEY: String = ""
     var SERVER_KEY: String = ""
+    var MINIFLUX_KEY: String = ""
     var PROXY_ADDRESS: String = ""
     var HUB_ADDRESS: String = ""
+    var MINIFLUX_ADDRESS: String = ""
 
     private val _updatingTitles = MutableStateFlow(false)
     val updatingTitles = _updatingTitles.asStateFlow()
 
-    // Legacy Keys
     const val CURRENT_THEME = "current_theme"
     const val IS_MONET = "is_monet"
     const val TITLES_NUM = "titles_num"
@@ -115,6 +119,7 @@ object MewsRepository {
     const val CURRENT_LANGUAGE = "current_language"
     const val BANNED_NEWS_SET = "banned_news_set"
     const val ENABLE_PROXY = "enable_proxy"
+    const val PARSER_BATCH_SIZE = "parser_batch_size"
 
     lateinit var sources: Flow<List<RSS>>
     lateinit var titles: Flow<List<Title>>
@@ -124,7 +129,8 @@ object MewsRepository {
         val appContext = context.applicationContext
 
         this.database = Room.databaseBuilder(appContext, AppDatabase::class.java, "MainDB")
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .build()
         this.sourceDao = database.sourceDao()
         this.messageDao = database.messageDao()
@@ -135,8 +141,10 @@ object MewsRepository {
 
         this.DEFAULT_GEMINI_API_KEY = GeminiApiKeyProvider().getKey()
         this.SERVER_KEY = RssHubApiKeyProvider().getKey()
+        this.MINIFLUX_KEY = MinifluxApiKeyProvider().getKey()
         this.PROXY_ADDRESS = ProxyAddressProvider().getKey()
         this.HUB_ADDRESS = RSSHubAddressProvider().getKey()
+        this.MINIFLUX_ADDRESS = MinifluxAddressProvider().getKey()
 
         setContext(appContext)
 
@@ -191,6 +199,8 @@ object MewsRepository {
         exactAlarmsAllowed = createSettingFlow({ it.alarmsAllowed }, false)
         notificationsGranted = createSettingFlow({ it.notificationsGranted }, false)
 
+        parserBatchSize = createSettingFlow({ it.parserBatchSize }, 50)
+
         val defaultLang = getStringResource(R.string.current_language)
         currentLanguage = createSettingFlow({ it.currentLanguage }, defaultLang)
 
@@ -218,7 +228,16 @@ object MewsRepository {
 
         sources = sourceDao.getAllSourcesFlow()
             .map { entities ->
-                entities.map { RSS(it.id, it.customName ?: it.originalName, it.feedUrl) }
+                entities.map {
+                    RSS(
+                    it.id, it.customName ?: it.originalName, it.originalName,
+                    feedUrl = it.feedUrl,
+                    websiteUrl = if (!it.websiteUrl.startsWith("http://") && !it.websiteUrl.startsWith("https://"))
+                        "https://${it.websiteUrl}"
+                    else it.websiteUrl,
+                        sourceType = SourceType.fromId(it.sourceType),
+                        errCount = it.errCount
+                ) }
             }
             .flowOn(Dispatchers.IO)
 
@@ -263,29 +282,41 @@ object MewsRepository {
 
     fun addSource(context: Context, name: String, link: String) {
         externalScope.launch(Dispatchers.IO) {
-            val entity = SourceEntity(
-                originalName = name,
-                customName = null,
-                websiteUrl = link,
-                feedUrl = linkTransform(link),
-                sourceType = 0,
-                lastSyncTime = 0,
-                errCount = 0,
-                lastErrMsg = null
-            )
-            sourceDao.insert(entity)
+            SourceResolver.resolveSourceDetails(link).let { source ->
+                when (source) {
+                    null -> return@let
+                    else -> {
+                        val entity = SourceEntity(
+                            originalName = source.name,
+                            customName = if (source.name != name) name else null,
+                            websiteUrl = source.websiteUrl,
+                            feedUrl = source.feedUrl,
+                            sourceType = source.type.id,
+                            lastSyncTime = 0,
+                            errCount = 0,
+                            lastErrMsg = null
+                        )
+                        sourceDao.insert(entity)
+                    }
+                }
+            }
         }
+
         AlarmScheduler.cancel(context, true)
-        setRssUpdate(context, true, rssUpdateInterval.value)
+        setParserUpdate(context, intervalMin = rssUpdateInterval.value, isImmediateSetup = true)
     }
 
-    fun getSource(id: Long): RSS? {
-        var rss: RSS? = null
-        externalScope.launch(Dispatchers.IO) {
-            val source = sourceDao.getSourceById(id)
-            if (source != null) rss = RSS(source.id, source.customName ?: source.originalName, source.feedUrl)
-        }
-        return rss
+    suspend fun getSource(id: Long): RSS? = withContext(Dispatchers.IO) {
+        val source = sourceDao.getSourceById(id)
+        if (source != null) RSS(
+            source.id,
+            source.customName ?: source.originalName,
+            source.originalName,
+            source.feedUrl,
+            source.websiteUrl,
+            SourceType.fromId(source.sourceType),
+            errCount = source.errCount
+        ) else null
     }
 
     fun deleteSource(id: Long) {
@@ -316,7 +347,6 @@ object MewsRepository {
             titleDao.deleteBeforeUpdateTime(time ?: 0)
         }
     }
-
 
     suspend fun addMessage(
         sourceId: Long,
@@ -354,7 +384,7 @@ object MewsRepository {
         if (idList.isEmpty()) return@withContext null
 
         val targetMsgs = messageDao.getMessagesByIds(idList)
-        val allSources = sourceDao.getAllSourcesFlow().first().associateBy { it.id } // Источников мало, это допустимо
+        val allSources = sourceDao.getAllSourcesFlow().first().associateBy { it.id }
 
         val result = targetMsgs.map { msg ->
             val sourceName = allSources[msg.sourceId]?.let { it.customName ?: it.originalName } ?: "Unknown"
@@ -379,6 +409,26 @@ object MewsRepository {
         }
     }
 
+    suspend fun getUniqueMessagesList(timeSeconds: Long? = null): List<Message> = withContext(Dispatchers.IO) {
+        val entities = if (timeSeconds != null) {
+            val timeMs = System.currentTimeMillis() - (timeSeconds * 1000)
+            messageDao.getUniqueMessagesAfterTimeOneShot(timeMs)
+        } else {
+            messageDao.getAllUniqueMessagesOneShot()
+        }
+
+        val allSources = sourceDao.getAllSourcesFlow().first().associateBy { it.id }
+
+        entities.map { msg ->
+            val sourceName = allSources[msg.sourceId]?.let { it.customName ?: it.originalName } ?: "Unknown"
+            Message(msg.id, msg.pubTime, msg.link, sourceName, msg.originalText, msg.cleanText)
+        }
+    }
+
+    suspend fun getCleanTextsInWindow(timeStart: Long, timeEnd: Long): List<String> = withContext(Dispatchers.IO) {
+        messageDao.getCleanTextsInWindow(timeStart, timeEnd)
+    }
+
     suspend fun getMessageByLink(link: String): Message? = withContext(Dispatchers.IO) {
         when (val mess = messageDao.getMessageByLink(link)) {
             null -> return@withContext null
@@ -387,7 +437,7 @@ object MewsRepository {
                     mess.id,
                     mess.pubTime,
                     mess.link,
-                    getSource(mess.sourceId)?.source ?: "null",
+                    getSource(mess.sourceId)?.currentName ?: "null",
                     mess.originalText,
                     mess.cleanText
                 )
@@ -462,52 +512,37 @@ object MewsRepository {
     }
 
     suspend fun getRssName(link: String): String? {
-        return getRssName(link, proxyEnabled.value)
+        return SourceResolver.resolveSourceDetails(link)?.name
     }
 
     fun setCurrentTab(newTab: TabScreen) { _selectedTab.value = newTab }
 
     fun setDarkTheme(newValue: DarkTheme) = updateSetting { it.copy(darkTheme = newValue) }
-
     fun setAppTheme(newValue: AppTheme) = updateSetting { it.copy(appTheme = newValue) }
     fun setExpandSources(newValue: Boolean) = updateSetting { it.copy(expandSources = newValue) }
-
     fun setTitleSorting(newValue: TitleSorting) = updateSetting { it.copy(titlesSorting = newValue) }
     fun setTitlesNum(newValue: HeadersNum) = updateSetting { it.copy(titlesNum = newValue) }
-
     fun setTitlesPeriod(newValue: TitlesPeriod) = updateSetting { it.copy(titlesPeriod = newValue) }
     fun setTitlesKeeping(newValue: TitlesKeeping) = updateSetting { it.copy(titlesKeeping = newValue) }
-
     fun setLlmModel(newValue: GeminiModelOption) = updateSetting { it.copy(llmModel = newValue) }
-
     fun setTitlesAutoUpdateFrequency(newValue: AutoUpdateFrequency) = updateSetting { it.copy(titlesAutoUpdateFrequency = newValue) }
-
     fun setUserApiKey(newValue: String) = updateSetting { it.copy(userApiKey = newValue) }
-
     fun setShowDates(newValue: Boolean) = updateSetting { it.copy(showDates = newValue) }
 
     fun setRssUpdateInterval(context: Context, newValue: Int) {
         externalScope.launch {
             settingsManager.updateSettings { it.copy(rssUpdateInterval = newValue) }
             AlarmScheduler.cancel(context, true)
-            setRssUpdate(context, intervalMin = newValue)
+            setParserUpdate(context, intervalMin = newValue)
         }
     }
 
     fun setLastRssUpdate(newValue: Long) = updateSetting { it.copy(lastRssUpdate = newValue) }
-
     fun setProxyEnabled(newValue: Boolean) = updateSetting { it.copy(enableProxy = newValue) }
-
     fun setLastTitlesUpdate(newValue: Long) = updateSetting { it.copy(lastTitlesUpdate = newValue) }
-
-    fun setUpdatingTitles(newValue: Boolean) {
-        _updatingTitles.value = newValue
-    }
-
+    fun setUpdatingTitles(newValue: Boolean) { _updatingTitles.value = newValue }
     fun setUpdatingState(newValue: String) = updateSetting { it.copy(updatingState = newValue) }
-
     fun setUpdatingProgress(newValue: Float) = updateSetting { it.copy(updatingProgress = newValue) }
-
     fun setBannedNews(newValue: Set<String>) = updateSetting { it.copy(bannedNews = newValue) }
 
     fun addBannedNew(newValue: String) {
@@ -523,15 +558,10 @@ object MewsRepository {
     }
 
     fun setCompactTab(newValue: Boolean) = updateSetting { it.copy(compactTabBar = newValue) }
-
     fun setFilterTopics(newValue: Boolean) = updateSetting { it.copy(filterTopics = newValue) }
-
     fun setInnerTimestamps(newValue: Boolean) = updateSetting { it.copy(innerTimestamps = newValue) }
-
     fun setShowSnippets(newValue: Boolean) = updateSetting { it.copy(showSnippets = newValue) }
-
     fun setTitlesAlarmUpdate(newValue: Boolean) = updateSetting { it.copy(titlesAutoUpdate = newValue) }
-
     fun setTitlesAlarmMins(newValue: Int) = updateSetting { it.copy(titlesAlarmTimeMins = newValue) }
 
     fun setExactAlarmsAllowed(newValue: Boolean) {
@@ -547,6 +577,7 @@ object MewsRepository {
     }
 
     fun setCurrentLanguage(newValue: String) = updateSetting { it.copy(currentLanguage = newValue) }
+    fun setParserBatchSize(newValue: Int) = updateSetting { it.copy(parserBatchSize = newValue) }
 
     fun saveLastError(failure: SummarizationResult.Failure) {
         externalScope.launch { settingsManager.saveLastError(failure) }
@@ -605,5 +636,45 @@ object MewsRepository {
 
     fun getStringResource(id: Int): String? {
         return _context.value?.getString(id)
+    }
+
+    suspend fun getSourcesQueue(): List<SourceEntity> = withContext(Dispatchers.IO) {
+        sourceDao.getAllSourcesFlow().first()
+            .filter { it.errCount < 3 }
+            .sortedBy { it.lastSyncTime }
+    }
+
+    suspend fun getMaxPubTimeForSource(sourceId: Long): Long? = withContext(Dispatchers.IO) {
+        messageDao.getMaxPubTimeForSource(sourceId)
+    }
+
+    suspend fun getAllSourceEntities(): List<SourceEntity> = withContext(Dispatchers.IO) {
+        sourceDao.getAllSourcesFlow().first()
+    }
+
+    suspend fun updateSourceEtag(sourceId: Long, etag: String?) = withContext(Dispatchers.IO) {
+        sourceDao.updateEtag(sourceId, etag)
+    }
+
+    suspend fun insertBatchAndUpdateSourceTime(
+        messages: List<MessageEntity>,
+        sourceId: Long,
+        syncTime: Long
+    ) = withContext(Dispatchers.IO) {
+        database.insertBatchAndUpdateSourceTime(messages, sourceId, syncTime)
+    }
+
+    suspend fun incrementErrorCount(sourceId: Long) = withContext(Dispatchers.IO) {
+        sourceDao.incrementErrorCount(sourceId)
+    }
+
+    suspend fun resetErrorCount(sourceId: Long) = withContext(Dispatchers.IO) {
+        sourceDao.resetErrorCount(sourceId)
+    }
+
+    fun resetAllSourceErrors() {
+        externalScope.launch(Dispatchers.IO) {
+            sourceDao.resetAllErrorCounts()
+        }
     }
 }

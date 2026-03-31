@@ -10,7 +10,9 @@ import com.rds.mews.localcore.RSS
 import com.rds.mews.localcore.SourceType
 import com.rds.mews.localcore.defineSourceType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +46,7 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
 
     val groupedSources: StateFlow<Map<SourceType, List<RSS>>> = sources
         .map { list ->
-            list.groupBy { defineSourceType(it.link) }
+            list.groupBy { it.sourceType }
         }
         .flowOn(Dispatchers.Default)
         .distinctUntilChanged()
@@ -89,6 +91,10 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
         _delSource.value = value
     }
 
+    fun resetErrCount(sourceId: Long) {
+        viewModelScope.launch { repository.resetErrorCount(sourceId) }
+    }
+
     fun setChangeSource(value: RSS?) {
         _changeSource.value = value
     }
@@ -117,10 +123,17 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
         _groupStates.value = currentMap
     }
 
+    private var resolveJob: Job? = null
+
     fun setRssLinkBuffer(value: String) {
         _rssLinkBuffer.value = value
-        viewModelScope.launch {
-            val linkName = if (value == "") null else repository.getRssName(value)
+
+        resolveJob?.cancel()
+        resolveJob = viewModelScope.launch {
+            delay(400)
+
+            val rssName = repository.getRssName(value)
+            val linkName = if (value == "") null else rssName
             when (linkName) {
                 null -> {
                     _sourceNameBuffer.value = ""

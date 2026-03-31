@@ -68,6 +68,7 @@ private val Context.dataStore: DataStore<AppSettings> by dataStore(
                     alarmsAllowed = sharedPrefs.getBoolean(MewsRepository.ALARMS_ALLOWED, currentData.alarmsAllowed),
                     notificationsGranted = sharedPrefs.getBoolean(MewsRepository.NOTIFICATIONS_GRANTED, currentData.notificationsGranted),
                     currentLanguage = sharedPrefs.getString(MewsRepository.CURRENT_LANGUAGE, null) ?: "english",
+                    parserBatchSize = sharedPrefs.getInt(MewsRepository.PARSER_BATCH_SIZE, currentData.parserBatchSize),
 
                     lastError = migratedError
                 )

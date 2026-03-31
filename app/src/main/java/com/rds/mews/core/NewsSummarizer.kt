@@ -7,6 +7,9 @@ import com.rds.mews.localcore.TitleStatus
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.settings_manager.GeminiException
 import com.rds.mews.settings_manager.SummarizationErrorType
+import com.rds.mews.text_filters.TextComparator
+import com.rds.mews.text_filters.TextSanitizer
+import com.rds.mews.text_filters.TokenEstimator
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -22,7 +25,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
-class SmartRateLimiter(private val minIntervalMs: Long = 4000L) {
+class SmartRateLimiter(private val minIntervalMs: Long = 4500L) {
     private val mutex = Mutex()
     private var nextAllowedTime = 0L
 
@@ -39,7 +42,7 @@ class SmartRateLimiter(private val minIntervalMs: Long = 4000L) {
     suspend fun penalize() {
         mutex.withLock {
             val now = System.nanoTime() / 1_000_000
-            val penaltyTarget = now + 10000L
+            val penaltyTarget = now + 15000L
             if (penaltyTarget > nextAllowedTime) {
                 nextAllowedTime = penaltyTarget
             }
@@ -54,10 +57,32 @@ class LLMClient(
     enableProxy: Boolean = false
 ) : Closeable {
 
-    private val finalUrl = URL_TEMPLATE.replace("%MODEL%", MODEL.ifBlank { MewsRepository.defaultModel.apiModelName })
+    private var currentModelApiName = MODEL.ifBlank { MewsRepository.defaultModel.apiModelName }
+    private var currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.PROXY_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
     private val jsonParser = SharedHttpClient.jsonParser
     private val MAX_RETRIES = 3
+    private val TAG = "LLMClient"
+
+    private fun switchToFallbackModel(): Boolean {
+        val models = MewsRepository.geminiModelsList
+        val currentIndex = models.indexOfFirst { it.apiModelName == currentModelApiName }
+
+        if (currentIndex > 0) {
+            currentModelApiName = models[currentIndex - 1].apiModelName
+            currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
+            Log.w(TAG, "Model fallback triggered. Switched to: $currentModelApiName")
+            return true
+        } else if (currentIndex == -1) {
+            currentModelApiName = models.first().apiModelName
+            currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
+            Log.w(TAG, "Unknown model fallback triggered. Switched to baseline: $currentModelApiName")
+            return true
+        }
+
+        Log.e(TAG, "Fallback chain exhausted. No available models left.")
+        return false
+    }
 
     suspend fun sendPrompt(prompt: String): String {
         val requestBodyObj = GeminiRequest(
@@ -66,7 +91,8 @@ class LLMClient(
         )
         val requestBodyString = try {
             jsonParser.encodeToString(requestBodyObj)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "Request serialization failed", e)
             throw GeminiException(SummarizationErrorType.JSON_PARSING_FAILED, "Request serialization failed")
         }
 
@@ -76,34 +102,20 @@ class LLMClient(
         while (attempt <= MAX_RETRIES) {
             try {
                 val response = httpClient.post(
-                    url = finalUrl,
+                    url = currentUrl,
                     body = requestBodyString,
                     headers = mapOf("x-goog-api-key" to apiKey, "Content-Type" to "application/json")
                 )
 
                 val responseString = response.body
                 val responseStatus = response.status
-                Log.d("LLMClient", "Raw response (Status ${responseStatus}): $responseString")
 
                 if (responseStatus != 200) {
+                    Log.w(TAG, "HTTP $responseStatus on attempt $attempt. Body: $responseString")
                     when (responseStatus) {
                         429 -> {
-                            if (responseString.contains("RequestsPerDay", ignoreCase = true)) {
-                                throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, "Daily quota exceeded")
-                            }
-                            if (responseString.contains("quota", ignoreCase = true)) {
-                                val waitTime = extractRetryTime(responseString)
-                                if (waitTime > 0) {
-                                    delay(waitTime + 1000)
-                                    attempt++
-                                    if (attempt > MAX_RETRIES + 2) throw GeminiException(SummarizationErrorType.RATE_LIMIT_EXCEEDED, "Retry loop exhausted")
-                                    continue
-                                }
-                            }
+                            handle429Error(responseString, attempt)
                             attempt++
-                            if (attempt > MAX_RETRIES) throw GeminiException(SummarizationErrorType.RATE_LIMIT_EXCEEDED)
-                            val backoff = 2000L * (2.0.pow((attempt - 1).coerceAtLeast(1)).toLong())
-                            delay(backoff)
                             continue
                         }
                         403 -> throw GeminiException(SummarizationErrorType.API_KEY_INVALID, "HTTP ${response.status}")
@@ -116,28 +128,29 @@ class LLMClient(
 
                 val geminiResponse = try {
                     jsonParser.decodeFromString<GeminiResponse>(responseString)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    Log.e(TAG, "Response parsing failed. Body: $responseString", e)
                     throw GeminiException(SummarizationErrorType.JSON_PARSING_FAILED, "Response parsing failed")
                 }
 
                 if (geminiResponse.error != null) {
                     val msg = geminiResponse.error.message ?: ""
-                    if (msg.contains("quota", true)) {
-                        if (msg.contains("RequestsPerDay", ignoreCase = true) || msg.contains("FreeTier", ignoreCase = true)) {
-                            throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, msg)
-                        }
-                        val waitTime = extractRetryTime(msg)
-                        if (waitTime > 0) {
-                            delay(waitTime + 1000)
-                            attempt++
-                            if (attempt > MAX_RETRIES + 2) throw GeminiException(SummarizationErrorType.RATE_LIMIT_EXCEEDED)
-                            continue
-                        }
+                    Log.w(TAG, "Gemini API returned error object: $msg")
+
+                    if (msg.contains("Requests per day", true) || msg.contains("RequestsPerDay", true) || msg.contains("FreeTier", true)) {
                         throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, msg)
                     }
+
+                    if (geminiResponse.error.code == 429 || msg.contains("quota", true)) {
+                        handle429Error(msg, attempt)
+                        attempt++
+                        continue
+                    }
+
                     if (msg.contains("key", true) || geminiResponse.error.code == 400) {
                         throw GeminiException(SummarizationErrorType.API_KEY_INVALID, msg)
                     }
+
                     attempt++
                     if (attempt > MAX_RETRIES) throw GeminiException(SummarizationErrorType.UNKNOWN_ERROR, msg)
                     delay(5000L)
@@ -145,7 +158,9 @@ class LLMClient(
                 }
 
                 if (geminiResponse.promptFeedback?.blockReason != null) {
-                    throw GeminiException(SummarizationErrorType.CONTENT_BLOCKED, geminiResponse.promptFeedback.blockReason)
+                    val reason = geminiResponse.promptFeedback.blockReason
+                    Log.w(TAG, "Content blocked by API. Reason: $reason")
+                    throw GeminiException(SummarizationErrorType.CONTENT_BLOCKED, reason)
                 }
 
                 val resultText = geminiResponse.candidates?.takeIf { it.isNotEmpty() }
@@ -153,27 +168,64 @@ class LLMClient(
                     ?.joinToString("\n") { it.text }
 
                 if (resultText.isNullOrBlank()) {
+                    Log.w(TAG, "Received empty answer from API")
                     throw GeminiException(SummarizationErrorType.EMPTY_ANSWER)
                 }
                 return resultText
 
             } catch (e: GeminiException) {
+                if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) {
+                    Log.w(TAG, "Quota exceeded for $currentModelApiName. Attempting fallback.")
+                    if (switchToFallbackModel()) {
+                        attempt = 0
+                        continue
+                    }
+                }
                 throw e
-            } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                Log.w(TAG, "Network timeout on attempt $attempt", e)
                 throw GeminiException(SummarizationErrorType.NETWORK_TIMEOUT)
             } catch (e: Exception) {
                 lastException = e
+                Log.w(TAG, "Unknown network error on attempt $attempt", e)
                 attempt++
                 if (attempt <= MAX_RETRIES) delay(1000L)
             }
         }
         val errorMsg = lastException?.message ?: "Unknown error"
+        Log.e(TAG, "Exhausted all retries. Last error: $errorMsg")
         throw GeminiException(SummarizationErrorType.NO_NETWORK, errorMsg)
     }
 
-    fun extractRetryTime(message: String): Long {
-        val regex = """(\d+(?:\.\d+)?)s""".toRegex()
+    private suspend fun handle429Error(responseString: String, attempt: Int) {
+        if (responseString.contains("Requests per day", ignoreCase = true) ||
+            responseString.contains("RequestsPerDay", ignoreCase = true) ||
+            responseString.contains("FreeTier", ignoreCase = true)) {
+            Log.e(TAG, "Daily quota limit reached.")
+            throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, "Daily quota exceeded")
+        }
 
+        val waitTime = extractRetryTime(responseString)
+
+        if (waitTime > 0) {
+            Log.d(TAG, "Explicit wait time found: ${waitTime}ms")
+            delay(waitTime + 1000L)
+        } else {
+            val baseDelay = 15000L
+            val exponentialMultiplier = 2.0.pow(attempt.toDouble()).toLong()
+            val calcDelay = baseDelay * exponentialMultiplier
+            Log.d(TAG, "No explicit wait time. Dynamic backoff: ${calcDelay}ms (Attempt $attempt)")
+            delay(calcDelay)
+        }
+
+        if (attempt > MAX_RETRIES + 1) {
+            Log.e(TAG, "Rate limit loop exhausted. Assuming daily quota exceeded.")
+            throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, "Daily quota limit reached (empirical timeout)")
+        }
+    }
+
+    private fun extractRetryTime(message: String): Long {
+        val regex = """(\d+(?:\.\d+)?)s""".toRegex()
         val match = regex.find(message)
         return match?.groupValues?.get(1)?.let { numStr ->
             try {
@@ -200,7 +252,8 @@ class LLMClient(
                 try {
                     val json = JSONArray(candidate)
                     return Pair(json, candidate.length != str.length)
-                } catch (_: JSONException) {
+                } catch (e: JSONException) {
+                    Log.w(TAG, "Partial JSON array parsing failed for candidate", e)
                 }
             }
 
@@ -217,30 +270,24 @@ class LLMClient(
 
         for (i in start until str.length) {
             val c = str[i]
-
             if (isEscaped) {
                 isEscaped = false
                 continue
             }
-
             if (c == '\\') {
                 isEscaped = true
                 continue
             }
-
             if (c == '"') {
                 inString = !inString
                 continue
             }
-
             if (!inString) {
                 if (c == '[') {
                     balance++
                 } else if (c == ']') {
                     balance--
-                    if (balance == 0) {
-                        return i
-                    }
+                    if (balance == 0) return i
                 }
             }
         }
@@ -284,26 +331,19 @@ class NewsSummarizer(private val llm: LLMClient) {
         val allIds: MutableList<Long>
     )
 
-    private data class PreparedMessage(
-        val msg: Message,
-        val cleanText: String
-    )
-
-    private val BATCH_CHAR_LIMIT = 150000
-    private val MAX_NEWS_LIMIT = 100
+    private val BATCH_CHAR_LIMIT = 165000
+    private val MAX_NEWS_LIMIT = 110
     private val SINGLE_NEWS_CHAR_LIMIT = 3000
-
-    private val DEDUP_THRESHOLD = 0.85
-
     private val TAG = "NewsSummarizer"
-    private val rateLimiter = SmartRateLimiter(minIntervalMs = 4000L)
+
+    private val rateLimiter = SmartRateLimiter(minIntervalMs = 4500L)
 
     private var totalItemsToProcess = 0
     private var processedItemsCount = 0
     private var baseProgress = 0f
 
     private fun safeReadyFunc(func: () -> Unit) {
-        try { func() } catch (e: Exception) { Log.e(TAG, "readyFunc failed", e) }
+        try { func() } catch (e: Exception) { Log.e(TAG, "readyFunc execution failed", e) }
     }
 
     suspend fun summarizeTopics(
@@ -314,17 +354,17 @@ class NewsSummarizer(private val llm: LLMClient) {
     ): SummarizationResult {
         try {
             Log.d(TAG, "Starting summarizeTopics. Filter enabled: $filterTopics")
-
             val isRetryMode = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId).isNotEmpty()
             val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
 
             val rawMessages = if (!isRetryMode) {
-                val msgs = MewsRepository.getMessagesList(messageSeconds)
+                val msgs = MewsRepository.getUniqueMessagesList(messageSeconds)
                 if (msgs.isEmpty()) {
+                    Log.d(TAG, "No news to analyze.")
                     safeReadyFunc(readyFunc)
                     return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE)
                 }
-                msgs
+                msgs.map { it.copy(originalText = "") }
             } else { emptyList() }
 
             val currentLanguage = try {
@@ -336,27 +376,31 @@ class NewsSummarizer(private val llm: LLMClient) {
             if (!isRetryMode) {
                 try {
                     val extractionTime = System.currentTimeMillis()
-
-                    val groupedMessages = deduplicateMessages(rawMessages)
-                    Log.d(TAG, "Dedup: Input ${rawMessages.size} -> Unique Groups ${groupedMessages.size}")
+                    val groupedMessages = rawMessages.map { GroupedMessage(it, mutableListOf(it.id)) }
+                    Log.d(TAG, "Groups prepared for extraction: ${groupedMessages.size}")
 
                     processNewsInBatches(maxTopics, groupedMessages, currentLanguage, filterTopics, bannedWords)
 
                     MewsRepository.setLastTitlesUpdate(extractionTime)
                     baseProgress = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress }
                 } catch (e: GeminiException) {
+                    Log.e(TAG, "Extraction failed due to Gemini API", e)
                     safeReadyFunc(readyFunc)
                     return SummarizationResult.Failure(e.errorType, e)
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.e(TAG, "Extraction failed due to internal error", e)
                     safeReadyFunc(readyFunc)
                     return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED, e)
                 }
             }
 
             val titlesToSummarize = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId)
-
-            if (titlesToSummarize.isEmpty()) { safeReadyFunc(readyFunc); return SummarizationResult.Success }
+            if (titlesToSummarize.isEmpty()) {
+                Log.d(TAG, "No processing titles found, operation completed.")
+                safeReadyFunc(readyFunc)
+                return SummarizationResult.Success
+            }
 
             totalItemsToProcess = titlesToSummarize.size
             processedItemsCount = 0
@@ -365,9 +409,13 @@ class NewsSummarizer(private val llm: LLMClient) {
             var successCount = 0
             var lastError: SummarizationErrorType? = null
 
+            Log.d(TAG, "Summarizing specific titles. Total: $totalItemsToProcess, Batches: ${batches.size}")
+
             coroutineScope {
-                batches.forEach { batch ->
+                batches.forEachIndexed { index, batch ->
+                    Log.d(TAG, "Processing title batch ${index + 1}/${batches.size}")
                     MewsRepository.setUpdatingState("summarizing_topics")
+
                     val topicsData = batch.mapNotNull { topic ->
                         val messageIds = topic.ids ?: emptyList()
                         val cachedMessages = messageIds.mapNotNull { id -> rawMessages.find { it.id == id } }
@@ -382,11 +430,12 @@ class NewsSummarizer(private val llm: LLMClient) {
                         val suitableMessages = cachedMessages + fetchedMessages
 
                         if (suitableMessages.isEmpty()) {
+                            Log.w(TAG, "Title ID ${topic.id} has no suitable messages, deleting.")
                             MewsRepository.deleteTitleById(topic.id)
                             null
                         } else {
                             val uniqueTextsForSummary = deduplicateForSummaryPayload(suitableMessages)
-                            val contentPayload = uniqueTextsForSummary.joinToString("\n") { "— ${it.originalText.take(SINGLE_NEWS_CHAR_LIMIT)}" }
+                            val contentPayload = uniqueTextsForSummary.joinToString("\n") { "— ${it.cleanText.take(SINGLE_NEWS_CHAR_LIMIT)}" }
                             Triple(topic, suitableMessages, contentPayload)
                         }
                     }
@@ -394,7 +443,6 @@ class NewsSummarizer(private val llm: LLMClient) {
                     if (topicsData.isNotEmpty()) {
                         try {
                             val results = adaptiveSummarizeBatch(topicsData, bannedWords, currentLanguage, 0)
-
                             if (results.isNotEmpty()) {
                                 for ((_, resultData, originalData) in results) {
                                     try {
@@ -402,6 +450,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                         val (topic, suitableMessages, _) = originalData
 
                                         if (summary.isBlank()) {
+                                            Log.d(TAG, "Topic ID ${topic.id} returned empty summary, deleting.")
                                             MewsRepository.deleteTitleById(topic.id)
                                             continue
                                         }
@@ -419,10 +468,11 @@ class NewsSummarizer(private val llm: LLMClient) {
                                     } catch (e: kotlinx.coroutines.CancellationException) {
                                         throw e
                                     } catch(e: Exception) {
-                                        Log.e(TAG, "Save error for topic ID: ${originalData.first.id}", e)
+                                        Log.e(TAG, "Failed to update DB for topic ID: ${originalData.first.id}", e)
                                     }
                                 }
                             } else {
+                                Log.w(TAG, "adaptiveSummarizeBatch returned empty result for current batch.")
                                 if (lastError == null) lastError = SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
                             }
 
@@ -431,10 +481,13 @@ class NewsSummarizer(private val llm: LLMClient) {
                                 for ((topic, _, _) in topicsData) {
                                     if (topic.id !in successIds) {
                                         try {
+                                            Log.d(TAG, "Retry Mode: Deleting failed topic ID ${topic.id}")
                                             MewsRepository.deleteTitleById(topic.id)
                                         } catch (e: kotlinx.coroutines.CancellationException) {
                                             throw e
-                                        } catch(_: Exception) {}
+                                        } catch(e: Exception) {
+                                            Log.e(TAG, "Failed to delete topic during cleanup", e)
+                                        }
                                     }
                                 }
                             }
@@ -443,15 +496,14 @@ class NewsSummarizer(private val llm: LLMClient) {
                             if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED ||
                                 e.errorType == SummarizationErrorType.NO_NETWORK ||
                                 e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) {
-                                Log.w(TAG, "Transient error: ${e.errorType}. Preserving drafts.")
+                                Log.w(TAG, "Transient error during summary batch: ${e.errorType}")
                                 lastError = e.errorType
                             } else {
+                                Log.e(TAG, "Critical error during summary batch, dropping partial topics", e)
                                 for ((t, _, _) in topicsData) {
-                                    try {
-                                        MewsRepository.deleteTitleById(t.id)
-                                    } catch (e: kotlinx.coroutines.CancellationException) {
-                                        throw e
-                                    } catch(_: Exception) {}
+                                    try { MewsRepository.deleteTitleById(t.id) }
+                                    catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                                    catch(_: Exception) {}
                                 }
                             }
                         }
@@ -461,25 +513,33 @@ class NewsSummarizer(private val llm: LLMClient) {
                         val relativeProgress = processedItemsCount.toFloat() / totalItemsToProcess.toFloat()
                         val newProgress = baseProgress + (relativeProgress * availableProgressSpace)
                         MewsRepository.setUpdatingProgress(newProgress.coerceIn(0f, 0.95f))
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to update progress", e)
+                    }
                 }
             }
 
             if (successCount == 0 && titlesToSummarize.isNotEmpty()) {
                 val error = lastError ?: SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
+                Log.e(TAG, "No topics were successfully summarized. Emitting Failure: $error")
                 safeReadyFunc(readyFunc)
                 return SummarizationResult.Failure(error)
             }
+
+            Log.d(TAG, "Summarization completed successfully. Topics handled: $successCount")
             safeReadyFunc(readyFunc)
             return SummarizationResult.Success
         } catch (e: GeminiException) {
+            Log.e(TAG, "Global GeminiException in summarizeTopics", e)
             safeReadyFunc(readyFunc)
             return SummarizationResult.Failure(e.errorType, e)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) {
+                Log.w(TAG, "Job Cancelled")
                 safeReadyFunc(readyFunc)
                 return SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED)
             }
+            Log.e(TAG, "Global unknown exception in summarizeTopics", e)
             safeReadyFunc(readyFunc)
             return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
         }
@@ -488,12 +548,10 @@ class NewsSummarizer(private val llm: LLMClient) {
     private fun createBatches(groups: List<GroupedMessage>): List<List<GroupedMessage>> {
         val batches = mutableListOf<List<GroupedMessage>>()
         var currentBatch = mutableListOf<GroupedMessage>()
-
-        var currentBatchCharLen = 0
         var currentBatchTokens = 0
 
         for (group in groups) {
-            val msgText = group.representative.originalText.take(SINGLE_NEWS_CHAR_LIMIT)
+            val msgText = group.representative.cleanText.take(SINGLE_NEWS_CHAR_LIMIT)
             val msgCharLen = msgText.length
 
             val msgTokens = try {
@@ -508,12 +566,10 @@ class NewsSummarizer(private val llm: LLMClient) {
             if ((isTokenLimitExceeded || isCountLimitExceeded) && currentBatch.isNotEmpty()) {
                 batches.add(currentBatch)
                 currentBatch = mutableListOf()
-                currentBatchCharLen = 0
                 currentBatchTokens = 0
             }
 
             currentBatch.add(group)
-            currentBatchCharLen += msgCharLen
             currentBatchTokens += msgTokens
         }
 
@@ -522,29 +578,12 @@ class NewsSummarizer(private val llm: LLMClient) {
         }
         return batches
     }
-    private fun deduplicateMessages(raw: List<Message>): List<GroupedMessage> {
-        val prepared = raw.map { PreparedMessage(it, TextSanitizer.sanitize(it.originalText)) }
-        val groups = mutableListOf<GroupedMessage>()
-
-        prepared.forEach { pMsg ->
-            val existingGroup = groups.find { group ->
-                val cleanGroup = TextSanitizer.sanitize(group.representative.originalText)
-                TextComparator.areSimilar(pMsg.cleanText, cleanGroup, DEDUP_THRESHOLD)
-            }
-            if (existingGroup != null) {
-                existingGroup.allIds.add(pMsg.msg.id)
-            } else {
-                groups.add(GroupedMessage(pMsg.msg, mutableListOf(pMsg.msg.id)))
-            }
-        }
-        return groups
-    }
 
     private fun deduplicateForSummaryPayload(messages: List<Message>): List<Message> {
         val unique = mutableListOf<Message>()
         messages.forEach { msg ->
-            val cleanMsg = TextSanitizer.sanitize(msg.originalText)
-            val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.originalText), cleanMsg, 0.95) }
+            val cleanMsg = TextSanitizer.sanitize(msg.cleanText)
+            val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.cleanText), cleanMsg, 0.95) }
             if (!exists) unique.add(msg)
         }
         return unique
@@ -560,10 +599,12 @@ class NewsSummarizer(private val llm: LLMClient) {
         val allExtracted = mutableListOf<Topics>()
         val batches = createBatches(uniqueGroups)
 
+        Log.d(TAG, "Extraction: Splitting into ${batches.size} sequential batches.")
         var criticalError: GeminiException? = null
 
         coroutineScope {
-            for (batch in batches) {
+            for ((index, batch) in batches.withIndex()) {
+                Log.d(TAG, "Extraction: Processing batch ${index + 1}/${batches.size} (Size: ${batch.size})")
                 try {
                     val batchLimit = (batch.size * 0.6).toInt().coerceAtLeast(3)
                     val result = adaptiveExtractTopics(batch, batchLimit, lang, 2, bannedNews)
@@ -578,11 +619,10 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                 } catch (e: GeminiException) {
                     criticalError = e
-                    if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED || e.errorType == SummarizationErrorType.NO_NETWORK || e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) {
-                        Log.w(
-                            TAG,
-                            "Critical stop during extraction: ${e.errorType}. Saving partial results."
-                        )
+                    Log.e(TAG, "Extraction error during batch ${index + 1}: ${e.errorType}")
+                    if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED ||
+                        e.errorType == SummarizationErrorType.NO_NETWORK ||
+                        e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) {
                         break
                     }
                 }
@@ -594,6 +634,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             throw GeminiException(SummarizationErrorType.EXTRACT_TOPICS_FAILED, "No topics found")
         }
 
+        Log.d(TAG, "Extraction complete. Total topics raw: ${allExtracted.size}")
 
         val finalTopicsCandidate: List<Topics> = if (filterEnabled) {
             try {
@@ -608,15 +649,14 @@ class NewsSummarizer(private val llm: LLMClient) {
                     simpleAlgorithmicMerge(smartMerged)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Smart merge failed (possibly due to quota), falling back to algo merge", e)
+                Log.w(TAG, "Smart merge failed, falling back to algorithmic merge", e)
                 simpleAlgorithmicMerge(allExtracted)
             }
         } else {
             simpleAlgorithmicMerge(allExtracted)
         }
 
-//        MewsRepository.delTitles()
-
+        Log.d(TAG, "Saving top $maxTopics topics to DB.")
         finalTopicsCandidate
             .sortedByDescending { it.weight }
             .take(maxTopics)
@@ -651,7 +691,6 @@ class NewsSummarizer(private val llm: LLMClient) {
                 }
 
                 if (isKeywordMatch) return@indexOfFirst true
-
                 TextComparator.areSimilar(existing.title, candidate.title, 0.8)
             }
 
@@ -686,7 +725,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             JSONObject().apply {
                 put("ix", index)
                 put("t", t.title)
-                put("kw", t.keywords.joinToString(", ")) // Передаем кейворды как контекст
+                put("kw", t.keywords.joinToString(", "))
                 put("w", t.weight)
             }
         }
@@ -694,11 +733,9 @@ class NewsSummarizer(private val llm: LLMClient) {
 
         val prompt = """
             Задача: Объедини дублирующиеся новости в кластеры.
-            
             Важно:
             1. Если группа новостей относится к запрещенным темам ('$banned') — НЕ включай её в итоговый список. Удали.
             2. Формируй заголовки в стиле Smart Casual.
-            
             Ввод: [{"ix": 0, "t": "...", "kw": "...", "w": 5}].
             Верни ТОЛЬКО JSON массив:
             [{"title": "Общий заголовок", "src": [0, 5], "weight": 9}]
@@ -731,7 +768,9 @@ class NewsSummarizer(private val llm: LLMClient) {
                     val w = obj.optInt("weight", 5)
                     mergedResults.add(Topics(obj.getString("title"), mergedIds.toList(), w, keywords = mergedKeywords.take(8).toList()))
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping corrupted topic item in smart merge", e)
+            }
         }
 
         if (mergedResults.isEmpty()) throw GeminiException(SummarizationErrorType.FILTER_FAILED)
@@ -744,28 +783,18 @@ class NewsSummarizer(private val llm: LLMClient) {
         try {
             rateLimiter.waitIfNeeded()
             val sanitizedBatch = batch.joinToString("\n") { grp ->
-                "• ${grp.representative.originalText.replace("\"", "'").replace("`", "").take(SINGLE_NEWS_CHAR_LIMIT)} (id - ${grp.representative.id})"
+                "• ${grp.representative.cleanText.replace("\"", "'").replace("`", "").take(SINGLE_NEWS_CHAR_LIMIT)} (id - ${grp.representative.id})"
             }
 
             val prompt = """
                 Проанализируй новости и выдели ОТДЕЛЬНЫЕ новостные события.
-                
-                ЛИМИТЫ (СТРОГО):
-                Максимальное количество тем: $maxLimit.
-                Если событий больше — выбери самые резонансные и значимые. Мелкие, локальные или малозначительные новости ИГНОРИРУЙ, не включай их в отчет.
-                
+                ЛИМИТЫ (СТРОГО): Максимальное количество тем: $maxLimit. Если событий больше — выбери самые резонансные и значимые. Мелкие, локальные или малозначительные новости ИГНОРИРУЙ.
                 Группируй новости по Сюжетным Линиям:
                 1. Цепочка событий (ОСТАВЛЯТЬ ВМЕСТЕ): Например, событие + реакция + последствия = ОДНА тема.
-                2. Дайджесты (РАЗДЕЛЯТЬ): Разные события, произошедшие в разных местах (например, разные ДТП) = РАЗНЫЕ темы.
-                
-                ФИЛЬТРАЦИЯ (СТРОГО):
-                Игнорируй: рекламу, розыгрыши призов, итоги конкурсов, спам, а также темы: '$banned'.
-                
-                ИНСТРУКЦИИ ЗАГОЛОВКОВ:
-                Пиши в стиле Smart Casual: живые, человеческие заголовки без канцелярита.
-                
-                Верни JSON массив: 
-                [{"title": "Заголовок", "id": [101, 105], "keywords": ["тег1", "тег2"], "weight": 8}].
+                2. Дайджесты (РАЗДЕЛЯТЬ): Разные события, произошедшие в разных местах = РАЗНЫЕ темы.
+                ФИЛЬТРАЦИЯ (СТРОГО): Игнорируй: рекламу, розыгрыши призов, итоги конкурсов, спам, а также темы: '$banned'.
+                ИНСТРУКЦИИ ЗАГОЛОВКОВ: Пиши в стиле Smart Casual: живые, человеческие заголовки без канцелярита.
+                Верни JSON массив: [{"title": "Заголовок", "id": [101, 105], "keywords": ["тег1", "тег2"], "weight": 8}].
                 weight - важность (1-10). keywords - 3-5 ключевых слов. Язык: $lang.
                 Новости: $sanitizedBatch
             """.trimIndent()
@@ -773,13 +802,11 @@ class NewsSummarizer(private val llm: LLMClient) {
             val response = try {
                 withTimeout(120000L) { llm.sendPrompt(prompt) }
             } catch (e: GeminiException) {
-                if (e.errorType == SummarizationErrorType.NO_NETWORK ||
-                    e.errorType == SummarizationErrorType.QUOTA_EXCEEDED ||
-                    e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) {
+                if (e.errorType == SummarizationErrorType.NO_NETWORK || e.errorType == SummarizationErrorType.QUOTA_EXCEEDED || e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) {
                     if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
                     throw e
                 }
-
+                Log.w(TAG, "Forcing batch split due to non-critical GeminiException", e)
                 throw RuntimeException("Trigger split", e)
             }
 
@@ -807,7 +834,6 @@ class NewsSummarizer(private val llm: LLMClient) {
                     val w = obj.optInt("weight", 5)
                     val title = obj.getString("title")
 
-                    // Парсим ключевые слова
                     val keywordsList = mutableListOf<String>()
                     val keywordsJson = obj.optJSONArray("keywords")
                     if (keywordsJson != null) {
@@ -817,12 +843,16 @@ class NewsSummarizer(private val llm: LLMClient) {
                     }
 
                     topics.add(Topics(title, fullIdList, w, keywords = keywordsList))
-                } catch (_: Exception) { continue }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Topic parsing error within extraction array", e)
+                    continue
+                }
             }
 
             if (isBroken && depth < 3) {
                 val victimGroups = batch.filter { !coveredIds.contains(it.representative.id) }
                 if (victimGroups.isNotEmpty() && victimGroups.size < batch.size) {
+                    Log.w(TAG, "Split triggered: Extracted JSON broken or incomplete, processing ${victimGroups.size} victims.")
                     val mid = victimGroups.size / 2
                     val left = adaptiveExtractTopics(victimGroups.subList(0, mid), maxLimit, lang, depth + 1, banned)
                     val right = adaptiveExtractTopics(victimGroups.subList(mid, victimGroups.size), maxLimit, lang, depth + 1, banned)
@@ -833,11 +863,13 @@ class NewsSummarizer(private val llm: LLMClient) {
 
         } catch (e: Exception) {
             if (batch.size > 2 && e !is GeminiException && depth < 3) {
+                Log.w(TAG, "Exception trapped in extraction. Force splitting batch. Depth: $depth", e)
                 val mid = batch.size / 2
                 val left = adaptiveExtractTopics(batch.subList(0, mid), maxLimit / 2, lang, depth + 1, banned)
                 val right = adaptiveExtractTopics(batch.subList(mid, batch.size), maxLimit / 2, lang, depth + 1, banned)
                 return left + right
             }
+            Log.e(TAG, "Batch unrecoverable at depth $depth", e)
             return emptyList()
         }
     }
@@ -863,10 +895,10 @@ class NewsSummarizer(private val llm: LLMClient) {
                 if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
                 if (e.errorType == SummarizationErrorType.CONTENT_BLOCKED) {
                     if (batch.size <= 1) {
-                        try {
-                            MewsRepository.deleteTitleById(batch.first().first.id) } catch (_: Exception) {}
+                        try { MewsRepository.deleteTitleById(batch.first().first.id) } catch (e: Exception) { Log.e(TAG, "Delete block failed", e) }
                         return emptyList()
                     }
+                    Log.w(TAG, "Content blocked. Splitting summary batch.", e)
                     throw RuntimeException("Trigger split", e)
                 }
                 throw e
@@ -884,15 +916,18 @@ class NewsSummarizer(private val llm: LLMClient) {
                     val newTitle = obj.optString("title").takeIf { it.isNotBlank() } ?: ""
 
                     val original = batch.find { it.first.ids?.contains(id) == true }
-                    if (original != null) { // summary может быть пустым (спам), но id обработан
+                    if (original != null) {
                         results.add(Triple(id, Pair(summary, newTitle.ifBlank { original.first.title }), original))
                         processedIds.add(id)
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error mapping summary JSON result back to original data", e)
+                }
             }
 
             val victims = batch.filter { item -> !processedIds.contains(item.first.ids?.firstOrNull() ?: 0L) }
             if (victims.isNotEmpty() && victims.size < batch.size && depth < 3) {
+                Log.w(TAG, "Missing topics in summary response. Splitting victims. Depth: $depth")
                 val mid = victims.size / 2
                 results.addAll(adaptiveSummarizeBatch(victims.subList(0, mid), bannedWords, lang, depth + 1))
                 results.addAll(adaptiveSummarizeBatch(victims.subList(mid, victims.size), bannedWords, lang, depth + 1))
@@ -901,10 +936,12 @@ class NewsSummarizer(private val llm: LLMClient) {
         } catch (e: Exception) {
             if (e is GeminiException && (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED || e.errorType == SummarizationErrorType.API_KEY_INVALID)) throw e
             if (batch.size > 1 && depth < 3) {
+                Log.w(TAG, "Unknown exception in summary. Splitting batch. Depth: $depth", e)
                 val mid = batch.size / 2
                 return adaptiveSummarizeBatch(batch.subList(0, mid), bannedWords, lang, depth + 1) +
                         adaptiveSummarizeBatch(batch.subList(mid, batch.size), bannedWords, lang, depth + 1)
             }
+            Log.e(TAG, "Summary batch failed completely at depth $depth", e)
             return emptyList()
         }
     }
@@ -920,30 +957,17 @@ class NewsSummarizer(private val llm: LLMClient) {
 
         val prompt = """
         Ты — ведущий обозреватель. Твоя цель — написать глубокий материал, адаптируя объем под значимость события.
-        
         Инструкции:
         1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык. Избегай канцеляризмов.
-        
         2. АДАПТИВНЫЙ ОБЪЕМ:
-           — Крупные события (скандалы, релизы, политика): пиши ПОДРОБНЫЙ обзор (ориентир 400-500 слов). Обязательно: контекст, история, цитаты, последствия.
-           — Рядовые новости: пиши ёмко, но детально (до 200-300 слов). Не лей воду, давай факты.
-        
+           — Крупные события: пиши ПОДРОБНЫЙ обзор. Обязательно: контекст, история, цитаты, последствия (до 500 слов).
+           — Рядовые новости: пиши ёмко, но детально. Не лей воду, давай факты (до 300 слов).
         3. УМНАЯ ФИЛЬТРАЦИЯ (Список нежелательных тем: '$banned'):
-           — Твоя задача — извлечь пользу. Если запрещенная тема упоминается вскользь — просто ИГНОРИРУЙ её и пиши об основном событии.
-           — Если же ВЕСЬ текст состоит из рекламы или условий розыгрыша — верни пустую строку (summary: "").
-           — Если новость ЦЕЛИКОМ посвящена теме из списка нежелательных (и писать больше не о чем) — верни пустую строку (summary: "").
-        
+           — Извлечь пользу. Если запрещенная тема упоминается вскользь — ИГНОРИРУЙ её.
+           — Если весь текст состоит из рекламы, спама или новость посвящена теме из списка — верни пустую строку (summary: "").
         4. Язык: ${lang}.
-        
         ФОРМАТ ОТВЕТА (СТРОГО JSON):
-        [
-          {
-            "id": <id из input>,
-            "title": "<цепляющий заголовок>",
-            "summary": "<текст статьи или пустая строка \"\">"
-          }
-        ]
-        
+        [{"id": <id из input>, "title": "<цепляющий заголовок>", "summary": "<текст статьи или пустая строка "">"}]
         Ввод: $jsonInput
         """.trimIndent()
 

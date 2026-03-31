@@ -30,6 +30,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.rds.mews.R
 import com.rds.mews.settings_manager.SummarizationErrorType
+import com.rds.mews.workers.ParserWorker
 import com.rds.mews.workers.RssUpdateWorker
 import com.rds.mews.workers.TitlesUpdateService
 import com.rds.mews.workers.TitlesUpdateWorker
@@ -85,15 +86,15 @@ fun intTimeToStr(time: Int): String {
 
 fun defineSourceType(link: String): SourceType {
     return when {
-        link.contains("t.me") -> SourceType.TELEGRAM_CHANNEL
-        else -> SourceType.RSS_FEED
+        link.contains("@") || link.contains("t.me") || link.contains("telegram.me") -> SourceType.TELEGRAM
+        else -> SourceType.RSS
     }
 }
 
 fun sourcesTypeInterpreter(sourceType: SourceType): Int {
     return when (sourceType) {
-        SourceType.RSS_FEED -> R.string.source_type_rss
-        SourceType.TELEGRAM_CHANNEL -> R.string.source_type_telegram
+        SourceType.RSS -> R.string.source_type_rss
+        SourceType.TELEGRAM -> R.string.source_type_telegram
     }
 }
 
@@ -139,6 +140,30 @@ fun setRssUpdate(context: Context, sources: Boolean = false, intervalMin: Int = 
         ExistingPeriodicWorkPolicy.REPLACE,
         workRequest
     )
+}
+
+fun setParserUpdate(context: Context, isImmediateSetup: Boolean = false, intervalMin: Int = 30) {
+    val constraints = Constraints.Builder()
+        .setRequiredNetworkType(NetworkType.CONNECTED)
+        .build()
+
+    val periodicWorkRequestBuilder = PeriodicWorkRequestBuilder<ParserWorker>(
+        intervalMin.toLong(), TimeUnit.MINUTES
+    ).setConstraints(constraints)
+
+    if (isImmediateSetup) {
+        periodicWorkRequestBuilder.setInitialDelay(10, TimeUnit.SECONDS)
+    }
+
+    val workRequest = periodicWorkRequestBuilder.build()
+
+    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        "parser-update-work",
+        ExistingPeriodicWorkPolicy.REPLACE,
+        workRequest
+    )
+
+    WorkManager.getInstance(context).cancelUniqueWork("rss-update-work")
 }
 
 fun setTitlesUpdate(context: Context) {

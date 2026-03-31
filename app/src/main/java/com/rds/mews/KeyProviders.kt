@@ -24,6 +24,16 @@ class RssHubApiKeyProvider: ApiKeyProvider {
     override fun getKey(): String = getRssHubKey()
 }
 
+class MinifluxApiKeyProvider: ApiKeyProvider {
+    companion object {
+        init { System.loadLibrary("mews-lib") }
+    }
+
+    private external fun getDecodedMinifluxKey(): String
+
+    override fun getKey(): String = getDecodedMinifluxKey()
+}
+
 class ProxyAddressProvider: ApiKeyProvider {
     companion object {
         init { System.loadLibrary("mews-lib") }
@@ -42,4 +52,14 @@ class RSSHubAddressProvider: ApiKeyProvider {
     private external fun getHubAddress(): String
 
     override fun getKey(): String = getHubAddress()
+}
+
+class MinifluxAddressProvider: ApiKeyProvider {
+    companion object {
+        init { System.loadLibrary("mews-lib") }
+    }
+
+    private external fun getMinifluxAddress(): String
+
+    override fun getKey(): String = getMinifluxAddress()
 }

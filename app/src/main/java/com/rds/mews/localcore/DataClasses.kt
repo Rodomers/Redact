@@ -13,7 +13,15 @@ data class Message(
     var originalText: String,
     var cleanText: String
 )
-data class RSS(var id: Long, var source: String, var link: String)
+data class RSS(
+    var id: Long,
+    var currentName: String?,
+    var originalName: String,
+    var feedUrl: String,
+    var websiteUrl: String,
+    val sourceType: SourceType,
+    val errCount: Int
+)
 data class Title(
     var id: Long,
     var title: String,
@@ -34,11 +42,6 @@ data class TitleCardStates(
     var sources: List<SourceMessages>? = null,
     val read: Boolean = false
 )
-
-enum class SourceType {
-    RSS_FEED,
-    TELEGRAM_CHANNEL
-}
 
 enum class ArrowPosition {
     TopLeft, TopCenter, TopRight,

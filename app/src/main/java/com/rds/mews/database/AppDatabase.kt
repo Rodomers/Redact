@@ -4,7 +4,9 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
+import androidx.room.withTransaction
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.rds.mews.localcore.defineSourceType
 
 @Database(
     entities = [
@@ -14,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TitleMessageMap::class,
         TitleRelatedMap::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -23,6 +25,45 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun sourceDao(): SourceDao
     abstract fun messageDao(): MessageDao
     abstract fun titleDao(): TitleDao
+
+    suspend fun insertBatchAndUpdateSourceTime(messages: List<MessageEntity>, sourceId: Long, syncTime: Long) {
+        withTransaction {
+            val msgDao = messageDao()
+            val rowIds = msgDao.insertAll(messages)
+
+            val conflictingLinks = mutableListOf<String>()
+            val conflictMap = mutableMapOf<String, MessageEntity>()
+
+            for (i in rowIds.indices) {
+                if (rowIds[i] == -1L) {
+                    val msg = messages[i]
+                    conflictingLinks.add(msg.link)
+                    conflictMap[msg.link] = msg
+                }
+            }
+
+            if (conflictingLinks.isNotEmpty()) {
+                val existingMessages = msgDao.getMessagesByLinks(conflictingLinks)
+                val toUpdate = mutableListOf<MessageEntity>()
+
+                for (existing in existingMessages) {
+                    val newMsg = conflictMap[existing.link]
+                    if (newMsg != null && existing.originalText != newMsg.originalText) {
+                        toUpdate.add(existing.copy(
+                            originalText = newMsg.originalText,
+                            cleanText = newMsg.cleanText
+                        ))
+                    }
+                }
+
+                if (toUpdate.isNotEmpty()) {
+                    msgDao.updateAll(toUpdate)
+                }
+            }
+
+            sourceDao().updateLastSyncTime(sourceId, syncTime)
+        }
+    }
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -106,6 +147,32 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `title_related_map` (`title_id_1` INTEGER NOT NULL, `title_id_2` INTEGER NOT NULL, PRIMARY KEY(`title_id_1`, `title_id_2`), FOREIGN KEY(`title_id_1`) REFERENCES `titles`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE, FOREIGN KEY(`title_id_2`) REFERENCES `titles`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_title_related_map_title_id_1` ON `title_related_map` (`title_id_1`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_title_related_map_title_id_2` ON `title_related_map` (`title_id_2`)")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sources` ADD COLUMN `etag_hash` TEXT")
+
+                db.query("SELECT id, feed_url FROM `sources`").use { cursor ->
+                    val idIndex = cursor.getColumnIndex("id")
+                    val urlIndex = cursor.getColumnIndex("feed_url")
+
+                    if (idIndex != -1 && urlIndex != -1) {
+                        val updateStmt = db.compileStatement("UPDATE `sources` SET `source_type` = ? WHERE `id` = ?")
+
+                        while (cursor.moveToNext()) {
+                            val id = cursor.getLong(idIndex)
+                            val url = cursor.getString(urlIndex) ?: ""
+
+                            val sourceType = defineSourceType(url).id.toLong()
+
+                            updateStmt.bindLong(1, sourceType)
+                            updateStmt.bindLong(2, id)
+                            updateStmt.executeUpdateDelete()
+                        }
+                    }
+                }
             }
         }
     }

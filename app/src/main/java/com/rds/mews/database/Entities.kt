@@ -21,20 +21,19 @@ class Converters {
 
 @Entity(
     tableName = "sources",
-    indices = [
-        Index(value = ["feed_url"], unique = true)
-    ]
+    indices = [Index(value = ["feed_url"], unique = true)]
 )
 data class SourceEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "original_name") val originalName: String,
-    @ColumnInfo(name = "custom_name") val customName: String?,
+    @ColumnInfo(name = "custom_name") val customName: String? = null,
     @ColumnInfo(name = "website_url") val websiteUrl: String,
     @ColumnInfo(name = "feed_url") val feedUrl: String,
     @ColumnInfo(name = "source_type") val sourceType: Int,
     @ColumnInfo(name = "last_sync_time") val lastSyncTime: Long,
     @ColumnInfo(name = "err_count") val errCount: Int,
-    @ColumnInfo(name = "last_err_msg") val lastErrMsg: String?
+    @ColumnInfo(name = "last_err_msg") val lastErrMsg: String? = null,
+    @ColumnInfo(name = "etag_hash") val etagHash: String? = null
 )
 
 @Entity(

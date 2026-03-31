@@ -7,9 +7,9 @@
     <string name="tabscreen_settings">Настройки</string>
 
     <string name="source_type_telegram">Telegram</string>
-    <string name="source_type_rss">RSS-ленты</string>
+    <string name="source_type_rss">Сайты и RSS-ленты</string>
     <string name="source_unknown_type">Источник неизвестен</string>
-    <string name="source_change">Изменить</string>
+    <string name="source_change">Подробнее</string>
     <string name="source_delete">Удалить</string>
     <string name="delsource_title">Удаление источника</string>
     <string name="delsource_text">Вы уверены, что хотите удалить источник \"%s\"?</string>
@@ -114,8 +114,8 @@
     <string name="titles_card_banned">Заголовок новости заблокирован. Он больше не появится в списке.</string>
     <string name="change_dialog_source">Название источника</string>
     <string name="change_dialog_add_source">Добавление источника</string>
-    <string name="change_dialog_change_source">Изменение источника</string>
-    <string name="change_dialog_link">Ссылка на RSS/Telegram</string>
+    <string name="change_dialog_change_source">Об источнике</string>
+    <string name="change_dialog_link">Ссылка на сайт или Telegram</string>
     <string name="valid_link">Валидная ссылка</string>
     <string name="enter_correct_link">Введите корректную ссылку</string>
     <string name="cancel">Отмена</string>
@@ -125,6 +125,7 @@
     <string name="share_btn_desc">Поделиться</string>
     <string name="ban_btn_desc">Заблокировать</string>
     <string name="mark_as_unread_btn_desc">Не прочитано</string>
+    <string name="source_reset_errors">Сброс ошибок</string>
 
     <string name="update">Обновить</string>
     <string name="updating">Обновление…</string>

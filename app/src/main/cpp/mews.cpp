@@ -3,7 +3,7 @@
 #include <vector>
 
 std::string getDecodedApiKey() {
-    std::vector<char> obfuscatedKey = {0};
+    std::vector<char> obfuscatedKey = {};
 
     char xorKey = '@';
 
@@ -16,6 +16,19 @@ std::string getDecodedApiKey() {
 }
 
 std::string getDecodedServerKey() {
+    std::vector<char> obfuscatedKey = {};
+
+    char xorKey = '@';
+
+    std::string key;
+    key.reserve(obfuscatedKey.size());
+    for (char c : obfuscatedKey) {
+        key += c ^ xorKey;
+    }
+    return key;
+}
+
+std::string getDecodedMinifluxKey() {
     std::vector<char> obfuscatedKey = {};
 
     char xorKey = '@';
@@ -41,6 +54,14 @@ Java_com_rds_mews_RssHubApiKeyProvider_getRssHubKey (
         JNIEnv* env,
         jobject /* this */) {
     std::string apiKey = getDecodedServerKey();
+    return env->NewStringUTF(apiKey.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_rds_mews_MinifluxApiKeyProvider_getDecodedMinifluxKey (
+        JNIEnv* env,
+        jobject /* this */) {
+    std::string apiKey = getDecodedMinifluxKey();
     return env->NewStringUTF(apiKey.c_str());
 }
 
@@ -70,6 +91,19 @@ std::string getDecodedHubAddress() {
     return address;
 }
 
+std::string getDecodedMinifluxAddress() {
+    std::vector<char> obfuscatedKey = {};
+
+    char xorKey = '@';
+
+    std::string address;
+    address.reserve(obfuscatedKey.size());
+    for (char c : obfuscatedKey) {
+        address += c ^ xorKey;
+    }
+    return address;
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_rds_mews_ProxyAddressProvider_getProxyAddress (
         JNIEnv* env,
@@ -83,5 +117,13 @@ Java_com_rds_mews_RSSHubAddressProvider_getHubAddress (
         JNIEnv* env,
         jobject /* this */) {
     std::string apiKey = getDecodedHubAddress();
+    return env->NewStringUTF(apiKey.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_rds_mews_MinifluxAddressProvider_getMinifluxAddress (
+        JNIEnv* env,
+        jobject /* this */) {
+    std::string apiKey = getDecodedMinifluxAddress();
     return env->NewStringUTF(apiKey.c_str());
 }

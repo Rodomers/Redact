@@ -44,13 +44,15 @@ import com.rds.mews.ui.theme.Shapes
 @Composable
 fun SourcesCard(
     source: String,
-    buttons: List<TextButtonInputs>
+    buttons: List<TextButtonInputs>,
+    error: Boolean = false
 ) {
     val transitionState = remember { MutableTransitionState(false) }
     val toggleDropdown = { transitionState.targetState = !transitionState.currentState }
     var bounds by remember { mutableStateOf<IntRect?>(null) }
 
-    val primaryColor = MaterialTheme.colorScheme.secondaryContainer
+    val primaryColor =
+        if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
 
     Surface(
         modifier = Modifier

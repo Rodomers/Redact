@@ -1,17 +1,10 @@
 package com.rds.mews.core
 
-import org.jsoup.nodes.Document
 import java.net.URL
 import java.net.HttpURLConnection
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
-import org.jsoup.Jsoup
-import org.jsoup.parser.Parser
-import kotlin.text.trim
-
+import java.util.UUID
 
 class TelegramRssClient {
-
 
     data class RssItem(
         val title: String,
@@ -23,7 +16,6 @@ class TelegramRssClient {
     private fun fetchChannelMessages(channelUrl: String): List<RssItem> {
         val html = downloadHtml(channelUrl)
 
-        // 1. Разбиваем на блоки сообщений
         val messageBlockRegex = Regex(
             """<div class="tgme_widget_message_wrap.*?</div>\s*</div>""",
             setOf(RegexOption.DOT_MATCHES_ALL)
@@ -35,7 +27,6 @@ class TelegramRssClient {
         for (block in blocks) {
             val blockHtml = block.value
 
-            // link (из data-post) + запасной вариант из ссылки даты
             val dataPost = Regex("""data-post="([^"]+)"""")
                 .find(blockHtml)
                 ?.groupValues?.get(1)
@@ -44,7 +35,6 @@ class TelegramRssClient {
             val messageUrl = when {
                 dataPost.isNotEmpty() -> "https://t.me/$dataPost"
                 else -> {
-                    // запасной вариант: href у .tgme_widget_message_date
                     val href = Regex("""<a\s+class="tgme_widget_message_date"[^>]*href="([^"]+)"""",
                         setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
                     ).find(blockHtml)?.groupValues?.get(1).orEmpty()
@@ -57,13 +47,10 @@ class TelegramRssClient {
                 }
             }
 
-                // datetime (универсально по любому <time ... datetime="...">)
             val datetime = Regex("""<time[^>]*\sdatetime="([^"]+)"""",
                 setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
             ).find(blockHtml)?.groupValues?.get(1).orEmpty()
 
-
-            // 4. Вытаскиваем текст (игнорируем фото/видео)
             val textRaw = Regex(
                 """<div class="tgme_widget_message_text[^"]*?"[^>]*>(.*?)</div>""",
                 RegexOption.DOT_MATCHES_ALL
@@ -75,12 +62,10 @@ class TelegramRssClient {
                 ?: ""
 
             val text = stripHtml(textRaw).trim()
+            val title = if (text.length > 30) text.substring(0, text.length / 3) + "..." else text
 
-            val title = text.substring(0, text.length / 3) + "..."
-            // val date = formatDate(datetime)
             if (text.isNotEmpty()) {
                 messages.add(RssItem(title, messageUrl, datetime, text))
-//                println("[$title\n$messageUrl\n$datetime\n$text]")
             }
         }
 
@@ -106,60 +91,18 @@ class TelegramRssClient {
             .replace("&#036;", "$")
     }
 
-    private fun formatDate(isoDate: String): String {
-        val zdt = ZonedDateTime.parse(isoDate, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-        return DateTimeFormatter.RFC_1123_DATE_TIME.format(zdt)
-    }
-
-    fun buildRss(channelUrl: String): Document {
+    fun buildRss(channelUrl: String, feedId: Long): List<MinifluxEntry> {
         val items = fetchChannelMessages(channelUrl)
-        val text = Jsoup.parse(downloadHtml(channelUrl)).selectFirst("title")!!.text().replace(" – Telegram", "").replace(" – Telegram", "")
 
-        val sb = StringBuilder()
-        sb.append("""<?xml version="1.0" encoding="UTF-8"?>""")
-        sb.append("\n<rss version=\"2.0\">\n<channel>\n")
-        sb.append("<title>${text}</title>\n")
-        sb.append("<link>$channelUrl</link>\n")
-        sb.append("<description>RSS feed for $channelUrl</description>\n")
-
-        for (item in items) {
-            sb.append("<item>\n")
-            sb.append("<title><![CDATA[${item.title}]]></title>\n")
-            sb.append("<link>${item.link}</link>\n")
-            sb.append("<pubDate>${item.pubDate}</pubDate>\n")
-            sb.append("<description><![CDATA[${item.description}]]></description>\n")
-            sb.append("</item>\n")
+        return items.map { item ->
+            MinifluxEntry(
+                id = UUID.nameUUIDFromBytes(item.link.toByteArray()).mostSignificantBits,
+                feed_id = feedId,
+                title = item.title,
+                url = item.link,
+                content = item.description,
+                published_at = item.pubDate
+            )
         }
-
-        sb.append("</channel>\n</rss>")
-
-        return Jsoup.parse(sb.toString(), "", Parser.xmlParser())
     }
-
-}
-
-
-private fun downloadHtml(url: String): String {
-    val connection = URL(url).openConnection() as HttpURLConnection
-    connection.requestMethod = "GET"
-    connection.connectTimeout = 10000
-    connection.readTimeout = 10000
-
-    return connection.inputStream.bufferedReader().use { it.readText() }
-}
-
-
-fun buildRssForTitle(channelUrl: String): Document {
-    val text = Jsoup.parse(downloadHtml(channelUrl)).selectFirst("title")!!.text().replace(" – Telegram", "").replace(" – Telegram", "")
-
-    val sb = StringBuilder()
-    sb.append("""<?xml version="1.0" encoding="UTF-8"?>""")
-    sb.append("\n<rss version=\"2.0\">\n<channel>\n")
-    sb.append("<title>${text}</title>\n")
-    sb.append("<link>$channelUrl</link>\n")
-    sb.append("<description>RSS feed for $channelUrl</description>\n")
-
-    sb.append("</channel>\n</rss>")
-
-    return Jsoup.parse(sb.toString(), "", Parser.xmlParser())
 }
