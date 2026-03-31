@@ -1,7 +1,7 @@
 <resources>
     <string name="app_version" translatable="false">1.0.0 Beta 2</string>
     <string name="current_language">English</string>
-    <string name="app_name" translatable="false">Mews</string>
+    <string name="app_name" translatable="false">Redact</string>
 
     <string name="title_activity_main" translatable="false">MainActivity</string>
     <string name="tabscreen_sources">Sources</string>
