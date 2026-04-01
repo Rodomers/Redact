@@ -230,14 +230,14 @@ object MewsRepository {
             .map { entities ->
                 entities.map {
                     RSS(
-                    it.id, it.customName ?: it.originalName, it.originalName,
-                    feedUrl = it.feedUrl,
-                    websiteUrl = if (!it.websiteUrl.startsWith("http://") && !it.websiteUrl.startsWith("https://"))
-                        "https://${it.websiteUrl}"
-                    else it.websiteUrl,
+                        it.id, it.customName ?: it.originalName, it.originalName,
+                        feedUrl = it.feedUrl,
+                        websiteUrl = if (!it.websiteUrl.startsWith("http://") && !it.websiteUrl.startsWith("https://"))
+                            "https://${it.websiteUrl}"
+                        else it.websiteUrl,
                         sourceType = SourceType.fromId(it.sourceType),
                         errCount = it.errCount
-                ) }
+                    ) }
             }
             .flowOn(Dispatchers.IO)
 
@@ -477,7 +477,8 @@ object MewsRepository {
         newTimeVal: Long,
         newTitle: String,
         summary: String,
-        status: Int = 0
+        status: Int = 0,
+        parentId: Long? = null
     ) = withContext(Dispatchers.IO) {
         val existing = titleDao.getTitleById(id) ?: return@withContext
         val updatedEntity = existing.copy(
@@ -488,6 +489,14 @@ object MewsRepository {
             status = status
         )
         titleDao.update(updatedEntity)
+
+        if (parentId != null) {
+            try {
+                titleDao.insertRelatedMapSafe(id, parentId)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to insert title relation", e)
+            }
+        }
     }
 
     suspend fun getTitlesWithStatus(processingStatusId: Int): List<NewsSummarizer.Topics> = withContext(Dispatchers.IO) {
@@ -501,6 +510,10 @@ object MewsRepository {
                 id = entity.id
             )
         }
+    }
+
+    suspend fun getRecentTitlesForStorylines(sinceMs: Long): List<TitleEntity> = withContext(Dispatchers.IO) {
+        titleDao.getAllTitlesFlow().first().filter { it.eventTime >= sinceMs && it.status != TitleStatus.PROCESSING.statusId }
     }
 
     suspend fun getTitlesCount(): Int = withContext(Dispatchers.IO) {

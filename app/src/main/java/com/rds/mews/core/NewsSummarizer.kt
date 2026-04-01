@@ -22,7 +22,6 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.io.Closeable
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.pow
 
 class SmartRateLimiter(private val minIntervalMs: Long = 4500L) {
@@ -71,16 +70,12 @@ class LLMClient(
         if (currentIndex > 0) {
             currentModelApiName = models[currentIndex - 1].apiModelName
             currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
-            Log.w(TAG, "Model fallback triggered. Switched to: $currentModelApiName")
             return true
         } else if (currentIndex == -1) {
             currentModelApiName = models.first().apiModelName
             currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
-            Log.w(TAG, "Unknown model fallback triggered. Switched to baseline: $currentModelApiName")
             return true
         }
-
-        Log.e(TAG, "Fallback chain exhausted. No available models left.")
         return false
     }
 
@@ -91,8 +86,7 @@ class LLMClient(
         )
         val requestBodyString = try {
             jsonParser.encodeToString(requestBodyObj)
-        } catch (e: Exception) {
-            Log.e(TAG, "Request serialization failed", e)
+        } catch (_: Exception) {
             throw GeminiException(SummarizationErrorType.JSON_PARSING_FAILED, "Request serialization failed")
         }
 
@@ -111,7 +105,6 @@ class LLMClient(
                 val responseStatus = response.status
 
                 if (responseStatus != 200) {
-                    Log.w(TAG, "HTTP $responseStatus on attempt $attempt. Body: $responseString")
                     when (responseStatus) {
                         429 -> {
                             handle429Error(responseString, attempt)
@@ -128,14 +121,12 @@ class LLMClient(
 
                 val geminiResponse = try {
                     jsonParser.decodeFromString<GeminiResponse>(responseString)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Response parsing failed. Body: $responseString", e)
+                } catch (_: Exception) {
                     throw GeminiException(SummarizationErrorType.JSON_PARSING_FAILED, "Response parsing failed")
                 }
 
                 if (geminiResponse.error != null) {
                     val msg = geminiResponse.error.message ?: ""
-                    Log.w(TAG, "Gemini API returned error object: $msg")
 
                     if (msg.contains("Requests per day", true) || msg.contains("RequestsPerDay", true) || msg.contains("FreeTier", true)) {
                         throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, msg)
@@ -159,7 +150,6 @@ class LLMClient(
 
                 if (geminiResponse.promptFeedback?.blockReason != null) {
                     val reason = geminiResponse.promptFeedback.blockReason
-                    Log.w(TAG, "Content blocked by API. Reason: $reason")
                     throw GeminiException(SummarizationErrorType.CONTENT_BLOCKED, reason)
                 }
 
@@ -168,32 +158,27 @@ class LLMClient(
                     ?.joinToString("\n") { it.text }
 
                 if (resultText.isNullOrBlank()) {
-                    Log.w(TAG, "Received empty answer from API")
                     throw GeminiException(SummarizationErrorType.EMPTY_ANSWER)
                 }
                 return resultText
 
             } catch (e: GeminiException) {
                 if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) {
-                    Log.w(TAG, "Quota exceeded for $currentModelApiName. Attempting fallback.")
                     if (switchToFallbackModel()) {
                         attempt = 0
                         continue
                     }
                 }
                 throw e
-            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                Log.w(TAG, "Network timeout on attempt $attempt", e)
+            } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
                 throw GeminiException(SummarizationErrorType.NETWORK_TIMEOUT)
             } catch (e: Exception) {
                 lastException = e
-                Log.w(TAG, "Unknown network error on attempt $attempt", e)
                 attempt++
                 if (attempt <= MAX_RETRIES) delay(1000L)
             }
         }
         val errorMsg = lastException?.message ?: "Unknown error"
-        Log.e(TAG, "Exhausted all retries. Last error: $errorMsg")
         throw GeminiException(SummarizationErrorType.NO_NETWORK, errorMsg)
     }
 
@@ -201,25 +186,21 @@ class LLMClient(
         if (responseString.contains("Requests per day", ignoreCase = true) ||
             responseString.contains("RequestsPerDay", ignoreCase = true) ||
             responseString.contains("FreeTier", ignoreCase = true)) {
-            Log.e(TAG, "Daily quota limit reached.")
             throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, "Daily quota exceeded")
         }
 
         val waitTime = extractRetryTime(responseString)
 
         if (waitTime > 0) {
-            Log.d(TAG, "Explicit wait time found: ${waitTime}ms")
             delay(waitTime + 1000L)
         } else {
             val baseDelay = 15000L
             val exponentialMultiplier = 2.0.pow(attempt.toDouble()).toLong()
             val calcDelay = baseDelay * exponentialMultiplier
-            Log.d(TAG, "No explicit wait time. Dynamic backoff: ${calcDelay}ms (Attempt $attempt)")
             delay(calcDelay)
         }
 
         if (attempt > MAX_RETRIES + 1) {
-            Log.e(TAG, "Rate limit loop exhausted. Assuming daily quota exceeded.")
             throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, "Daily quota limit reached (empirical timeout)")
         }
     }
@@ -252,8 +233,7 @@ class LLMClient(
                 try {
                     val json = JSONArray(candidate)
                     return Pair(json, candidate.length != str.length)
-                } catch (e: JSONException) {
-                    Log.w(TAG, "Partial JSON array parsing failed for candidate", e)
+                } catch (_: JSONException) {
                 }
             }
 
@@ -343,7 +323,9 @@ class NewsSummarizer(private val llm: LLMClient) {
     private var baseProgress = 0f
 
     private fun safeReadyFunc(func: () -> Unit) {
-        try { func() } catch (e: Exception) { Log.e(TAG, "readyFunc execution failed", e) }
+        try { func() } catch (e: Exception) {
+            Log.e(TAG, "readyFunc execution failed", e)
+        }
     }
 
     suspend fun summarizeTopics(
@@ -353,14 +335,12 @@ class NewsSummarizer(private val llm: LLMClient) {
         filterTopics: Boolean = true
     ): SummarizationResult {
         try {
-            Log.d(TAG, "Starting summarizeTopics. Filter enabled: $filterTopics")
             val isRetryMode = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId).isNotEmpty()
             val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
 
             val rawMessages = if (!isRetryMode) {
                 val msgs = MewsRepository.getUniqueMessagesList(messageSeconds)
                 if (msgs.isEmpty()) {
-                    Log.d(TAG, "No news to analyze.")
                     safeReadyFunc(readyFunc)
                     return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE)
                 }
@@ -376,20 +356,47 @@ class NewsSummarizer(private val llm: LLMClient) {
             if (!isRetryMode) {
                 try {
                     val extractionTime = System.currentTimeMillis()
-                    val groupedMessages = rawMessages.map { GroupedMessage(it, mutableListOf(it.id)) }
-                    Log.d(TAG, "Groups prepared for extraction: ${groupedMessages.size}")
+                    val sortedMessages = rawMessages.sortedBy { it.time }
+                    val startTime = sortedMessages.firstOrNull()?.time ?: 0L
+                    val TWELVE_HOURS_MS = 12 * 60 * 60 * 1000L
+                    val MIN_NEWS_PER_CHUNK = 20
 
-                    processNewsInBatches(maxTopics, groupedMessages, currentLanguage, filterTopics, bannedWords)
+                    val buffer = mutableListOf<Message>()
+                    var currentWindowEnd = startTime + TWELVE_HOURS_MS
+                    val globalApprovedTopics = mutableListOf<Topics>()
+
+                    totalItemsToProcess = rawMessages.size
+                    processedItemsCount = 0
+                    val availableSpace = 0.4f
+
+                    MewsRepository.setUpdatingState("extracting_topics")
+
+                    for (msg in sortedMessages) {
+                        while (msg.time > currentWindowEnd) {
+                            if (buffer.size >= MIN_NEWS_PER_CHUNK) {
+                                processNewsBuffer(buffer, currentLanguage, filterTopics, bannedWords, globalApprovedTopics, availableSpace)
+                                buffer.clear()
+                            }
+                            currentWindowEnd += TWELVE_HOURS_MS
+                        }
+                        buffer.add(msg)
+                    }
+
+                    if (buffer.isNotEmpty()) {
+                        processNewsBuffer(buffer, currentLanguage, filterTopics, bannedWords, globalApprovedTopics, availableSpace)
+                        buffer.clear()
+                    }
+
+                    val finalTopics = globalApprovedTopics.sortedByDescending { it.weight }.take(maxTopics)
+                    finalTopics.forEach { saveTopicToDb(it) }
 
                     MewsRepository.setLastTitlesUpdate(extractionTime)
                     baseProgress = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress }
                 } catch (e: GeminiException) {
-                    Log.e(TAG, "Extraction failed due to Gemini API", e)
                     safeReadyFunc(readyFunc)
                     return SummarizationResult.Failure(e.errorType, e)
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.e(TAG, "Extraction failed due to internal error", e)
                     safeReadyFunc(readyFunc)
                     return SummarizationResult.Failure(SummarizationErrorType.EXTRACT_TOPICS_FAILED, e)
                 }
@@ -397,7 +404,6 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             val titlesToSummarize = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId)
             if (titlesToSummarize.isEmpty()) {
-                Log.d(TAG, "No processing titles found, operation completed.")
                 safeReadyFunc(readyFunc)
                 return SummarizationResult.Success
             }
@@ -409,11 +415,8 @@ class NewsSummarizer(private val llm: LLMClient) {
             var successCount = 0
             var lastError: SummarizationErrorType? = null
 
-            Log.d(TAG, "Summarizing specific titles. Total: $totalItemsToProcess, Batches: ${batches.size}")
-
             coroutineScope {
                 batches.forEachIndexed { index, batch ->
-                    Log.d(TAG, "Processing title batch ${index + 1}/${batches.size}")
                     MewsRepository.setUpdatingState("summarizing_topics")
 
                     val topicsData = batch.mapNotNull { topic ->
@@ -430,7 +433,6 @@ class NewsSummarizer(private val llm: LLMClient) {
                         val suitableMessages = cachedMessages + fetchedMessages
 
                         if (suitableMessages.isEmpty()) {
-                            Log.w(TAG, "Title ID ${topic.id} has no suitable messages, deleting.")
                             MewsRepository.deleteTitleById(topic.id)
                             null
                         } else {
@@ -450,29 +452,62 @@ class NewsSummarizer(private val llm: LLMClient) {
                                         val (topic, suitableMessages, _) = originalData
 
                                         if (summary.isBlank()) {
-                                            Log.d(TAG, "Topic ID ${topic.id} returned empty summary, deleting.")
                                             MewsRepository.deleteTitleById(topic.id)
                                             continue
                                         }
 
                                         val newTimeVal = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
 
+                                        var matchedParentId: Long? = null
+                                        try {
+                                            val historyTimeMs = System.currentTimeMillis() - (72 * 60 * 60 * 1000L)
+                                            val history = MewsRepository.getRecentTitlesForStorylines(historyTimeMs)
+
+                                            for (historyItem in history) {
+                                                if (historyItem.id == topic.id) continue
+
+                                                var hasKeywordMatch = false
+                                                for (tk in topic.keywords) {
+                                                    for (hk in historyItem.keywords) {
+                                                        if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.85)) {
+                                                            hasKeywordMatch = true
+                                                            break
+                                                        }
+                                                    }
+                                                    if (hasKeywordMatch) break
+                                                }
+
+                                                if (hasKeywordMatch) {
+                                                    val match45 = TextComparator.areSimilar(newTitle, historyItem.title, 0.45) || TextComparator.areSimilar(summary, historyItem.summary, 0.45)
+                                                    val match60 = TextComparator.areSimilar(newTitle, historyItem.title, 0.61) || TextComparator.areSimilar(summary, historyItem.summary, 0.61)
+
+                                                    if (match45 && !match60) {
+                                                        matchedParentId = historyItem.id
+                                                        break
+                                                    }
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            if (e !is kotlinx.coroutines.CancellationException) {
+                                                Log.e(TAG, "Storylines matching failed for title ${topic.id}", e)
+                                            } else throw e
+                                        }
+
                                         MewsRepository.updateTitle(
                                             id = topic.id,
                                             newTimeVal = newTimeVal,
                                             newTitle = newTitle,
-                                            summary = summary
+                                            summary = summary,
+                                            parentId = matchedParentId
                                         )
 
                                         successCount++
                                     } catch (e: kotlinx.coroutines.CancellationException) {
                                         throw e
-                                    } catch(e: Exception) {
-                                        Log.e(TAG, "Failed to update DB for topic ID: ${originalData.first.id}", e)
+                                    } catch(_: Exception) {
                                     }
                                 }
                             } else {
-                                Log.w(TAG, "adaptiveSummarizeBatch returned empty result for current batch.")
                                 if (lastError == null) lastError = SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
                             }
 
@@ -481,12 +516,10 @@ class NewsSummarizer(private val llm: LLMClient) {
                                 for ((topic, _, _) in topicsData) {
                                     if (topic.id !in successIds) {
                                         try {
-                                            Log.d(TAG, "Retry Mode: Deleting failed topic ID ${topic.id}")
                                             MewsRepository.deleteTitleById(topic.id)
                                         } catch (e: kotlinx.coroutines.CancellationException) {
                                             throw e
-                                        } catch(e: Exception) {
-                                            Log.e(TAG, "Failed to delete topic during cleanup", e)
+                                        } catch(_: Exception) {
                                         }
                                     }
                                 }
@@ -496,10 +529,8 @@ class NewsSummarizer(private val llm: LLMClient) {
                             if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED ||
                                 e.errorType == SummarizationErrorType.NO_NETWORK ||
                                 e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) {
-                                Log.w(TAG, "Transient error during summary batch: ${e.errorType}")
                                 lastError = e.errorType
                             } else {
-                                Log.e(TAG, "Critical error during summary batch, dropping partial topics", e)
                                 for ((t, _, _) in topicsData) {
                                     try { MewsRepository.deleteTitleById(t.id) }
                                     catch (e: kotlinx.coroutines.CancellationException) { throw e }
@@ -513,33 +544,27 @@ class NewsSummarizer(private val llm: LLMClient) {
                         val relativeProgress = processedItemsCount.toFloat() / totalItemsToProcess.toFloat()
                         val newProgress = baseProgress + (relativeProgress * availableProgressSpace)
                         MewsRepository.setUpdatingProgress(newProgress.coerceIn(0f, 0.95f))
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to update progress", e)
+                    } catch (_: Exception) {
                     }
                 }
             }
 
             if (successCount == 0 && titlesToSummarize.isNotEmpty()) {
                 val error = lastError ?: SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
-                Log.e(TAG, "No topics were successfully summarized. Emitting Failure: $error")
                 safeReadyFunc(readyFunc)
                 return SummarizationResult.Failure(error)
             }
 
-            Log.d(TAG, "Summarization completed successfully. Topics handled: $successCount")
             safeReadyFunc(readyFunc)
             return SummarizationResult.Success
         } catch (e: GeminiException) {
-            Log.e(TAG, "Global GeminiException in summarizeTopics", e)
             safeReadyFunc(readyFunc)
             return SummarizationResult.Failure(e.errorType, e)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) {
-                Log.w(TAG, "Job Cancelled")
                 safeReadyFunc(readyFunc)
                 return SummarizationResult.Failure(SummarizationErrorType.JOB_CANCELLED)
             }
-            Log.e(TAG, "Global unknown exception in summarizeTopics", e)
             safeReadyFunc(readyFunc)
             return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
         }
@@ -589,24 +614,26 @@ class NewsSummarizer(private val llm: LLMClient) {
         return unique
     }
 
-    private suspend fun processNewsInBatches(maxTopics: Int, uniqueGroups: List<GroupedMessage>, lang: String, filterEnabled: Boolean, bannedNews: String) {
-        totalItemsToProcess = uniqueGroups.size
-        processedItemsCount = 0
-        val availableSpace = 0.4f
-
-        try { MewsRepository.setUpdatingState("extracting_topics") } catch (_: Exception) {}
-
-        val allExtracted = mutableListOf<Topics>()
+    private suspend fun processNewsBuffer(
+        buffer: List<Message>,
+        lang: String,
+        filterEnabled: Boolean,
+        bannedNews: String,
+        globalApprovedTopics: MutableList<Topics>,
+        availableSpace: Float
+    ) {
+        val uniqueGroups = buffer.map { GroupedMessage(it, mutableListOf(it.id)) }
         val batches = createBatches(uniqueGroups)
+        val allExtracted = mutableListOf<Topics>()
+        var criticalError: GeminiException? = null
 
         Log.d(TAG, "Extraction: Splitting into ${batches.size} sequential batches.")
-        var criticalError: GeminiException? = null
 
         coroutineScope {
             for ((index, batch) in batches.withIndex()) {
                 Log.d(TAG, "Extraction: Processing batch ${index + 1}/${batches.size} (Size: ${batch.size})")
                 try {
-                    val batchLimit = (batch.size * 0.6).toInt().coerceAtLeast(3)
+                    val batchLimit = batch.size
                     val result = adaptiveExtractTopics(batch, batchLimit, lang, 2, bannedNews)
                     allExtracted.addAll(result)
 
@@ -629,47 +656,33 @@ class NewsSummarizer(private val llm: LLMClient) {
             }
         }
 
-        if (allExtracted.isEmpty()) {
-            if (criticalError != null) throw criticalError
-            throw GeminiException(SummarizationErrorType.EXTRACT_TOPICS_FAILED, "No topics found")
-        }
+        if (allExtracted.isEmpty() && criticalError != null) throw criticalError
 
         Log.d(TAG, "Extraction complete. Total topics raw: ${allExtracted.size}")
 
-        val finalTopicsCandidate: List<Topics> = if (filterEnabled) {
+        val filteredTopics = if (filterEnabled && allExtracted.isNotEmpty()) {
             try {
                 if (criticalError?.errorType == SummarizationErrorType.QUOTA_EXCEEDED) {
-                    simpleAlgorithmicMerge(allExtracted)
+                    allExtracted
                 } else {
-                    val current = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress + availableSpace }
                     MewsRepository.setUpdatingState("filtering_topics")
-                    MewsRepository.setUpdatingProgress(current)
-
-                    val smartMerged = smartMergeTopics(allExtracted, lang, 0, bannedNews)
-                    simpleAlgorithmicMerge(smartMerged)
+                    smartMergeTopics(allExtracted, lang, 0, bannedNews)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Smart merge failed, falling back to algorithmic merge", e)
-                simpleAlgorithmicMerge(allExtracted)
+                allExtracted
             }
         } else {
-            simpleAlgorithmicMerge(allExtracted)
+            allExtracted
         }
 
-        Log.d(TAG, "Saving top $maxTopics topics to DB.")
-        finalTopicsCandidate
-            .sortedByDescending { it.weight }
-            .take(maxTopics)
-            .forEach { t -> saveTopicToDb(t) }
+        mergeIntoGlobal(filteredTopics, globalApprovedTopics)
     }
 
-    private fun simpleAlgorithmicMerge(rawTopics: List<Topics>): List<Topics> {
-        val merged = mutableListOf<Topics>()
-
-        rawTopics.sortedByDescending { it.weight }.forEach { candidate ->
-            val existingIndex = merged.indexOfFirst { existing ->
+    private fun mergeIntoGlobal(newTopics: List<Topics>, globalCache: MutableList<Topics>) {
+        newTopics.forEach { candidate ->
+            val existingIndex = globalCache.indexOfFirst { existing ->
                 var isKeywordMatch = false
-
                 if (existing.keywords.size >= 2 && candidate.keywords.size >= 2) {
                     var matchCount = 0
                     for (k1 in existing.keywords) {
@@ -680,38 +693,28 @@ class NewsSummarizer(private val llm: LLMClient) {
                             }
                         }
                     }
-
-                    val minLen = min(existing.keywords.size, candidate.keywords.size)
-                    if (minLen >= 3) {
-                        if (matchCount >= minLen * 0.5) isKeywordMatch = true
-                    }
-                    else if (minLen == 2) {
-                        if (matchCount == 2) isKeywordMatch = true
-                    }
+                    if (matchCount >= 2) isKeywordMatch = true
                 }
-
-                if (isKeywordMatch) return@indexOfFirst true
-                TextComparator.areSimilar(existing.title, candidate.title, 0.8)
+                isKeywordMatch || TextComparator.areSimilar(existing.title, candidate.title, 0.65)
             }
 
             if (existingIndex != -1) {
-                val existing = merged[existingIndex]
+                val existing = globalCache[existingIndex]
                 val combinedIds = (existing.ids.orEmpty() + candidate.ids.orEmpty()).distinct()
                 val maxWeight = max(existing.weight, candidate.weight)
                 val combinedKeywords = (existing.keywords + candidate.keywords)
                     .distinctBy { it.lowercase() }
                     .take(8)
 
-                merged[existingIndex] = existing.copy(
+                globalCache[existingIndex] = existing.copy(
                     ids = combinedIds,
                     weight = maxWeight,
                     keywords = combinedKeywords
                 )
             } else {
-                merged.add(candidate)
+                globalCache.add(candidate)
             }
         }
-        return merged
     }
 
     private suspend fun smartMergeTopics(topics: List<Topics>, lang: String, depth: Int, banned: String): List<Topics> {
@@ -768,8 +771,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     val w = obj.optInt("weight", 5)
                     mergedResults.add(Topics(obj.getString("title"), mergedIds.toList(), w, keywords = mergedKeywords.take(8).toList()))
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Skipping corrupted topic item in smart merge", e)
+            } catch (_: Exception) {
             }
         }
 
@@ -789,6 +791,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             val prompt = """
                 Проанализируй новости и выдели ОТДЕЛЬНЫЕ новостные события.
                 ЛИМИТЫ (СТРОГО): Максимальное количество тем: $maxLimit. Если событий больше — выбери самые резонансные и значимые. Мелкие, локальные или малозначительные новости ИГНОРИРУЙ.
+                ЗАПРЕТ НА МАКРО-КЛАСТЕРИЗАЦИЮ: Если множество новостей связано глобальным фоном (например, одним международным конфликтом), категорически запрещено сливать их в одну тему. Изолируй каждый конкретный инцидент, заявление или происшествие в отдельный объект.
                 Группируй новости по Сюжетным Линиям:
                 1. Цепочка событий (ОСТАВЛЯТЬ ВМЕСТЕ): Например, событие + реакция + последствия = ОДНА тема.
                 2. Дайджесты (РАЗДЕЛЯТЬ): Разные события, произошедшие в разных местах = РАЗНЫЕ темы.
@@ -806,7 +809,6 @@ class NewsSummarizer(private val llm: LLMClient) {
                     if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
                     throw e
                 }
-                Log.w(TAG, "Forcing batch split due to non-critical GeminiException", e)
                 throw RuntimeException("Trigger split", e)
             }
 
@@ -843,8 +845,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     }
 
                     topics.add(Topics(title, fullIdList, w, keywords = keywordsList))
-                } catch (e: Exception) {
-                    Log.w(TAG, "Topic parsing error within extraction array", e)
+                } catch (_: Exception) {
                     continue
                 }
             }
@@ -956,16 +957,15 @@ class NewsSummarizer(private val llm: LLMClient) {
         })
 
         val prompt = """
-        Ты — ведущий обозреватель. Твоя цель — написать глубокий материал, адаптируя объем под значимость события.
+        Ты — ведущий обозреватель. Твоя цель — написать материал, адаптируя объем под значимость события.
         Инструкции:
         1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык. Избегай канцеляризмов.
-        2. АДАПТИВНЫЙ ОБЪЕМ:
-           — Крупные события: пиши ПОДРОБНЫЙ обзор. Обязательно: контекст, история, цитаты, последствия (до 500 слов).
-           — Рядовые новости: пиши ёмко, но детально. Не лей воду, давай факты (до 300 слов).
-        3. УМНАЯ ФИЛЬТРАЦИЯ (Список нежелательных тем: '$banned'):
+        2. АДАПТИВНЫЙ ОБЪЕМ: Пиши ёмко. Категорически запрещено генерировать собственные выводы, прогнозы, 'воду' или добавлять экспертные оценки. Опирайся ИСКЛЮЧИТЕЛЬНО на твердые факты из исходника (субъекты, действия, локации, цифры). Сохрани стиль Smart Casual, заменив рассуждения высокой информационной плотностью. Лимит до 300 слов.
+        3. ПРОВЕРКА НА ГЕТЕРОГЕННОСТЬ (FALLBACK): Проанализируй массив `news_content`. Если в нем присутствуют независимые, не связанные друг с другом новости, НЕ пытайся объединить их связным текстом. Выдели самую значимую новость как основу (заголовок + абзац), а остальные события добавь в конец отдельным маркированным списком (в формате дайджеста). Ни один факт не должен быть утерян.
+        4. УМНАЯ ФИЛЬТРАЦИЯ (Список нежелательных тем: '$banned'):
            — Извлечь пользу. Если запрещенная тема упоминается вскользь — ИГНОРИРУЙ её.
            — Если весь текст состоит из рекламы, спама или новость посвящена теме из списка — верни пустую строку (summary: "").
-        4. Язык: ${lang}.
+        5. Язык: ${lang}.
         ФОРМАТ ОТВЕТА (СТРОГО JSON):
         [{"id": <id из input>, "title": "<цепляющий заголовок>", "summary": "<текст статьи или пустая строка "">"}]
         Ввод: $jsonInput
