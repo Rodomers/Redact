@@ -183,9 +183,38 @@ class TitlesViewModel(
         _scrollEvents.trySend(TitlesScrollEvent.ScrollToTop)
     }
 
-    fun scrollToItem(id: Int) {
-        val id = (id - 2).coerceIn(0, Int.MAX_VALUE)
-        _scrollEvents.trySend(TitlesScrollEvent.ScrollToItem(id))
+    fun scrollToItem(index: Int) {
+        val targetIndex = (index - 2).coerceIn(0, Int.MAX_VALUE)
+        _scrollEvents.trySend(TitlesScrollEvent.ScrollToItem(targetIndex, animated = false))
+    }
+
+    fun switchStorylineAndScroll(targetTitleId: Long) {
+        viewModelScope.launch {
+            val groups = groupedTitles.value
+            var globalIndex = 0
+            var targetGridIndex = -1
+
+            for ((_, titlesInDate) in groups) {
+                globalIndex++
+                val indexInGroup = titlesInDate.indexOfFirst { it.id == targetTitleId }
+                if (indexInGroup != -1) {
+                    targetGridIndex = globalIndex + indexInGroup
+                    break
+                }
+                globalIndex += titlesInDate.size
+            }
+
+            if (targetGridIndex != -1) {
+                val currentState = _titleCardStates.value.find { it.id == targetTitleId }
+
+                val finalIndex = (targetGridIndex - 2).coerceIn(0, Int.MAX_VALUE)
+                _scrollEvents.trySend(TitlesScrollEvent.ScrollToItem(finalIndex, animated = true))
+                delay(450)
+                if (currentState?.expanded != true) {
+                    toggleTitleExpanded(targetTitleId)
+                }
+            }
+        }
     }
 
     fun onBanTheme(value: String) {
@@ -420,7 +449,7 @@ class TitlesViewModel(
 
 sealed interface TitlesScrollEvent {
     data object ScrollToTop : TitlesScrollEvent
-    data class ScrollToItem(val id: Int) : TitlesScrollEvent
+    data class ScrollToItem(val id: Int, val animated: Boolean = false) : TitlesScrollEvent
 }
 
 class TitlesViewModelFactory(private val application: Application) :

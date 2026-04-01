@@ -87,6 +87,7 @@ import kotlin.collections.component2
 import kotlin.collections.iterator
 import com.rds.mews.ui.theme.Shapes
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
+import com.rds.mews.viewmodels.TitlesScrollEvent
 
 @Composable
 fun TitlesScreen(
@@ -97,6 +98,24 @@ fun TitlesScreen(
     scope: CoroutineScope,
     bottomSpacer: Dp
 ) {
+    LaunchedEffect(Unit) {
+        viewModel.scrollEvents.collect { event ->
+            when (event) {
+                is TitlesScrollEvent.ScrollToTop -> lazyGridState.animateScrollToItem(0)
+                is TitlesScrollEvent.ScrollToItem -> {
+                    if (event.animated) {
+                        lazyGridState.animateScrollToItem(
+                            index = event.id,
+                            scrollOffset = -150
+                        )
+                    } else {
+                        lazyGridState.scrollToItem(event.id)
+                    }
+                }
+            }
+        }
+    }
+
     val groupedItems by viewModel.groupedTitles.collectAsStateWithLifecycle()
     val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
@@ -143,6 +162,7 @@ fun TitlesScreen(
         markTitleAsRead = viewModel::markTitleAsRead,
         showGreeting = viewModel::showGreeting,
         lastTitlesUpdateExists = viewModel::lastTitlesUpdateExists,
+        onSwitchStoryline = viewModel::switchStorylineAndScroll
     )
 }
 
@@ -181,7 +201,8 @@ fun TitlesGrid(
     getDateFromUnix: (Long) -> TimeDate,
     markTitleAsRead: (Long, Boolean) -> Unit,
     showGreeting: (Context) -> Unit,
-    lastTitlesUpdateExists: () -> Boolean
+    lastTitlesUpdateExists: () -> Boolean,
+    onSwitchStoryline: (Long) -> Unit
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
 
@@ -363,7 +384,6 @@ fun TitlesGrid(
                     val isExpanded = statesItem?.expanded ?: false
                     val pagerState = rememberPagerState(initialPage = statesItem?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
                     val sources = statesItem?.sources
-                    val read = statesItem?.read ?: false
 
                     val isPartiallyObscured by remember {
                         derivedStateOf {
@@ -414,7 +434,8 @@ fun TitlesGrid(
                                     markAsUnread = {
                                         onToggleExpanded(item.id)
                                         markTitleAsRead(item.id, false)
-                                    }
+                                    },
+                                    onSwitchStoryline = onSwitchStoryline
                                 )
 
                                 if (isPartiallyObscured) {

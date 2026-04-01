@@ -110,6 +110,7 @@
     <string name="titles_card_source">Source</string>
     <string name="titles_card_copied">Article text copied to clipboard.</string>
     <string name="titles_card_banned">Article text was blocked. It will no longer appear in the list.</string>
+    <string name="related_news">Related news</string>
     <string name="change_dialog_source">Source name</string>
     <string name="change_dialog_add_source">Add source</string>
     <string name="change_dialog_change_source">About the source</string>

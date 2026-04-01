@@ -102,6 +102,7 @@ fun MainScreen(mainActivity: MainActivity) {
         MewsRepository.setCurrentLanguage(currentLangResource)
     }
 
+
     MewsTheme(settingsTheme = currentTheme, appTheme = appTheme) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()

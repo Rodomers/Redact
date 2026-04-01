@@ -11,6 +11,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
@@ -36,7 +37,6 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -47,6 +47,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
@@ -65,12 +67,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -79,6 +86,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -90,6 +98,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
 import androidx.compose.ui.unit.sp
@@ -99,21 +108,19 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.R
+import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.localcore.IconButtonInputs
 import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.ui.theme.Shapes
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.min
 import kotlin.math.roundToInt
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import dev.jeziellago.compose.markdowntext.MarkdownText
 
 @Composable
 fun TitlesCard(
@@ -121,6 +128,7 @@ fun TitlesCard(
     sources: List<SourceMessages>? = null,
     changeSourceState: (Long, String) -> Unit = { _, _ -> },
     onBanTheme: (String) -> Unit,
+    onSwitchStoryline: (Long) -> Unit = {},
     isExpanded: Boolean,
     onToggleExpanded: () -> Unit,
     pagerState: PagerState,
@@ -204,6 +212,7 @@ fun TitlesCard(
                 title = title,
                 sources = sources,
                 changeSourceState = changeSourceState,
+                onSwitchStoryline = onSwitchStoryline,
                 progress = expansionAnim.value,
                 collapsedBounds = collapsedBounds!!,
                 onDismissRequest = onToggleExpanded,
@@ -258,13 +267,10 @@ fun RootViewOverlay(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-
             setParentCompositionContext(parentComposition)
-
             setViewTreeLifecycleOwner(view.findViewTreeLifecycleOwner())
             setViewTreeViewModelStoreOwner(view.findViewTreeViewModelStoreOwner())
             setViewTreeSavedStateRegistryOwner(view.findViewTreeSavedStateRegistryOwner())
-
             setContent {
                 Box(
                     modifier = Modifier
@@ -278,12 +284,8 @@ fun RootViewOverlay(
                 }
             }
         }
-
         rootViewGroup.addView(composeView)
-
-        onDispose {
-            rootViewGroup.removeView(composeView)
-        }
+        onDispose { rootViewGroup.removeView(composeView) }
     }
 }
 
@@ -302,6 +304,7 @@ private fun HeroExpansionContent(
     title: Title,
     sources: List<SourceMessages>?,
     changeSourceState: (Long, String) -> Unit,
+    onSwitchStoryline: (Long) -> Unit,
     progress: Float,
     collapsedBounds: Rect,
     onDismissRequest: () -> Unit,
@@ -317,12 +320,10 @@ private fun HeroExpansionContent(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-
     val verticalMarginDp = 50.dp
     val horizontalMarginDp = 8.dp
     val horizontalMarginPx = with(density) { horizontalMarginDp.toPx() }
     val verticalMarginPx = with(density) { verticalMarginDp.toPx() }
-
     val clampedProgress = progress.coerceIn(0f, 1f)
 
     BackHandler { onDismissRequest() }
@@ -330,18 +331,14 @@ private fun HeroExpansionContent(
     val displayMetrics = context.resources.displayMetrics
     val screenWidthPx = displayMetrics.widthPixels.toFloat()
     val screenHeightPx = displayMetrics.heightPixels.toFloat()
-
     val maxAvailableWidth = screenWidthPx - (horizontalMarginPx * 2)
     val maxAvailableHeight = screenHeightPx - (verticalMarginPx * 2)
-
     val maxAvailableHeightDp = with(density) { maxAvailableHeight.toDp() }
     val targetWidthDp = with(density) { maxAvailableWidth.toDp() }
 
     var contentHeight by remember { mutableStateOf<Float?>(null) }
-
     val scrimAlpha = clampedProgress * 0.6f
     val contentAlpha = ((clampedProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
-
     val containerColor = MaterialTheme.colorScheme.surface
 
     Box(
@@ -357,12 +354,7 @@ private fun HeroExpansionContent(
         if (contentHeight == null) {
             Box(
                 modifier = Modifier
-                    .offset {
-                        IntOffset(
-                            horizontalMarginPx.roundToInt(),
-                            verticalMarginPx.roundToInt()
-                        )
-                    }
+                    .offset { IntOffset(horizontalMarginPx.roundToInt(), verticalMarginPx.roundToInt()) }
                     .width(targetWidthDp)
                     .alpha(0f)
                     .onGloballyPositioned { coordinates ->
@@ -377,14 +369,12 @@ private fun HeroExpansionContent(
         val currentContentHeight = contentHeight ?: collapsedBounds.height
         val targetHeight = min(currentContentHeight, maxAvailableHeight)
         val centeredTop = (screenHeightPx - targetHeight) / 2
-
         val expandedBounds = Rect(
             left = horizontalMarginPx,
             top = centeredTop,
             right = horizontalMarginPx + maxAvailableWidth,
             bottom = centeredTop + targetHeight
         )
-
         val currentRect: Rect = lerp(collapsedBounds, expandedBounds, progress)
 
         Surface(
@@ -402,24 +392,17 @@ private fun HeroExpansionContent(
                     val placeable = measurable.measure(Constraints.fixed(currentW, currentH))
                     layout(currentW, currentH) { placeable.place(0, 0) }
                 }
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() },
-                    enabled = true
-                ) {},
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, enabled = true) {},
             shape = Shapes.large,
             color = containerColor,
             shadowElevation = 0.dp
         ) {
-            Box(
-                modifier = Modifier
-                    .width(targetWidthDp)
-                    .fillMaxHeight()
-            ) {
+            Box(modifier = Modifier.width(targetWidthDp).fillMaxHeight()) {
                 ExpandedCardContent(
                     title = title,
                     sources = sources,
                     changeSourceState = changeSourceState,
+                    onSwitchStoryline = onSwitchStoryline,
                     onBanTheme = onBanTheme,
                     onMarkAsUnread = onMarkAsUnread,
                     pagerState = pagerState,
@@ -432,7 +415,8 @@ private fun HeroExpansionContent(
                     originalNoTime = originalNoTime,
                     showSnippet = showSnippet,
                     isRead = isRead,
-                    headerStartColor = backgroundColor
+                    headerStartColor = backgroundColor,
+                    targetCardHeight = targetHeight
                 )
             }
         }
@@ -440,37 +424,38 @@ private fun HeroExpansionContent(
 }
 
 @Composable
-private fun MeasureCardCompleteStructure(
-    title: Title,
-    isRead: Boolean
-) {
-    Column(modifier = Modifier
-        .fillMaxWidth()
-        .wrapContentHeight()
-    ) {
-        TitlesHeaderContent(
-            title = title,
-            noTime = false,
-            isRead = isRead,
-            onClicked = {},
-            animationProgress = 1f,
-            expansionFraction = 1f
-        )
-
+private fun MeasureCardCompleteStructure(title: Title, isRead: Boolean) {
+    Column(modifier = Modifier.fillMaxWidth().wrapContentHeight()) {
+        TitlesHeaderContent(title = title, noTime = false, isRead = isRead, onClicked = {}, animationProgress = 1f, expansionFraction = 1f)
         Spacer(modifier = Modifier.height(8.dp))
-
         MarkdownText(
             markdown = title.summary.trim(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 14.2.sp,
-                lineHeight = 22.2.sp
-            )
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.2.sp, lineHeight = 22.2.sp)
         )
-
         Spacer(modifier = Modifier.height(54.dp))
+    }
+}
+
+@Composable
+private fun StorylineBreadcrumb(depth: Int, hasChild: Boolean, modifier: Modifier = Modifier) {
+    val totalDots = depth + (if (hasChild) 2 else 1)
+    Column(
+        modifier = modifier.padding(top = 4.dp, end = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        repeat(totalDots) { index ->
+            val isActive = index == depth
+            val size = if (isActive) 8.dp else 5.dp
+            val color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+        }
     }
 }
 
@@ -487,13 +472,10 @@ private fun TitlesHeaderContent(
 ) {
     val baseTitleWeight = if (isRead) 400 else 800
     val baseTimeWeight = if (isRead) 400 else 700
-
     val expandedTitleWeight = 800
     val expandedTimeWeight = 700
-
     val currentBaseTitleWeight by animateIntAsState(targetValue = baseTitleWeight, label = "titleWeight")
     val currentBaseTimeWeight by animateIntAsState(targetValue = baseTimeWeight, label = "timeWeight")
-
     val finalTitleWeight = currentBaseTitleWeight + ((expandedTitleWeight - currentBaseTitleWeight) * expansionFraction).roundToInt()
     val finalTimeWeight = currentBaseTimeWeight + ((expandedTimeWeight - currentBaseTimeWeight) * expansionFraction).roundToInt()
 
@@ -503,72 +485,89 @@ private fun TitlesHeaderContent(
 
     val baseDotSize = if (isRead) 0.dp else 8.dp
     val currentDotSize by animateDpAsState(targetValue = baseDotSize, label = "dotSize")
-
+    val baseDotAlpha = if (isRead) 0f else 1f
+    val currentDotAlpha by animateFloatAsState(targetValue = baseDotAlpha, label = "dotAlpha")
     val baseSpacerWidth = if (isRead) 0.dp else 6.dp
     val currentSpacerWidth by animateDpAsState(targetValue = baseSpacerWidth, label = "spacerWidth")
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (clickableEnabled) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClicked() } else Modifier)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        if (title.storyDepth > 0 || title.childId != null) {
+            StorylineBreadcrumb(depth = title.storyDepth, hasChild = title.childId != null)
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            if (!noTime) {
+                val alpha = (animationProgress * 2f).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            val height = (placeable.height * animationProgress).roundToInt()
+                            layout(placeable.width, height) { placeable.place(0, height - placeable.height) }
+                        }
+                        .alpha(alpha)
+                        .padding(bottom = 6.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.surface, Shapes.large)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(currentDotSize)
+                                .alpha(currentDotAlpha)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                        Spacer(modifier = Modifier.width(currentSpacerWidth))
+                        Text(
+                            text = getFormattedTimeUnix(title.eventTime),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = finalAlpha),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight(finalTimeWeight),
+                            textAlign = TextAlign.Left
+                        )
+                    }
+                }
+            }
+            Text(
+                text = title.title,
+                textAlign = TextAlign.Left,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = finalAlpha),
+                modifier = Modifier.fillMaxWidth(),
+                fontWeight = FontWeight(finalTitleWeight)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PullToSwitchIndicator(text: String, progress: Float, modifier: Modifier = Modifier) {
+    val clampedProgress = progress.coerceIn(0f, 1f)
+    val alpha = (clampedProgress * 1.5f).coerceIn(0f, 1f)
+    val scale = 0.85f + (0.15f * clampedProgress)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .then(
-                if (clickableEnabled) {
-                    Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onClicked() }
-                } else {
-                    Modifier
-                }
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .alpha(alpha)
+            .graphicsLayer { scaleX = scale; scaleY = scale },
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (!noTime) {
-            val alpha = (animationProgress * 2f).coerceIn(0f, 1f)
-
-            Box(
-                modifier = Modifier
-                    .layout { measurable, constraints ->
-                        val placeable = measurable.measure(constraints)
-                        val height = (placeable.height * animationProgress).roundToInt()
-                        layout(placeable.width, height) {
-                            placeable.place(0, height - placeable.height)
-                        }
-                    }
-                    .alpha(alpha)
-                    .padding(bottom = 6.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surface, Shapes.large)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(currentDotSize)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
-
-                    Spacer(modifier = Modifier.width(currentSpacerWidth))
-
-                    Text(
-                        text = getFormattedTimeUnix(title.eventTime),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = finalAlpha),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight(finalTimeWeight),
-                        textAlign = TextAlign.Left
-                    )
-                }
-            }
-        }
         Text(
-            text = title.title,
-            textAlign = TextAlign.Left,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = finalAlpha),
-            modifier = Modifier.fillMaxWidth(),
-            fontWeight = FontWeight(finalTitleWeight)
+            text = if (clampedProgress >= 1f) "Отпустите для перехода" else text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -578,6 +577,7 @@ private fun ExpandedCardContent(
     title: Title,
     sources: List<SourceMessages>?,
     changeSourceState: (Long, String) -> Unit,
+    onSwitchStoryline: (Long) -> Unit,
     onBanTheme: (String) -> Unit,
     onMarkAsUnread: () -> Unit,
     pagerState: PagerState,
@@ -590,7 +590,8 @@ private fun ExpandedCardContent(
     originalNoTime: Boolean,
     showSnippet: Boolean,
     isRead: Boolean,
-    headerStartColor: Color
+    headerStartColor: Color,
+    targetCardHeight: Float
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -602,37 +603,108 @@ private fun ExpandedCardContent(
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
-
-    val source = stringResource(R.string.titles_card_source)
     val bottomPanelHeight = 50.dp
     val bottomPanelItemsColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f)
-
     val headerEndColor = MaterialTheme.colorScheme.secondaryContainer
-
     val shouldAnimateHeader = headerStartColor != headerEndColor
 
-    val copiedText = "${title.title}\n\n${title.summary}\n\n${source}: Mews, ${
-        title.sources.toList().distinct()
-    }".replace(
-        Regex("[*_]"),
-        ""
-    )
-    fun copyText() {
-        clipboardManager.setText(AnnotatedString(copiedText))
+    var pullOffset by remember { mutableFloatStateOf(0f) }
+    var hasTriggeredHaptic by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+
+    val pullThresholdPx = with(density) { 90.dp.toPx() }
+    val maxPullPx = with(density) { 135.dp.toPx() }
+
+    val hasRelatedNews = title.parentId != null || title.childId != null
+
+    val nestedScrollConnection = remember(hasRelatedNews) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (!hasRelatedNews) return Offset.Zero
+
+                if (pullOffset > 0f && available.y < 0f) {
+                    val consumed = available.y.coerceAtLeast(-pullOffset)
+                    pullOffset += consumed
+                    return Offset(0f, consumed)
+                }
+                if (pullOffset < 0f && available.y > 0f) {
+                    val consumed = available.y.coerceAtMost(-pullOffset)
+                    pullOffset += consumed
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (!hasRelatedNews || source != NestedScrollSource.Drag) return Offset.Zero
+
+                if (available.y > 0f && title.parentId != null) {
+                    pullOffset = (pullOffset + available.y * 0.4f).coerceAtMost(maxPullPx)
+
+                    if (pullOffset >= pullThresholdPx && !hasTriggeredHaptic) {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        hasTriggeredHaptic = true
+                    } else if (pullOffset < pullThresholdPx) {
+                        hasTriggeredHaptic = false
+                    }
+                    return Offset(0f, available.y)
+                }
+                if (available.y < 0f && title.childId != null) {
+                    pullOffset = (pullOffset + available.y * 0.4f).coerceAtLeast(-maxPullPx)
+
+                    if (pullOffset <= -pullThresholdPx && !hasTriggeredHaptic) {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        hasTriggeredHaptic = true
+                    } else if (pullOffset > -pullThresholdPx) {
+                        hasTriggeredHaptic = false
+                    }
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pullOffset != 0f) {
+                    val switchId = if (pullOffset >= pullThresholdPx && title.parentId != null) title.parentId
+                    else if (pullOffset <= -pullThresholdPx && title.childId != null) title.childId
+                    else null
+
+                    if (switchId != null) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onCollapse()
+                        onSwitchStoryline(switchId)
+                    }
+
+                    coroutineScope.launch {
+                        hasTriggeredHaptic = false
+                        animate(
+                            initialValue = pullOffset,
+                            targetValue = 0f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                        ) { value, _ -> pullOffset = value }
+                    }
+
+                    return available
+                }
+                return Velocity.Zero
+            }
+        }
     }
+
+    val copiedText = "${title.title}\n\n${title.summary}\n\nИсточник: Mews, ${title.sources.toList().distinct()}"
+    fun copyText() { clipboardManager.setText(AnnotatedString(copiedText)) }
     fun shareText() {
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, copiedText)
         }
-
-        val shareIntent = Intent.createChooser(sendIntent, null)
-
-        context.startActivity(shareIntent)
+        context.startActivity(Intent.createChooser(sendIntent, null))
     }
-    fun banNew() {
-        onBanTheme(title.title)
-    }
+    fun banNew() { onBanTheme(title.title) }
     val buttons = listOf(
         TextButtonInputs(stringResource(R.string.share_btn_desc), ::shareText),
         TextButtonInputs(stringResource(R.string.ban_btn_desc), ::banNew, stringResource(R.string.titles_card_banned)),
@@ -640,214 +712,193 @@ private fun ExpandedCardContent(
     )
 
     val headerAnimProgress = if (originalNoTime) expansionProgress else 1f
+    LaunchedEffect(pagerState.targetPage) { rememberPage(pagerState.targetPage) }
 
-    LaunchedEffect(pagerState.targetPage) {
-        rememberPage(pagerState.targetPage)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = maxHeight)
-            .wrapContentHeight()
-    ) {
+    Column(modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).wrapContentHeight()) {
         Surface(
             shape = Shapes.large,
             color = Color.Transparent,
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(Shapes.large)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { onCollapse() }
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onCollapse() }
                 .drawBehind {
-                    if (!shouldAnimateHeader) {
-                        drawRect(headerEndColor)
-                    } else {
+                    if (!shouldAnimateHeader) drawRect(headerEndColor)
+                    else {
                         drawRect(headerStartColor)
-
                         if (expansionProgress > 0f) {
-                            drawRect(
-                                color = headerEndColor,
-                                topLeft = androidx.compose.ui.geometry.Offset.Zero,
-                                size = androidx.compose.ui.geometry.Size(
-                                    width = size.width * expansionProgress,
-                                    height = size.height
-                                )
-                            )
+                            drawRect(color = headerEndColor, topLeft = Offset.Zero, size = androidx.compose.ui.geometry.Size(width = size.width * expansionProgress, height = size.height))
                         }
                     }
                 }
         ) {
             Column {
-                TitlesHeaderContent(
-                    title = title,
-                    noTime = false,
-                    isRead = isRead,
-                    onClicked = {},
-                    clickableEnabled = false,
-                    animationProgress = headerAnimProgress,
-                    expansionFraction = expansionProgress
-                )
-
+                TitlesHeaderContent(title = title, noTime = false, isRead = isRead, onClicked = {}, clickableEnabled = false, animationProgress = headerAnimProgress, expansionFraction = expansionProgress)
                 if (showSnippet) {
                     val snippetAlpha = (1f - expansionProgress).coerceIn(0f, 1f)
                     SnippetText(
                         text = title.summary,
-                        modifier = Modifier
-                            .layout { measurable, constraints ->
-                                val placeable = measurable.measure(constraints)
-                                val visibleHeight = (placeable.height * snippetAlpha).roundToInt()
-                                layout(placeable.width, visibleHeight) {
-                                    val yOffset = (placeable.height * expansionProgress).roundToInt() * -1
-                                    placeable.place(0, yOffset)
-                                }
-                            },
+                        modifier = Modifier.layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            val visibleHeight = (placeable.height * snippetAlpha).roundToInt()
+                            layout(placeable.width, visibleHeight) {
+                                val yOffset = (placeable.height * expansionProgress).roundToInt() * -1
+                                placeable.place(0, yOffset)
+                            }
+                        },
                         alpha = snippetAlpha * if (isRead) 0.6f else 1f
                     )
                 }
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f, fill = false)
-        ) {
+        Box(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = sources?.isNotEmpty() ?: false,
                 verticalAlignment = Alignment.Top,
                 beyondViewportPageCount = 1,
-                modifier = Modifier
-                    .requiredWidth(targetWidth)
-                    .fillMaxHeight()
-                    .graphicsLayer { alpha = contentAlpha }
+                modifier = Modifier.requiredWidth(targetWidth).fillMaxHeight().graphicsLayer { alpha = contentAlpha }
             ) { page ->
                 when (page) {
                     0 -> {
-                        Column(
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
+                                .nestedScroll(nestedScrollConnection)
                         ) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                            ) {
-                                MarkdownText(
-                                    markdown = title.summary.trim(),
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontSize = 14.2.sp,
-                                        lineHeight = 22.2.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .combinedClickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null,
-                                            onClick = {},
-                                            onLongClick = {
-                                                copyText()
-                                                Toast.makeText(
-                                                    context,
-                                                    R.string.titles_card_copied,
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            }
-                                        )
+                            if (title.parentId != null && pullOffset > 0f) {
+                                PullToSwitchIndicator(
+                                    text = stringResource(R.string.related_news),
+                                    progress = pullOffset / pullThresholdPx,
+                                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 24.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
+
+                            if (title.childId != null && pullOffset < 0f) {
+                                PullToSwitchIndicator(
+                                    text = stringResource(R.string.related_news),
+                                    progress = -pullOffset / pullThresholdPx,
+                                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp)
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer { translationY = pullOffset }
+                                    .verticalScroll(scrollState)
+                                    .padding(horizontal = 16.dp)
+                            ) {
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    MarkdownText(
+                                        markdown = title.summary.trim(),
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.2.sp, lineHeight = 22.2.sp, color = MaterialTheme.colorScheme.onSurface)
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .combinedClickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null,
+                                                onClick = {},
+                                                onLongClick = {
+                                                    copyText()
+                                                    Toast.makeText(context, R.string.titles_card_copied, Toast.LENGTH_SHORT).show()
+                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                }
+                                            )
+                                    )
+                                }
+
+                                if (title.keywords.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    FlowRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        title.keywords.forEach { keyword ->
+                                            CustomTextButton(
+                                                inputs = TextButtonInputs(
+                                                    text = keyword,
+                                                    action = {
+                                                        onBanTheme(keyword)
+                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    },
+                                                    toast = stringResource(R.string.titles_card_banned)
+                                                ),
+                                                defaultBackgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                shape = Shapes.large
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (title.childId != null) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    HorizontalDivider(modifier = Modifier.alpha(0.3f))
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "Продолжение сюжета",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = title.relatedTitle ?: "",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                        if (title.relatedSnippet != null) {
+                                            Text(
+                                                text = title.relatedSnippet!!,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 3,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(top = 4.dp).alpha(0.7f)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
+                            }
                         }
                     }
                     1 -> {
                         if (sources == null) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .verticalScroll(rememberScrollState())
-                            ) {
+                            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = title.sources,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = title.ids,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp)
-                                )
+                                Text(text = title.sources, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
+                                Text(text = title.ids, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
                                 Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
                             }
                         } else {
                             val allMessages = remember(sources) { sources.flatMap { it.messages } }
-
                             val minLength = remember(allMessages) { allMessages.minOfOrNull { it.originalText.length } ?: 0 }
                             val maxLength = remember(allMessages) { allMessages.maxOfOrNull { it.originalText.length } ?: 1 }
-
-                            LazyVerticalGrid(
-                                modifier = Modifier
-                                    .padding(horizontal = 8.dp)
-                                    .fillMaxWidth(),
-                                columns = GridCells.Fixed(1)
-                            ) {
+                            LazyVerticalGrid(modifier = Modifier.padding(horizontal = 8.dp).fillMaxWidth(), columns = GridCells.Fixed(1)) {
                                 sources.forEach { pack ->
                                     val source = pack.source
                                     val state = pack.state
                                     val messages = pack.messages
-
-                                    customHeader(
-                                        text = source,
-                                        isExpanded = state,
-                                        onHeaderClick = { changeSourceState(title.id, source) },
-                                        fontSize = 18.sp
-                                    )
-
+                                    customHeader(text = source, isExpanded = state, onHeaderClick = { changeSourceState(title.id, source) }, fontSize = 18.sp)
                                     item(key = "${title.id}_$source") {
                                         Column(modifier = Modifier.fillMaxWidth()) {
                                             ExpandableContainer(visible = state) {
                                                 Box(modifier = Modifier.padding(bottom = 16.dp)) {
-
-                                                    FlowRow(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                                        maxItemsInEachRow = 5
-                                                    ) {
+                                                    FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 5) {
                                                         messages.forEach { item ->
                                                             val padding = remember(item.originalText.length, minLength, maxLength) {
-                                                                if (maxLength == minLength) {
-                                                                    val absoluteMaxChars = 200f
-                                                                    val fraction = (item.originalText.length / absoluteMaxChars).coerceIn(0f, 1f)
-                                                                    12.dp + (48.dp * fraction)
-                                                                } else {
-                                                                    val fraction = (item.originalText.length - minLength).toFloat() / (maxLength - minLength)
-                                                                    12.dp + (48.dp * fraction)
-                                                                }
+                                                                if (maxLength == minLength) 12.dp + (48.dp * (item.originalText.length / 200f).coerceIn(0f, 1f))
+                                                                else 12.dp + (48.dp * ((item.originalText.length - minLength).toFloat() / (maxLength - minLength)))
                                                             }
-
-                                                            CustomTextButton(
-                                                                inputs = TextButtonInputs(
-                                                                    getFormattedTimeUnix(item.time),
-                                                                    { handler.openUri(item.link) }
-                                                                ),
-                                                                horizontalPadding = padding,
-
-                                                                defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                                shape = Shapes.large
-                                                            )
+                                                            CustomTextButton(inputs = TextButtonInputs(getFormattedTimeUnix(item.time), { handler.openUri(item.link) }), horizontalPadding = padding, defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer, shape = Shapes.large)
                                                         }
                                                     }
                                                 }
@@ -855,12 +906,7 @@ private fun ExpandedCardContent(
                                         }
                                     }
                                 }
-
-                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Spacer(modifier = Modifier
-                                        .height(bottomPanelHeight - 8.dp)
-                                        .fillMaxWidth())
-                                }
+                                item(span = { GridItemSpan(maxLineSpan) }) { Spacer(modifier = Modifier.height(bottomPanelHeight - 8.dp).fillMaxWidth()) }
                             }
                         }
                     }
@@ -871,29 +917,12 @@ private fun ExpandedCardContent(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.surface.copy(0.7f),
-                                MaterialTheme.colorScheme.surface
-                            )
-                        )
-                    )
+                    .background(brush = Brush.verticalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface.copy(0.7f), MaterialTheme.colorScheme.surface)))
                     .graphicsLayer { alpha = contentAlpha }
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight()
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(modifier = Modifier.fillMaxWidth().wrapContentHeight().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     AnimatedSegmentedControl(
-                        items = listOf(
-                            stringResource(R.string.titles_card_text) to { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                            stringResource(R.string.titles_card_source) to { coroutineScope.launch { pagerState.animateScrollToPage(1) } }
-                        ),
+                        items = listOf(stringResource(R.string.titles_card_text) to { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, stringResource(R.string.titles_card_source) to { coroutineScope.launch { pagerState.animateScrollToPage(1) } }),
                         selectedIndex = pagerState.currentPage,
                         modifier = Modifier.padding(bottom = 8.dp),
                         backgroundColor = bottomPanelItemsColor,
@@ -903,34 +932,16 @@ private fun ExpandedCardContent(
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     CustomIconButton(
-                        inputs = IconButtonInputs(Icons.Default.MoreVert, {
-                            dropdownTransitionState.targetState = !dropdownTransitionState.currentState
-                        }),
-                        modifier = Modifier
-                            .size(40.dp)
-                            .padding(bottom = 6.dp)
-                            .align(Alignment.CenterVertically)
-                            .onGloballyPositioned {
-                                buttonBounds = it.boundsInWindow().roundToIntRect()
-                            },
+                        inputs = IconButtonInputs(Icons.Default.MoreVert, { dropdownTransitionState.targetState = !dropdownTransitionState.currentState }),
+                        modifier = Modifier.size(40.dp).padding(bottom = 6.dp).align(Alignment.CenterVertically).onGloballyPositioned { buttonBounds = it.boundsInWindow().roundToIntRect() },
                         iconModifier = Modifier.size(18.dp),
                         defaultBackgroundColor = bottomPanelItemsColor,
                         transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.7f),
                         transitionState = dropdownTransitionState,
                         shape = Shapes.large
                     )
-
                     if (dropdownTransitionState.currentState || dropdownTransitionState.targetState) {
-                        CustomDropdown(
-                            transitionState = dropdownTransitionState,
-                            buttons = buttons,
-                            inputBounds = buttonBounds,
-                            config = config,
-                            density = density,
-                            onDismissRequest = { dropdownTransitionState.targetState = false },
-                            arrowPosition = ArrowPosition.BottomRight,
-                            backgroundColor = MaterialTheme.colorScheme.secondaryContainer
-                        )
+                        CustomDropdown(transitionState = dropdownTransitionState, buttons = buttons, inputBounds = buttonBounds, config = config, density = density, onDismissRequest = { dropdownTransitionState.targetState = false }, arrowPosition = ArrowPosition.BottomRight, backgroundColor = MaterialTheme.colorScheme.secondaryContainer)
                     }
                 }
             }

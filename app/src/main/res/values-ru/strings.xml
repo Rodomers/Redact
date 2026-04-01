@@ -112,6 +112,7 @@
     <string name="titles_card_source">Источник</string>
     <string name="titles_card_copied">Текст новости скопирован в буфера обмена.</string>
     <string name="titles_card_banned">Заголовок новости заблокирован. Он больше не появится в списке.</string>
+    <string name="related_news">Связанные темы</string>
     <string name="change_dialog_source">Название источника</string>
     <string name="change_dialog_add_source">Добавление источника</string>
     <string name="change_dialog_change_source">Об источнике</string>

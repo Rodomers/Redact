@@ -32,7 +32,13 @@ data class Title(
     val isRead: Boolean = false,
     val isPinned: Boolean = false,
     var sources: String,
-    var ids: String
+    var ids: String,
+    var keywords: List<String> = emptyList(),
+    var parentId: Long? = null,
+    var childId: Long? = null,
+    var relatedTitle: String? = null,
+    var relatedSnippet: String? = null,
+    var storyDepth: Int = 0
 )
 
 data class TitleCardStates(

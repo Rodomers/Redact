@@ -55,7 +55,6 @@ class LLMClient(
     private val URL_TEMPLATE: String = "https://generativelanguage.googleapis.com/v1beta/models/%MODEL%:generateContent",
     enableProxy: Boolean = false
 ) : Closeable {
-
     private var currentModelApiName = MODEL.ifBlank { MewsRepository.defaultModel.apiModelName }
     private var currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.PROXY_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
@@ -64,7 +63,7 @@ class LLMClient(
     private val TAG = "LLMClient"
 
     private fun switchToFallbackModel(): Boolean {
-        val models = MewsRepository.geminiModelsList
+        val models = MewsRepository.geminiModelsList.filter { !it.apiModelName.lowercase().contains("pro") }
         val currentIndex = models.indexOfFirst { it.apiModelName == currentModelApiName }
 
         if (currentIndex > 0) {
@@ -164,7 +163,7 @@ class LLMClient(
 
             } catch (e: GeminiException) {
                 if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) {
-                    if (switchToFallbackModel()) {
+                    if (MewsRepository.userApiKey.value != MewsRepository.DEFAULT_GEMINI_API_KEY && switchToFallbackModel()) {
                         attempt = 0
                         continue
                     }
@@ -305,7 +304,6 @@ class NewsSummarizer(private val llm: LLMClient) {
         val status: Int = 0,
         val keywords: List<String> = emptyList()
     )
-
     data class GroupedMessage(
         val representative: Message,
         val allIds: MutableList<Long>
@@ -334,6 +332,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         readyFunc: () -> Unit,
         filterTopics: Boolean = true
     ): SummarizationResult {
+        MewsRepository.setUpdatingState("extracting_topics")
         try {
             val isRetryMode = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId).isNotEmpty()
             val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
@@ -358,11 +357,14 @@ class NewsSummarizer(private val llm: LLMClient) {
                     val extractionTime = System.currentTimeMillis()
                     val sortedMessages = rawMessages.sortedBy { it.time }
                     val startTime = sortedMessages.firstOrNull()?.time ?: 0L
-                    val TWELVE_HOURS_MS = 12 * 60 * 60 * 1000L
+
+                    val totalDuration = sortedMessages.last().time - startTime
+                    val windowDuration = max(totalDuration / 3, 3600_000L) // Минимум 1 час для страховки
+
                     val MIN_NEWS_PER_CHUNK = 20
 
                     val buffer = mutableListOf<Message>()
-                    var currentWindowEnd = startTime + TWELVE_HOURS_MS
+                    var currentWindowEnd = startTime + windowDuration
                     val globalApprovedTopics = mutableListOf<Topics>()
 
                     totalItemsToProcess = rawMessages.size
@@ -377,7 +379,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                 processNewsBuffer(buffer, currentLanguage, filterTopics, bannedWords, globalApprovedTopics, availableSpace)
                                 buffer.clear()
                             }
-                            currentWindowEnd += TWELVE_HOURS_MS
+                            currentWindowEnd += windowDuration
                         }
                         buffer.add(msg)
                     }
@@ -387,7 +389,42 @@ class NewsSummarizer(private val llm: LLMClient) {
                         buffer.clear()
                     }
 
-                    val finalTopics = globalApprovedTopics.sortedByDescending { it.weight }.take(maxTopics)
+                    val mergedTopics = if (filterTopics && globalApprovedTopics.isNotEmpty()) {
+                        MewsRepository.setUpdatingState("filtering_topics")
+                        try {
+                            smartMergeTopics(globalApprovedTopics, currentLanguage, 0, bannedWords)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Smart merge failed, falling back to algorithmic merge", e)
+                            globalApprovedTopics
+                        }
+                    } else {
+                        globalApprovedTopics
+                    }
+
+                    val msgTimeMap = rawMessages.associate { it.id to it.time }
+                    val topicsWithTime = mergedTopics.map { t ->
+                        val tMin = t.ids?.mapNotNull { msgTimeMap[it] }?.minOrNull() ?: startTime
+                        t to tMin
+                    }
+
+                    val windowMap = topicsWithTime.groupBy { (it.second - startTime) / windowDuration }
+                    val finalSelected = mutableListOf<Topics>()
+                    val pool = mutableListOf<Topics>()
+
+                    windowMap.values.forEach { windowItems ->
+                        val best = windowItems.maxByOrNull { it.first.weight }?.first
+                        if (best != null) {
+                            finalSelected.add(best)
+                            windowItems.forEach { if (it.first != best) pool.add(it.first) }
+                        }
+                    }
+
+                    val needed = maxTopics - finalSelected.size
+                    if (needed > 0) {
+                        finalSelected.addAll(pool.sortedByDescending { it.weight }.take(needed))
+                    }
+
+                    val finalTopics = finalSelected.sortedByDescending { it.weight }.take(maxTopics)
                     finalTopics.forEach { saveTopicToDb(it) }
 
                     MewsRepository.setLastTitlesUpdate(extractionTime)
@@ -414,6 +451,9 @@ class NewsSummarizer(private val llm: LLMClient) {
             val availableProgressSpace = 0.95f - baseProgress
             var successCount = 0
             var lastError: SummarizationErrorType? = null
+
+            val historyTimeMs = System.currentTimeMillis() - (72 * 60 * 60 * 1000L)
+            val history = MewsRepository.getRecentTitlesForStorylines(historyTimeMs)
 
             coroutineScope {
                 batches.forEachIndexed { index, batch ->
@@ -460,9 +500,6 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                                         var matchedParentId: Long? = null
                                         try {
-                                            val historyTimeMs = System.currentTimeMillis() - (72 * 60 * 60 * 1000L)
-                                            val history = MewsRepository.getRecentTitlesForStorylines(historyTimeMs)
-
                                             for (historyItem in history) {
                                                 if (historyItem.id == topic.id) continue
 
@@ -533,7 +570,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                             } else {
                                 for ((t, _, _) in topicsData) {
                                     try { MewsRepository.deleteTitleById(t.id) }
-                                    catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                                    catch (ex: kotlinx.coroutines.CancellationException) { throw ex }
                                     catch(_: Exception) {}
                                 }
                             }
@@ -657,26 +694,8 @@ class NewsSummarizer(private val llm: LLMClient) {
         }
 
         if (allExtracted.isEmpty() && criticalError != null) throw criticalError
-
         Log.d(TAG, "Extraction complete. Total topics raw: ${allExtracted.size}")
-
-        val filteredTopics = if (filterEnabled && allExtracted.isNotEmpty()) {
-            try {
-                if (criticalError?.errorType == SummarizationErrorType.QUOTA_EXCEEDED) {
-                    allExtracted
-                } else {
-                    MewsRepository.setUpdatingState("filtering_topics")
-                    smartMergeTopics(allExtracted, lang, 0, bannedNews)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Smart merge failed, falling back to algorithmic merge", e)
-                allExtracted
-            }
-        } else {
-            allExtracted
-        }
-
-        mergeIntoGlobal(filteredTopics, globalApprovedTopics)
+        mergeIntoGlobal(allExtracted, globalApprovedTopics)
     }
 
     private fun mergeIntoGlobal(newTopics: List<Topics>, globalCache: MutableList<Topics>) {
@@ -718,6 +737,7 @@ class NewsSummarizer(private val llm: LLMClient) {
     }
 
     private suspend fun smartMergeTopics(topics: List<Topics>, lang: String, depth: Int, banned: String): List<Topics> {
+        if (topics.isEmpty()) return emptyList()
         if (topics.size > 150 && depth < 3) {
             val mid = topics.size / 2
             return smartMergeTopics(topics.subList(0, mid), lang, depth + 1, banned) +
@@ -877,7 +897,14 @@ class NewsSummarizer(private val llm: LLMClient) {
 
     private suspend fun saveTopicToDb(t: Topics) {
         val ids = t.ids ?: emptyList()
-        MewsRepository.addTitle(newTimeVal = 0, newTitle = t.title, summary = "", messageIds = ids, status = TitleStatus.PROCESSING)
+        MewsRepository.addTitle(
+            newTimeVal = 0,
+            newTitle = t.title,
+            summary = "",
+            messageIds = ids,
+            status = TitleStatus.PROCESSING,
+            keywords = t.keywords
+        )
     }
 
     private suspend fun adaptiveSummarizeBatch(
@@ -896,7 +923,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
                 if (e.errorType == SummarizationErrorType.CONTENT_BLOCKED) {
                     if (batch.size <= 1) {
-                        try { MewsRepository.deleteTitleById(batch.first().first.id) } catch (e: Exception) { Log.e(TAG, "Delete block failed", e) }
+                        try { MewsRepository.deleteTitleById(batch.first().first.id) } catch (ex: Exception) { Log.e(TAG, "Delete block failed", ex) }
                         return emptyList()
                     }
                     Log.w(TAG, "Content blocked. Splitting summary batch.", e)
@@ -957,17 +984,18 @@ class NewsSummarizer(private val llm: LLMClient) {
         })
 
         val prompt = """
-        Ты — ведущий обозреватель. Твоя цель — написать материал, адаптируя объем под значимость события.
+        Ты — ведущий обозреватель. Твоя цель — написать глубокий материал, адаптируя объем под значимость события.
         Инструкции:
         1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык. Избегай канцеляризмов.
-        2. АДАПТИВНЫЙ ОБЪЕМ: Пиши ёмко. Категорически запрещено генерировать собственные выводы, прогнозы, 'воду' или добавлять экспертные оценки. Опирайся ИСКЛЮЧИТЕЛЬНО на твердые факты из исходника (субъекты, действия, локации, цифры). Сохрани стиль Smart Casual, заменив рассуждения высокой информационной плотностью. Лимит до 300 слов.
-        3. ПРОВЕРКА НА ГЕТЕРОГЕННОСТЬ (FALLBACK): Проанализируй массив `news_content`. Если в нем присутствуют независимые, не связанные друг с другом новости, НЕ пытайся объединить их связным текстом. Выдели самую значимую новость как основу (заголовок + абзац), а остальные события добавь в конец отдельным маркированным списком (в формате дайджеста). Ни один факт не должен быть утерян.
-        4. УМНАЯ ФИЛЬТРАЦИЯ (Список нежелательных тем: '$banned'):
+        2. АДАПТИВНЫЙ ОБЪЕМ:
+           — Крупные события: пиши ПОДРОБНЫЙ обзор. Обязательно: контекст, история, цитаты, факты, последствия из оригинальных текстов (до 500 слов).
+           — Рядовые новости: пиши ёмко, но детально. Не лей воду, давай факты (до 300 слов).
+        3. УМНАЯ ФИЛЬТРАЦИЯ (Список нежелательных тем: '$banned'):
            — Извлечь пользу. Если запрещенная тема упоминается вскользь — ИГНОРИРУЙ её.
            — Если весь текст состоит из рекламы, спама или новость посвящена теме из списка — верни пустую строку (summary: "").
-        5. Язык: ${lang}.
+        4. Язык: ${lang}.
         ФОРМАТ ОТВЕТА (СТРОГО JSON):
-        [{"id": <id из input>, "title": "<цепляющий заголовок>", "summary": "<текст статьи или пустая строка "">"}]
+        [{"id": <id из input>, "title": "<заголовок>", "summary": "<текст статьи или пустая строка "">"}]
         Ввод: $jsonInput
         """.trimIndent()
 

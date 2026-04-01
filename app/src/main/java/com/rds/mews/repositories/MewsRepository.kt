@@ -28,11 +28,8 @@ import com.rds.mews.settings_manager.AppSettings
 import com.rds.mews.settings_manager.SettingsManager
 import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.workers.AlarmScheduler
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 
@@ -243,26 +240,54 @@ object MewsRepository {
 
         titles = titleDao.getAllTitlesFlow()
             .map { entities ->
-                entities.map { entity ->
-                    val sourcesList = titleDao.getSourcesForTitleFlow(entity.id).first()
-                    val messagesList = titleDao.getMessagesForTitleFlow(entity.id).first()
-                    val sourcesStr = sourcesList.joinToString(", ") { it.customName ?: it.originalName }
-                    val linksStr = messagesList.joinToString(", ") { it.id.toString() }
-                    Title(
-                        entity.id,
-                        eventTime = entity.eventTime,
-                        title = entity.title,
-                        summary = entity.summary,
-                        sources = sourcesStr,
-                        ids = linksStr,
-                        status = entity.status,
-                        isRead = entity.isRead
-                    )
+                coroutineScope {
+                    entities.map { entity ->
+                        async {
+                            val sourcesList = titleDao.getSourcesForTitleFlow(entity.id).first()
+                            val messagesList = titleDao.getMessagesForTitleFlow(entity.id).first()
+                            val sourcesStr = sourcesList.joinToString(", ") { it.customName ?: it.originalName }
+                            val idsStr = messagesList.joinToString(", ") { it.id.toString() }
+
+                            val parent = titleDao.getParentTitle(entity.id)
+                            val child = titleDao.getChildTitle(entity.id)
+                            val depth = calculateDepth(entity)
+
+                            Title(
+                                id = entity.id,
+                                title = entity.title,
+                                summary = entity.summary,
+                                eventTime = entity.eventTime,
+                                updateTime = entity.updateTime,
+                                status = entity.status,
+                                isRead = entity.isRead,
+                                sources = sourcesStr,
+                                ids = idsStr,
+                                keywords = entity.keywords,
+                                parentId = parent?.id,
+                                childId = child?.id,
+                                relatedTitle = child?.title,
+                                relatedSnippet = child?.summary?.take(120),
+                                storyDepth = depth
+                            )
+                        }
+                    }.awaitAll()
                 }
             }
-            .flowOn(Dispatchers.IO)
+            .flowOn(Dispatchers.Default)
 
         isInitialized = true
+    }
+
+    private suspend fun calculateDepth(entity: TitleEntity): Int {
+        var current: TitleEntity? = entity
+        var depth = 0
+        while (depth < 5) {
+            val parent = current?.let { titleDao.getParentTitle(it.id) }
+            if (parent == null) break
+            current = parent
+            depth++
+        }
+        return depth
     }
 
     val darkThemeList: List<DarkTheme> get() = DarkTheme.entries
@@ -333,6 +358,19 @@ object MewsRepository {
 
     fun startTitlesUpdate(context: Context) {
         setTitlesUpdate(context)
+    }
+
+    fun manuallyLinkTopics(childId: Long, parentId: Long) {
+        externalScope.launch(Dispatchers.IO) {
+            try {
+                database.openHelper.writableDatabase.execSQL(
+                    "INSERT OR IGNORE INTO title_related_map (title_id_1, title_id_2) VALUES ($childId, $parentId)"
+                )
+                Log.d("Mews", "Успешно связали новость $childId с родителем $parentId")
+            } catch (e: Exception) {
+                Log.e("Mews", "Ошибка при связывании", e)
+            }
+        }
     }
 
     fun markTitleAsRead(id: Long, read: Boolean = true) {
@@ -451,6 +489,7 @@ object MewsRepository {
         summary: String,
         messageIds: List<Long>,
         status: TitleStatus = TitleStatus.DEFAULT,
+        keywords: List<String> = emptyList()
     ): Long = withContext(Dispatchers.IO) {
         val titleEntity = TitleEntity(
             title = newTitle,
@@ -461,7 +500,7 @@ object MewsRepository {
             isRead = false,
             isPinned = false,
             importanceWeight = 0,
-            keywords = emptyList()
+            keywords = keywords
         )
         val titleId = titleDao.insert(titleEntity)
 
@@ -561,6 +600,12 @@ object MewsRepository {
     fun addBannedNew(newValue: String) {
         if (!bannedNewsFlow.value.contains(newValue)) {
             updateSetting { it.copy(bannedNews = it.bannedNews + newValue) }
+        }
+    }
+
+    fun addBannedKeyword(word: String) {
+        if (!bannedNewsFlow.value.contains(word)) {
+            updateSetting { it.copy(bannedNews = it.bannedNews + word) }
         }
     }
 
