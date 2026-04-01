@@ -1,6 +1,6 @@
 package com.rds.mews.ui.grids
 
-import TimelineMarker
+import com.rds.mews.ui.custom_elements.TimelineMarker
 import android.annotation.SuppressLint
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -87,7 +87,6 @@ import kotlin.collections.component2
 import kotlin.collections.iterator
 import com.rds.mews.ui.theme.Shapes
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
-import com.rds.mews.localcore.TitleSorting
 
 @Composable
 fun TitlesScreen(
@@ -386,7 +385,8 @@ fun TitlesGrid(
                                 TimelineMarker(
                                     time = item.eventTime,
                                     isFirst = isFirst,
-                                    isLast = isLast
+                                    isLast = isLast,
+                                    isRead = item.isRead
                                 )
                             }
 
@@ -406,9 +406,10 @@ fun TitlesGrid(
                                     onBanTheme = onBanTheme,
                                     sources = sources,
                                     changeSourceState = changeSourceState,
-                                    backgroundColor = if (read)
-                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.5f)
-                                    else MaterialTheme.colorScheme.secondaryContainer,
+//                                    backgroundColor = if (read)
+//                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.5f)
+//                                    else MaterialTheme.colorScheme.secondaryContainer,
+                                    backgroundColor = MaterialTheme.colorScheme.secondaryContainer,
                                     expandable = lastTitlesUpdateExists(),
                                     markAsUnread = {
                                         onToggleExpanded(item.id)

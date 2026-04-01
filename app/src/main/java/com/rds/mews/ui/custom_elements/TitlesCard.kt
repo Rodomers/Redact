@@ -11,6 +11,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,6 +43,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -131,6 +135,7 @@ fun TitlesCard(
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
     var isPopupReady by remember { mutableStateOf(false) }
     val expansionAnim = remember { Animatable(if (isExpanded) 1f else 0f) }
+    val isRead = title.isRead
 
     LaunchedEffect(isExpanded, expansionAnim.value == 0f) {
         if (!isExpanded && expansionAnim.value == 0f) {
@@ -177,14 +182,17 @@ fun TitlesCard(
             TitlesHeaderContent(
                 title = title,
                 noTime = noTime,
+                isRead = isRead,
                 onClicked = {},
-                clickableEnabled = false
+                clickableEnabled = false,
+                expansionFraction = 0f
             )
 
             if (showSnippet && expandable) {
                 SnippetText(
                     text = title.summary,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = 12.dp),
+                    alpha = if (isRead) 0.6f else 1f
                 )
             }
         }
@@ -206,6 +214,7 @@ fun TitlesCard(
                 rememberPage = rememberPage,
                 originalNoTime = noTime,
                 showSnippet = showSnippet,
+                isRead = isRead,
                 backgroundColor = backgroundColor
             )
         }
@@ -303,6 +312,7 @@ private fun HeroExpansionContent(
     rememberPage: (Int) -> Unit,
     originalNoTime: Boolean,
     showSnippet: Boolean,
+    isRead: Boolean,
     backgroundColor: Color
 ) {
     val context = LocalContext.current
@@ -360,7 +370,7 @@ private fun HeroExpansionContent(
                         onReady()
                     }
             ) {
-                MeasureCardCompleteStructure(title)
+                MeasureCardCompleteStructure(title, isRead)
             }
         }
 
@@ -421,6 +431,7 @@ private fun HeroExpansionContent(
                     expansionProgress = clampedProgress,
                     originalNoTime = originalNoTime,
                     showSnippet = showSnippet,
+                    isRead = isRead,
                     headerStartColor = backgroundColor
                 )
             }
@@ -430,7 +441,8 @@ private fun HeroExpansionContent(
 
 @Composable
 private fun MeasureCardCompleteStructure(
-    title: Title
+    title: Title,
+    isRead: Boolean
 ) {
     Column(modifier = Modifier
         .fillMaxWidth()
@@ -439,8 +451,10 @@ private fun MeasureCardCompleteStructure(
         TitlesHeaderContent(
             title = title,
             noTime = false,
+            isRead = isRead,
             onClicked = {},
-            animationProgress = 1f
+            animationProgress = 1f,
+            expansionFraction = 1f
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -465,11 +479,35 @@ private fun TitlesHeaderContent(
     modifier: Modifier = Modifier,
     title: Title,
     noTime: Boolean,
+    isRead: Boolean,
     onClicked: () -> Unit,
     clickableEnabled: Boolean = true,
-    animationProgress: Float = 1f
+    animationProgress: Float = 1f,
+    expansionFraction: Float = 0f
 ) {
-    Row(
+    val baseTitleWeight = if (isRead) 400 else 800
+    val baseTimeWeight = if (isRead) 400 else 700
+
+    val expandedTitleWeight = 800
+    val expandedTimeWeight = 700
+
+    val currentBaseTitleWeight by animateIntAsState(targetValue = baseTitleWeight, label = "titleWeight")
+    val currentBaseTimeWeight by animateIntAsState(targetValue = baseTimeWeight, label = "timeWeight")
+
+    val finalTitleWeight = currentBaseTitleWeight + ((expandedTitleWeight - currentBaseTitleWeight) * expansionFraction).roundToInt()
+    val finalTimeWeight = currentBaseTimeWeight + ((expandedTimeWeight - currentBaseTimeWeight) * expansionFraction).roundToInt()
+
+    val baseAlpha = if (isRead) 0.6f else 1.0f
+    val currentBaseAlpha by animateFloatAsState(targetValue = baseAlpha, label = "contentAlpha")
+    val finalAlpha = currentBaseAlpha + ((1.0f - currentBaseAlpha) * expansionFraction)
+
+    val baseDotSize = if (isRead) 0.dp else 8.dp
+    val currentDotSize by animateDpAsState(targetValue = baseDotSize, label = "dotSize")
+
+    val baseSpacerWidth = if (isRead) 0.dp else 6.dp
+    val currentSpacerWidth by animateDpAsState(targetValue = baseSpacerWidth, label = "spacerWidth")
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .then(
@@ -482,35 +520,55 @@ private fun TitlesHeaderContent(
                     Modifier
                 }
             )
-            .padding(horizontal = 16.dp, vertical = 0.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         if (!noTime) {
             val alpha = (animationProgress * 2f).coerceIn(0f, 1f)
 
-            Text(
-                text = getFormattedTimeUnix(title.eventTime),
-                textAlign = TextAlign.Left,
+            Box(
                 modifier = Modifier
                     .layout { measurable, constraints ->
                         val placeable = measurable.measure(constraints)
-                        val width = (placeable.width * animationProgress).roundToInt()
-                        layout(width, placeable.height) {
-                            placeable.place(0, 0)
+                        val height = (placeable.height * animationProgress).roundToInt()
+                        layout(placeable.width, height) {
+                            placeable.place(0, height - placeable.height)
                         }
                     }
-                    .padding(end = (8 * animationProgress).dp, top = 8.dp, bottom = 8.dp)
-                    .wrapContentWidth()
                     .alpha(alpha)
-            )
+                    .padding(bottom = 6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.surface, Shapes.large)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(currentDotSize)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+
+                    Spacer(modifier = Modifier.width(currentSpacerWidth))
+
+                    Text(
+                        text = getFormattedTimeUnix(title.eventTime),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = finalAlpha),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight(finalTimeWeight),
+                        textAlign = TextAlign.Left
+                    )
+                }
+            }
         }
         Text(
             text = title.title,
             textAlign = TextAlign.Left,
-            modifier = Modifier
-                .padding(vertical = 12.dp)
-                .weight(1f),
-            fontWeight = FontWeight.Bold
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = finalAlpha),
+            modifier = Modifier.fillMaxWidth(),
+            fontWeight = FontWeight(finalTitleWeight)
         )
     }
 }
@@ -531,6 +589,7 @@ private fun ExpandedCardContent(
     expansionProgress: Float,
     originalNoTime: Boolean,
     showSnippet: Boolean,
+    isRead: Boolean,
     headerStartColor: Color
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -552,7 +611,9 @@ private fun ExpandedCardContent(
 
     val shouldAnimateHeader = headerStartColor != headerEndColor
 
-    val copiedText = "${title.title}\n\n${title.summary}\n\n${source}: Mews, ${title.sources}".replace(
+    val copiedText = "${title.title}\n\n${title.summary}\n\n${source}: Mews, ${
+        title.sources.toList().distinct()
+    }".replace(
         Regex("[*_]"),
         ""
     )
@@ -575,7 +636,7 @@ private fun ExpandedCardContent(
     val buttons = listOf(
         TextButtonInputs(stringResource(R.string.share_btn_desc), ::shareText),
         TextButtonInputs(stringResource(R.string.ban_btn_desc), ::banNew, stringResource(R.string.titles_card_banned)),
-                TextButtonInputs(stringResource(R.string.mark_as_unread_btn_desc), onMarkAsUnread)
+        TextButtonInputs(stringResource(R.string.mark_as_unread_btn_desc), onMarkAsUnread)
     )
 
     val headerAnimProgress = if (originalNoTime) expansionProgress else 1f
@@ -623,9 +684,11 @@ private fun ExpandedCardContent(
                 TitlesHeaderContent(
                     title = title,
                     noTime = false,
+                    isRead = isRead,
                     onClicked = {},
                     clickableEnabled = false,
-                    animationProgress = headerAnimProgress
+                    animationProgress = headerAnimProgress,
+                    expansionFraction = expansionProgress
                 )
 
                 if (showSnippet) {
@@ -641,7 +704,7 @@ private fun ExpandedCardContent(
                                     placeable.place(0, yOffset)
                                 }
                             },
-                        alpha = snippetAlpha
+                        alpha = snippetAlpha * if (isRead) 0.6f else 1f
                     )
                 }
             }

@@ -63,7 +63,7 @@ fun BaseFloatingBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = maxHeight),
-                shape = Shapes.large,
+                shape = Shapes.extraLarge,
                 color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.97f)
             ) {
                 Column(

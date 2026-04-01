@@ -1,3 +1,6 @@
+package com.rds.mews.ui.custom_elements
+
+import android.annotation.SuppressLint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -5,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -17,19 +21,22 @@ fun TimelineMarker(
     time: Long,
     isFirst: Boolean,
     isLast: Boolean,
-    modifier: Modifier = Modifier,
+    isRead: Boolean,
+    @SuppressLint("ModifierParameter") modifier: Modifier = Modifier,
     topOffset: Dp = 35.dp
 ) {
     Row(modifier = modifier.fillMaxHeight()) {
+        val backgroundColor = MaterialTheme.colorScheme.surface
+
         Text(
             text = getFormattedTimeUnix(time).split(":").joinToString("\n"),
             modifier = Modifier
                 .width(37.dp)
                 .padding(top = 16.dp, end = 8.dp),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface,
             fontSize = 16.sp,
-            fontWeight = FontWeight.W500,
+            fontWeight = if (isRead) FontWeight.Normal else FontWeight.Bold,
             textAlign = TextAlign.Center
         )
 
@@ -38,17 +45,14 @@ fun TimelineMarker(
                 .width(24.dp)
                 .fillMaxHeight()
         ) {
-            val lineColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(0.3f)
-            val dotColor = MaterialTheme.colorScheme.onSecondaryContainer
+            val lineColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f)
+            val dotColor = if (isRead) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val dotRadius = 5.dp.toPx()
                 val lineWidth = 2.dp.toPx()
-                val lineColor = lineColor
-                val dotColor = dotColor
-
                 val yOffsetPx = topOffset.toPx()
-                val centerX = size.width / 2
+                val centerX = size.width / 2f
 
                 if (!isFirst) {
                     drawLine(
@@ -67,11 +71,25 @@ fun TimelineMarker(
                     )
                 }
 
-                drawCircle(
-                    color = dotColor,
-                    radius = dotRadius,
-                    center = Offset(centerX, yOffsetPx)
-                )
+                if (isRead) {
+                    drawCircle(
+                        color = backgroundColor,
+                        radius = dotRadius,
+                        center = Offset(centerX, yOffsetPx)
+                    )
+                    drawCircle(
+                        color = dotColor,
+                        radius = dotRadius,
+                        center = Offset(centerX, yOffsetPx),
+                        style = Stroke(width = lineWidth)
+                    )
+                } else {
+                    drawCircle(
+                        color = dotColor,
+                        radius = dotRadius,
+                        center = Offset(centerX, yOffsetPx)
+                    )
+                }
             }
         }
     }
