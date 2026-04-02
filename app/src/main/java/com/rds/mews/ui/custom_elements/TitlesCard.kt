@@ -66,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -236,8 +237,16 @@ private fun SnippetText(
     modifier: Modifier = Modifier,
     alpha: Float = 1f
 ) {
+    val cleanText = remember(text) {
+        text
+            .replace(Regex("\\[(.*?)\\]\\(.*?\\)"), "$1")
+            .replace(Regex("[*_~#>`]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
     Text(
-        text = text.replace(Regex("[*_]"), ""),
+        text = cleanText,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
@@ -695,7 +704,7 @@ private fun ExpandedCardContent(
         }
     }
 
-    val copiedText = "${title.title}\n\n${title.summary}\n\nИсточник: Mews, ${title.sources.toList().distinct()}"
+    val copiedText = "${title.title}\n\n${title.summary}\n\nИсточник: Mews, ${title.sources}"
     fun copyText() { clipboardManager.setText(AnnotatedString(copiedText)) }
     fun shareText() {
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
@@ -704,10 +713,9 @@ private fun ExpandedCardContent(
         }
         context.startActivity(Intent.createChooser(sendIntent, null))
     }
-    fun banNew() { onBanTheme(title.title) }
     val buttons = listOf(
         TextButtonInputs(stringResource(R.string.share_btn_desc), ::shareText),
-        TextButtonInputs(stringResource(R.string.ban_btn_desc), ::banNew, stringResource(R.string.titles_card_banned)),
+//        TextButtonInputs(stringResource(R.string.ban_btn_desc), ::banNew, stringResource(R.string.titles_card_banned)),
         TextButtonInputs(stringResource(R.string.mark_as_unread_btn_desc), onMarkAsUnread)
     )
 
@@ -752,7 +760,11 @@ private fun ExpandedCardContent(
             }
         }
 
-        Box(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
+        Box(modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f, fill = false)
+            .clipToBounds()
+        ) {
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = sources?.isNotEmpty() ?: false,

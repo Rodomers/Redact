@@ -4,8 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,15 +17,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,7 +53,6 @@ import com.rds.mews.ui.custom_elements.ApiKeyBottomSheet
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
-import com.rds.mews.ui.custom_elements.CustomIconButton
 import com.rds.mews.ui.custom_elements.SettingsItem
 import com.rds.mews.ui.custom_elements.CustomSwitch
 import com.rds.mews.ui.custom_elements.CustomTextButton
@@ -66,6 +62,13 @@ import com.rds.mews.ui.custom_elements.customHeader
 import com.rds.mews.ui.theme.Shapes
 import com.rds.mews.viewmodels.SettingsViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.key
+import com.rds.mews.ui.custom_elements.AnimatedKeywordItem
+import com.rds.mews.ui.custom_elements.CustomKeywordButton
 
 @Composable
 fun SettingsScreen(
@@ -441,25 +444,25 @@ fun SettingsGrid(
     if (state.bannedNewsScreenOpened) {
         val bannedItems = remember(state.bannedNews) {
             val list = mutableListOf<@Composable () -> Unit>()
-            state.bannedNews.forEach { link ->
-                if (link.isNotBlank()) {
-                    list.add {
-                        SettingsItem(
-                            text = link,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        ) {
-                            CustomIconButton(
-                                inputs = IconButtonInputs(
-                                    icon = Icons.Default.Close,
-                                    action = { functions.delBannedNews(link) }
-                                ),
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .background(
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
-                                        shape = Shapes.large
-                                    )
-                            )
+
+            list.add {
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateContentSize()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    state.bannedNews.forEach { keyword ->
+                        if (keyword.isNotBlank()) {
+                            key(keyword) {
+                                AnimatedKeywordItem(
+                                    keyword = keyword,
+                                    onDelete = { functions.delBannedNews(it) }
+                                )
+                            }
                         }
                     }
                 }

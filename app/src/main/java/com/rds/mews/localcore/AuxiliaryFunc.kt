@@ -148,7 +148,7 @@ fun setParserUpdate(context: Context, isImmediateSetup: Boolean = false, interva
         .build()
 
     val periodicWorkRequestBuilder = PeriodicWorkRequestBuilder<ParserWorker>(
-        intervalMin.toLong(), TimeUnit.MINUTES
+        30L, TimeUnit.MINUTES
     ).setConstraints(constraints)
 
     if (isImmediateSetup) {

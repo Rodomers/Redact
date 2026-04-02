@@ -163,7 +163,7 @@ class LLMClient(
 
             } catch (e: GeminiException) {
                 if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) {
-                    if (MewsRepository.userApiKey.value != MewsRepository.DEFAULT_GEMINI_API_KEY && switchToFallbackModel()) {
+                    if (switchToFallbackModel()) {
                         attempt = 0
                         continue
                     }
@@ -503,22 +503,28 @@ class NewsSummarizer(private val llm: LLMClient) {
                                             for (historyItem in history) {
                                                 if (historyItem.id == topic.id) continue
 
-                                                var hasKeywordMatch = false
+                                                var keywordMatches = 0
                                                 for (tk in topic.keywords) {
                                                     for (hk in historyItem.keywords) {
                                                         if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.85)) {
-                                                            hasKeywordMatch = true
+                                                            keywordMatches++
                                                             break
                                                         }
                                                     }
-                                                    if (hasKeywordMatch) break
+                                                    if (keywordMatches >= 3) break
                                                 }
 
-                                                if (hasKeywordMatch) {
-                                                    val match45 = TextComparator.areSimilar(newTitle, historyItem.title, 0.45) || TextComparator.areSimilar(summary, historyItem.summary, 0.45)
-                                                    val match60 = TextComparator.areSimilar(newTitle, historyItem.title, 0.61) || TextComparator.areSimilar(summary, historyItem.summary, 0.61)
+                                                when (keywordMatches) {
+                                                    in (1..2) -> {
+                                                        val match45 = TextComparator.areSimilar(newTitle, historyItem.title, 0.45) || TextComparator.areSimilar(summary, historyItem.summary, 0.45)
+                                                        val areSimilar = TextComparator.areSimilar(newTitle, historyItem.title, 0.98) || TextComparator.areSimilar(summary, historyItem.summary, 0.61)
 
-                                                    if (match45 && !match60) {
+                                                        if (match45 && !areSimilar) {
+                                                            matchedParentId = historyItem.id
+                                                            break
+                                                        }
+                                                    }
+                                                    in (3..Int.MAX_VALUE) -> {
                                                         matchedParentId = historyItem.id
                                                         break
                                                     }
@@ -986,16 +992,19 @@ class NewsSummarizer(private val llm: LLMClient) {
         val prompt = """
         Ты — ведущий обозреватель. Твоя цель — написать глубокий материал, адаптируя объем под значимость события.
         Инструкции:
-        1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык. Избегай канцеляризмов.
-        2. АДАПТИВНЫЙ ОБЪЕМ:
-           — Крупные события: пиши ПОДРОБНЫЙ обзор. Обязательно: контекст, история, цитаты, факты, последствия из оригинальных текстов (до 500 слов).
-           — Рядовые новости: пиши ёмко, но детально. Не лей воду, давай факты (до 300 слов).
-        3. УМНАЯ ФИЛЬТРАЦИЯ (Список нежелательных тем: '$banned'):
+        1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык. Избегай канцеляризмов. Используй абзацы для разделения мыслей (не более 3-4 предложений в абзаце).
+        2. АДАПТИВНЫЙ ОБЪЕМ И ДЕТАЛИЗАЦИЯ:
+           — Сохраняй не менее 40% исходной фактологии. Обязательно переноси из источника: конкретные цифры, имена, названия компаний и точные цитаты.
+           — Крупные события: пиши ПОДРОБНЫЙ обзор (от 300 до 600 слов). Контекст, история, факты, последствия.
+           — Рядовые новости: пиши ёмко, но детально (от 150 до 300 слов). 
+        3. РАЗБИВКА ДАЙДЖЕСТОВ: Если переданный текст содержит несколько независимых новостей, ОБЯЗАТЕЛЬНО разделяй их подзаголовками формата `### Название темы` и форматируй ключевые тезисы списком (`- `).
+        4. УМНАЯ ФИЛЬТРАЦИЯ (Список нежелательных тем: '$banned'):
            — Извлечь пользу. Если запрещенная тема упоминается вскользь — ИГНОРИРУЙ её.
            — Если весь текст состоит из рекламы, спама или новость посвящена теме из списка — верни пустую строку (summary: "").
-        4. Язык: ${lang}.
+        5. Форматирование: активно используй **жирный шрифт** для выделения ключевых имен и терминов.
+        6. Язык: ${lang}.
         ФОРМАТ ОТВЕТА (СТРОГО JSON):
-        [{"id": <id из input>, "title": "<заголовок>", "summary": "<текст статьи или пустая строка "">"}]
+        [{"id": <id из input>, "title": "<заголовок>", "summary": "<отформатированный текст статьи или пустая строка "">"}]
         Ввод: $jsonInput
         """.trimIndent()
 

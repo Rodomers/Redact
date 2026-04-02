@@ -598,14 +598,8 @@ object MewsRepository {
     fun setBannedNews(newValue: Set<String>) = updateSetting { it.copy(bannedNews = newValue) }
 
     fun addBannedNew(newValue: String) {
-        if (!bannedNewsFlow.value.contains(newValue)) {
+        if (!bannedNewsFlow.value.contains(newValue) && bannedNewsFlow.value.size <= 40) {
             updateSetting { it.copy(bannedNews = it.bannedNews + newValue) }
-        }
-    }
-
-    fun addBannedKeyword(word: String) {
-        if (!bannedNewsFlow.value.contains(word)) {
-            updateSetting { it.copy(bannedNews = it.bannedNews + word) }
         }
     }
 

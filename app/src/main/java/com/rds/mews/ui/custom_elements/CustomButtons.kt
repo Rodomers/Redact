@@ -21,12 +21,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Indication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -35,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import com.rds.mews.localcore.IconButtonInputs
@@ -224,6 +235,108 @@ fun CustomIconButton(
             imageVector = inputs.icon,
             contentDescription = null,
             tint = contentColor
+        )
+    }
+}
+
+@Composable
+fun CustomKeywordButton(
+    text: String,
+    onDeleteAction: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    defaultBackgroundColor: Color = Color.Transparent,
+    contentColor: Color = LocalContentColor.current,
+    shape: CornerBasedShape = Shapes.medium
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "scaleAnimation"
+    )
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = modifier
+            .wrapContentWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                alpha = if (enabled) 1f else 0.5f
+            }
+            .clip(shape)
+            .drawBehind {
+                drawRect(color = defaultBackgroundColor)
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onDeleteAction,
+                role = Role.Button
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = text,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        Spacer(modifier = Modifier.width(6.dp))
+
+        Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@Composable
+fun AnimatedKeywordItem(
+    keyword: String,
+    onDelete: (String) -> Unit
+) {
+    var isDeleting by remember { mutableStateOf(false) }
+
+    val alpha by animateFloatAsState(
+        targetValue = if (isDeleting) 0f else 1f,
+        animationSpec = tween(durationMillis = 200),
+        finishedListener = {
+            if (isDeleting) onDelete(keyword)
+        },
+        label = "alphaOut"
+    )
+
+    val scale by animateFloatAsState(
+        targetValue = if (isDeleting) 0.5f else 1f,
+        animationSpec = tween(durationMillis = 200),
+        label = "scaleOut"
+    )
+
+    if (alpha > 0f) {
+        CustomKeywordButton(
+            text = keyword,
+            onDeleteAction = { isDeleting = true },
+            modifier = Modifier.graphicsLayer {
+                this.alpha = alpha
+                this.scaleX = scale
+                this.scaleY = scale
+            },
+            defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            shape = Shapes.large
         )
     }
 }

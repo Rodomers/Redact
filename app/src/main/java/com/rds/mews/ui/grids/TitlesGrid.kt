@@ -104,8 +104,21 @@ fun TitlesScreen(
                 is TitlesScrollEvent.ScrollToTop -> lazyGridState.animateScrollToItem(0)
                 is TitlesScrollEvent.ScrollToItem -> {
                     if (event.animated) {
+                        val targetIndex = event.id
+                        val currentIndex = lazyGridState.firstVisibleItemIndex
+                        val distance = kotlin.math.abs(targetIndex - currentIndex)
+
+                        if (distance > 10) {
+                            val preTargetIndex = if (targetIndex > currentIndex) {
+                                targetIndex - 5
+                            } else {
+                                targetIndex + 5
+                            }
+                            lazyGridState.scrollToItem(preTargetIndex)
+                        }
+
                         lazyGridState.animateScrollToItem(
-                            index = event.id,
+                            index = targetIndex,
                             scrollOffset = -150
                         )
                     } else {
