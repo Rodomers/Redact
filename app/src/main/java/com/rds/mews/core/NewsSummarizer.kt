@@ -359,7 +359,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     val startTime = sortedMessages.firstOrNull()?.time ?: 0L
 
                     val totalDuration = sortedMessages.last().time - startTime
-                    val windowDuration = max(totalDuration / 3, 3600_000L) // Минимум 1 час для страховки
+                    val windowDuration = max(totalDuration / 3, 3600_000L)
 
                     val MIN_NEWS_PER_CHUNK = 20
 
@@ -452,8 +452,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             var successCount = 0
             var lastError: SummarizationErrorType? = null
 
-            val historyTimeMs = System.currentTimeMillis() - (72 * 60 * 60 * 1000L)
-            val history = MewsRepository.getRecentTitlesForStorylines(historyTimeMs)
+            val history = MewsRepository.getRecentTitlesForStorylines(System.currentTimeMillis() - (72 * 60 * 60 * 1000L))
 
             coroutineScope {
                 batches.forEachIndexed { index, batch ->
@@ -491,7 +490,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                         val (summary, newTitle) = resultData
                                         val (topic, suitableMessages, _) = originalData
 
-                                        if (summary.isBlank()) {
+                                        if (summary.isBlank() || summary == "REJECTED") {
                                             MewsRepository.deleteTitleById(topic.id)
                                             continue
                                         }
@@ -500,6 +499,9 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                                         var matchedParentId: Long? = null
                                         try {
+                                            var bestMatchId: Long? = null
+                                            var maxScore = 0.0
+
                                             for (historyItem in history) {
                                                 if (historyItem.id == topic.id) continue
 
@@ -511,25 +513,30 @@ class NewsSummarizer(private val llm: LLMClient) {
                                                             break
                                                         }
                                                     }
-                                                    if (keywordMatches >= 3) break
                                                 }
 
-                                                when (keywordMatches) {
-                                                    in (1..2) -> {
-                                                        val match45 = TextComparator.areSimilar(newTitle, historyItem.title, 0.45) || TextComparator.areSimilar(summary, historyItem.summary, 0.45)
-                                                        val areSimilar = TextComparator.areSimilar(newTitle, historyItem.title, 0.98) || TextComparator.areSimilar(summary, historyItem.summary, 0.61)
+                                                val isTitleVerySimilar = TextComparator.areSimilar(newTitle, historyItem.title, 0.90)
 
-                                                        if (match45 && !areSimilar) {
-                                                            matchedParentId = historyItem.id
-                                                            break
-                                                        }
-                                                    }
-                                                    in (3..Int.MAX_VALUE) -> {
-                                                        matchedParentId = historyItem.id
-                                                        break
+                                                if (keywordMatches >= 3 && isTitleVerySimilar) {
+                                                    bestMatchId = historyItem.id
+                                                    break
+                                                }
+
+                                                val match45Title = TextComparator.areSimilar(newTitle, historyItem.title, 0.45)
+                                                val match45Summary = TextComparator.areSimilar(summary, historyItem.summary, 0.45)
+
+                                                if (keywordMatches >= 1 && (match45Title || match45Summary)) {
+                                                    var currentScore = keywordMatches.toDouble()
+                                                    if (match45Title) currentScore += 0.5
+                                                    if (match45Summary) currentScore += 0.5
+
+                                                    if (currentScore > maxScore) {
+                                                        maxScore = currentScore
+                                                        bestMatchId = historyItem.id
                                                     }
                                                 }
                                             }
+                                            matchedParentId = bestMatchId
                                         } catch (e: Exception) {
                                             if (e !is kotlinx.coroutines.CancellationException) {
                                                 Log.e(TAG, "Storylines matching failed for title ${topic.id}", e)
@@ -950,6 +957,14 @@ class NewsSummarizer(private val llm: LLMClient) {
                     val newTitle = obj.optString("title").takeIf { it.isNotBlank() } ?: ""
 
                     val original = batch.find { it.first.ids?.contains(id) == true }
+
+                    if (summary.trim() == "REJECTED" || summary.isBlank()) {
+                        if (original != null) {
+                            MewsRepository.deleteTitleById(original.first.id)
+                        }
+                        continue
+                    }
+
                     if (original != null) {
                         results.add(Triple(id, Pair(summary, newTitle.ifBlank { original.first.title }), original))
                         processedIds.add(id)
@@ -990,21 +1005,16 @@ class NewsSummarizer(private val llm: LLMClient) {
         })
 
         val prompt = """
-        Ты — ведущий обозреватель. Твоя цель — написать глубокий материал, адаптируя объем под значимость события.
+        Ты — ведущий обозреватель. Твоя цель — написать глубокий материал, адаптируя его под значимость события.
         Инструкции:
-        1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык. Избегай канцеляризмов. Используй абзацы для разделения мыслей (не более 3-4 предложений в абзаце).
-        2. АДАПТИВНЫЙ ОБЪЕМ И ДЕТАЛИЗАЦИЯ:
-           — Сохраняй не менее 40% исходной фактологии. Обязательно переноси из источника: конкретные цифры, имена, названия компаний и точные цитаты.
-           — Крупные события: пиши ПОДРОБНЫЙ обзор (от 300 до 600 слов). Контекст, история, факты, последствия.
-           — Рядовые новости: пиши ёмко, но детально (от 150 до 300 слов). 
-        3. РАЗБИВКА ДАЙДЖЕСТОВ: Если переданный текст содержит несколько независимых новостей, ОБЯЗАТЕЛЬНО разделяй их подзаголовками формата `### Название темы` и форматируй ключевые тезисы списком (`- `).
-        4. УМНАЯ ФИЛЬТРАЦИЯ (Список нежелательных тем: '$banned'):
-           — Извлечь пользу. Если запрещенная тема упоминается вскользь — ИГНОРИРУЙ её.
-           — Если весь текст состоит из рекламы, спама или новость посвящена теме из списка — верни пустую строку (summary: "").
-        5. Форматирование: активно используй **жирный шрифт** для выделения ключевых имен и терминов.
-        6. Язык: ${lang}.
+        1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык без канцеляризмов. Используй абзацы (не более 3-4 предложений).
+        2. ФАКТОЛОГИЯ: Сохраняй максимум фактологии: переноси из источника все конкретные цифры, имена, названия компаний и точные цитаты.
+        3. КРИТИЧЕСКИЙ ЗАПРЕТ: Запрещено генерировать данные, имена, номера и последствия, отсутствующие во входящем JSON.
+        4. ФОРМАТИРОВАНИЕ: Запрещено создавать маркированные списки, если в них менее 3 элементов.
+        5. УМНАЯ ФИЛЬТРАЦИЯ: Обязательно верни JSON-объект для каждого переданного id. Если текст состоит из рекламы, спама или посвящен нежелательным темам ('$banned'), верни строгое значение 'summary': 'REJECTED'.
+        6. ЯЗЫК: ${lang}.
         ФОРМАТ ОТВЕТА (СТРОГО JSON):
-        [{"id": <id из input>, "title": "<заголовок>", "summary": "<отформатированный текст статьи или пустая строка "">"}]
+        [{"id": <id из input>, "title": "<заголовок>", "summary": "<отформатированный текст статьи или строго "REJECTED">"}]
         Ввод: $jsonInput
         """.trimIndent()
 
