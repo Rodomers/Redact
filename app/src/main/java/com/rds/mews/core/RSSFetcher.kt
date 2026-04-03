@@ -4,10 +4,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import com.rds.mews.database.SourceEntity
 import com.rds.mews.localcore.SourceType
-import com.rds.mews.localcore.defineSourceType
 import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.jsoup.Jsoup
@@ -124,7 +122,7 @@ class RssFetcher(
                             text = "${item.title ?: ""}\n\n$fullText".trim()
                         }
                     }
-                    MewsRepository.addMessage(sourceId = source.id, messageTime = time, link = link, messageText = text)
+                    MewsRepository.addMessage(sourceId = source.id, messageTime = time, link = link, messageText = text, mediaUrls = item.mediaUrls)
                     itemsAdded++
                 }
                 feedsProcessed++
@@ -229,7 +227,8 @@ class RssFetcher(
         val title: String?,
         val link: String?,
         val description: String?,
-        val pubDateMillis: Long?
+        val pubDateMillis: Long?,
+        val mediaUrls: List<String>
     )
 
     private fun parseRssItems(doc: Document): List<RssItem> {
@@ -241,7 +240,47 @@ class RssFetcher(
             val description = elementText(node, "description")
             val pubDateStr = elementText(node, "pubDate")
             val pubDateMillis = tryParseDate(pubDateStr)
-            result += RssItem(title, link, description, pubDateMillis)
+
+            val mediaUrls = mutableSetOf<String>()
+
+            val enclosures = node.select("enclosure")
+            for (enclosure in enclosures) {
+                val type = enclosure.attr("type")
+                if (type.startsWith("image/") || type.startsWith("video/")) {
+                    val url = enclosure.attr("url")
+                    if (url.isNotBlank()) mediaUrls.add(url)
+                }
+            }
+
+            val mediaContents = node.getElementsByTag("media:content")
+            for (mc in mediaContents) {
+                val url = mc.attr("url")
+                if (url.isNotBlank()) mediaUrls.add(url)
+            }
+
+            val mediaThumbnails = node.getElementsByTag("media:thumbnail")
+            for (mt in mediaThumbnails) {
+                val url = mt.attr("url")
+                if (url.isNotBlank()) mediaUrls.add(url)
+            }
+
+            var contentEncoded: String? = null
+            val ceList = node.getElementsByTag("content:encoded")
+            if (ceList.isNotEmpty()) {
+                contentEncoded = ceList[ceList.lastIndex]?.text()?.trim()
+            }
+
+            val htmlTexts = listOfNotNull(description, contentEncoded).joinToString(" ")
+            if (htmlTexts.isNotBlank()) {
+                val htmlDoc = Jsoup.parse(htmlTexts)
+                val mediaElements = htmlDoc.select("img, video, source")
+                for (el in mediaElements) {
+                    val src = el.attr("src")
+                    if (src.isNotBlank()) mediaUrls.add(src)
+                }
+            }
+
+            result += RssItem(title, link, description, pubDateMillis, mediaUrls.toList())
         }
         return result
     }

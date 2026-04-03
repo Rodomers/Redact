@@ -16,7 +16,7 @@ import com.rds.mews.localcore.defineSourceType
         TitleMessageMap::class,
         TitleRelatedMap::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -173,6 +173,12 @@ abstract class AppDatabase : RoomDatabase() {
                         }
                     }
                 }
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `messages` ADD COLUMN `media_urls` TEXT NOT NULL DEFAULT ''")
             }
         }
     }

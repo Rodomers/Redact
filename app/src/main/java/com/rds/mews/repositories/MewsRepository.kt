@@ -127,7 +127,7 @@ object MewsRepository {
 
         this.database = Room.databaseBuilder(appContext, AppDatabase::class.java, "MainDB")
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .build()
         this.sourceDao = database.sourceDao()
         this.messageDao = database.messageDao()
@@ -251,6 +251,7 @@ object MewsRepository {
                             val parent = titleDao.getParentTitle(entity.id)
                             val child = titleDao.getChildTitle(entity.id)
                             val depth = calculateDepth(entity)
+                            val mediaUrlsList = messagesList.flatMap { it.mediaUrls }.distinct()
 
                             Title(
                                 id = entity.id,
@@ -267,7 +268,8 @@ object MewsRepository {
                                 childId = child?.id,
                                 relatedTitle = child?.title,
                                 relatedSnippet = child?.summary?.take(120),
-                                storyDepth = depth
+                                storyDepth = depth,
+                                mediaUrls = mediaUrlsList
                             )
                         }
                     }.awaitAll()
@@ -391,7 +393,8 @@ object MewsRepository {
         messageTime: Long,
         link: String,
         messageText: String,
-        title: String = ""
+        title: String = "",
+        mediaUrls: List<String> = emptyList()
     ): Long = withContext(Dispatchers.IO) {
         val existing = messageDao.getMessageByLink(link)
         if (existing != null) {
@@ -407,7 +410,8 @@ object MewsRepository {
             cleanText = messageText,
             isDuplicate = false,
             isRead = false,
-            factCheck = null
+            factCheck = null,
+            mediaUrls = mediaUrls
         )
         messageDao.insert(entity)
     }

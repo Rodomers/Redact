@@ -73,7 +73,12 @@ class ParserWorker(
                 val sourcesQueue = MewsRepository.getSourcesQueue()
 
                 for (source in sourcesQueue) {
-                    processSource(source, minifluxClient, enableProxy)
+                    if (source.errCount < 3 && System.currentTimeMillis() - source.lastSyncTime > 1_800_000)
+                        processSource(
+                        source,
+                        minifluxClient,
+                        enableProxy
+                    )
                 }
 
                 MewsRepository.messageTimeKill(864000L)
@@ -132,7 +137,7 @@ class ParserWorker(
             }
 
             MewsRepository.resetErrorCount(source.id)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             MewsRepository.incrementErrorCount(source.id)
         }
     }

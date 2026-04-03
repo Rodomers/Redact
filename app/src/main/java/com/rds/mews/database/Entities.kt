@@ -62,7 +62,8 @@ data class MessageEntity(
     @ColumnInfo(name = "clean_text") val cleanText: String,
     @ColumnInfo(name = "is_duplicate") val isDuplicate: Boolean,
     @ColumnInfo(name = "is_read") val isRead: Boolean,
-    @ColumnInfo(name = "fact_check") val factCheck: String?
+    @ColumnInfo(name = "fact_check") val factCheck: String?,
+    @ColumnInfo(name = "media_urls") val mediaUrls: List<String> = emptyList()
 )
 
 @Entity(

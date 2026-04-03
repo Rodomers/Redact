@@ -42,6 +42,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -65,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -79,6 +81,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -109,6 +112,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import coil.compose.AsyncImage
 import com.rds.mews.R
 import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.localcore.IconButtonInputs
@@ -620,6 +624,7 @@ private fun ExpandedCardContent(
     var pullOffset by remember { mutableFloatStateOf(0f) }
     var hasTriggeredHaptic by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
+    var clickedImageIndex by remember { mutableStateOf<Int?>(null) }
 
     val pullThresholdPx = with(density) { 90.dp.toPx() }
     val maxPullPx = with(density) { 135.dp.toPx() }
@@ -715,7 +720,6 @@ private fun ExpandedCardContent(
     }
     val buttons = listOf(
         TextButtonInputs(stringResource(R.string.share_btn_desc), ::shareText),
-//        TextButtonInputs(stringResource(R.string.ban_btn_desc), ::banNew, stringResource(R.string.titles_card_banned)),
         TextButtonInputs(stringResource(R.string.mark_as_unread_btn_desc), onMarkAsUnread)
     )
 
@@ -823,6 +827,129 @@ private fun ExpandedCardContent(
                                                 }
                                             )
                                     )
+                                }
+
+                                val imageMediaUrls = remember(title.mediaUrls) {
+                                    title.mediaUrls.filter { url ->
+                                        val lower = url.lowercase()
+                                        !lower.endsWith(".mp4") && !lower.endsWith(".webm") && !lower.endsWith(".mov") && !lower.endsWith(".mkv")
+                                    }
+                                }
+
+                                if (imageMediaUrls.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    val imagePagerState = rememberPagerState { imageMediaUrls.size }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(250.dp)
+                                            .clip(Shapes.large)
+                                    ) {
+                                        HorizontalPager(
+                                            state = imagePagerState,
+                                            modifier = Modifier.fillMaxSize()
+                                        ) { pageIndex ->
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .clickable { clickedImageIndex = pageIndex }
+                                            ) {
+                                                AsyncImage(
+                                                    model = imageMediaUrls[pageIndex],
+                                                    contentDescription = null,
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .blur(24.dp)
+                                                        .alpha(0.6f),
+                                                    contentScale = ContentScale.Crop
+                                                )
+
+                                                AsyncImage(
+                                                    model = imageMediaUrls[pageIndex],
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Fit
+                                                )
+                                            }
+                                        }
+
+                                        if (imageMediaUrls.size > 1) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomCenter)
+                                                    .padding(bottom = 8.dp)
+                                                    .background(Color.Black.copy(alpha = 0.3f), Shapes.large)
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                repeat(imageMediaUrls.size) { index ->
+                                                    val isSelected = imagePagerState.currentPage == index
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(if (isSelected) 8.dp else 6.dp)
+                                                            .clip(CircleShape)
+                                                            .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.5f))
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (clickedImageIndex != null) {
+                                        RootViewOverlay {
+                                            val fullScreenPagerState = rememberPagerState(initialPage = clickedImageIndex!!) { imageMediaUrls.size }
+                                            BackHandler { clickedImageIndex = null }
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color.Black.copy(alpha = 0.95f))
+                                            ) {
+                                                HorizontalPager(
+                                                    state = fullScreenPagerState,
+                                                    modifier = Modifier.fillMaxSize()
+                                                ) { page ->
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .clickable(
+                                                                interactionSource = remember { MutableInteractionSource() },
+                                                                indication = null
+                                                            ) { clickedImageIndex = null }
+                                                    ) {
+                                                        AsyncImage(
+                                                            model = imageMediaUrls[page],
+                                                            contentDescription = null,
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            contentScale = ContentScale.Fit
+                                                        )
+                                                    }
+                                                }
+
+                                                if (imageMediaUrls.size > 1) {
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .align(Alignment.BottomCenter)
+                                                            .padding(bottom = 24.dp)
+                                                            .background(Color.Black.copy(alpha = 0.5f), Shapes.large)
+                                                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        repeat(imageMediaUrls.size) { index ->
+                                                            val isSelected = fullScreenPagerState.currentPage == index
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(if (isSelected) 10.dp else 8.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.5f))
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
 
                                 if (title.keywords.isNotEmpty()) {

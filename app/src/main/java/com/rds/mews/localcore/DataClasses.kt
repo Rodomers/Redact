@@ -38,7 +38,8 @@ data class Title(
     var childId: Long? = null,
     var relatedTitle: String? = null,
     var relatedSnippet: String? = null,
-    var storyDepth: Int = 0
+    var storyDepth: Int = 0,
+    var mediaUrls: List<String> = emptyList()
 )
 
 data class TitleCardStates(
