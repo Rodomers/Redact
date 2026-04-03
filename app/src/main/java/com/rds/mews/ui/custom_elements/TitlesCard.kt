@@ -48,6 +48,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -81,6 +82,12 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
@@ -122,7 +129,9 @@ import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.ui.theme.Shapes
 import dev.jeziellago.compose.markdowntext.MarkdownText
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -626,6 +635,45 @@ private fun ExpandedCardContent(
     val scrollState = rememberScrollState()
     var clickedImageIndex by remember { mutableStateOf<Int?>(null) }
 
+    var dynamicMediaUrls by remember { mutableStateOf<List<String>?>(null) }
+
+    LaunchedEffect(title.id, sources) {
+        val allMessages = sources?.flatMap { it.messages } ?: emptyList()
+        val telegramLinks = allMessages.map { it.link }.filter { it.contains("t.me") }
+
+        if (telegramLinks.isEmpty()) {
+            dynamicMediaUrls = title.mediaUrls.map { it.substringBefore("?") }
+                .filter { url ->
+                    val cleanUrl = url.lowercase()
+                    !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
+                }.distinct()
+            return@LaunchedEffect
+        }
+
+        withContext(Dispatchers.IO) {
+            val liveUrls = mutableListOf<String>()
+            for (link in telegramLinks) {
+                try {
+                    val result: Any? = com.rds.mews.core.TelegramRssClient().scrapeEmbedMedia(link)
+                    if (result is List<*>) {
+                        liveUrls.addAll(result.filterIsInstance<String>())
+                    } else if (result is String) {
+                        liveUrls.add(result)
+                    }
+                } catch (e: Exception) {
+                }
+            }
+
+            val oldUrls = title.mediaUrls.filter { !it.contains("telesco.pe") }
+
+            dynamicMediaUrls = (liveUrls + oldUrls).map { it.substringBefore("?") }
+                .filter { url ->
+                    val cleanUrl = url.lowercase()
+                    !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
+                }.distinct()
+        }
+    }
+
     val pullThresholdPx = with(density) { 90.dp.toPx() }
     val maxPullPx = with(density) { 135.dp.toPx() }
 
@@ -829,16 +877,20 @@ private fun ExpandedCardContent(
                                     )
                                 }
 
-                                val imageMediaUrls = remember(title.mediaUrls) {
-                                    title.mediaUrls.filter { url ->
-                                        val lower = url.lowercase()
-                                        !lower.endsWith(".mp4") && !lower.endsWith(".webm") && !lower.endsWith(".mov") && !lower.endsWith(".mkv")
-                                    }
-                                }
-
-                                if (imageMediaUrls.isNotEmpty()) {
+                                if (dynamicMediaUrls == null) {
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    val imagePagerState = rememberPagerState { imageMediaUrls.size }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(150.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator()
+                                    }
+                                } else if (dynamicMediaUrls!!.isNotEmpty()) {
+                                    val mediaUrls = dynamicMediaUrls!!
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    val imagePagerState = rememberPagerState { mediaUrls.size }
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -855,7 +907,7 @@ private fun ExpandedCardContent(
                                                     .clickable { clickedImageIndex = pageIndex }
                                             ) {
                                                 AsyncImage(
-                                                    model = imageMediaUrls[pageIndex],
+                                                    model = mediaUrls[pageIndex],
                                                     contentDescription = null,
                                                     modifier = Modifier
                                                         .fillMaxSize()
@@ -865,7 +917,7 @@ private fun ExpandedCardContent(
                                                 )
 
                                                 AsyncImage(
-                                                    model = imageMediaUrls[pageIndex],
+                                                    model = mediaUrls[pageIndex],
                                                     contentDescription = null,
                                                     modifier = Modifier.fillMaxSize(),
                                                     contentScale = ContentScale.Fit
@@ -873,7 +925,7 @@ private fun ExpandedCardContent(
                                             }
                                         }
 
-                                        if (imageMediaUrls.size > 1) {
+                                        if (mediaUrls.size > 1) {
                                             Row(
                                                 modifier = Modifier
                                                     .align(Alignment.BottomCenter)
@@ -883,7 +935,7 @@ private fun ExpandedCardContent(
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                repeat(imageMediaUrls.size) { index ->
+                                                repeat(mediaUrls.size) { index ->
                                                     val isSelected = imagePagerState.currentPage == index
                                                     Box(
                                                         modifier = Modifier
@@ -898,7 +950,7 @@ private fun ExpandedCardContent(
 
                                     if (clickedImageIndex != null) {
                                         RootViewOverlay {
-                                            val fullScreenPagerState = rememberPagerState(initialPage = clickedImageIndex!!) { imageMediaUrls.size }
+                                            val fullScreenPagerState = rememberPagerState(initialPage = clickedImageIndex!!) { mediaUrls.size }
                                             BackHandler { clickedImageIndex = null }
                                             Box(
                                                 modifier = Modifier
@@ -909,24 +961,80 @@ private fun ExpandedCardContent(
                                                     state = fullScreenPagerState,
                                                     modifier = Modifier.fillMaxSize()
                                                 ) { page ->
+                                                    var scale by remember { mutableFloatStateOf(1f) }
+                                                    var offsetX by remember { mutableFloatStateOf(0f) }
+                                                    var offsetY by remember { mutableFloatStateOf(0f) }
+
                                                     Box(
                                                         modifier = Modifier
                                                             .fillMaxSize()
-                                                            .clickable(
-                                                                interactionSource = remember { MutableInteractionSource() },
-                                                                indication = null
-                                                            ) { clickedImageIndex = null }
+                                                            .pointerInput(Unit) {
+                                                                detectTapGestures(
+                                                                    onTap = { clickedImageIndex = null },
+                                                                    onDoubleTap = {
+                                                                        scale = if (scale > 1f) 1f else 2f
+                                                                        offsetX = 0f
+                                                                        offsetY = 0f
+                                                                    }
+                                                                )
+                                                            }
+                                                            .pointerInput(Unit) {
+                                                                awaitEachGesture {
+                                                                    awaitFirstDown()
+                                                                    do {
+                                                                        val event = awaitPointerEvent()
+                                                                        if (event.changes.any { it.isConsumed }) continue
+
+                                                                        val zoom = event.calculateZoom()
+                                                                        val pan = event.calculatePan()
+                                                                        val isMultiTouch = event.changes.size > 1
+
+                                                                        val newScale = (scale * zoom).coerceIn(1f, 4f)
+                                                                        val finalScale = if (newScale < 1.01f) 1f else newScale
+                                                                        val isZooming = finalScale != scale
+                                                                        scale = finalScale
+
+                                                                        if (scale > 1f) {
+                                                                            val maxX = (size.width * (scale - 1)) / 2
+                                                                            val maxY = (size.height * (scale - 1)) / 2
+                                                                            val newOffsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
+                                                                            val newOffsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
+
+                                                                            val consumedPan = newOffsetX != offsetX || newOffsetY != offsetY
+                                                                            offsetX = newOffsetX
+                                                                            offsetY = newOffsetY
+
+                                                                            if (isMultiTouch || isZooming || consumedPan) {
+                                                                                event.changes.forEach { it.consume() }
+                                                                            }
+                                                                        } else {
+                                                                            offsetX = 0f
+                                                                            offsetY = 0f
+                                                                            if (isMultiTouch || isZooming) {
+                                                                                event.changes.forEach { it.consume() }
+                                                                            }
+                                                                        }
+                                                                    } while (event.changes.any { it.pressed })
+                                                                }
+                                                            }
                                                     ) {
                                                         AsyncImage(
-                                                            model = imageMediaUrls[page],
+                                                            model = mediaUrls[page],
                                                             contentDescription = null,
-                                                            modifier = Modifier.fillMaxSize(),
+                                                            modifier = Modifier
+                                                                .fillMaxSize()
+                                                                .graphicsLayer(
+                                                                    scaleX = scale,
+                                                                    scaleY = scale,
+                                                                    translationX = offsetX,
+                                                                    translationY = offsetY
+                                                                ),
                                                             contentScale = ContentScale.Fit
                                                         )
                                                     }
                                                 }
 
-                                                if (imageMediaUrls.size > 1) {
+                                                if (mediaUrls.size > 1) {
                                                     Row(
                                                         modifier = Modifier
                                                             .align(Alignment.BottomCenter)
@@ -936,7 +1044,7 @@ private fun ExpandedCardContent(
                                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        repeat(imageMediaUrls.size) { index ->
+                                                        repeat(mediaUrls.size) { index ->
                                                             val isSelected = fullScreenPagerState.currentPage == index
                                                             Box(
                                                                 modifier = Modifier

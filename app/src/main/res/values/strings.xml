@@ -44,7 +44,7 @@
     <string name="settings_endure_time">Inner timestamps</string>
     <string name="settings_show_snippets">Show snippets</string>
     <string name="settings_expand_sources">Expand sources</string>
-    <string name="settings_filter_topics">Topics filter</string>
+    <string name="settings_filter_topics">LLM-based topics filter</string>
     <string name="settings_titles_auto_update">Topics autoupdate</string>
     <string name="settings_banned_news">Blocked news</string>
     <string name="settings_unban_new_button">Unban news button</string>

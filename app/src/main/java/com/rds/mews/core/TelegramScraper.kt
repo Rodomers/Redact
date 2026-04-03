@@ -3,6 +3,7 @@ package com.rds.mews.core
 import java.net.URL
 import java.net.HttpURLConnection
 import java.util.UUID
+import kotlinx.coroutines.withContext
 
 class TelegramRssClient {
 
@@ -103,6 +104,23 @@ class TelegramRssClient {
                 content = item.description,
                 published_at = item.pubDate
             )
+        }
+    }
+
+    suspend fun scrapeEmbedMedia(postLink: String): List<String> = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val embedUrl = if (postLink.contains("?")) {
+            "$postLink&embed=1"
+        } else {
+            "$postLink?embed=1"
+        }
+
+        val document = org.jsoup.Jsoup.connect(embedUrl).userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").get()
+        val elements = document.select(".tgme_widget_message_photo_wrap")
+        val regex = Regex("""url\('([^']+)'\)""")
+
+        elements.mapNotNull { element ->
+            val style = element.attr("style")
+            regex.find(style)?.groupValues?.get(1)
         }
     }
 }
