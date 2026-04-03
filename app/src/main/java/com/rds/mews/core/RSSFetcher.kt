@@ -207,7 +207,7 @@ class RssFetcher(
 
         } catch (e: Exception) {
             if (SourceType.fromId(source.sourceType) == SourceType.TELEGRAM) {
-                val fallbackEntries = TelegramRssClient().buildRss(source.feedUrl, source.id)
+                val fallbackEntries = TelegramRssClient(httpClient).buildRss(source.feedUrl, source.id)
                 return fallbackEntries.filter { entry ->
                     try {
                         val zdt = ZonedDateTime.parse(entry.published_at, DateTimeFormatter.ISO_OFFSET_DATE_TIME)

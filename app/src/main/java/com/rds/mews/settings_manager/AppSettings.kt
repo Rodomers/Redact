@@ -81,7 +81,7 @@ data class AppSettings(
     val currentLanguage: String = "English",
 
     // Technical State
-    val parserBatchSize: Int = 50, // Блок 2.3: Текущий размер пакета вставки БД
+    val parserBatchSize: Int = 50,
     val updatingState: String = "off",
     val updatingProgress: Float = 0f,
     val lastTitlesUpdate: Long = 0L,

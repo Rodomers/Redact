@@ -121,12 +121,14 @@ import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import coil.compose.AsyncImage
 import com.rds.mews.R
+import com.rds.mews.core.SharedHttpClient
 import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.localcore.IconButtonInputs
 import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.getFormattedTimeUnix
+import com.rds.mews.text_filters.TextSanitizer
 import com.rds.mews.ui.theme.Shapes
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.Dispatchers
@@ -152,6 +154,7 @@ fun TitlesCard(
     backgroundColor: Color = MaterialTheme.colorScheme.secondaryContainer,
     expandable: Boolean = true,
     markAsUnread: () -> Unit,
+    httpClient: SharedHttpClient.JdkClient? = null,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
@@ -238,7 +241,8 @@ fun TitlesCard(
                 originalNoTime = noTime,
                 showSnippet = showSnippet,
                 isRead = isRead,
-                backgroundColor = backgroundColor
+                backgroundColor = backgroundColor,
+                httpClient = httpClient
             )
         }
     }
@@ -338,7 +342,8 @@ private fun HeroExpansionContent(
     originalNoTime: Boolean,
     showSnippet: Boolean,
     isRead: Boolean,
-    backgroundColor: Color
+    backgroundColor: Color,
+    httpClient: SharedHttpClient.JdkClient?
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -376,7 +381,12 @@ private fun HeroExpansionContent(
         if (contentHeight == null) {
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(horizontalMarginPx.roundToInt(), verticalMarginPx.roundToInt()) }
+                    .offset {
+                        IntOffset(
+                            horizontalMarginPx.roundToInt(),
+                            verticalMarginPx.roundToInt()
+                        )
+                    }
                     .width(targetWidthDp)
                     .alpha(0f)
                     .onGloballyPositioned { coordinates ->
@@ -414,12 +424,18 @@ private fun HeroExpansionContent(
                     val placeable = measurable.measure(Constraints.fixed(currentW, currentH))
                     layout(currentW, currentH) { placeable.place(0, 0) }
                 }
-                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, enabled = true) {},
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    enabled = true
+                ) {},
             shape = Shapes.large,
             color = containerColor,
             shadowElevation = 0.dp
         ) {
-            Box(modifier = Modifier.width(targetWidthDp).fillMaxHeight()) {
+            Box(modifier = Modifier
+                .width(targetWidthDp)
+                .fillMaxHeight()) {
                 ExpandedCardContent(
                     title = title,
                     sources = sources,
@@ -438,7 +454,8 @@ private fun HeroExpansionContent(
                     showSnippet = showSnippet,
                     isRead = isRead,
                     headerStartColor = backgroundColor,
-                    targetCardHeight = targetHeight
+                    targetCardHeight = targetHeight,
+                    httpClient = httpClient
                 )
             }
         }
@@ -447,12 +464,16 @@ private fun HeroExpansionContent(
 
 @Composable
 private fun MeasureCardCompleteStructure(title: Title, isRead: Boolean) {
-    Column(modifier = Modifier.fillMaxWidth().wrapContentHeight()) {
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .wrapContentHeight()) {
         TitlesHeaderContent(title = title, noTime = false, isRead = isRead, onClicked = {}, animationProgress = 1f, expansionFraction = 1f)
         Spacer(modifier = Modifier.height(8.dp))
         MarkdownText(
             markdown = title.summary.trim(),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.2.sp, lineHeight = 22.2.sp)
         )
         Spacer(modifier = Modifier.height(54.dp))
@@ -515,7 +536,11 @@ private fun TitlesHeaderContent(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (clickableEnabled) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClicked() } else Modifier)
+            .then(
+                if (clickableEnabled) Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onClicked() } else Modifier)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top
     ) {
@@ -531,7 +556,12 @@ private fun TitlesHeaderContent(
                         .layout { measurable, constraints ->
                             val placeable = measurable.measure(constraints)
                             val height = (placeable.height * animationProgress).roundToInt()
-                            layout(placeable.width, height) { placeable.place(0, height - placeable.height) }
+                            layout(placeable.width, height) {
+                                placeable.place(
+                                    0,
+                                    height - placeable.height
+                                )
+                            }
                         }
                         .alpha(alpha)
                         .padding(bottom = 6.dp)
@@ -613,7 +643,8 @@ private fun ExpandedCardContent(
     showSnippet: Boolean,
     isRead: Boolean,
     headerStartColor: Color,
-    targetCardHeight: Float
+    targetCardHeight: Float,
+    httpClient: SharedHttpClient.JdkClient?
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -654,7 +685,7 @@ private fun ExpandedCardContent(
             val liveUrls = mutableListOf<String>()
             for (link in telegramLinks) {
                 try {
-                    val result: Any? = com.rds.mews.core.TelegramRssClient().scrapeEmbedMedia(link)
+                    val result: Any? = httpClient?.let { com.rds.mews.core.TelegramRssClient(it).scrapeEmbedMedia(link) }
                     if (result is List<*>) {
                         liveUrls.addAll(result.filterIsInstance<String>())
                     } else if (result is String) {
@@ -757,7 +788,8 @@ private fun ExpandedCardContent(
         }
     }
 
-    val copiedText = "${title.title}\n\n${title.summary}\n\nИсточник: Mews, ${title.sources}"
+    val copiedText =
+        "${title.title}\n\n${TextSanitizer.sanitize(title.summary)}\n\nИсточник: Mews, ${title.sources}"
     fun copyText() { clipboardManager.setText(AnnotatedString(copiedText)) }
     fun shareText() {
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
@@ -774,20 +806,33 @@ private fun ExpandedCardContent(
     val headerAnimProgress = if (originalNoTime) expansionProgress else 1f
     LaunchedEffect(pagerState.targetPage) { rememberPage(pagerState.targetPage) }
 
-    Column(modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).wrapContentHeight()) {
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .heightIn(max = maxHeight)
+        .wrapContentHeight()) {
         Surface(
             shape = Shapes.large,
             color = Color.Transparent,
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(Shapes.large)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onCollapse() }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onCollapse() }
                 .drawBehind {
                     if (!shouldAnimateHeader) drawRect(headerEndColor)
                     else {
                         drawRect(headerStartColor)
                         if (expansionProgress > 0f) {
-                            drawRect(color = headerEndColor, topLeft = Offset.Zero, size = androidx.compose.ui.geometry.Size(width = size.width * expansionProgress, height = size.height))
+                            drawRect(
+                                color = headerEndColor,
+                                topLeft = Offset.Zero,
+                                size = androidx.compose.ui.geometry.Size(
+                                    width = size.width * expansionProgress,
+                                    height = size.height
+                                )
+                            )
                         }
                     }
                 }
@@ -822,7 +867,10 @@ private fun ExpandedCardContent(
                 userScrollEnabled = sources?.isNotEmpty() ?: false,
                 verticalAlignment = Alignment.Top,
                 beyondViewportPageCount = 1,
-                modifier = Modifier.requiredWidth(targetWidth).fillMaxHeight().graphicsLayer { alpha = contentAlpha }
+                modifier = Modifier
+                    .requiredWidth(targetWidth)
+                    .fillMaxHeight()
+                    .graphicsLayer { alpha = contentAlpha }
             ) { page ->
                 when (page) {
                     0 -> {
@@ -835,7 +883,9 @@ private fun ExpandedCardContent(
                                 PullToSwitchIndicator(
                                     text = stringResource(R.string.related_news),
                                     progress = pullOffset / pullThresholdPx,
-                                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 24.dp)
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .padding(top = 24.dp)
                                 )
                             }
 
@@ -843,7 +893,9 @@ private fun ExpandedCardContent(
                                 PullToSwitchIndicator(
                                     text = stringResource(R.string.related_news),
                                     progress = -pullOffset / pullThresholdPx,
-                                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp)
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 80.dp)
                                 )
                             }
 
@@ -870,7 +922,11 @@ private fun ExpandedCardContent(
                                                 onClick = {},
                                                 onLongClick = {
                                                     copyText()
-                                                    Toast.makeText(context, R.string.titles_card_copied, Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(
+                                                        context,
+                                                        R.string.titles_card_copied,
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
                                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 }
                                             )
@@ -930,7 +986,10 @@ private fun ExpandedCardContent(
                                                 modifier = Modifier
                                                     .align(Alignment.BottomCenter)
                                                     .padding(bottom = 8.dp)
-                                                    .background(Color.Black.copy(alpha = 0.3f), Shapes.large)
+                                                    .background(
+                                                        Color.Black.copy(alpha = 0.3f),
+                                                        Shapes.large
+                                                    )
                                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                                 verticalAlignment = Alignment.CenterVertically
@@ -941,7 +1000,11 @@ private fun ExpandedCardContent(
                                                         modifier = Modifier
                                                             .size(if (isSelected) 8.dp else 6.dp)
                                                             .clip(CircleShape)
-                                                            .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.5f))
+                                                            .background(
+                                                                if (isSelected) Color.White else Color.White.copy(
+                                                                    alpha = 0.5f
+                                                                )
+                                                            )
                                                     )
                                                 }
                                             }
@@ -970,9 +1033,12 @@ private fun ExpandedCardContent(
                                                             .fillMaxSize()
                                                             .pointerInput(Unit) {
                                                                 detectTapGestures(
-                                                                    onTap = { clickedImageIndex = null },
+                                                                    onTap = {
+                                                                        clickedImageIndex = null
+                                                                    },
                                                                     onDoubleTap = {
-                                                                        scale = if (scale > 1f) 1f else 2f
+                                                                        scale =
+                                                                            if (scale > 1f) 1f else 2f
                                                                         offsetX = 0f
                                                                         offsetY = 0f
                                                                     }
@@ -982,25 +1048,46 @@ private fun ExpandedCardContent(
                                                                 awaitEachGesture {
                                                                     awaitFirstDown()
                                                                     do {
-                                                                        val event = awaitPointerEvent()
+                                                                        val event =
+                                                                            awaitPointerEvent()
                                                                         if (event.changes.any { it.isConsumed }) continue
 
-                                                                        val zoom = event.calculateZoom()
-                                                                        val pan = event.calculatePan()
-                                                                        val isMultiTouch = event.changes.size > 1
+                                                                        val zoom =
+                                                                            event.calculateZoom()
+                                                                        val pan =
+                                                                            event.calculatePan()
+                                                                        val isMultiTouch =
+                                                                            event.changes.size > 1
 
-                                                                        val newScale = (scale * zoom).coerceIn(1f, 4f)
-                                                                        val finalScale = if (newScale < 1.01f) 1f else newScale
-                                                                        val isZooming = finalScale != scale
+                                                                        val newScale =
+                                                                            (scale * zoom).coerceIn(
+                                                                                1f,
+                                                                                4f
+                                                                            )
+                                                                        val finalScale =
+                                                                            if (newScale < 1.01f) 1f else newScale
+                                                                        val isZooming =
+                                                                            finalScale != scale
                                                                         scale = finalScale
 
                                                                         if (scale > 1f) {
-                                                                            val maxX = (size.width * (scale - 1)) / 2
-                                                                            val maxY = (size.height * (scale - 1)) / 2
-                                                                            val newOffsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
-                                                                            val newOffsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
+                                                                            val maxX =
+                                                                                (size.width * (scale - 1)) / 2
+                                                                            val maxY =
+                                                                                (size.height * (scale - 1)) / 2
+                                                                            val newOffsetX =
+                                                                                (offsetX + pan.x).coerceIn(
+                                                                                    -maxX,
+                                                                                    maxX
+                                                                                )
+                                                                            val newOffsetY =
+                                                                                (offsetY + pan.y).coerceIn(
+                                                                                    -maxY,
+                                                                                    maxY
+                                                                                )
 
-                                                                            val consumedPan = newOffsetX != offsetX || newOffsetY != offsetY
+                                                                            val consumedPan =
+                                                                                newOffsetX != offsetX || newOffsetY != offsetY
                                                                             offsetX = newOffsetX
                                                                             offsetY = newOffsetY
 
@@ -1039,8 +1126,14 @@ private fun ExpandedCardContent(
                                                         modifier = Modifier
                                                             .align(Alignment.BottomCenter)
                                                             .padding(bottom = 24.dp)
-                                                            .background(Color.Black.copy(alpha = 0.5f), Shapes.large)
-                                                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                                                            .background(
+                                                                Color.Black.copy(alpha = 0.5f),
+                                                                Shapes.large
+                                                            )
+                                                            .padding(
+                                                                horizontal = 12.dp,
+                                                                vertical = 6.dp
+                                                            ),
                                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
@@ -1050,7 +1143,11 @@ private fun ExpandedCardContent(
                                                                 modifier = Modifier
                                                                     .size(if (isSelected) 10.dp else 8.dp)
                                                                     .clip(CircleShape)
-                                                                    .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.5f))
+                                                                    .background(
+                                                                        if (isSelected) Color.White else Color.White.copy(
+                                                                            alpha = 0.5f
+                                                                        )
+                                                                    )
                                                             )
                                                         }
                                                     }
@@ -1107,7 +1204,9 @@ private fun ExpandedCardContent(
                                                 style = MaterialTheme.typography.bodySmall,
                                                 maxLines = 3,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(top = 4.dp).alpha(0.7f)
+                                                modifier = Modifier
+                                                    .padding(top = 4.dp)
+                                                    .alpha(0.7f)
                                             )
                                         }
                                     }
@@ -1119,17 +1218,25 @@ private fun ExpandedCardContent(
                     }
                     1 -> {
                         if (sources == null) {
-                            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                            Column(modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())) {
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text(text = title.sources, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
-                                Text(text = title.ids, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                                Text(text = title.sources, modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
+                                Text(text = title.ids, modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp))
                                 Spacer(modifier = Modifier.height(bottomPanelHeight + 4.dp))
                             }
                         } else {
                             val allMessages = remember(sources) { sources.flatMap { it.messages } }
                             val minLength = remember(allMessages) { allMessages.minOfOrNull { it.originalText.length } ?: 0 }
                             val maxLength = remember(allMessages) { allMessages.maxOfOrNull { it.originalText.length } ?: 1 }
-                            LazyVerticalGrid(modifier = Modifier.padding(horizontal = 8.dp).fillMaxWidth(), columns = GridCells.Fixed(1)) {
+                            LazyVerticalGrid(modifier = Modifier
+                                .padding(horizontal = 8.dp)
+                                .fillMaxWidth(), columns = GridCells.Fixed(1)) {
                                 sources.forEach { pack ->
                                     val source = pack.source
                                     val state = pack.state
@@ -1153,7 +1260,9 @@ private fun ExpandedCardContent(
                                         }
                                     }
                                 }
-                                item(span = { GridItemSpan(maxLineSpan) }) { Spacer(modifier = Modifier.height(bottomPanelHeight - 8.dp).fillMaxWidth()) }
+                                item(span = { GridItemSpan(maxLineSpan) }) { Spacer(modifier = Modifier
+                                    .height(bottomPanelHeight - 8.dp)
+                                    .fillMaxWidth()) }
                             }
                         }
                     }
@@ -1164,10 +1273,21 @@ private fun ExpandedCardContent(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(brush = Brush.verticalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface.copy(0.7f), MaterialTheme.colorScheme.surface)))
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.surface.copy(0.7f),
+                                MaterialTheme.colorScheme.surface
+                            )
+                        )
+                    )
                     .graphicsLayer { alpha = contentAlpha }
             ) {
-                Row(modifier = Modifier.fillMaxWidth().wrapContentHeight().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+                    .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     AnimatedSegmentedControl(
                         items = listOf(stringResource(R.string.titles_card_text) to { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, stringResource(R.string.titles_card_source) to { coroutineScope.launch { pagerState.animateScrollToPage(1) } }),
                         selectedIndex = pagerState.currentPage,
@@ -1180,7 +1300,13 @@ private fun ExpandedCardContent(
                     Spacer(modifier = Modifier.weight(1f))
                     CustomIconButton(
                         inputs = IconButtonInputs(Icons.Default.MoreVert, { dropdownTransitionState.targetState = !dropdownTransitionState.currentState }),
-                        modifier = Modifier.size(40.dp).padding(bottom = 6.dp).align(Alignment.CenterVertically).onGloballyPositioned { buttonBounds = it.boundsInWindow().roundToIntRect() },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .padding(bottom = 6.dp)
+                            .align(Alignment.CenterVertically)
+                            .onGloballyPositioned {
+                                buttonBounds = it.boundsInWindow().roundToIntRect()
+                            },
                         iconModifier = Modifier.size(18.dp),
                         defaultBackgroundColor = bottomPanelItemsColor,
                         transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.7f),

@@ -1,11 +1,9 @@
 package com.rds.mews.core
 
-import java.net.URL
-import java.net.HttpURLConnection
 import java.util.UUID
 import kotlinx.coroutines.withContext
 
-class TelegramRssClient {
+class TelegramRssClient(private val httpClient: SharedHttpClient.JdkClient) {
 
     data class RssItem(
         val title: String,
@@ -14,7 +12,7 @@ class TelegramRssClient {
         val description: String
     )
 
-    private fun fetchChannelMessages(channelUrl: String): List<RssItem> {
+    private suspend fun fetchChannelMessages(channelUrl: String): List<RssItem> {
         val html = downloadHtml(channelUrl)
 
         val messageBlockRegex = Regex(
@@ -73,13 +71,8 @@ class TelegramRssClient {
         return messages
     }
 
-    private fun downloadHtml(url: String): String {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.connectTimeout = 10000
-        connection.readTimeout = 10000
-
-        return connection.inputStream.bufferedReader().use { it.readText() }
+    private suspend fun downloadHtml(url: String): String {
+        return httpClient.get(url).body
     }
 
     private fun stripHtml(input: String): String {
@@ -92,7 +85,7 @@ class TelegramRssClient {
             .replace("&#036;", "$")
     }
 
-    fun buildRss(channelUrl: String, feedId: Long): List<MinifluxEntry> {
+    suspend fun buildRss(channelUrl: String, feedId: Long): List<MinifluxEntry> {
         val items = fetchChannelMessages(channelUrl)
 
         return items.map { item ->
@@ -114,7 +107,8 @@ class TelegramRssClient {
             "$postLink?embed=1"
         }
 
-        val document = org.jsoup.Jsoup.connect(embedUrl).userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").get()
+        val html = httpClient.get(embedUrl).body
+        val document = org.jsoup.Jsoup.parse(html)
         val elements = document.select(".tgme_widget_message_photo_wrap")
         val regex = Regex("""url\('([^']+)'\)""")
 

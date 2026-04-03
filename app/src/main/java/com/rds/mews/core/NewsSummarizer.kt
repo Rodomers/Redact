@@ -291,7 +291,9 @@ suspend fun validateGeminiKey(apiKey: String, proxyIp: String, proxyKey: String,
     val client = SharedHttpClient.createInstance(proxyIp, proxyKey, enableProxy)
     return try {
         val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
-        client.get(url).status == 200
+        val getUrl = client.get(url)
+        println(getUrl.body)
+        getUrl.status == 200
     } catch (_: Exception) { false } finally { client.close() }
 }
 
@@ -715,7 +717,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         newTopics.forEach { candidate ->
             val existingIndex = globalCache.indexOfFirst { existing ->
                 var isKeywordMatch = false
-                if (existing.keywords.size >= 2 && candidate.keywords.size >= 2) {
+                if (existing.keywords.size >= 3 && candidate.keywords.size >= 3) {
                     var matchCount = 0
                     for (k1 in existing.keywords) {
                         for (k2 in candidate.keywords) {
@@ -725,9 +727,9 @@ class NewsSummarizer(private val llm: LLMClient) {
                             }
                         }
                     }
-                    if (matchCount >= 2) isKeywordMatch = true
+                    if (matchCount >= 3) isKeywordMatch = true
                 }
-                isKeywordMatch || TextComparator.areSimilar(existing.title, candidate.title, 0.65)
+                isKeywordMatch || TextComparator.areSimilar(existing.title, candidate.title, 0.85)
             }
 
             if (existingIndex != -1) {
@@ -770,8 +772,9 @@ class NewsSummarizer(private val llm: LLMClient) {
         val prompt = """
             Задача: Объедини дублирующиеся новости в кластеры.
             Важно:
-            1. Если группа новостей относится к запрещенным темам ('$banned') — НЕ включай её в итоговый список. Удали.
-            2. Формируй заголовки в стиле Smart Casual.
+            1. УЗКОЕ СЛИЯНИЕ СЮЖЕТОВ: Объединяй дубликаты и новости, описывающие один и тот же инцидент или принадлежащие к одному узкому развивающемуся сюжету. СТРОГИЙ ЗАПРЕТ: Не объединяй независимые события только на основе общей локации или категории.
+            2. Если группа новостей относится к запрещенным темам ('$banned') — НЕ включай её в итоговый список. Удали.
+            3. Формируй заголовки в стиле Smart Casual.
             Ввод: [{"ix": 0, "t": "...", "kw": "...", "w": 5}].
             Верни ТОЛЬКО JSON массив:
             [{"title": "Общий заголовок", "src": [0, 5], "weight": 9}]
@@ -824,10 +827,9 @@ class NewsSummarizer(private val llm: LLMClient) {
             val prompt = """
                 Проанализируй новости и выдели ОТДЕЛЬНЫЕ новостные события.
                 ЛИМИТЫ (СТРОГО): Максимальное количество тем: $maxLimit. Если событий больше — выбери самые резонансные и значимые. Мелкие, локальные или малозначительные новости ИГНОРИРУЙ.
-                ЗАПРЕТ НА МАКРО-КЛАСТЕРИЗАЦИЮ: Если множество новостей связано глобальным фоном (например, одним международным конфликтом), категорически запрещено сливать их в одну тему. Изолируй каждый конкретный инцидент, заявление или происшествие в отдельный объект.
                 Группируй новости по Сюжетным Линиям:
                 1. Цепочка событий (ОСТАВЛЯТЬ ВМЕСТЕ): Например, событие + реакция + последствия = ОДНА тема.
-                2. Дайджесты (РАЗДЕЛЯТЬ): Разные события, произошедшие в разных местах = РАЗНЫЕ темы.
+                2. Сюжетная кластеризация (БАЛАНС): Объединяй события в одну тему, ТОЛЬКО если они являются частями одного развивающегося сюжета или конфликта. СТРОГИЙ ЗАПРЕТ НА КАТЕГОРИИ: Категорически запрещено создавать общие рубрики ('Политика', 'Спорт'). Если события не связаны прямой причинно-следственной связью, они должны быть в РАЗНЫХ темах.
                 ФИЛЬТРАЦИЯ (СТРОГО): Игнорируй: рекламу, розыгрыши призов, итоги конкурсов, спам, а также темы: '$banned'.
                 ИНСТРУКЦИИ ЗАГОЛОВКОВ: Пиши в стиле Smart Casual: живые, человеческие заголовки без канцелярита.
                 Верни JSON массив: [{"title": "Заголовок", "id": [101, 105], "keywords": ["тег1", "тег2"], "weight": 8}].
@@ -1013,6 +1015,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         4. ФОРМАТИРОВАНИЕ: Запрещено создавать маркированные списки, если в них менее 3 элементов.
         5. УМНАЯ ФИЛЬТРАЦИЯ: Обязательно верни JSON-объект для каждого переданного id. Если текст состоит из рекламы, спама или посвящен нежелательным темам ('$banned'), верни строгое значение 'summary': 'REJECTED'.
         6. ЯЗЫК: ${lang}.
+        7. ПРЕДОХРАНИТЕЛЬ СЮЖЕТОВ: Если внутри одного id сгруппировано несколько связанных под-событий, ты обязан кратко упомянуть суть КАЖДОГО из них. Запрещено поглощать факты и обобщать текст до уровня размытых формулировок. При необходимости выделяй разные аспекты абзацами.
         ФОРМАТ ОТВЕТА (СТРОГО JSON):
         [{"id": <id из input>, "title": "<заголовок>", "summary": "<отформатированный текст статьи или строго "REJECTED">"}]
         Ввод: $jsonInput
