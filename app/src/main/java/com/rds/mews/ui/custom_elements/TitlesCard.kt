@@ -758,7 +758,7 @@ private fun ExpandedCardContent(
     }
 
     val copiedText =
-        "${title.title}\n\n${TextSanitizer.sanitize(title.summary)}\n\nИсточник: Mews, ${title.sources}"
+        "${title.title}\n\n${TextSanitizer.sanitize(title.summary)}\n\nИсточник: ${stringResource(R.string.app_name)}, ${title.sources}"
     fun copyText() { clipboardManager.setText(AnnotatedString(copiedText)) }
     fun shareText() {
         val sendIntent = Intent(Intent.ACTION_SEND).apply {

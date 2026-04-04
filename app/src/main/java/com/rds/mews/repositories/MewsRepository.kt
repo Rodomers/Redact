@@ -32,8 +32,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.Calendar
 import java.util.Date
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
@@ -47,6 +45,8 @@ object MewsRepository {
     private lateinit var settingsManager: SettingsManager
     private lateinit var externalScope: CoroutineScope
     private const val TAG = "MewsRepository"
+
+    private val resolvedAvatars = MutableStateFlow<Map<Long, String>>(emptyMap())
 
     lateinit var lastError: StateFlow<SummarizationResult.Failure?>
     lateinit var lastTitlesUpdate: StateFlow<Long>
@@ -353,7 +353,6 @@ object MewsRepository {
     }
 
     fun getSourcesWithAvatars(): Flow<List<RSS>> = channelFlow {
-        val resolvedAvatars = MutableStateFlow<Map<Long, String>>(emptyMap())
         val semaphore = Semaphore(3)
 
         sourceDao.getAllSourcesFlow()
@@ -397,6 +396,7 @@ object MewsRepository {
     fun deleteSource(id: Long) {
         externalScope.launch(Dispatchers.IO) {
             sourceDao.deleteById(id)
+            resolvedAvatars.update { it - id }
         }
     }
 

@@ -267,14 +267,14 @@ fun isScheduleExactAlarm(context: Context): Boolean {
         else true
 }
 
-@SuppressLint("BatteryLife")
-fun requestIgnoreBatteryOptimization(context: Context) {
-    val intent = Intent().apply {
-        action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-        data = "package:${context.packageName}".toUri()
-    }
-    context.startActivity(intent)
-}
+//@SuppressLint("BatteryLife")
+//fun requestIgnoreBatteryOptimization(context: Context) {
+//    val intent = Intent().apply {
+//        action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+//        data = "package:${context.packageName}".toUri()
+//    }
+//    context.startActivity(intent)
+//}
 
 fun isNotificationPermissionGranted(context: Context): Boolean {
     return NotificationManagerCompat.from(context).areNotificationsEnabled()
