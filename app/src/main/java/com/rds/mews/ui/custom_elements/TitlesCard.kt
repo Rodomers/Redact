@@ -121,7 +121,6 @@ import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import coil.compose.AsyncImage
 import com.rds.mews.R
-import com.rds.mews.core.SharedHttpClient
 import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.localcore.IconButtonInputs
 import com.rds.mews.localcore.SourceMessages
@@ -154,7 +153,6 @@ fun TitlesCard(
     backgroundColor: Color = MaterialTheme.colorScheme.secondaryContainer,
     expandable: Boolean = true,
     markAsUnread: () -> Unit,
-    httpClient: SharedHttpClient.JdkClient? = null,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
@@ -241,8 +239,7 @@ fun TitlesCard(
                 originalNoTime = noTime,
                 showSnippet = showSnippet,
                 isRead = isRead,
-                backgroundColor = backgroundColor,
-                httpClient = httpClient
+                backgroundColor = backgroundColor
             )
         }
     }
@@ -342,8 +339,7 @@ private fun HeroExpansionContent(
     originalNoTime: Boolean,
     showSnippet: Boolean,
     isRead: Boolean,
-    backgroundColor: Color,
-    httpClient: SharedHttpClient.JdkClient?
+    backgroundColor: Color
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -454,8 +450,7 @@ private fun HeroExpansionContent(
                     showSnippet = showSnippet,
                     isRead = isRead,
                     headerStartColor = backgroundColor,
-                    targetCardHeight = targetHeight,
-                    httpClient = httpClient
+                    targetCardHeight = targetHeight
                 )
             }
         }
@@ -643,8 +638,7 @@ private fun ExpandedCardContent(
     showSnippet: Boolean,
     isRead: Boolean,
     headerStartColor: Color,
-    targetCardHeight: Float,
-    httpClient: SharedHttpClient.JdkClient?
+    targetCardHeight: Float
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -685,7 +679,7 @@ private fun ExpandedCardContent(
             val liveUrls = mutableListOf<String>()
             for (link in telegramLinks) {
                 try {
-                    val result: Any? = httpClient?.let { com.rds.mews.core.TelegramRssClient(it).scrapeEmbedMedia(link) }
+                    val result: Any? = com.rds.mews.core.TelegramRssClient().scrapeEmbedMedia(link)
                     if (result is List<*>) {
                         liveUrls.addAll(result.filterIsInstance<String>())
                     } else if (result is String) {

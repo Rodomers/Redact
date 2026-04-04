@@ -1,9 +1,11 @@
 package com.rds.mews.core
 
+import java.net.URL
+import java.net.HttpURLConnection
 import java.util.UUID
 import kotlinx.coroutines.withContext
 
-class TelegramRssClient(private val httpClient: SharedHttpClient.JdkClient) {
+class TelegramRssClient {
 
     data class RssItem(
         val title: String,
@@ -12,7 +14,7 @@ class TelegramRssClient(private val httpClient: SharedHttpClient.JdkClient) {
         val description: String
     )
 
-    private suspend fun fetchChannelMessages(channelUrl: String): List<RssItem> {
+    private fun fetchChannelMessages(channelUrl: String): List<RssItem> {
         val html = downloadHtml(channelUrl)
 
         val messageBlockRegex = Regex(
@@ -71,8 +73,13 @@ class TelegramRssClient(private val httpClient: SharedHttpClient.JdkClient) {
         return messages
     }
 
-    private suspend fun downloadHtml(url: String): String {
-        return httpClient.get(url).body
+    private fun downloadHtml(url: String): String {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 10000
+        connection.readTimeout = 10000
+
+        return connection.inputStream.bufferedReader().use { it.readText() }
     }
 
     private fun stripHtml(input: String): String {
@@ -85,7 +92,7 @@ class TelegramRssClient(private val httpClient: SharedHttpClient.JdkClient) {
             .replace("&#036;", "$")
     }
 
-    suspend fun buildRss(channelUrl: String, feedId: Long): List<MinifluxEntry> {
+    fun buildRss(channelUrl: String, feedId: Long): List<MinifluxEntry> {
         val items = fetchChannelMessages(channelUrl)
 
         return items.map { item ->
@@ -107,8 +114,7 @@ class TelegramRssClient(private val httpClient: SharedHttpClient.JdkClient) {
             "$postLink?embed=1"
         }
 
-        val html = httpClient.get(embedUrl).body
-        val document = org.jsoup.Jsoup.parse(html)
+        val document = org.jsoup.Jsoup.connect(embedUrl).userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").get()
         val elements = document.select(".tgme_widget_message_photo_wrap")
         val regex = Regex("""url\('([^']+)'\)""")
 

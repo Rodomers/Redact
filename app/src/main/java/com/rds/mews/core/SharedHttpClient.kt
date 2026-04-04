@@ -39,7 +39,7 @@ object SharedHttpClient {
         private val enableProxy: Boolean
     ) : Closeable {
 
-        val okHttpClient: OkHttpClient
+        private val client: OkHttpClient
         private val dnsClient = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)
@@ -106,7 +106,7 @@ object SharedHttpClient {
                 }
             }
 
-            okHttpClient = builder.build()
+            client = builder.build()
         }
 
         private fun resolveOverDohRecursive(host: String, depth: Int): String? {
@@ -169,7 +169,7 @@ object SharedHttpClient {
                         requestBuilder.method(method, null)
                     }
 
-                    okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+                    client.newCall(requestBuilder.build()).execute().use { response ->
                         val responseBody = response.body?.string() ?: ""
                         val responseHeaders = response.headers.toMap()
                         return@withContext HttpResponse(response.code, responseBody, responseHeaders)
@@ -186,8 +186,8 @@ object SharedHttpClient {
 
         override fun close() {
             try {
-                okHttpClient.dispatcher.executorService.shutdown()
-                okHttpClient.connectionPool.evictAll()
+                client.dispatcher.executorService.shutdown()
+                client.connectionPool.evictAll()
                 dnsClient.dispatcher.executorService.shutdown()
                 dnsClient.connectionPool.evictAll()
             } catch (e: Exception) { }
