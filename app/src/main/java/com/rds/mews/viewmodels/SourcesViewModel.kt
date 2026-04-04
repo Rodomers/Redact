@@ -37,7 +37,7 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
     private val _isLinkCorrect = MutableStateFlow(false)
     val isLinkCorrect: StateFlow<Boolean> = _isLinkCorrect
 
-    val sources: StateFlow<List<RSS>> = repository.sources
+    val sources: StateFlow<List<RSS>> = repository.getSourcesWithAvatars()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

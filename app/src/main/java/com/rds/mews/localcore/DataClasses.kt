@@ -13,6 +13,7 @@ data class Message(
     var originalText: String,
     var cleanText: String
 )
+
 data class RSS(
     var id: Long,
     var currentName: String?,
@@ -20,7 +21,9 @@ data class RSS(
     var feedUrl: String,
     var websiteUrl: String,
     val sourceType: SourceType,
-    val errCount: Int
+    val errCount: Int,
+    val lastUpdated: Long?,
+    val avatarUrl: String?
 )
 data class Title(
     var id: Long,

@@ -145,7 +145,8 @@ object SourceResolver {
         val name: String,
         val websiteUrl: String,
         val feedUrl: String,
-        val type: SourceType
+        val type: SourceType,
+        val avatarUrl: String? = null
     )
 
     suspend fun resolveSourceDetails(strLink: String, enableProxy: Boolean = false): ResolvedSource? {
@@ -206,7 +207,16 @@ object SourceResolver {
                 name
             }
 
-            return ResolvedSource(name = finalName, websiteUrl = websiteUrl, feedUrl = feedUrlToSave, type = sourceType)
+            val xmlAvatarUrl = doc.selectFirst("channel > image > url, logo, icon")?.text()?.takeIf { it.isNotBlank() }
+            val avatarUrl = xmlAvatarUrl ?: findAvatarUrl(websiteUrl, httpClient, sourceType)
+
+            return ResolvedSource(
+                name = finalName,
+                websiteUrl = websiteUrl,
+                feedUrl = feedUrlToSave,
+                type = sourceType,
+                avatarUrl = avatarUrl
+            )
 
         } catch (_: Exception) {
             return null
@@ -231,6 +241,40 @@ object SourceResolver {
         } catch (_: Exception) {
             null
         }
+    }
+
+    private suspend fun findAvatarUrl(url: String, httpClient: SharedHttpClient.JdkClient, type: SourceType): String? = withContext(Dispatchers.IO) {
+        try {
+            val response = httpClient.get(url)
+            if (response.status !in 200..299 || response.body.isBlank()) {
+                return@withContext null
+            }
+
+            val doc = Jsoup.parse(response.body, url)
+
+            if (type == SourceType.TELEGRAM) {
+                val imgElement = doc.selectFirst("img.tgme_page_photo_image")
+                return@withContext imgElement?.attr("src")?.takeIf { it.isNotBlank() }
+            } else {
+                val appleIcon = doc.selectFirst("link[rel=apple-touch-icon]")
+                val appleUrl = appleIcon?.attr("abs:href")
+                if (!appleUrl.isNullOrBlank()) return@withContext appleUrl
+
+                val shortcutIcon = doc.selectFirst("link[rel=\"shortcut icon\"]")
+                val shortcutUrl = shortcutIcon?.attr("abs:href")
+                if (!shortcutUrl.isNullOrBlank()) return@withContext shortcutUrl
+
+                val icon = doc.selectFirst("link[rel=icon]")
+                val iconUrl = icon?.attr("abs:href")
+                if (!iconUrl.isNullOrBlank()) return@withContext iconUrl
+
+                val ogImage = doc.selectFirst("meta[property=\"og:image\"]")
+                val ogUrl = ogImage?.attr("abs:content")
+                if (!ogUrl.isNullOrBlank()) return@withContext ogUrl
+            }
+        } catch (_: Exception) {
+        }
+        return@withContext null
     }
 
     private fun buildTelegramRssUrl(username: String): String {

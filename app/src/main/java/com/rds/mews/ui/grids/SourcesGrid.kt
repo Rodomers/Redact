@@ -34,6 +34,7 @@ import com.rds.mews.R
 import com.rds.mews.localcore.RSS
 import com.rds.mews.localcore.SourceType
 import com.rds.mews.localcore.TextButtonInputs
+import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.localcore.sourcesTypeInterpreter
 import com.rds.mews.ui.custom_elements.AddSourceBottomSheet
 import com.rds.mews.ui.custom_elements.ExpandableContainer
@@ -231,16 +232,12 @@ fun SourcesGrid(
                                 stringResource(R.string.source_delete),
                                 { setDelSource(item) }),
                         )
-                        val error = item.errCount >= 3
                         SourcesCard(
-                            source = item.currentName ?: item.originalName,
-                            buttons = if (!error) buttons else listOf(
-                                TextButtonInputs(
-                                    stringResource(R.string.source_reset_errors),
-                                    { resetErrCount(item.id) }
-                                )
-                            ) + buttons,
-                            error = error
+                            rss = item,
+                            buttons = buttons,
+                            avatarUrl = item.avatarUrl,
+                            timeText = getFormattedTimeUnix(item.lastUpdated ?: 0L),
+                            onResetErrors = { resetErrCount(item.id) }
                         )
                     }
                 }

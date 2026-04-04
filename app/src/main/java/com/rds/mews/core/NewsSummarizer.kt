@@ -10,11 +10,13 @@ import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.text_filters.TextComparator
 import com.rds.mews.text_filters.TextSanitizer
 import com.rds.mews.text_filters.TokenEstimator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import org.json.JSONArray
@@ -288,13 +290,20 @@ class LLMClient(
 }
 
 suspend fun validateGeminiKey(apiKey: String, proxyIp: String, proxyKey: String, enableProxy: Boolean): Boolean {
-    val client = SharedHttpClient.createInstance(proxyIp, proxyKey, enableProxy)
-    return try {
-        val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
-        val getUrl = client.get(url)
-        println(getUrl.body)
-        getUrl.status == 200
-    } catch (_: Exception) { false } finally { client.close() }
+    return withContext(Dispatchers.IO) {
+        val client = SharedHttpClient.createInstance(proxyIp, proxyKey, enableProxy)
+        try {
+            val url = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey"
+            val getUrl = client.get(url)
+            println(getUrl.body)
+            getUrl.status == 200
+        } catch (e: Exception) {
+            println("cause: ${e.cause}, message: ${e.message}")
+            false
+        } finally {
+            client.close()
+        }
+    }
 }
 
 class NewsSummarizer(private val llm: LLMClient) {
@@ -517,9 +526,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                                     }
                                                 }
 
-                                                val isTitleVerySimilar = TextComparator.areSimilar(newTitle, historyItem.title, 0.90)
-
-                                                if (keywordMatches >= 3 && isTitleVerySimilar) {
+                                                if (keywordMatches >= 2) {
                                                     bestMatchId = historyItem.id
                                                     break
                                                 }

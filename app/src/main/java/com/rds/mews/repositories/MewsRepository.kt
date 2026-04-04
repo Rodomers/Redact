@@ -32,6 +32,10 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.Calendar
 import java.util.Date
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 object MewsRepository {
     private lateinit var database: AppDatabase
@@ -229,11 +233,11 @@ object MewsRepository {
                     RSS(
                         it.id, it.customName ?: it.originalName, it.originalName,
                         feedUrl = it.feedUrl,
-                        websiteUrl = if (!it.websiteUrl.startsWith("http://") && !it.websiteUrl.startsWith("https://"))
-                            "https://${it.websiteUrl}"
-                        else it.websiteUrl,
+                        websiteUrl = formatWebsiteUrl(it.websiteUrl),
                         sourceType = SourceType.fromId(it.sourceType),
-                        errCount = it.errCount
+                        errCount = it.errCount,
+                        lastUpdated = it.lastSyncTime,
+                        avatarUrl = null
                     ) }
             }
             .flowOn(Dispatchers.IO)
@@ -245,7 +249,7 @@ object MewsRepository {
                         async {
                             val sourcesList = titleDao.getSourcesForTitleFlow(entity.id).first()
                             val messagesList = titleDao.getMessagesForTitleFlow(entity.id).first()
-                            val sourcesStr = sourcesList.joinToString(", ") { it.customName ?: it.originalName }
+                            val sourcesStr = sourcesList.distinct().joinToString(", ") { it.customName ?: it.originalName }
                             val idsStr = messagesList.joinToString(", ") { it.id.toString() }
 
                             val parent = titleDao.getParentTitle(entity.id)
@@ -342,8 +346,52 @@ object MewsRepository {
             source.feedUrl,
             source.websiteUrl,
             SourceType.fromId(source.sourceType),
-            errCount = source.errCount
+            errCount = source.errCount,
+            lastUpdated = source.lastSyncTime,
+            avatarUrl = null
         ) else null
+    }
+
+    fun getSourcesWithAvatars(): Flow<List<RSS>> = channelFlow {
+        val resolvedAvatars = MutableStateFlow<Map<Long, String>>(emptyMap())
+        val semaphore = Semaphore(3)
+
+        sourceDao.getAllSourcesFlow()
+            .combine(resolvedAvatars) { entities, avatars ->
+                entities.map { entity ->
+                    val fetchedAvatar = avatars[entity.id]?.takeIf { it.isNotEmpty() }
+                    RSS(
+                        id = entity.id,
+                        currentName = entity.customName ?: entity.originalName,
+                        originalName = entity.originalName,
+                        feedUrl = entity.feedUrl,
+                        websiteUrl = formatWebsiteUrl(entity.websiteUrl),
+                        sourceType = SourceType.fromId(entity.sourceType),
+                        errCount = entity.errCount,
+                        lastUpdated = entity.lastSyncTime,
+                        avatarUrl = fetchedAvatar
+                    )
+                }
+            }
+            .collect { currentList ->
+                send(currentList)
+
+                currentList.forEach { item ->
+                    if (!resolvedAvatars.value.containsKey(item.id)) {
+                        resolvedAvatars.update { it + (item.id to "") }
+
+                        launch(Dispatchers.IO) {
+                            semaphore.withPermit {
+                                val avatar = SourceResolver.resolveSourceDetails(item.websiteUrl)?.avatarUrl
+                                if (avatar != null) {
+                                    resolvedAvatars.update { it + (item.id to avatar) }
+                                }
+                                delay(200L)
+                            }
+                        }
+                    }
+                }
+            }
     }
 
     fun deleteSource(id: Long) {
@@ -731,6 +779,14 @@ object MewsRepository {
     fun resetAllSourceErrors() {
         externalScope.launch(Dispatchers.IO) {
             sourceDao.resetAllErrorCounts()
+        }
+    }
+
+    private fun formatWebsiteUrl(url: String): String {
+        return if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            "https://$url"
+        } else {
+            url
         }
     }
 }
