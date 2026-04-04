@@ -55,6 +55,8 @@ import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.TitleStatus
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 class TitlesViewModel(
     private val application: Application,
@@ -166,6 +168,9 @@ class TitlesViewModel(
 
     private val _titleCardStates = MutableStateFlow<Set<TitleCardStates>>(emptySet())
     val titleCardStates: StateFlow<Set<TitleCardStates>> = _titleCardStates.asStateFlow()
+
+    private val _dynamicMediaUrls = MutableStateFlow<Map<Long, List<String>>>(emptyMap())
+    val dynamicMediaUrls: StateFlow<Map<Long, List<String>>> = _dynamicMediaUrls.asStateFlow()
 
     fun toggleEmptyMess(newValue: Boolean) {
         _showEmptyMessage.value = newValue
@@ -329,6 +334,52 @@ class TitlesViewModel(
                 }
                 else it
             }.toSet()
+        }
+    }
+
+    fun loadDynamicMediaUrls(titleId: Long) {
+        if (_dynamicMediaUrls.value.containsKey(titleId)) return
+
+        val targetTitle = _titles.value.find { it.id == titleId } ?: return
+        val mediaUrls = targetTitle.mediaUrls
+
+        val targetState = _titleCardStates.value.find { it.id == titleId }
+        val sources = targetState?.sources
+
+        viewModelScope.launch {
+            val allMessages = sources?.flatMap { it.messages } ?: emptyList()
+            val telegramLinks = allMessages.map { it.link }.filter { it.contains("t.me") }
+
+            if (telegramLinks.isEmpty()) {
+                val urls = mediaUrls.map { it.substringBefore("?") }
+                    .filter { url ->
+                        val cleanUrl = url.lowercase()
+                        !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
+                    }.distinct()
+                _dynamicMediaUrls.update { it + (titleId to urls) }
+                return@launch
+            }
+
+            withContext(Dispatchers.IO) {
+                val liveUrls = mutableListOf<String>()
+                val scraper = com.rds.mews.core.TelegramRssClient(repository.proxyEnabled.value)
+                for (link in telegramLinks) {
+                    try {
+                        val result = scraper.scrapeEmbedMedia(link)
+                        liveUrls.addAll(result)
+                    } catch (e: Exception) { }
+                }
+
+                val oldUrls = mediaUrls.filter { !it.contains("telesco.pe") }
+
+                val finalUrls = (liveUrls + oldUrls).map { it.substringBefore("?") }
+                    .filter { url ->
+                        val cleanUrl = url.lowercase()
+                        !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
+                    }.distinct()
+
+                _dynamicMediaUrls.update { it + (titleId to finalUrls) }
+            }
         }
     }
 

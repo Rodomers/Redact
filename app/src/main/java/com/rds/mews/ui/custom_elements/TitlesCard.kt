@@ -80,13 +80,13 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
@@ -130,9 +130,7 @@ import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.text_filters.TextSanitizer
 import com.rds.mews.ui.theme.Shapes
 import dev.jeziellago.compose.markdowntext.MarkdownText
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -153,6 +151,8 @@ fun TitlesCard(
     backgroundColor: Color = MaterialTheme.colorScheme.secondaryContainer,
     expandable: Boolean = true,
     markAsUnread: () -> Unit,
+    dynamicMediaUrls: List<String>? = null,
+    onLoadMediaUrls: () -> Unit = {},
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
@@ -239,7 +239,9 @@ fun TitlesCard(
                 originalNoTime = noTime,
                 showSnippet = showSnippet,
                 isRead = isRead,
-                backgroundColor = backgroundColor
+                backgroundColor = backgroundColor,
+                dynamicMediaUrls = dynamicMediaUrls,
+                onLoadMediaUrls = onLoadMediaUrls
             )
         }
     }
@@ -339,7 +341,9 @@ private fun HeroExpansionContent(
     originalNoTime: Boolean,
     showSnippet: Boolean,
     isRead: Boolean,
-    backgroundColor: Color
+    backgroundColor: Color,
+    dynamicMediaUrls: List<String>?,
+    onLoadMediaUrls: () -> Unit
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -450,7 +454,9 @@ private fun HeroExpansionContent(
                     showSnippet = showSnippet,
                     isRead = isRead,
                     headerStartColor = backgroundColor,
-                    targetCardHeight = targetHeight
+                    targetCardHeight = targetHeight,
+                    dynamicMediaUrls = dynamicMediaUrls,
+                    onLoadMediaUrls = onLoadMediaUrls
                 )
             }
         }
@@ -638,7 +644,9 @@ private fun ExpandedCardContent(
     showSnippet: Boolean,
     isRead: Boolean,
     headerStartColor: Color,
-    targetCardHeight: Float
+    targetCardHeight: Float,
+    dynamicMediaUrls: List<String>?,
+    onLoadMediaUrls: () -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -660,42 +668,9 @@ private fun ExpandedCardContent(
     val scrollState = rememberScrollState()
     var clickedImageIndex by remember { mutableStateOf<Int?>(null) }
 
-    var dynamicMediaUrls by remember { mutableStateOf<List<String>?>(null) }
-
     LaunchedEffect(title.id, sources) {
-        val allMessages = sources?.flatMap { it.messages } ?: emptyList()
-        val telegramLinks = allMessages.map { it.link }.filter { it.contains("t.me") }
-
-        if (telegramLinks.isEmpty()) {
-            dynamicMediaUrls = title.mediaUrls.map { it.substringBefore("?") }
-                .filter { url ->
-                    val cleanUrl = url.lowercase()
-                    !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
-                }.distinct()
-            return@LaunchedEffect
-        }
-
-        withContext(Dispatchers.IO) {
-            val liveUrls = mutableListOf<String>()
-            for (link in telegramLinks) {
-                try {
-                    val result: Any? = com.rds.mews.core.TelegramRssClient().scrapeEmbedMedia(link)
-                    if (result is List<*>) {
-                        liveUrls.addAll(result.filterIsInstance<String>())
-                    } else if (result is String) {
-                        liveUrls.add(result)
-                    }
-                } catch (e: Exception) {
-                }
-            }
-
-            val oldUrls = title.mediaUrls.filter { !it.contains("telesco.pe") }
-
-            dynamicMediaUrls = (liveUrls + oldUrls).map { it.substringBefore("?") }
-                .filter { url ->
-                    val cleanUrl = url.lowercase()
-                    !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
-                }.distinct()
+        if (dynamicMediaUrls == null) {
+            onLoadMediaUrls()
         }
     }
 
@@ -727,7 +702,7 @@ private fun ExpandedCardContent(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                if (!hasRelatedNews || source != NestedScrollSource.Drag) return Offset.Zero
+                if (!hasRelatedNews || source != NestedScrollSource.UserInput) return Offset.Zero
 
                 if (available.y > 0f && title.parentId != null) {
                     pullOffset = (pullOffset + available.y * 0.4f).coerceAtMost(maxPullPx)
@@ -937,10 +912,9 @@ private fun ExpandedCardContent(
                                     ) {
                                         CircularProgressIndicator()
                                     }
-                                } else if (dynamicMediaUrls!!.isNotEmpty()) {
-                                    val mediaUrls = dynamicMediaUrls!!
+                                } else if (dynamicMediaUrls.isNotEmpty()) {
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    val imagePagerState = rememberPagerState { mediaUrls.size }
+                                    val imagePagerState = rememberPagerState { dynamicMediaUrls.size }
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -957,7 +931,7 @@ private fun ExpandedCardContent(
                                                     .clickable { clickedImageIndex = pageIndex }
                                             ) {
                                                 AsyncImage(
-                                                    model = mediaUrls[pageIndex],
+                                                    model = dynamicMediaUrls[pageIndex],
                                                     contentDescription = null,
                                                     modifier = Modifier
                                                         .fillMaxSize()
@@ -967,7 +941,7 @@ private fun ExpandedCardContent(
                                                 )
 
                                                 AsyncImage(
-                                                    model = mediaUrls[pageIndex],
+                                                    model = dynamicMediaUrls[pageIndex],
                                                     contentDescription = null,
                                                     modifier = Modifier.fillMaxSize(),
                                                     contentScale = ContentScale.Fit
@@ -975,7 +949,7 @@ private fun ExpandedCardContent(
                                             }
                                         }
 
-                                        if (mediaUrls.size > 1) {
+                                        if (dynamicMediaUrls.size > 1) {
                                             Row(
                                                 modifier = Modifier
                                                     .align(Alignment.BottomCenter)
@@ -988,7 +962,7 @@ private fun ExpandedCardContent(
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                repeat(mediaUrls.size) { index ->
+                                                repeat(dynamicMediaUrls.size) { index ->
                                                     val isSelected = imagePagerState.currentPage == index
                                                     Box(
                                                         modifier = Modifier
@@ -1007,7 +981,7 @@ private fun ExpandedCardContent(
 
                                     if (clickedImageIndex != null) {
                                         RootViewOverlay {
-                                            val fullScreenPagerState = rememberPagerState(initialPage = clickedImageIndex!!) { mediaUrls.size }
+                                            val fullScreenPagerState = rememberPagerState(initialPage = clickedImageIndex!!) { dynamicMediaUrls.size }
                                             BackHandler { clickedImageIndex = null }
                                             Box(
                                                 modifier = Modifier
@@ -1100,7 +1074,7 @@ private fun ExpandedCardContent(
                                                             }
                                                     ) {
                                                         AsyncImage(
-                                                            model = mediaUrls[page],
+                                                            model = dynamicMediaUrls[page],
                                                             contentDescription = null,
                                                             modifier = Modifier
                                                                 .fillMaxSize()
@@ -1115,7 +1089,7 @@ private fun ExpandedCardContent(
                                                     }
                                                 }
 
-                                                if (mediaUrls.size > 1) {
+                                                if (dynamicMediaUrls.size > 1) {
                                                     Row(
                                                         modifier = Modifier
                                                             .align(Alignment.BottomCenter)
@@ -1131,7 +1105,7 @@ private fun ExpandedCardContent(
                                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        repeat(mediaUrls.size) { index ->
+                                                        repeat(dynamicMediaUrls.size) { index ->
                                                             val isSelected = fullScreenPagerState.currentPage == index
                                                             Box(
                                                                 modifier = Modifier

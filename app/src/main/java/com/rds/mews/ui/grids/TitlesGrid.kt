@@ -87,6 +87,7 @@ import kotlin.collections.component2
 import kotlin.collections.iterator
 import com.rds.mews.ui.theme.Shapes
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
+import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.viewmodels.TitlesScrollEvent
 
 @Composable
@@ -141,6 +142,7 @@ fun TitlesScreen(
     val innerTime by viewModel.innerTimestamps.collectAsStateWithLifecycle()
     val showSnippets by viewModel.showSnippets.collectAsStateWithLifecycle()
     val lastTitlesUpdate by viewModel.lastUpdated.collectAsStateWithLifecycle()
+    val dynamicMediaUrls by viewModel.dynamicMediaUrls.collectAsStateWithLifecycle()
 
     TitlesGrid(
         lazyGridState = lazyGridState,
@@ -167,6 +169,7 @@ fun TitlesScreen(
         innerTime = innerTime,
         showSnippets = showSnippets,
         bottomSpacer = bottomSpacer,
+        dynamicMediaUrls = dynamicMediaUrls,
         onBanTheme = viewModel::onBanTheme,
         onConfigChange = viewModel::scrollToItem,
         changeSourceState = viewModel::changeTitleSourceState,
@@ -175,7 +178,8 @@ fun TitlesScreen(
         markTitleAsRead = viewModel::markTitleAsRead,
         showGreeting = viewModel::showGreeting,
         lastTitlesUpdateExists = viewModel::lastTitlesUpdateExists,
-        onSwitchStoryline = viewModel::switchStorylineAndScroll
+        onSwitchStoryline = viewModel::switchStorylineAndScroll,
+        loadDynamicMediaUrls = viewModel::loadDynamicMediaUrls
     )
 }
 
@@ -207,6 +211,7 @@ fun TitlesGrid(
     innerTime: Boolean,
     showSnippets: Boolean,
     bottomSpacer: Dp,
+    dynamicMediaUrls: Map<Long, List<String>>,
     onBanTheme: (String) -> Unit,
     onConfigChange: (Int) -> Unit,
     changeSourceState: (Long, String) -> Unit,
@@ -215,7 +220,8 @@ fun TitlesGrid(
     markTitleAsRead: (Long, Boolean) -> Unit,
     showGreeting: (Context) -> Unit,
     lastTitlesUpdateExists: () -> Boolean,
-    onSwitchStoryline: (Long) -> Unit
+    onSwitchStoryline: (Long) -> Unit,
+    loadDynamicMediaUrls: (Long) -> Unit
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
 
@@ -448,7 +454,9 @@ fun TitlesGrid(
                                         onToggleExpanded(item.id)
                                         markTitleAsRead(item.id, false)
                                     },
-                                    onSwitchStoryline = onSwitchStoryline
+                                    onSwitchStoryline = onSwitchStoryline,
+                                    onLoadMediaUrls = { loadDynamicMediaUrls(item.id) },
+                                    dynamicMediaUrls = dynamicMediaUrls[item.id]
                                 )
 
                                 if (isPartiallyObscured) {

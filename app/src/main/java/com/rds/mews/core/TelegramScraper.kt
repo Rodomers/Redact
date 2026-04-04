@@ -1,11 +1,12 @@
 package com.rds.mews.core
 
-import java.net.URL
-import java.net.HttpURLConnection
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.jsoup.Jsoup
+import com.rds.mews.repositories.MewsRepository
 
-class TelegramRssClient {
+class TelegramRssClient(private val enableProxy: Boolean = false) {
 
     data class RssItem(
         val title: String,
@@ -14,7 +15,7 @@ class TelegramRssClient {
         val description: String
     )
 
-    private fun fetchChannelMessages(channelUrl: String): List<RssItem> {
+    private suspend fun fetchChannelMessages(channelUrl: String): List<RssItem> = withContext(Dispatchers.IO) {
         val html = downloadHtml(channelUrl)
 
         val messageBlockRegex = Regex(
@@ -70,16 +71,23 @@ class TelegramRssClient {
             }
         }
 
-        return messages
+        return@withContext messages
     }
 
-    private fun downloadHtml(url: String): String {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.connectTimeout = 10000
-        connection.readTimeout = 10000
-
-        return connection.inputStream.bufferedReader().use { it.readText() }
+    private suspend fun downloadHtml(url: String): String = withContext(Dispatchers.IO) {
+        val httpClient = SharedHttpClient.createInstance(
+            MewsRepository.HUB_ADDRESS,
+            MewsRepository.SERVER_KEY,
+            enableProxy
+        )
+        try {
+            val response = httpClient.get(url)
+            if (response.status in 200..299) response.body else ""
+        } catch (e: Exception) {
+            ""
+        } finally {
+            httpClient.close()
+        }
     }
 
     private fun stripHtml(input: String): String {
@@ -92,10 +100,10 @@ class TelegramRssClient {
             .replace("&#036;", "$")
     }
 
-    fun buildRss(channelUrl: String, feedId: Long): List<MinifluxEntry> {
+    suspend fun buildRss(channelUrl: String, feedId: Long): List<MinifluxEntry> = withContext(Dispatchers.IO) {
         val items = fetchChannelMessages(channelUrl)
 
-        return items.map { item ->
+        return@withContext items.map { item ->
             MinifluxEntry(
                 id = UUID.nameUUIDFromBytes(item.link.toByteArray()).mostSignificantBits,
                 feed_id = feedId,
@@ -107,20 +115,32 @@ class TelegramRssClient {
         }
     }
 
-    suspend fun scrapeEmbedMedia(postLink: String): List<String> = withContext(kotlinx.coroutines.Dispatchers.IO) {
+    suspend fun scrapeEmbedMedia(postLink: String): List<String> = withContext(Dispatchers.IO) {
         val embedUrl = if (postLink.contains("?")) {
             "$postLink&embed=1"
         } else {
             "$postLink?embed=1"
         }
 
-        val document = org.jsoup.Jsoup.connect(embedUrl).userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").get()
-        val elements = document.select(".tgme_widget_message_photo_wrap")
-        val regex = Regex("""url\('([^']+)'\)""")
+        val httpClient = SharedHttpClient.createInstance(
+            MewsRepository.HUB_ADDRESS,
+            MewsRepository.SERVER_KEY,
+            enableProxy
+        )
+        try {
+            val response = httpClient.get(embedUrl)
+            if (response.status !in 200..299) return@withContext emptyList()
 
-        elements.mapNotNull { element ->
-            val style = element.attr("style")
-            regex.find(style)?.groupValues?.get(1)
+            val document = Jsoup.parse(response.body, embedUrl)
+            val elements = document.select(".tgme_widget_message_photo_wrap")
+            val regex = Regex("""url\('([^']+)'\)""")
+
+            elements.mapNotNull { element ->
+                val style = element.attr("style")
+                regex.find(style)?.groupValues?.get(1)
+            }
+        } finally {
+            httpClient.close()
         }
     }
 }

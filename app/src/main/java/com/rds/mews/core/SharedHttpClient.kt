@@ -39,7 +39,7 @@ object SharedHttpClient {
         private val enableProxy: Boolean
     ) : Closeable {
 
-        private val client: OkHttpClient
+        val okHttpClient: OkHttpClient
         private val dnsClient = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)
@@ -106,7 +106,7 @@ object SharedHttpClient {
                 }
             }
 
-            client = builder.build()
+            okHttpClient = builder.build()
         }
 
         private fun resolveOverDohRecursive(host: String, depth: Int): String? {
@@ -122,7 +122,7 @@ object SharedHttpClient {
 
                 dnsClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return null
-                    val body = response.body?.string() ?: return null
+                    val body = response.body.string()
 
                     val matcher = Pattern.compile("\"data\"\\s*:\\s*\"([^\"]+)\"").matcher(body)
                     while (matcher.find()) {
@@ -137,7 +137,7 @@ object SharedHttpClient {
                     if (matcher.find()) {
                         val cname = matcher.group(1)
                         Log.d("API_LOG", "DoH CNAME found: $host -> $cname, recursing...")
-                        return resolveOverDohRecursive(cname, depth + 1)
+                        return resolveOverDohRecursive(cname ?: "", depth + 1)
                     }
                 }
             } catch (e: Exception) {
@@ -169,8 +169,8 @@ object SharedHttpClient {
                         requestBuilder.method(method, null)
                     }
 
-                    client.newCall(requestBuilder.build()).execute().use { response ->
-                        val responseBody = response.body?.string() ?: ""
+                    okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+                        val responseBody = response.body.string()
                         val responseHeaders = response.headers.toMap()
                         return@withContext HttpResponse(response.code, responseBody, responseHeaders)
                     }
@@ -186,11 +186,11 @@ object SharedHttpClient {
 
         override fun close() {
             try {
-                client.dispatcher.executorService.shutdown()
-                client.connectionPool.evictAll()
+                okHttpClient.dispatcher.executorService.shutdown()
+                okHttpClient.connectionPool.evictAll()
                 dnsClient.dispatcher.executorService.shutdown()
                 dnsClient.connectionPool.evictAll()
-            } catch (e: Exception) { }
+            } catch (_: Exception) { }
         }
     }
 
