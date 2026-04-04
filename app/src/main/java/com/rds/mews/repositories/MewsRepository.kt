@@ -386,7 +386,7 @@ object MewsRepository {
                                 if (avatar != null) {
                                     resolvedAvatars.update { it + (item.id to avatar) }
                                 }
-                                delay(200L)
+                                delay(100L)
                             }
                         }
                     }

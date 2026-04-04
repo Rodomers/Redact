@@ -65,6 +65,7 @@ fun SourcesCard(
     timeText: String,
     onResetErrors: (Long) -> Unit
 ) {
+    val resetText = stringResource(R.string.source_reset_errors)
     val menuTransitionState = remember { MutableTransitionState(false) }
 
     val blurRadius by animateDpAsState(
@@ -87,7 +88,7 @@ fun SourcesCard(
         if (hasErrors) {
             list.add(
                 TextButtonInputs(
-                    text = "Сбросить ошибки",
+                    text = resetText,
                     action = { onResetErrors(rss.id) }
                 )
             )
@@ -111,30 +112,15 @@ fun SourcesCard(
                     .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
             ) {
                 if (avatarUrl != null) {
-                    var isImageLoaded by remember { mutableStateOf(false) }
-                    val dimAlpha by animateFloatAsState(
-                        targetValue = if (isImageLoaded) 0.3f else 0f,
-                        label = "dimAlpha"
-                    )
-
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(avatarUrl)
                             .crossfade(true)
                             .build(),
                         contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                        onSuccess = { isImageLoaded = true }
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
                     )
-
-                    if (dimAlpha > 0f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = dimAlpha))
-                        )
-                    }
                 }
 
                 Box(
