@@ -26,6 +26,7 @@ import com.rds.mews.database.TitleMessageMap
 import com.rds.mews.localcore.*
 import com.rds.mews.settings_manager.AppSettings
 import com.rds.mews.settings_manager.SettingsManager
+import com.rds.mews.text_filters.TextSanitizer
 import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.workers.AlarmScheduler
 import kotlinx.coroutines.*
@@ -272,7 +273,7 @@ object MewsRepository {
                                 parentId = parent?.id,
                                 childId = child?.id,
                                 relatedTitle = child?.title,
-                                relatedSnippet = "${child?.summary?.take(120)}...",
+                                relatedSnippet = "${TextSanitizer.sanitize(child?.summary ?: "").take(120)}...",
                                 storyDepth = depth,
                                 mediaUrls = mediaUrlsList
                             )
