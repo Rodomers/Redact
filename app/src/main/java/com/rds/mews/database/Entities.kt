@@ -21,7 +21,10 @@ class Converters {
 
 @Entity(
     tableName = "sources",
-    indices = [Index(value = ["feed_url"], unique = true)]
+    indices = [
+        Index(value = ["feed_url"], unique = true),
+        Index(value = ["website_url"], unique = true)
+    ]
 )
 data class SourceEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

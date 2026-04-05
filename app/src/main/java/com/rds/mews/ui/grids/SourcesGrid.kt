@@ -236,7 +236,10 @@ fun SourcesGrid(
                             rss = item,
                             buttons = buttons,
                             avatarUrl = item.avatarUrl,
-                            timeText = getFormattedTimeUnix(item.lastUpdated ?: 0L),
+                            timeText = when (item.lastUpdated) {
+                                in listOf(0L, null) -> "-"
+                                else -> getFormattedTimeUnix(item.lastUpdated ?: 0L)
+                            },
                             onResetErrors = { resetErrCount(item.id) }
                         )
                     }

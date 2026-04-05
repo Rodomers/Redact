@@ -99,8 +99,7 @@ class ParserWorker(
         enableProxy: Boolean
     ) {
         try {
-            val dbCursorTime = MewsRepository.getMaxPubTimeForSource(source.id) ?: 0L
-            val cursorTimeMs = maxOf(dbCursorTime, System.currentTimeMillis() - 864000000L)
+            val cursorTimeMs = maxOf(source.lastSyncTime, System.currentTimeMillis() - 864000000L)
 
             var serverFeedId: Long? = null
             try {

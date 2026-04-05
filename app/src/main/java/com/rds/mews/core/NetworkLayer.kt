@@ -168,7 +168,7 @@ object SourceResolver {
                     rawLink.startsWith("@") -> rawLink.drop(1)
                     else -> rawLink.trimEnd('/').split("/").last().substringBefore("?")
                 }
-                websiteUrl = "https://t.me/$username"
+                websiteUrl = "https://t.me/s/$username"
                 feedUrlToSave = websiteUrl
                 urlToPing = buildTelegramRssUrl(username)
             } else {

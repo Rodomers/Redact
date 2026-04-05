@@ -131,14 +131,14 @@ object TextSanitizer {
     /**
      * Очищает текст и удаляет последнее предложение, если в нем есть ссылка.
      */
-    fun sanitize(text: String): String {
+    fun sanitize(text: String, saveWhitespace: Boolean = false): String {
         if (text.isBlank()) return ""
 
         var clean = text
         clean = IMAGE_PATTERN.matcher(clean).replaceAll("")
         clean = LINK_TEXT_PATTERN.matcher(clean).replaceAll("$1")
         clean = FORMATTING_CHARS.matcher(clean).replaceAll("")
-        clean = WHITESPACE_CLEANUP.matcher(clean).replaceAll(" ").trim()
+        if (!saveWhitespace) clean = WHITESPACE_CLEANUP.matcher(clean).replaceAll(" ").trim()
 
         return cutFooterWithLink(clean)
     }

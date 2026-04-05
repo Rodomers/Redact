@@ -463,7 +463,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             var successCount = 0
             var lastError: SummarizationErrorType? = null
 
-            val history = MewsRepository.getRecentTitlesForStorylines(System.currentTimeMillis() - (72 * 60 * 60 * 1000L))
+            val summarizedTopicsData = mutableListOf<Triple<Long, Long, Pair<String, String>>>()
 
             coroutineScope {
                 batches.forEachIndexed { index, batch ->
@@ -508,58 +508,15 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                                         val newTimeVal = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
 
-                                        var matchedParentId: Long? = null
-                                        try {
-                                            var bestMatchId: Long? = null
-                                            var maxScore = 0.0
-
-                                            for (historyItem in history) {
-                                                if (historyItem.id == topic.id) continue
-
-                                                var keywordMatches = 0
-                                                for (tk in topic.keywords) {
-                                                    for (hk in historyItem.keywords) {
-                                                        if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.85)) {
-                                                            keywordMatches++
-                                                            break
-                                                        }
-                                                    }
-                                                }
-
-                                                if (keywordMatches >= 2) {
-                                                    bestMatchId = historyItem.id
-                                                    break
-                                                }
-
-                                                val match45Title = TextComparator.areSimilar(newTitle, historyItem.title, 0.45)
-                                                val match45Summary = TextComparator.areSimilar(summary, historyItem.summary, 0.45)
-
-                                                if (keywordMatches >= 1 && (match45Title || match45Summary)) {
-                                                    var currentScore = keywordMatches.toDouble()
-                                                    if (match45Title) currentScore += 0.5
-                                                    if (match45Summary) currentScore += 0.5
-
-                                                    if (currentScore > maxScore) {
-                                                        maxScore = currentScore
-                                                        bestMatchId = historyItem.id
-                                                    }
-                                                }
-                                            }
-                                            matchedParentId = bestMatchId
-                                        } catch (e: Exception) {
-                                            if (e !is kotlinx.coroutines.CancellationException) {
-                                                Log.e(TAG, "Storylines matching failed for title ${topic.id}", e)
-                                            } else throw e
-                                        }
-
                                         MewsRepository.updateTitle(
                                             id = topic.id,
                                             newTimeVal = newTimeVal,
                                             newTitle = newTitle,
                                             summary = summary,
-                                            parentId = matchedParentId
+                                            parentId = null
                                         )
 
+                                        summarizedTopicsData.add(Triple(topic.id, newTimeVal, Pair(newTitle, summary)))
                                         successCount++
                                     } catch (e: kotlinx.coroutines.CancellationException) {
                                         throw e
@@ -605,6 +562,78 @@ class NewsSummarizer(private val llm: LLMClient) {
                         MewsRepository.setUpdatingProgress(newProgress.coerceIn(0f, 0.95f))
                     } catch (_: Exception) {
                     }
+                }
+            }
+
+            if (successCount > 0) {
+                try {
+                    val history = MewsRepository.getRecentTitlesForStorylines(System.currentTimeMillis() - (72 * 60 * 60 * 1000L))
+                    val sortedSummarized = summarizedTopicsData.sortedBy { it.second }
+
+                    for ((topicId, topicTime, titleAndSummary) in sortedSummarized) {
+                        val (newTitle, summary) = titleAndSummary
+                        val currentTopic = history.find { it.id == topicId }
+
+                        if (currentTopic != null) {
+                            var bestMatchId: Long? = null
+                            var maxScore = 0.0
+
+                            for (historyItem in history) {
+                                if (historyItem.id == topicId) continue
+                                if (historyItem.eventTime > topicTime || (historyItem.eventTime == topicTime && historyItem.id >= topicId)) continue
+
+                                var keywordMatches = 0
+                                println(
+                                    "current keywords: ${currentTopic.keywords.joinToString(", ")},\nhistory keywords: ${
+                                        historyItem.keywords.joinToString(
+                                            ", "
+                                        )
+                                    }"
+                                )
+                                for (tk in currentTopic.keywords) {
+                                    for (hk in historyItem.keywords) {
+                                        if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.85)) {
+                                            keywordMatches++
+                                            break
+                                        }
+                                    }
+                                }
+
+                                if (keywordMatches >= 2) {
+                                    bestMatchId = historyItem.id
+                                    break
+                                }
+
+                                val match45Title = TextComparator.areSimilar(newTitle, historyItem.title, 0.45)
+                                val match45Summary = TextComparator.areSimilar(summary, historyItem.summary, 0.45)
+
+                                if (keywordMatches >= 1 && (match45Title || match45Summary)) {
+                                    var currentScore = keywordMatches.toDouble()
+                                    if (match45Title) currentScore += 0.5
+                                    if (match45Summary) currentScore += 0.5
+
+                                    if (currentScore > maxScore) {
+                                        maxScore = currentScore
+                                        bestMatchId = historyItem.id
+                                    }
+                                }
+                            }
+
+                            if (bestMatchId != null) {
+                                MewsRepository.updateTitle(
+                                    id = topicId,
+                                    newTimeVal = topicTime,
+                                    newTitle = newTitle,
+                                    summary = summary,
+                                    parentId = bestMatchId
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (e !is kotlinx.coroutines.CancellationException) {
+                        Log.e(TAG, "Storylines matching failed", e)
+                    } else throw e
                 }
             }
 

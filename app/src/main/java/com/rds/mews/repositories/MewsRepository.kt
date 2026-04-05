@@ -131,7 +131,8 @@ object MewsRepository {
 
         this.database = Room.databaseBuilder(appContext, AppDatabase::class.java, "MainDB")
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4,
+                AppDatabase.MIGRATION_4_5)
             .build()
         this.sourceDao = database.sourceDao()
         this.messageDao = database.messageDao()
@@ -271,7 +272,7 @@ object MewsRepository {
                                 parentId = parent?.id,
                                 childId = child?.id,
                                 relatedTitle = child?.title,
-                                relatedSnippet = child?.summary?.take(120),
+                                relatedSnippet = "${child?.summary?.take(120)}...",
                                 storyDepth = depth,
                                 mediaUrls = mediaUrlsList
                             )

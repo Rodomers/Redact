@@ -64,11 +64,8 @@ import com.rds.mews.viewmodels.SettingsViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.key
 import com.rds.mews.ui.custom_elements.AnimatedKeywordItem
-import com.rds.mews.ui.custom_elements.CustomKeywordButton
 
 @Composable
 fun SettingsScreen(

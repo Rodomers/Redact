@@ -112,14 +112,14 @@ interface TitleDao {
         INNER JOIN title_related_map r ON t.id = r.title_id_2 
         WHERE r.title_id_1 = :currentId LIMIT 1
     """)
-    suspend fun getChildTitle(currentId: Long): TitleEntity?
+    suspend fun getParentTitle(currentId: Long): TitleEntity?
 
     @Query("""
         SELECT t.* FROM titles t 
         INNER JOIN title_related_map r ON t.id = r.title_id_1 
         WHERE r.title_id_2 = :currentId LIMIT 1
     """)
-    suspend fun getParentTitle(currentId: Long): TitleEntity?
+    suspend fun getChildTitle (currentId: Long): TitleEntity?
 
     @Query("""
         SELECT m.* FROM messages m 

@@ -16,7 +16,7 @@ import com.rds.mews.localcore.defineSourceType
         TitleMessageMap::class,
         TitleRelatedMap::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -179,6 +179,21 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `messages` ADD COLUMN `media_urls` TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    DELETE FROM `sources` 
+                    WHERE `id` NOT IN (
+                        SELECT MIN(`id`) 
+                        FROM `sources` 
+                        GROUP BY `website_url`
+                    )
+                """.trimIndent())
+
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_sources_website_url` ON `sources` (`website_url`)")
             }
         }
     }
