@@ -88,6 +88,7 @@ import kotlin.collections.iterator
 import com.rds.mews.ui.theme.Shapes
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
 import com.rds.mews.localcore.SourceMessages
+import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.viewmodels.TitlesScrollEvent
 
 @Composable
@@ -143,6 +144,7 @@ fun TitlesScreen(
     val showSnippets by viewModel.showSnippets.collectAsStateWithLifecycle()
     val lastTitlesUpdate by viewModel.lastUpdated.collectAsStateWithLifecycle()
     val dynamicMediaUrls by viewModel.dynamicMediaUrls.collectAsStateWithLifecycle()
+    val titleSorting by viewModel.titleSorting.collectAsStateWithLifecycle()
 
     TitlesGrid(
         lazyGridState = lazyGridState,
@@ -169,6 +171,7 @@ fun TitlesScreen(
         innerTime = innerTime,
         showSnippets = showSnippets,
         bottomSpacer = bottomSpacer,
+        titleSorting = titleSorting,
         dynamicMediaUrls = dynamicMediaUrls,
         onBanTheme = viewModel::onBanTheme,
         onConfigChange = viewModel::scrollToItem,
@@ -210,6 +213,7 @@ fun TitlesGrid(
     scope: CoroutineScope,
     innerTime: Boolean,
     showSnippets: Boolean,
+    titleSorting: TitleSorting,
     bottomSpacer: Dp,
     dynamicMediaUrls: Map<Long, List<String>>,
     onBanTheme: (String) -> Unit,
@@ -456,7 +460,8 @@ fun TitlesGrid(
                                     },
                                     onSwitchStoryline = onSwitchStoryline,
                                     onLoadMediaUrls = { loadDynamicMediaUrls(item.id) },
-                                    dynamicMediaUrls = dynamicMediaUrls[item.id]
+                                    dynamicMediaUrls = dynamicMediaUrls[item.id],
+                                    titleSorting = titleSorting
                                 )
 
                                 if (isPartiallyObscured) {

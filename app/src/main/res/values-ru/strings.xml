@@ -127,6 +127,9 @@
     <string name="ban_btn_desc">Заблокировать</string>
     <string name="mark_as_unread_btn_desc">Не прочитано</string>
     <string name="source_reset_errors">Сброс ошибок</string>
+    <string name="titles_card_background">Предыстория</string>
+    <string name="titles_card_continued">Продолжение сюжета</string>
+    <string name="titles_card_release">Отпустите для перехода</string>
 
     <string name="update">Обновить</string>
     <string name="updating">Обновление…</string>

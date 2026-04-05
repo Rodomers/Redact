@@ -125,6 +125,9 @@
     <string name="ban_btn_desc">Block</string>
     <string name="mark_as_unread_btn_desc">Unread</string>
     <string name="source_reset_errors">Reset errors</string>
+    <string name="titles_card_background">Background</string>
+    <string name="titles_card_continued">To be continued…</string>
+    <string name="titles_card_release">Release to read more</string>
 
     <string name="update">Update</string>
     <string name="updating">Updating…</string>

@@ -126,6 +126,7 @@ import com.rds.mews.localcore.IconButtonInputs
 import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.Title
+import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.text_filters.TextSanitizer
 import com.rds.mews.ui.theme.Shapes
@@ -138,6 +139,7 @@ import kotlin.math.roundToInt
 @Composable
 fun TitlesCard(
     title: Title,
+    titleSorting: TitleSorting = TitleSorting.NEWEST,
     sources: List<SourceMessages>? = null,
     changeSourceState: (Long, String) -> Unit = { _, _ -> },
     onBanTheme: (String) -> Unit,
@@ -204,6 +206,7 @@ fun TitlesCard(
         Column(modifier = Modifier.fillMaxWidth()) {
             TitlesHeaderContent(
                 title = title,
+                titleSorting = titleSorting,
                 noTime = noTime,
                 isRead = isRead,
                 onClicked = {},
@@ -225,6 +228,7 @@ fun TitlesCard(
         RootViewOverlay {
             HeroExpansionContent(
                 title = title,
+                titleSorting = titleSorting,
                 sources = sources,
                 changeSourceState = changeSourceState,
                 onSwitchStoryline = onSwitchStoryline,
@@ -327,6 +331,7 @@ private fun Context.findActivity(): Activity? {
 @Composable
 private fun HeroExpansionContent(
     title: Title,
+    titleSorting: TitleSorting,
     sources: List<SourceMessages>?,
     changeSourceState: (Long, String) -> Unit,
     onSwitchStoryline: (Long) -> Unit,
@@ -394,7 +399,7 @@ private fun HeroExpansionContent(
                         onReady()
                     }
             ) {
-                MeasureCardCompleteStructure(title, isRead)
+                MeasureCardCompleteStructure(title, isRead, titleSorting)
             }
         }
 
@@ -438,6 +443,7 @@ private fun HeroExpansionContent(
                 .fillMaxHeight()) {
                 ExpandedCardContent(
                     title = title,
+                    titleSorting = titleSorting,
                     sources = sources,
                     changeSourceState = changeSourceState,
                     onSwitchStoryline = onSwitchStoryline,
@@ -464,11 +470,11 @@ private fun HeroExpansionContent(
 }
 
 @Composable
-private fun MeasureCardCompleteStructure(title: Title, isRead: Boolean) {
+private fun MeasureCardCompleteStructure(title: Title, isRead: Boolean, titleSorting: TitleSorting) {
     Column(modifier = Modifier
         .fillMaxWidth()
         .wrapContentHeight()) {
-        TitlesHeaderContent(title = title, noTime = false, isRead = isRead, onClicked = {}, animationProgress = 1f, expansionFraction = 1f)
+        TitlesHeaderContent(title = title, titleSorting = titleSorting, noTime = false, isRead = isRead, onClicked = {}, animationProgress = 1f, expansionFraction = 1f)
         Spacer(modifier = Modifier.height(8.dp))
         MarkdownText(
             markdown = title.summary.trim(),
@@ -482,7 +488,7 @@ private fun MeasureCardCompleteStructure(title: Title, isRead: Boolean) {
 }
 
 @Composable
-private fun StorylineBreadcrumb(depth: Int, hasChild: Boolean, modifier: Modifier = Modifier) {
+private fun StorylineBreadcrumb(depth: Int, hasChild: Boolean, isOldest: Boolean, modifier: Modifier = Modifier) {
     val totalDots = depth + (if (hasChild) 2 else 1)
     Column(
         modifier = modifier.padding(top = 4.dp, end = 12.dp),
@@ -490,7 +496,8 @@ private fun StorylineBreadcrumb(depth: Int, hasChild: Boolean, modifier: Modifie
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         repeat(totalDots) { index ->
-            val isActive = index == depth
+            val displayDepth = if (isOldest) (totalDots - 1 - depth) else depth
+            val isActive = index == displayDepth
             val size = if (isActive) 8.dp else 5.dp
             val color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
             Box(
@@ -507,6 +514,7 @@ private fun StorylineBreadcrumb(depth: Int, hasChild: Boolean, modifier: Modifie
 private fun TitlesHeaderContent(
     modifier: Modifier = Modifier,
     title: Title,
+    titleSorting: TitleSorting,
     noTime: Boolean,
     isRead: Boolean,
     onClicked: () -> Unit,
@@ -546,7 +554,11 @@ private fun TitlesHeaderContent(
         verticalAlignment = Alignment.Top
     ) {
         if (title.storyDepth > 0 || title.childId != null) {
-            StorylineBreadcrumb(depth = title.storyDepth, hasChild = title.childId != null)
+            StorylineBreadcrumb(
+                depth = title.storyDepth,
+                hasChild = title.childId != null,
+                isOldest = titleSorting == TitleSorting.OLDEST
+            )
         }
 
         Column(modifier = Modifier.weight(1f)) {
@@ -617,7 +629,7 @@ private fun PullToSwitchIndicator(text: String, progress: Float, modifier: Modif
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = if (clampedProgress >= 1f) "Отпустите для перехода" else text,
+            text = if (clampedProgress >= 1f) stringResource(R.string.titles_card_release) else text,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold
@@ -628,6 +640,7 @@ private fun PullToSwitchIndicator(text: String, progress: Float, modifier: Modif
 @Composable
 private fun ExpandedCardContent(
     title: Title,
+    titleSorting: TitleSorting,
     sources: List<SourceMessages>?,
     changeSourceState: (Long, String) -> Unit,
     onSwitchStoryline: (Long) -> Unit,
@@ -678,8 +691,11 @@ private fun ExpandedCardContent(
     val maxPullPx = with(density) { 135.dp.toPx() }
 
     val hasRelatedNews = title.parentId != null || title.childId != null
+    val isOldest = titleSorting == TitleSorting.OLDEST
+    val topRelatedId = if (isOldest) title.childId else title.parentId
+    val bottomRelatedId = if (isOldest) title.parentId else title.childId
 
-    val nestedScrollConnection = remember(hasRelatedNews) {
+    val nestedScrollConnection = remember(hasRelatedNews, isOldest) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (!hasRelatedNews) return Offset.Zero
@@ -704,7 +720,7 @@ private fun ExpandedCardContent(
             ): Offset {
                 if (!hasRelatedNews || source != NestedScrollSource.UserInput) return Offset.Zero
 
-                if (available.y > 0f && title.parentId != null) {
+                if (available.y > 0f && topRelatedId != null) {
                     pullOffset = (pullOffset + available.y * 0.4f).coerceAtMost(maxPullPx)
 
                     if (pullOffset >= pullThresholdPx && !hasTriggeredHaptic) {
@@ -715,7 +731,7 @@ private fun ExpandedCardContent(
                     }
                     return Offset(0f, available.y)
                 }
-                if (available.y < 0f && title.childId != null) {
+                if (available.y < 0f && bottomRelatedId != null) {
                     pullOffset = (pullOffset + available.y * 0.4f).coerceAtLeast(-maxPullPx)
 
                     if (pullOffset <= -pullThresholdPx && !hasTriggeredHaptic) {
@@ -731,8 +747,8 @@ private fun ExpandedCardContent(
 
             override suspend fun onPreFling(available: Velocity): Velocity {
                 if (pullOffset != 0f) {
-                    val switchId = if (pullOffset >= pullThresholdPx && title.parentId != null) title.parentId
-                    else if (pullOffset <= -pullThresholdPx && title.childId != null) title.childId
+                    val switchId = if (pullOffset >= pullThresholdPx && topRelatedId != null) topRelatedId
+                    else if (pullOffset <= -pullThresholdPx && bottomRelatedId != null) bottomRelatedId
                     else null
 
                     if (switchId != null) {
@@ -807,7 +823,7 @@ private fun ExpandedCardContent(
                 }
         ) {
             Column {
-                TitlesHeaderContent(title = title, noTime = false, isRead = isRead, onClicked = {}, clickableEnabled = false, animationProgress = headerAnimProgress, expansionFraction = expansionProgress)
+                TitlesHeaderContent(title = title, titleSorting = titleSorting, noTime = false, isRead = isRead, onClicked = {}, clickableEnabled = false, animationProgress = headerAnimProgress, expansionFraction = expansionProgress)
                 if (showSnippet) {
                     val snippetAlpha = (1f - expansionProgress).coerceIn(0f, 1f)
                     SnippetText(
@@ -848,7 +864,7 @@ private fun ExpandedCardContent(
                                 .fillMaxWidth()
                                 .nestedScroll(nestedScrollConnection)
                         ) {
-                            if (title.parentId != null && pullOffset > 0f) {
+                            if (topRelatedId != null && pullOffset > 0f) {
                                 PullToSwitchIndicator(
                                     text = stringResource(R.string.related_news),
                                     progress = pullOffset / pullThresholdPx,
@@ -858,7 +874,7 @@ private fun ExpandedCardContent(
                                 )
                             }
 
-                            if (title.childId != null && pullOffset < 0f) {
+                            if (bottomRelatedId != null && pullOffset < 0f) {
                                 PullToSwitchIndicator(
                                     text = stringResource(R.string.related_news),
                                     progress = -pullOffset / pullThresholdPx,
@@ -876,6 +892,37 @@ private fun ExpandedCardContent(
                                     .padding(horizontal = 16.dp)
                             ) {
                                 Spacer(modifier = Modifier.height(8.dp))
+
+                                if (isOldest && title.childId != null) {
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.titles_card_background),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = title.relatedTitle ?: "",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                        if (title.relatedSnippet != null) {
+                                            Text(
+                                                text = title.relatedSnippet!!,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 3,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier
+                                                    .padding(top = 4.dp)
+                                                    .alpha(0.7f)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    HorizontalDivider(modifier = Modifier.alpha(0.3f))
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
 
                                 Box(modifier = Modifier.fillMaxWidth()) {
                                     MarkdownText(
@@ -1149,7 +1196,7 @@ private fun ExpandedCardContent(
                                     }
                                 }
 
-                                if (title.childId != null) {
+                                if (!isOldest && title.childId != null) {
                                     Spacer(modifier = Modifier.height(16.dp))
                                     HorizontalDivider(modifier = Modifier.alpha(0.3f))
                                     Spacer(modifier = Modifier.height(16.dp))
@@ -1157,7 +1204,7 @@ private fun ExpandedCardContent(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
-                                            text = "Продолжение сюжета",
+                                            text = stringResource(R.string.titles_card_continued),
                                             style = MaterialTheme.typography.labelLarge,
                                             color = MaterialTheme.colorScheme.primary
                                         )
