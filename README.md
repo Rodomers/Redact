@@ -2,6 +2,8 @@
 
 ![Kotlin](https://img.shields.io/badge/kotlin-2.2.10-blue.svg?logo=kotlin)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Ready-brightgreen.svg)
+[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=flat&logo=telegram&logoColor=white)](https://t.me/redact_app)
+
 
 Лучший новостной агрегатор 2026 по версии разработчика.
 
@@ -25,3 +27,8 @@
   <img src="https://github.com/user-attachments/assets/9354e4e2-94c4-41e7-be1a-62a3df517417" width="220"/>
   <img src="https://github.com/user-attachments/assets/1d06cc2b-4f6f-4686-bfe0-05aa3532fc88" width="220"/>
 </p>
+
+## Обратная связь
+
+Следить за развитием проекта и предлагать свои фичи можно в Telegram-канале: 
+[Redact](https://t.me/redact_app)
