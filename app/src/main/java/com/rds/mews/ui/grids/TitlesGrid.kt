@@ -87,7 +87,6 @@ import kotlin.collections.component2
 import kotlin.collections.iterator
 import com.rds.mews.ui.theme.Shapes
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
-import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.viewmodels.TitlesScrollEvent
 
@@ -174,7 +173,7 @@ fun TitlesScreen(
         titleSorting = titleSorting,
         dynamicMediaUrls = dynamicMediaUrls,
         onBanTheme = viewModel::onBanTheme,
-        onConfigChange = viewModel::scrollToItem,
+        scrollToItem = viewModel::scrollToItem,
         changeSourceState = viewModel::changeTitleSourceState,
         changeGroupState = viewModel::changeGroupState,
         getDateFromUnix = viewModel::getDateFromUnix,
@@ -217,7 +216,7 @@ fun TitlesGrid(
     bottomSpacer: Dp,
     dynamicMediaUrls: Map<Long, List<String>>,
     onBanTheme: (String) -> Unit,
-    onConfigChange: (Int) -> Unit,
+    scrollToItem: (Int) -> Unit,
     changeSourceState: (Long, String) -> Unit,
     changeGroupState: (TimeDate) -> Unit,
     getDateFromUnix: (Long) -> TimeDate,
@@ -230,6 +229,7 @@ fun TitlesGrid(
     val verticalArrangement by remember { mutableStateOf(8.dp) }
 
     val config = LocalConfiguration.current
+    var updates = 0
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -259,7 +259,7 @@ fun TitlesGrid(
         if (!lastTitlesUpdateExists() && groupedItems.isEmpty()) showGreeting(context)
     }
 
-    LaunchedEffect(config) {
+    LaunchedEffect(config, updates) {
         val cardId = titlesCardStates.firstOrNull { it.expanded }?.id ?: -1
         if (cardId != -1L) {
             var globIndex = 0
@@ -270,7 +270,7 @@ fun TitlesGrid(
                 if (itIndex != -1) item = itIndex + globIndex
                 globIndex += items.size
             }
-            onConfigChange(item)
+            scrollToItem(item)
         }
     }
 
@@ -407,6 +407,8 @@ fun TitlesGrid(
                     val isExpanded = statesItem?.expanded ?: false
                     val pagerState = rememberPagerState(initialPage = statesItem?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
                     val sources = statesItem?.sources
+
+                    if (isExpanded) updates++
 
                     val isPartiallyObscured by remember {
                         derivedStateOf {

@@ -204,7 +204,7 @@ val PeachLightScheme = lightColorScheme(
     background = PeachLightBg, surface = PeachLightBg,
     surfaceContainerLow = PeachLightFloat,
     secondaryContainer = PeachLightContainer,
-    onSecondaryContainer = TextBlack, // Черный текст (как просил)
+    onSecondaryContainer = TextBlack,
     onSurface = TextBlack, onBackground = TextBlack,
     primary = PeachLightContainer, onPrimary = TextBlack
 )
@@ -213,7 +213,7 @@ val PeachDarkScheme = darkColorScheme(
     background = PeachDarkBg, surface = PeachDarkBg,
     surfaceContainerLow = PeachDarkFloat,
     secondaryContainer = PeachDarkContainer,
-    onSecondaryContainer = TextWhite, // Белый текст (как просил)
+    onSecondaryContainer = TextWhite,
     onSurface = TextWhite, onBackground = TextWhite,
     primary = PeachDarkContainer, onPrimary = TextWhite
 )
@@ -223,11 +223,9 @@ val InterLightScheme = lightColorScheme(
     background = InterLightBg, surface = InterLightBg,
     surfaceContainerLow = InterLightFloat,
 
-    // Активные элементы (Свитчи, Табы) -> Красный на Бисквите
     secondaryContainer = InterLightContainer,
-    onSecondaryContainer = InterLightContent, // <--- ТЕПЕРЬ КРАСНЫЙ ИСПОЛЬЗУЕТСЯ ТУТ
+    onSecondaryContainer = InterLightContent,
 
-    // Основной текст -> Темно-коричневый (Тинт)
     onSurface = InterLightText,
     onBackground = InterLightText,
 
@@ -247,7 +245,6 @@ val InterDarkScheme = darkColorScheme(
     primary = InterDarkContainer, onPrimary = InterDarkText
 )
 
-// Добавленный объект Typography, который отсутствовал
 val typography = Typography(
     bodyLarge = TextStyle(
         fontFamily = FontFamily.Default,
@@ -256,8 +253,6 @@ val typography = Typography(
         lineHeight = 24.sp,
         letterSpacing = 0.5.sp
     )
-    /* При необходимости здесь можно переопределить и другие стили текста,
-       такие как titleLarge, bodyMedium и т.д. */
 )
 
 @Composable
@@ -270,15 +265,12 @@ fun MewsTheme(
 ) {
     val context = LocalContext.current
 
-    // 1. Определяем, включен ли сейчас реально темный режим
-    // (на основе настроек приложения ИЛИ системы)
     val useDarkTheme = when (settingsTheme) {
         DarkTheme.LIGHT -> false
         DarkTheme.DARK -> true
-        else -> systemDarkTheme // FOLLOW_SYSTEM
+        else -> systemDarkTheme
     }
 
-    // 2. Проверяем доступность Dynamic Color (Android 12+)
     val useDynamicColor = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) &&
             dynamicColor &&
             appTheme == AppTheme.MATERIAL
@@ -289,19 +281,15 @@ fun MewsTheme(
             if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         else -> when (appTheme) {
-            // Стандартные и Material (если dynamicColor выключен или старый Android)
             AppTheme.DEFAULT, AppTheme.MATERIAL -> if (useDarkTheme) DarkColorScheme else LightColorScheme
 
-            // Двухрежимные темы (Светлая + Темная)
             AppTheme.SLATE -> if (useDarkTheme) SlateDarkScheme else SlateLightScheme
             AppTheme.PISTACHIO -> if (useDarkTheme) PistachioDarkScheme else PistachioLightScheme
             AppTheme.SWISS -> if (useDarkTheme) SwissDarkScheme else SwissLightScheme
             AppTheme.INDUSTRIAL -> if (useDarkTheme) ConcreteDarkScheme else ConcreteLightScheme
 
-            // Специфические (Fallback логика)
             AppTheme.PAPER -> if (useDarkTheme) PaperDarkScheme else PaperLightScheme
 
-            // Темные атмосферные (Днем -> дефолт светлая, чтобы не слепло)
             AppTheme.STORM -> if (useDarkTheme) StormDarkScheme else StormLightScheme
             AppTheme.COFFEE -> if (useDarkTheme) CoffeeDarkScheme else CoffeeLightScheme
             AppTheme.VIOLET -> if (useDarkTheme) VioletDarkScheme else VioletLightScheme
@@ -310,7 +298,6 @@ fun MewsTheme(
         }
     }
 
-    // 4. Настройка системных баров (Status Bar)
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -320,7 +307,6 @@ fun MewsTheme(
 
             val insetsController = WindowCompat.getInsetsController(window, view)
 
-            // Если тема темная -> иконки светлые (false), и наоборот
             insetsController.isAppearanceLightStatusBars = !useDarkTheme
         }
     }

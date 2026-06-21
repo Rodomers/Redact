@@ -499,7 +499,7 @@ private fun StorylineBreadcrumb(depth: Int, hasChild: Boolean, isOldest: Boolean
             val displayDepth = if (isOldest) (totalDots - 1 - depth) else depth
             val isActive = index == displayDepth
             val size = if (isActive) 8.dp else 5.dp
-            val color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+            val color = if (isActive) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
             Box(
                 modifier = Modifier
                     .size(size)
@@ -590,7 +590,7 @@ private fun TitlesHeaderContent(
                                 .size(currentDotSize)
                                 .alpha(currentDotAlpha)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
+                                .background(MaterialTheme.colorScheme.onSecondaryContainer)
                         )
                         Spacer(modifier = Modifier.width(currentSpacerWidth))
                         Text(
@@ -631,7 +631,7 @@ private fun PullToSwitchIndicator(text: String, progress: Float, modifier: Modif
         Text(
             text = if (clampedProgress >= 1f) stringResource(R.string.titles_card_release) else text,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
             fontWeight = FontWeight.Bold
         )
     }
@@ -774,7 +774,7 @@ private fun ExpandedCardContent(
     }
 
     val copiedText =
-        "${title.title}\n\n${TextSanitizer.sanitize(title.summary, true)}\n\nИсточник: ${stringResource(R.string.app_name)}, ${title.sources}"
+        "${title.title}\n\n${TextSanitizer.sanitize(title.summary, true)}\n\n${stringResource(R.string.titles_card_source)}: ${stringResource(R.string.app_name)}, ${title.sources}"
     fun copyText() { clipboardManager.setText(AnnotatedString(copiedText)) }
     fun shareText() {
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
@@ -900,7 +900,7 @@ private fun ExpandedCardContent(
                                         Text(
                                             text = stringResource(R.string.titles_card_background),
                                             style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
                                         )
                                         Text(
                                             text = title.relatedTitle ?: "",
@@ -1189,7 +1189,7 @@ private fun ExpandedCardContent(
                                                     },
                                                     toast = stringResource(R.string.titles_card_banned)
                                                 ),
-                                                defaultBackgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.9f),
                                                 shape = Shapes.large
                                             )
                                         }
@@ -1206,7 +1206,7 @@ private fun ExpandedCardContent(
                                         Text(
                                             text = stringResource(R.string.titles_card_continued),
                                             style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
                                         )
                                         Text(
                                             text = title.relatedTitle ?: "",

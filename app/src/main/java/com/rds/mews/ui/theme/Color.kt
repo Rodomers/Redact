@@ -27,17 +27,15 @@ val SlateDarkFloat = Color(0xFF1A1C1E)
 val SlateDarkContainer = Color(0xFF2B2F33)
 
 // ==========================================
-// 2. Pistachio (Фисташковая) - FIXED CONTRAST
+// 2. Pistachio (Фисташковая)
 // ==========================================
-// Light: Свежая, но мягкая.
 val PistachioLightBg = Color(0xFFF5F7F4)
 val PistachioLightFloat = Color(0xFFEBF0E8)
 val PistachioLightContainer = Color(0xFFD8E6D3)
 
 // Dark:
-val PistachioDarkBg = Color(0xFF121312) // Почти нейтральный черный
+val PistachioDarkBg = Color(0xFF121312)
 val PistachioDarkFloat = Color(0xFF1B1D1B)
-// FIX: Сделали светлее (Lighter Moss), чтобы отличался от фона
 val PistachioDarkContainer = Color(0xFF3B473B)
 
 // ==========================================
@@ -96,12 +94,11 @@ val CoffeeDarkFloat = Color(0xFF26221E)
 val CoffeeDarkContainer = Color(0xFF423832)
 
 // ==========================================
-// 8. Violet (Королевская) - ИСПРАВЛЕНО
+// 8. Violet (Фиолетовая)
 // ==========================================
-// Light: FIX! Убрали насыщенность. Теперь это строгая пыльная лаванда.
-val VioletLightBg = Color(0xFFF8F8FA) // Почти белый, холодный
+val VioletLightBg = Color(0xFFF8F8FA)
 val VioletLightFloat = Color(0xFFF1F0F4)
-val VioletLightContainer = Color(0xFFE1D9EA) // Очень бледный, "грязный" фиолетовый
+val VioletLightContainer = Color(0xFFE1D9EA)
 
 // Dark: Строгая, холодная
 val VioletDarkBg = Color(0xFF141218)
@@ -111,25 +108,25 @@ val VioletDarkContainer = Color(0xFF352F3F)
 // ==========================================
 // 10. Peach (Персик)
 // ==========================================
-val PeachLightBg = Color(0xFFFFF5F2) // Уходим от желтизны в едва заметный розовый
+val PeachLightBg = Color(0xFFFFF5F2)
 val PeachLightFloat = Color(0xFFFCEBE6)
-val PeachLightContainer = Color(0xFFFDDCC6) // Чистый пастельный персик (Apricot)
+val PeachLightContainer = Color(0xFFFDDCC6)
 
-val PeachDarkBg = Color(0xFF1C1412) // Темный с красным подтоном
+val PeachDarkBg = Color(0xFF1C1412)
 val PeachDarkFloat = Color(0xFF261B19)
-val PeachDarkContainer = Color(0xFF4B302B) // Темная терракота
+val PeachDarkContainer = Color(0xFF4B302B)
 
 // ==========================================
-// 11. International (Интернациональная) - FINAL WARM
+// 11. International (Интернациональная)
 // ==========================================
-val InterLightBg = Color(0xFFFFF9F2) // Теплый молочный
+val InterLightBg = Color(0xFFFFF9F2)
 val InterLightFloat = Color(0xFFF5EBE0)
-val InterLightContainer = Color(0xFFEBDCC6) // Бисквит
-val InterLightContent = Color(0xFFC42B1C)   // Тот самый Красный (Swiss Red)
-val InterLightText = Color(0xFF4A3B32)      // Темно-коричневый (для основного текста)
+val InterLightContainer = Color(0xFFEBDCC6)
+val InterLightContent = Color(0xFFC42B1C)
+val InterLightText = Color(0xFF4A3B32)
 
 val InterDarkBg = Color(0xFF1A1614)
 val InterDarkFloat = Color(0xFF241E1B)
 val InterDarkContainer = Color(0xFF3D322C)
-val InterDarkContent = Color(0xFFFF8A80)   // Мягкий красный
-val InterDarkText = Color(0xFFEBDCCB)      // Бежевый текст
+val InterDarkContent = Color(0xFFFF8A80)
+val InterDarkText = Color(0xFFEBDCCB)

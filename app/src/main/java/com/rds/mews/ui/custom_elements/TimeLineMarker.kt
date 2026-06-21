@@ -46,7 +46,7 @@ fun TimelineMarker(
                 .fillMaxHeight()
         ) {
             val lineColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f)
-            val dotColor = if (isRead) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary
+            val dotColor = if (isRead) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSecondaryContainer
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val dotRadius = 5.dp.toPx()
