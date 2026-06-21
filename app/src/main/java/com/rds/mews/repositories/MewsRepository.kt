@@ -606,7 +606,8 @@ object MewsRepository {
     }
 
     suspend fun getRecentTitlesForStorylines(sinceMs: Long): List<TitleEntity> = withContext(Dispatchers.IO) {
-        titleDao.getAllTitlesFlow().first().filter { it.eventTime >= sinceMs && it.status != TitleStatus.PROCESSING.statusId }
+        titleDao.getChildfreeTitlesFlow().first()
+            .filter { titleDao.getChildTitle(it.id) == null && it.eventTime >= sinceMs && it.status != TitleStatus.PROCESSING.statusId }
     }
 
     suspend fun getTitlesCount(): Int = withContext(Dispatchers.IO) {

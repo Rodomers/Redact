@@ -101,6 +101,16 @@ interface TitleDao {
     @Query("SELECT * FROM titles ORDER BY event_time ASC")
     fun getAllTitlesFlow(): Flow<List<TitleEntity>>
 
+    @Query("""
+    SELECT * FROM titles t 
+    WHERE NOT EXISTS (
+        SELECT 1 FROM title_related_map r 
+        WHERE r.title_id_1 = t.id
+    )
+    ORDER BY t.event_time ASC
+    """)
+    fun getChildfreeTitlesFlow(): Flow<List<TitleEntity>>
+
     @Query("SELECT * FROM titles WHERE event_time > :timeMs ORDER BY event_time ASC")
     fun getTitlesAfterTimeFlow(timeMs: Long): Flow<List<TitleEntity>>
 

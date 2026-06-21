@@ -567,8 +567,9 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             if (successCount > 0) {
                 try {
-                    val history = MewsRepository.getRecentTitlesForStorylines(System.currentTimeMillis() - (72 * 60 * 60 * 1000L))
+                    val history = MewsRepository.getRecentTitlesForStorylines(System.currentTimeMillis() - (72 * 60 * 60 * 1000L)).toMutableList()
                     val sortedSummarized = summarizedTopicsData.sortedBy { it.second }
+                    val minKeywordMatches = 2
 
                     for ((topicId, topicTime, titleAndSummary) in sortedSummarized) {
                         val (newTitle, summary) = titleAndSummary
@@ -599,7 +600,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                     }
                                 }
 
-                                if (keywordMatches >= 2) {
+                                if (keywordMatches > minKeywordMatches) {
                                     bestMatchId = historyItem.id
                                     break
                                 }
@@ -607,7 +608,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                 val match45Title = TextComparator.areSimilar(newTitle, historyItem.title, 0.45)
                                 val match45Summary = TextComparator.areSimilar(summary, historyItem.summary, 0.45)
 
-                                if (keywordMatches >= 1 && (match45Title || match45Summary)) {
+                                if (keywordMatches >= minKeywordMatches && (match45Title || match45Summary)) {
                                     var currentScore = keywordMatches.toDouble()
                                     if (match45Title) currentScore += 0.5
                                     if (match45Summary) currentScore += 0.5
@@ -620,6 +621,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                             }
 
                             if (bestMatchId != null) {
+                                history.removeIf { it.id == bestMatchId }
                                 MewsRepository.updateTitle(
                                     id = topicId,
                                     newTimeVal = topicTime,
