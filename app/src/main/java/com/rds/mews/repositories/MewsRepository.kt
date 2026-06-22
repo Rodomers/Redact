@@ -257,7 +257,20 @@ object MewsRepository {
                             val parent = titleDao.getParentTitle(entity.id)
                             val child = titleDao.getChildTitle(entity.id)
                             val depth = calculateDepth(entity)
-                            val mediaUrlsList = messagesList.flatMap { it.mediaUrls }.distinct()
+                            val mediaUrlsList = messagesList.flatMap { message ->
+                                message.mediaUrls.map { url ->
+                                    MediaWithSource(
+                                    mediaLink = url,
+                                    message = Message(
+                                        id = message.id,
+                                        time = message.pubTime,
+                                        link = message.link,
+                                        source = getSource(message.sourceId)?.currentName ?: "",
+                                        originalText = "",
+                                        cleanText = ""
+                                    )
+                                ) }
+                            }.distinct()
 
                             Title(
                                 id = entity.id,

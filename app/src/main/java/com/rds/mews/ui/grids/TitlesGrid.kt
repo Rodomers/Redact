@@ -87,6 +87,7 @@ import kotlin.collections.component2
 import kotlin.collections.iterator
 import com.rds.mews.ui.theme.Shapes
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
+import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.viewmodels.TitlesScrollEvent
 
@@ -214,7 +215,7 @@ fun TitlesGrid(
     showSnippets: Boolean,
     titleSorting: TitleSorting,
     bottomSpacer: Dp,
-    dynamicMediaUrls: Map<Long, List<String>>,
+    dynamicMediaUrls: Map<Long, List<MediaWithSource>>,
     onBanTheme: (String) -> Unit,
     scrollToItem: (Int) -> Unit,
     changeSourceState: (Long, String) -> Unit,

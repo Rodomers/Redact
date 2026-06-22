@@ -45,6 +45,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -88,6 +89,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
@@ -110,6 +112,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
 import androidx.compose.ui.unit.sp
@@ -120,6 +123,7 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import com.rds.mews.R
 import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.localcore.IconButtonInputs
@@ -128,13 +132,15 @@ import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.getFormattedTimeUnix
-import com.rds.mews.text_filters.TextSanitizer
+import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.ui.theme.Shapes
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.util.UUID
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.abs
 
 @Composable
 fun TitlesCard(
@@ -153,7 +159,7 @@ fun TitlesCard(
     backgroundColor: Color = MaterialTheme.colorScheme.secondaryContainer,
     expandable: Boolean = true,
     markAsUnread: () -> Unit,
-    dynamicMediaUrls: List<String>? = null,
+    dynamicMediaUrls: List<MediaWithSource>? = null,
     onLoadMediaUrls: () -> Unit = {},
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
@@ -347,7 +353,7 @@ private fun HeroExpansionContent(
     showSnippet: Boolean,
     isRead: Boolean,
     backgroundColor: Color,
-    dynamicMediaUrls: List<String>?,
+    dynamicMediaUrls: List<MediaWithSource>?,
     onLoadMediaUrls: () -> Unit
 ) {
     val context = LocalContext.current
@@ -638,6 +644,47 @@ private fun PullToSwitchIndicator(text: String, progress: Float, modifier: Modif
 }
 
 @Composable
+private fun DynamicPagerIndicator(
+    currentPage: Int,
+    pageCount: Int,
+    modifier: Modifier = Modifier
+) {
+    if (pageCount <= 1) return
+    val maxVisible = 5
+    Row(
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.4f), Shapes.large)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val start = (currentPage - 2).coerceIn(0, (pageCount - maxVisible).coerceAtLeast(0))
+        val end = (start + maxVisible - 1).coerceAtMost(pageCount - 1)
+        for (i in start..end) {
+            val isSelected = i == currentPage
+            val size = if (isSelected) {
+                9.dp
+            } else if (i == start && start > 0) {
+                4.dp
+            } else if (i == end && end < pageCount - 1) {
+                4.dp
+            } else {
+                7.dp
+            }
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(
+                        if (isSelected) Color.White else Color.White.copy(alpha = 0.5f)
+                    )
+            )
+        }
+    }
+}
+
+@SuppressLint("ConfigurationScreenWidthHeight")
+@Composable
 private fun ExpandedCardContent(
     title: Title,
     titleSorting: TitleSorting,
@@ -658,7 +705,7 @@ private fun ExpandedCardContent(
     isRead: Boolean,
     headerStartColor: Color,
     targetCardHeight: Float,
-    dynamicMediaUrls: List<String>?,
+    dynamicMediaUrls: List<MediaWithSource>?,
     onLoadMediaUrls: () -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -668,6 +715,9 @@ private fun ExpandedCardContent(
     val config = LocalConfiguration.current
     val handler = LocalUriHandler.current
     val haptics = LocalHapticFeedback.current
+
+    val imagePagerState = rememberPagerState { dynamicMediaUrls?.size ?: 0 }
+    val imageBoundsMap = remember { mutableMapOf<Int, Rect>() }
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
@@ -774,7 +824,7 @@ private fun ExpandedCardContent(
     }
 
     val copiedText =
-        "${title.title}\n\n${TextSanitizer.sanitize(title.summary, true)}\n\n${stringResource(R.string.titles_card_source)}: ${stringResource(R.string.app_name)}, ${title.sources}"
+        "${title.title}\n\n${title.summary}\n\n${stringResource(R.string.titles_card_source)}: ${stringResource(R.string.app_name)}, ${title.sources}"
     fun copyText() { clipboardManager.setText(AnnotatedString(copiedText)) }
     fun shareText() {
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
@@ -961,7 +1011,6 @@ private fun ExpandedCardContent(
                                     }
                                 } else if (dynamicMediaUrls.isNotEmpty()) {
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    val imagePagerState = rememberPagerState { dynamicMediaUrls.size }
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -975,10 +1024,13 @@ private fun ExpandedCardContent(
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
+                                                    .onGloballyPositioned { coordinates ->
+                                                        imageBoundsMap[pageIndex] = coordinates.boundsInWindow()
+                                                    }
                                                     .clickable { clickedImageIndex = pageIndex }
                                             ) {
                                                 AsyncImage(
-                                                    model = dynamicMediaUrls[pageIndex],
+                                                    model = dynamicMediaUrls[pageIndex].mediaLink,
                                                     contentDescription = null,
                                                     modifier = Modifier
                                                         .fillMaxSize()
@@ -988,7 +1040,7 @@ private fun ExpandedCardContent(
                                                 )
 
                                                 AsyncImage(
-                                                    model = dynamicMediaUrls[pageIndex],
+                                                    model = dynamicMediaUrls[pageIndex].mediaLink,
                                                     contentDescription = null,
                                                     modifier = Modifier.fillMaxSize(),
                                                     contentScale = ContentScale.Fit
@@ -996,175 +1048,265 @@ private fun ExpandedCardContent(
                                             }
                                         }
 
-                                        if (dynamicMediaUrls.size > 1) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .align(Alignment.BottomCenter)
-                                                    .padding(bottom = 8.dp)
-                                                    .background(
-                                                        Color.Black.copy(alpha = 0.3f),
-                                                        Shapes.large
-                                                    )
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                repeat(dynamicMediaUrls.size) { index ->
-                                                    val isSelected = imagePagerState.currentPage == index
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(if (isSelected) 8.dp else 6.dp)
-                                                            .clip(CircleShape)
-                                                            .background(
-                                                                if (isSelected) Color.White else Color.White.copy(
-                                                                    alpha = 0.5f
-                                                                )
-                                                            )
-                                                    )
-                                                }
-                                            }
-                                        }
+                                        DynamicPagerIndicator(
+                                            currentPage = imagePagerState.currentPage,
+                                            pageCount = dynamicMediaUrls.size,
+                                            modifier = Modifier
+                                                .align(Alignment.BottomCenter)
+                                                .padding(bottom = 8.dp)
+                                        )
                                     }
 
                                     if (clickedImageIndex != null) {
                                         RootViewOverlay {
-                                            val fullScreenPagerState = rememberPagerState(initialPage = clickedImageIndex!!) { dynamicMediaUrls.size }
-                                            BackHandler { clickedImageIndex = null }
+                                            val initialPage = clickedImageIndex!!
+                                            val fullScreenPagerState = rememberPagerState(initialPage = initialPage) { dynamicMediaUrls.size }
+
+                                            val transitionAnim = remember { Animatable(0f) }
+                                            var isClosing by remember { mutableStateOf(false) }
+                                            val swipeDismissY = remember { Animatable(0f) }
+
+                                            LaunchedEffect(Unit) {
+                                                transitionAnim.animateTo(
+                                                    targetValue = 1f,
+                                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMedium)
+                                                )
+                                            }
+
+                                            LaunchedEffect(fullScreenPagerState.currentPage) {
+                                                imagePagerState.scrollToPage(fullScreenPagerState.currentPage)
+                                            }
+
+                                            val closeWithAnimation: () -> Unit = {
+                                                if (!isClosing) {
+                                                    isClosing = true
+                                                    coroutineScope.launch {
+                                                        imagePagerState.scrollToPage(fullScreenPagerState.currentPage)
+                                                        delay(16)
+                                                        launch {
+                                                            swipeDismissY.animateTo(0f, animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium))
+                                                        }
+                                                        transitionAnim.animateTo(
+                                                            targetValue = 0f,
+                                                            animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
+                                                        )
+                                                        clickedImageIndex = null
+                                                    }
+                                                }
+                                            }
+
+                                            BackHandler {
+                                                closeWithAnimation()
+                                            }
+
+                                            val dynamicThemeSurfaceColor = MaterialTheme.colorScheme.surface
+                                            val backgroundAlpha = (transitionAnim.value * 0.98f) * (1f - (swipeDismissY.value / 600f)).coerceIn(0f, 1f)
+
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
-                                                    .background(Color.Black.copy(alpha = 0.95f))
+                                                    .background(dynamicThemeSurfaceColor.copy(alpha = backgroundAlpha))
                                             ) {
-                                                HorizontalPager(
-                                                    state = fullScreenPagerState,
-                                                    modifier = Modifier.fillMaxSize()
-                                                ) { page ->
-                                                    var scale by remember { mutableFloatStateOf(1f) }
-                                                    var offsetX by remember { mutableFloatStateOf(0f) }
-                                                    var offsetY by remember { mutableFloatStateOf(0f) }
+                                                val targetBounds = imageBoundsMap[fullScreenPagerState.currentPage] ?: Rect.Zero
+                                                val screenWidth = with(density) { config.screenWidthDp.dp.toPx() }
+                                                val screenHeight = with(density) { config.screenHeightDp.dp.toPx() }
 
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxSize()
-                                                            .pointerInput(Unit) {
-                                                                detectTapGestures(
-                                                                    onTap = {
-                                                                        clickedImageIndex = null
-                                                                    },
-                                                                    onDoubleTap = {
-                                                                        scale =
-                                                                            if (scale > 1f) 1f else 2f
-                                                                        offsetX = 0f
-                                                                        offsetY = 0f
-                                                                    }
+                                                val currentLeft = targetBounds.left + (0f - targetBounds.left) * transitionAnim.value
+                                                val currentTop = targetBounds.top + (0f - targetBounds.top) * transitionAnim.value + (swipeDismissY.value * transitionAnim.value)
+                                                val currentWidth = targetBounds.width + (screenWidth - targetBounds.width) * transitionAnim.value
+                                                val currentHeight = targetBounds.height + (screenHeight - targetBounds.height) * transitionAnim.value
+                                                val cornerSize = 16.dp * (1f - transitionAnim.value)
+
+                                                Box(
+                                                    modifier = Modifier
+                                                        .offset { IntOffset(currentLeft.roundToInt(), currentTop.roundToInt()) }
+                                                        .size(with(density) { currentWidth.toDp() }, with(density) { currentHeight.toDp() })
+                                                        .clip(RoundedCornerShape(cornerSize.coerceAtLeast(0.dp)))
+                                                ) {
+                                                    HorizontalPager(
+                                                        state = fullScreenPagerState,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        userScrollEnabled = transitionAnim.value == 1f && swipeDismissY.value == 0f
+                                                    ) { page ->
+                                                        val scale = remember { Animatable(1f) }
+                                                        val offsetX = remember { Animatable(0f) }
+                                                        val offsetY = remember { Animatable(0f) }
+
+                                                        var imageSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+                                                        var containerSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+
+                                                        val actualImageWidth = remember(imageSize, containerSize) {
+                                                            if (imageSize.width > 0 && imageSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
+                                                                val scaleFactor = minOf(
+                                                                    containerSize.width / imageSize.width,
+                                                                    containerSize.height / imageSize.height
                                                                 )
+                                                                imageSize.width * scaleFactor
+                                                            } else {
+                                                                containerSize.width
                                                             }
-                                                            .pointerInput(Unit) {
-                                                                awaitEachGesture {
-                                                                    awaitFirstDown()
-                                                                    do {
-                                                                        val event =
-                                                                            awaitPointerEvent()
-                                                                        if (event.changes.any { it.isConsumed }) continue
+                                                        }
 
-                                                                        val zoom =
-                                                                            event.calculateZoom()
-                                                                        val pan =
-                                                                            event.calculatePan()
-                                                                        val isMultiTouch =
-                                                                            event.changes.size > 1
-
-                                                                        val newScale =
-                                                                            (scale * zoom).coerceIn(
-                                                                                1f,
-                                                                                4f
-                                                                            )
-                                                                        val finalScale =
-                                                                            if (newScale < 1.01f) 1f else newScale
-                                                                        val isZooming =
-                                                                            finalScale != scale
-                                                                        scale = finalScale
-
-                                                                        if (scale > 1f) {
-                                                                            val maxX =
-                                                                                (size.width * (scale - 1)) / 2
-                                                                            val maxY =
-                                                                                (size.height * (scale - 1)) / 2
-                                                                            val newOffsetX =
-                                                                                (offsetX + pan.x).coerceIn(
-                                                                                    -maxX,
-                                                                                    maxX
-                                                                                )
-                                                                            val newOffsetY =
-                                                                                (offsetY + pan.y).coerceIn(
-                                                                                    -maxY,
-                                                                                    maxY
-                                                                                )
-
-                                                                            val consumedPan =
-                                                                                newOffsetX != offsetX || newOffsetY != offsetY
-                                                                            offsetX = newOffsetX
-                                                                            offsetY = newOffsetY
-
-                                                                            if (isMultiTouch || isZooming || consumedPan) {
-                                                                                event.changes.forEach { it.consume() }
-                                                                            }
-                                                                        } else {
-                                                                            offsetX = 0f
-                                                                            offsetY = 0f
-                                                                            if (isMultiTouch || isZooming) {
-                                                                                event.changes.forEach { it.consume() }
-                                                                            }
-                                                                        }
-                                                                    } while (event.changes.any { it.pressed })
-                                                                }
+                                                        val actualImageHeight = remember(imageSize, containerSize) {
+                                                            if (imageSize.width > 0 && imageSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
+                                                                val scaleFactor = minOf(
+                                                                    containerSize.width / imageSize.width,
+                                                                    containerSize.height / imageSize.height
+                                                                )
+                                                                imageSize.height * scaleFactor
+                                                            } else {
+                                                                containerSize.height
                                                             }
-                                                    ) {
-                                                        AsyncImage(
-                                                            model = dynamicMediaUrls[page],
-                                                            contentDescription = null,
+                                                        }
+
+                                                        Box(
                                                             modifier = Modifier
                                                                 .fillMaxSize()
-                                                                .graphicsLayer(
-                                                                    scaleX = scale,
-                                                                    scaleY = scale,
-                                                                    translationX = offsetX,
-                                                                    translationY = offsetY
-                                                                ),
-                                                            contentScale = ContentScale.Fit
-                                                        )
+                                                                .pointerInput(Unit) {
+                                                                    detectTapGestures(
+                                                                        onDoubleTap = {
+                                                                            coroutineScope.launch {
+                                                                                if (scale.value > 1f) {
+                                                                                    launch { scale.animateTo(1f) }
+                                                                                    launch { offsetX.animateTo(0f) }
+                                                                                    launch { offsetY.animateTo(0f) }
+                                                                                } else {
+                                                                                    launch { scale.animateTo(2.5f) }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        onTap = {
+                                                                            closeWithAnimation()
+                                                                        }
+                                                                    )
+                                                                }
+                                                                .pointerInput(actualImageWidth, actualImageHeight) {
+                                                                    awaitEachGesture {
+                                                                        awaitFirstDown(requireUnconsumed = false)
+                                                                        var zoomActive = false
+                                                                        var isVerticalSwipe = false
+                                                                        var firstPan = true
+
+                                                                        do {
+                                                                            val event = awaitPointerEvent()
+                                                                            val zoom = event.calculateZoom()
+                                                                            val pan = event.calculatePan()
+
+                                                                            if (scale.value > 1f) {
+                                                                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                                                                val newScale = (scale.value * zoom).coerceIn(1f, 5f)
+                                                                                coroutineScope.launch { scale.snapTo(newScale) }
+
+                                                                                if (scale.value > 1f) {
+                                                                                    val maxX = ((actualImageWidth * (scale.value - 1f)) / 2f).coerceAtLeast(0f)
+                                                                                    val maxY = ((actualImageHeight * (scale.value - 1f)) / 2f).coerceAtLeast(0f)
+                                                                                    val newX = offsetX.value + pan.x
+                                                                                    val newY = offsetY.value + pan.y
+
+                                                                                    coroutineScope.launch {
+                                                                                        offsetX.snapTo(newX.coerceIn(-maxX, maxX))
+                                                                                        offsetY.snapTo(newY.coerceIn(-maxY, maxY))
+                                                                                    }
+                                                                                }
+                                                                            } else {
+                                                                                if (zoom !in 0.99f..1.01f) {
+                                                                                    zoomActive = true
+                                                                                }
+                                                                                if (pan != Offset.Zero && !zoomActive) {
+                                                                                    if (firstPan) {
+                                                                                        isVerticalSwipe = abs(pan.y) > abs(pan.x)
+                                                                                        firstPan = false
+                                                                                    }
+                                                                                    if (isVerticalSwipe) {
+                                                                                        event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                                                                        val targetY = swipeDismissY.value + pan.y
+                                                                                        if (targetY > 0f) {
+                                                                                            coroutineScope.launch { swipeDismissY.snapTo(targetY) }
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                                if (zoomActive) {
+                                                                                    val newScale = (scale.value * zoom).coerceIn(1f, 5f)
+                                                                                    coroutineScope.launch { scale.snapTo(newScale) }
+                                                                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                                                                }
+                                                                            }
+                                                                        } while (event.changes.any { it.pressed })
+
+                                                                        if (scale.value < 1.05f) {
+                                                                            coroutineScope.launch {
+                                                                                scale.animateTo(1f)
+                                                                                offsetX.animateTo(0f)
+                                                                                offsetY.animateTo(0f)
+                                                                            }
+                                                                        }
+                                                                        if (swipeDismissY.value > 180f) {
+                                                                            closeWithAnimation()
+                                                                        } else {
+                                                                            coroutineScope.launch {
+                                                                                swipeDismissY.animateTo(0f)
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                        ) {
+                                                            AsyncImage(
+                                                                model = dynamicMediaUrls[page].mediaLink,
+                                                                contentDescription = null,
+                                                                onState = { state ->
+                                                                    if (state is AsyncImagePainter.State.Success) {
+                                                                        imageSize = state.painter.intrinsicSize
+                                                                    }
+                                                                },
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .onGloballyPositioned { coordinates ->
+                                                                        containerSize = androidx.compose.ui.geometry.Size(
+                                                                            coordinates.size.width.toFloat(),
+                                                                            coordinates.size.height.toFloat()
+                                                                        )
+                                                                    }
+                                                                    .graphicsLayer(
+                                                                        scaleX = scale.value,
+                                                                        scaleY = scale.value,
+                                                                        translationX = offsetX.value,
+                                                                        translationY = offsetY.value
+                                                                    ),
+                                                                contentScale = ContentScale.Fit
+                                                            )
+                                                        }
                                                     }
                                                 }
 
-                                                if (dynamicMediaUrls.size > 1) {
-                                                    Row(
+                                                if (transitionAnim.value > 0.1f) {
+                                                    Column(
                                                         modifier = Modifier
-                                                            .align(Alignment.BottomCenter)
+                                                            .align(Alignment.BottomStart)
                                                             .padding(bottom = 24.dp)
-                                                            .background(
-                                                                Color.Black.copy(alpha = 0.5f),
-                                                                Shapes.large
-                                                            )
-                                                            .padding(
-                                                                horizontal = 12.dp,
-                                                                vertical = 6.dp
-                                                            ),
-                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                        verticalAlignment = Alignment.CenterVertically
+                                                            .alpha(transitionAnim.value * (1f - (swipeDismissY.value / 400f)).coerceIn(0f, 1f))
+                                                            .fillMaxWidth(),
+                                                        horizontalAlignment = Alignment.CenterHorizontally
                                                     ) {
-                                                        repeat(dynamicMediaUrls.size) { index ->
-                                                            val isSelected = fullScreenPagerState.currentPage == index
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .size(if (isSelected) 10.dp else 8.dp)
-                                                                    .clip(CircleShape)
-                                                                    .background(
-                                                                        if (isSelected) Color.White else Color.White.copy(
-                                                                            alpha = 0.5f
-                                                                        )
-                                                                    )
-                                                            )
-                                                        }
+                                                        val currentMedia = dynamicMediaUrls[fullScreenPagerState.currentPage]
+                                                        val specificSource = currentMedia.message?.source ?: "-"
+                                                        val specificTime = currentMedia.message?.time ?: title.eventTime
+                                                        val link = currentMedia.message?.link
+
+                                                        CustomTextButton(
+                                                            inputs = TextButtonInputs(
+                                                                text = "$specificSource • ${getFormattedTimeUnix(specificTime)}",
+                                                                action = { link?.let { handler.openUri(it) } }
+                                                            ),
+                                                            defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                            shape = Shapes.large
+                                                        )
+
+                                                        Spacer(modifier = Modifier.height(16.dp))
+
+                                                        DynamicPagerIndicator(
+                                                            currentPage = fullScreenPagerState.currentPage,
+                                                            pageCount = dynamicMediaUrls.size
+                                                        )
                                                     }
                                                 }
                                             }
@@ -1189,7 +1331,7 @@ private fun ExpandedCardContent(
                                                     },
                                                     toast = stringResource(R.string.titles_card_banned)
                                                 ),
-                                                defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.9f),
+                                                defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
                                                 shape = Shapes.large
                                             )
                                         }

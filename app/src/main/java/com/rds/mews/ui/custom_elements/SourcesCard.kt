@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -78,13 +79,14 @@ fun SourcesCard(
 
     val hasErrors = rss.errCount >= 3
     val primaryColor = MaterialTheme.colorScheme.secondaryContainer
+    val resetErrText = stringResource(R.string.source_reset_errors)
 
     val currentButtons = remember(buttons, hasErrors) {
         val list = buttons.toMutableList()
         if (hasErrors) {
             list.add(
                 TextButtonInputs(
-                    text = "Сбросить ошибки",
+                    text = resetErrText,
                     action = {
                         onResetErrors(rss.id)
                     }
@@ -117,12 +119,16 @@ fun SourcesCard(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(avatarUrl)
                             .crossfade(true)
-                            .memoryCacheKey("$avatarUrl-$retryCount")
-                            .diskCacheKey("$avatarUrl-$retryCount")
+                            .placeholder(R.drawable.zhdun)
+                            .error(R.drawable.zhdun)
+//                            .memoryCacheKey("$avatarUrl-$retryCount")
+//                            .diskCacheKey("$avatarUrl-$retryCount")
                             .build(),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .scale(if (isImageLoaded) 1f else 0.7f),
                         onSuccess = { isImageLoaded = true },
                         onError = {
                             isImageLoaded = false
@@ -134,6 +140,18 @@ fun SourcesCard(
                             }
                         },
                         onLoading = { isImageLoaded = false }
+                    )
+                } else {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(R.drawable.zhdun)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .scale(0.7f)
                     )
                 }
 

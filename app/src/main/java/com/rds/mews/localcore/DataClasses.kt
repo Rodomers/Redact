@@ -42,7 +42,7 @@ data class Title(
     var relatedTitle: String? = null,
     var relatedSnippet: String? = null,
     var storyDepth: Int = 0,
-    var mediaUrls: List<String> = emptyList()
+    var mediaUrls: List<MediaWithSource> = emptyList()
 )
 
 data class TitleCardStates(
@@ -166,3 +166,5 @@ data class IconButtonInputs(
     override val action: () -> Unit,
     override val toast: String? = null
 ) : ButtonInputs
+
+data class MediaWithSource(val mediaLink: String, val message: Message?)
