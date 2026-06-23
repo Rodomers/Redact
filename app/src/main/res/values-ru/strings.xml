@@ -48,6 +48,9 @@
     <string name="settings_titles_alarm_update">Включить автообновление</string>
     <string name="settings_titles_update_time">Время обновления</string>
     <string name="settings_titles_update_frequency">Интервал обновления</string>
+    <string name="settings_titles_copy_plain_text">Копировать без форматирования</string>
+    <string name="settings_keep_unread">Сохранять непрочитанные</string>
+    <string name="settings_update_notifications">Уведомления об обновлении</string>
     <string name="settings_titles_sorting">Сортировка</string>
     <string name="settings_titles_sorting_newest">Сначала новые</string>
     <string name="settings_titles_sorting_oldest">Сначала старые</string>

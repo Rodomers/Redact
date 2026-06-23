@@ -1,6 +1,8 @@
 package com.rds.mews.localcore
 
 import android.content.Context
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.rds.mews.MainActivity
 import com.rds.mews.settings_manager.SummarizationErrorType
@@ -50,7 +52,8 @@ data class TitleCardStates(
     var expanded: Boolean = false,
     var currentPage: Int = 0,
     var sources: List<SourceMessages>? = null,
-    val read: Boolean = false
+    val read: Boolean = false,
+    val currentImage: Int = 0
 )
 
 enum class ArrowPosition {
@@ -103,6 +106,9 @@ data class SettingsUiState(
     val defaultGeminiModel: GeminiModelOption,
     val geminiApiBuffer: String,
     val isApiKeyCorrect: Boolean,
+    val copyPlainText: Boolean,
+    val keepUnreadTitles: Boolean,
+    val enableUpdateNotifications: Boolean,
     val geminiModels: List<GeminiModelOption>,
     val darkThemes: List<DarkTheme>,
     val appThemes: List<AppTheme>,
@@ -131,6 +137,9 @@ data class SettingsUiFunctions(
     val setRssUpdateInterval: (Context, Int) -> Unit,
     val setFilterTopics: (Boolean) -> Unit,
     val setBannedNews: (Set<String>) -> Unit,
+    val setPlainText: (Boolean) -> Unit,
+    val setKeepUnread: (Boolean) -> Unit,
+    val setUpdateNotifications: (Boolean) -> Unit,
     val delBannedNews: (String) -> Unit,
     val setCurrentLlm: (GeminiModelOption) -> Unit,
     val setUserGeminiApi: (String) -> Unit,

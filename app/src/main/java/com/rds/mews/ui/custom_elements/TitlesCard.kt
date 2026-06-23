@@ -16,6 +16,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -133,6 +134,7 @@ import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.localcore.MediaWithSource
+import com.rds.mews.text_filters.TextSanitizer
 import com.rds.mews.ui.theme.Shapes
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.launch
@@ -161,6 +163,10 @@ fun TitlesCard(
     markAsUnread: () -> Unit,
     dynamicMediaUrls: List<MediaWithSource>? = null,
     onLoadMediaUrls: () -> Unit = {},
+    onImageChanged: (Int) -> Unit,
+    sanitizeCopiedText: Boolean = false,
+    imagePagerState: PagerState,
+    scrollState: ScrollState,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
@@ -244,6 +250,7 @@ fun TitlesCard(
                 onReady = { isPopupReady = true },
                 onBanTheme = onBanTheme,
                 onMarkAsUnread = markAsUnread,
+                onImageChanged = onImageChanged,
                 pagerState = pagerState,
                 rememberPage = rememberPage,
                 originalNoTime = noTime,
@@ -251,7 +258,10 @@ fun TitlesCard(
                 isRead = isRead,
                 backgroundColor = backgroundColor,
                 dynamicMediaUrls = dynamicMediaUrls,
-                onLoadMediaUrls = onLoadMediaUrls
+                onLoadMediaUrls = onLoadMediaUrls,
+                sanitizeCopiedText = sanitizeCopiedText,
+                imagePagerState = imagePagerState,
+                scrollState = scrollState
             )
         }
     }
@@ -354,7 +364,11 @@ private fun HeroExpansionContent(
     isRead: Boolean,
     backgroundColor: Color,
     dynamicMediaUrls: List<MediaWithSource>?,
-    onLoadMediaUrls: () -> Unit
+    onLoadMediaUrls: () -> Unit,
+    onImageChanged: (Int) -> Unit,
+    sanitizeCopiedText: Boolean,
+    imagePagerState: PagerState,
+    scrollState: ScrollState
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -466,9 +480,12 @@ private fun HeroExpansionContent(
                     showSnippet = showSnippet,
                     isRead = isRead,
                     headerStartColor = backgroundColor,
-                    targetCardHeight = targetHeight,
                     dynamicMediaUrls = dynamicMediaUrls,
-                    onLoadMediaUrls = onLoadMediaUrls
+                    onLoadMediaUrls = onLoadMediaUrls,
+                    sanitizeCopiedText = sanitizeCopiedText,
+                    imagePagerState = imagePagerState,
+                    scrollState = scrollState,
+                    onImageChanged = onImageChanged
                 )
             }
         }
@@ -704,9 +721,12 @@ private fun ExpandedCardContent(
     showSnippet: Boolean,
     isRead: Boolean,
     headerStartColor: Color,
-    targetCardHeight: Float,
     dynamicMediaUrls: List<MediaWithSource>?,
-    onLoadMediaUrls: () -> Unit
+    onLoadMediaUrls: () -> Unit,
+    onImageChanged: (Int) -> Unit,
+    sanitizeCopiedText: Boolean,
+    imagePagerState: PagerState,
+    scrollState: ScrollState
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -716,7 +736,7 @@ private fun ExpandedCardContent(
     val handler = LocalUriHandler.current
     val haptics = LocalHapticFeedback.current
 
-    val imagePagerState = rememberPagerState { dynamicMediaUrls?.size ?: 0 }
+//    val imagePagerState = rememberPagerState { dynamicMediaUrls?.size ?: 0 }
     val imageBoundsMap = remember { mutableMapOf<Int, Rect>() }
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
@@ -728,7 +748,7 @@ private fun ExpandedCardContent(
 
     var pullOffset by remember { mutableFloatStateOf(0f) }
     var hasTriggeredHaptic by remember { mutableStateOf(false) }
-    val scrollState = rememberScrollState()
+//    val scrollState = rememberScrollState()
     var clickedImageIndex by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(title.id, sources) {
@@ -823,8 +843,10 @@ private fun ExpandedCardContent(
         }
     }
 
+    val summary = if (sanitizeCopiedText) TextSanitizer.sanitize(title.summary, saveWhitespace = true) else title.summary
+    val boldTitle = if (sanitizeCopiedText) "" else "**"
     val copiedText =
-        "${title.title}\n\n${title.summary}\n\n${stringResource(R.string.titles_card_source)}: ${stringResource(R.string.app_name)}, ${title.sources}"
+        "${boldTitle}${title.title}${boldTitle}\n\n${summary}\n\n${stringResource(R.string.titles_card_source)}: ${stringResource(R.string.app_name)}, ${title.sources}"
     fun copyText() { clipboardManager.setText(AnnotatedString(copiedText)) }
     fun shareText() {
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
@@ -1019,8 +1041,9 @@ private fun ExpandedCardContent(
                                     ) {
                                         HorizontalPager(
                                             state = imagePagerState,
-                                            modifier = Modifier.fillMaxSize()
+                                            modifier = Modifier.fillMaxSize(),
                                         ) { pageIndex ->
+                                            onImageChanged(pageIndex)
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()

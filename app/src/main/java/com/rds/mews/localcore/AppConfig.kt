@@ -181,3 +181,19 @@ enum class SourceType(val id: Int) {
         }
     }
 }
+
+@Serializable
+enum class SummarizingStatus(val stringId: Int, val id: Int) {
+    DEFAULT(R.string.update, 0),
+    UPDATING(R.string.updating, 1),
+    PARSING(R.string.parsing, 2),
+    EXTRACTING(R.string.extracting_topics, 3),
+    FILTERING(R.string.filtering_topics, 4),
+    SUMMARIZING(R.string.summarizing, 5);
+
+    companion object {
+        fun fromId(key: Int): SummarizingStatus {
+            return entries.find { it.id == key } ?: DEFAULT
+        }
+    }
+}

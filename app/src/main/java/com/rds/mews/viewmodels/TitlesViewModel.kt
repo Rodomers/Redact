@@ -49,6 +49,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import com.rds.mews.R
+import com.rds.mews.core.TelegramRssClient
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.TitleStatus
@@ -104,6 +105,7 @@ class TitlesViewModel(
 
     val isRefreshing: StateFlow<Boolean> = repository.updatingTitles
     val expandSources: StateFlow<Boolean> = repository.expandSources
+    val copyPlainText: StateFlow<Boolean> = repository.sanitizeCopiedText
     val titleSorting: StateFlow<TitleSorting> = repository.titleSorting
     val updatingState: StateFlow<String?> = repository.updatingState
     val updatingProgress: StateFlow<Float> = repository.updatingProgress
@@ -316,6 +318,15 @@ class TitlesViewModel(
         }
     }
 
+    fun setCurrentTitleImage(id: Long, image: Int) {
+        _titleCardStates.update { currentSet ->
+            currentSet.map {
+                if (it.id == id) { it.copy(currentImage = image) }
+                else it
+            }.toSet()
+        }
+    }
+
     fun changeTitleSourceState(id: Long, source: String) {
         _titleCardStates.update { currentSet ->
             currentSet.map {
@@ -364,7 +375,7 @@ class TitlesViewModel(
 
             withContext(Dispatchers.IO) {
                 val liveUrls = mutableListOf<MediaWithSource>()
-                val scraper = com.rds.mews.core.TelegramRssClient(repository.proxyEnabled.value)
+                val scraper = TelegramRssClient(repository.proxyEnabled.value)
                 for (message in telegramLinks) {
                     try {
                         val result = scraper.scrapeEmbedMedia(message.link).map { MediaWithSource(it, message) }
@@ -493,7 +504,8 @@ class TitlesViewModel(
                             expanded = oldState?.expanded ?: false,
                             read = title.isRead,
                             currentPage = oldState?.currentPage ?: 0,
-                            sources = newSources
+                            sources = newSources,
+                            currentImage = oldState?.currentImage ?: 0
                         )
                     }.toSet()
                 }

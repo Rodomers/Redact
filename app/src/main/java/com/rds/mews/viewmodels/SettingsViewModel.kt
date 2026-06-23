@@ -113,6 +113,12 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     val proxyEnabled: StateFlow<Boolean> = repository.proxyEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val copyPlainText: StateFlow<Boolean> = repository.sanitizeCopiedText
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val keepUnreadTitles: StateFlow<Boolean> = repository.saveUnreadTitles
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val enableUpdateNotifications: StateFlow<Boolean> = repository.enableUpdateNotification
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _defaultApiKey = repository.DEFAULT_GEMINI_API_KEY
 
@@ -205,6 +211,13 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     fun setShowSnippets(value: Boolean) = viewModelScope.launch { repository.setShowSnippets(value) }
     fun setBannedNews(value: Set<String>) = viewModelScope.launch { repository.setBannedNews(value) }
     fun delBannedNews(value: String) = viewModelScope.launch { repository.delBannedNew(value) }
+    fun setPlainText(value: Boolean) = viewModelScope.launch { repository.setSanitizeCopiedText(value) }
+    fun setKeepUnread(value: Boolean) = viewModelScope.launch { repository.setSaveUnreadTitles(value) }
+    fun setUpdateNotifications(value: Boolean) = viewModelScope.launch {
+        val granted = repository.notificationsGranted.value
+        if (granted == value || granted) repository.setEnableUpdateNotification(value)
+        if (!granted && value) setShowNotificationsSheet(true)
+    }
 
     fun setTitlesAlarmUpdate(
         context: Context,

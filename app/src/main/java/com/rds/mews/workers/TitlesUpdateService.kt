@@ -57,10 +57,6 @@ class TitlesUpdateService : Service() {
                 SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e)
             }
 
-            if (result is SummarizationResult.Success && !oneTimeUpdate) {
-                sendSuccessNotification()
-            }
-
             if (!oneTimeUpdate) {
                 scheduleNextUpdate()
             }
@@ -109,38 +105,6 @@ class TitlesUpdateService : Service() {
             .setContentText(getString(R.string.titles_service_text))
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .build()
-    }
-
-    private fun sendSuccessNotification() {
-        val channelId = "update_service_channel"
-        val notificationId = 1
-
-        val channel = NotificationChannel(
-            channelId,
-            getString(R.string.titles_updated_name),
-            NotificationManager.IMPORTANCE_DEFAULT
-        )
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(channel)
-
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            putExtra("selected_tab", 1)
-        }
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.ic_launcher_monochrome)
-            .setContentTitle(getString(R.string.titles_updated_title))
-            .setContentText(getString(R.string.titles_updated_text))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .build()
-
-        if (isNotificationPermissionGranted(applicationContext)) {
-            manager.notify(notificationId, notification)
-        }
     }
 
     @SuppressLint("ServiceCast")

@@ -112,6 +112,9 @@ fun SettingsScreen(
     val isApiKeyDefault by viewModel.isKeyDefault.collectAsStateWithLifecycle()
     val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
     val expandSources by viewModel.expandSources.collectAsStateWithLifecycle()
+    val copyPlainText by viewModel.copyPlainText.collectAsStateWithLifecycle()
+    val keepUnreadTitles by viewModel.keepUnreadTitles.collectAsStateWithLifecycle()
+    val updateNotifications by viewModel.enableUpdateNotifications.collectAsStateWithLifecycle()
 
     val state = SettingsUiState(
         autoUpdateScreenOpened = autoupdateScreenOpened,
@@ -144,13 +147,16 @@ fun SettingsScreen(
         defaultGeminiModel = defaultGeminiModel,
         geminiApiBuffer = geminiBuffer,
         isApiKeyCorrect = isApiKeyValid,
+        copyPlainText = copyPlainText,
+        keepUnreadTitles = keepUnreadTitles,
+        enableUpdateNotifications = updateNotifications,
         darkThemes = viewModel.darkThemes,
         appThemes = viewModel.appThemes,
         titleSortingList = viewModel.titleSortingList,
         headersNumList = viewModel.headersNumList,
         titlesPeriods = viewModel.titlesPeriods,
         titlesKeepings = viewModel.titlesKeepings,
-        autoUpdateFrequencies = viewModel.autoUpdateFrequencies,
+        autoUpdateFrequencies = viewModel.autoUpdateFrequencies
     )
 
     val functions = remember {
@@ -187,7 +193,10 @@ fun SettingsScreen(
             addGroupState = viewModel::addGroupState,
             changeGroupState = viewModel::changeGroupState,
             setGeminiBuffer = viewModel::setGeminiKeyBuffer,
-            clearFeed = viewModel::clearFeed
+            clearFeed = viewModel::clearFeed,
+            setPlainText = viewModel::setPlainText,
+            setKeepUnread = viewModel::setKeepUnread,
+            setUpdateNotifications = viewModel::setUpdateNotifications
         )
     }
 
@@ -666,6 +675,33 @@ fun SettingsGrid(
                     visible = groupStates.find { it.group == titlesChapterId }?.expanded ?: true
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
+                        SettingsItem(
+                            text = stringResource(R.string.settings_update_notifications),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        ) {
+                            CustomSwitch(
+                                checked = state.enableUpdateNotifications,
+                                onCheckedChange = { functions.setUpdateNotifications(it) }
+                            )
+                        }
+                        SettingsItem(
+                            text = stringResource(R.string.settings_keep_unread),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        ) {
+                            CustomSwitch(
+                                checked = state.keepUnreadTitles,
+                                onCheckedChange = { functions.setKeepUnread(it) }
+                            )
+                        }
+                        SettingsItem(
+                            text = stringResource(R.string.settings_titles_copy_plain_text),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        ) {
+                            CustomSwitch(
+                                checked = state.copyPlainText,
+                                onCheckedChange = { functions.setPlainText(it) }
+                            )
+                        }
                         SettingsItem(
                             text = stringResource(R.string.settings_titles_sorting),
                             modifier = Modifier.padding(vertical = verticalArrangement)

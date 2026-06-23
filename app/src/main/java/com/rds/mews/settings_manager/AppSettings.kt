@@ -56,6 +56,7 @@ data class AppSettings(
     val titlesNum: HeadersNum = HeadersNum.NUM_10,
     val titlesPeriod: TitlesPeriod = TitlesPeriod.ADAPTIVE,
     val titlesKeeping: TitlesKeeping = TitlesKeeping.DAYS_1,
+    val sanitizeCopiedText: Boolean = false,
 
     // Network & AI
     val userApiKey: String = "",
@@ -70,6 +71,8 @@ data class AppSettings(
     val notificationsGranted: Boolean = false,
     val rssUpdateInterval: Int = 30,
     val lastRssUpdate: Long = 0L,
+    val saveUnreadTitles: Boolean = false,
+    val enableUpdateNotification: Boolean = false,
 
     // UI Toggles
     val compactTabBar: Boolean = false,

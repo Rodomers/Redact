@@ -184,6 +184,9 @@ interface TitleDao {
     @Query("DELETE FROM titles WHERE update_time < :timeMs")
     suspend fun deleteBeforeUpdateTime(timeMs: Long): Int
 
+    @Query("DELETE FROM titles WHERE update_time < :timeMs AND is_read = 1")
+    suspend fun deleteReadItemsBeforeUpdateTime(timeMs: Long): Int
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertTitleMessageMap(map: TitleMessageMap)
 

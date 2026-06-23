@@ -14,6 +14,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
 class TitlesUpdater() {
     suspend fun performUpdate(isOneTime: Boolean): SummarizationResult {
@@ -24,7 +25,6 @@ class TitlesUpdater() {
             )
         }
 
-        // Объявляем переменные снаружи try, чтобы иметь к ним доступ в finally
         var llmClient: LLMClient? = null
         var finalResult: SummarizationResult = SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
 
@@ -90,7 +90,8 @@ class TitlesUpdater() {
                 }
 
                 if (finalResult is SummarizationResult.Success) {
-                    MewsRepository.delTitles(System.currentTimeMillis() - MewsRepository.titlesKeeping.value.ms)
+                    MewsRepository.delTitles(System.currentTimeMillis() - MewsRepository.titlesKeeping.value.ms,
+                        MewsRepository.saveUnreadTitles.first())
                     MewsRepository.clearError()
                 } else if (finalResult is SummarizationResult.Failure) {
                     MewsRepository.saveLastError(finalResult)
@@ -125,11 +126,14 @@ class TitlesUpdater() {
             MewsRepository.setUpdatingProgress(1f)
             MewsRepository.setUpdatingTitles(false)
 
-            withContext(Dispatchers.IO) { delay(500L) }
+            withContext(Dispatchers.IO) { delay(500L.milliseconds) }
 
             MewsRepository.setUpdatingState("off")
             MewsRepository.setUpdatingProgress(0f)
         }
+
+        if (finalResult is SummarizationResult.Success && MewsRepository.enableUpdateNotification.first())
+            MewsRepository.getAppContext().sendSuccessNotification()
 
         return finalResult
     }

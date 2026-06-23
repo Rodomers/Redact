@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -121,10 +122,11 @@ fun SourcesCard(
                             .crossfade(true)
                             .placeholder(R.drawable.zhdun)
                             .error(R.drawable.zhdun)
-//                            .memoryCacheKey("$avatarUrl-$retryCount")
-//                            .diskCacheKey("$avatarUrl-$retryCount")
                             .build(),
                         contentDescription = null,
+                        colorFilter = if (!isImageLoaded)
+                            ColorFilter.tint(MaterialTheme.colorScheme.onSecondaryContainer)
+                        else null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxSize()
@@ -147,6 +149,7 @@ fun SourcesCard(
                             .data(R.drawable.zhdun)
                             .crossfade(true)
                             .build(),
+                        colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSecondaryContainer),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier

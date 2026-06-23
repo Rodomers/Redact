@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -145,6 +146,7 @@ fun TitlesScreen(
     val lastTitlesUpdate by viewModel.lastUpdated.collectAsStateWithLifecycle()
     val dynamicMediaUrls by viewModel.dynamicMediaUrls.collectAsStateWithLifecycle()
     val titleSorting by viewModel.titleSorting.collectAsStateWithLifecycle()
+    val copyPlainText by viewModel.copyPlainText.collectAsStateWithLifecycle()
 
     TitlesGrid(
         lazyGridState = lazyGridState,
@@ -170,6 +172,7 @@ fun TitlesScreen(
         scope = scope,
         innerTime = innerTime,
         showSnippets = showSnippets,
+        copyPlainText = copyPlainText,
         bottomSpacer = bottomSpacer,
         titleSorting = titleSorting,
         dynamicMediaUrls = dynamicMediaUrls,
@@ -182,7 +185,8 @@ fun TitlesScreen(
         showGreeting = viewModel::showGreeting,
         lastTitlesUpdateExists = viewModel::lastTitlesUpdateExists,
         onSwitchStoryline = viewModel::switchStorylineAndScroll,
-        loadDynamicMediaUrls = viewModel::loadDynamicMediaUrls
+        loadDynamicMediaUrls = viewModel::loadDynamicMediaUrls,
+        setCurrentTitleImage = viewModel::setCurrentTitleImage
     )
 }
 
@@ -213,6 +217,7 @@ fun TitlesGrid(
     scope: CoroutineScope,
     innerTime: Boolean,
     showSnippets: Boolean,
+    copyPlainText: Boolean,
     titleSorting: TitleSorting,
     bottomSpacer: Dp,
     dynamicMediaUrls: Map<Long, List<MediaWithSource>>,
@@ -225,7 +230,8 @@ fun TitlesGrid(
     showGreeting: (Context) -> Unit,
     lastTitlesUpdateExists: () -> Boolean,
     onSwitchStoryline: (Long) -> Unit,
-    loadDynamicMediaUrls: (Long) -> Unit
+    loadDynamicMediaUrls: (Long) -> Unit,
+    setCurrentTitleImage: (Long, Int) -> Unit
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
 
@@ -437,6 +443,9 @@ fun TitlesGrid(
                             }
 
                             Box(modifier = Modifier.weight(1f)) {
+                                val imagePagerState = rememberPagerState(initialPage = statesItem?.currentImage ?: 0, pageCount = { dynamicMediaUrls[item.id]?.size ?: 0})
+                                val scrollState = rememberScrollState()
+
                                 TitlesCard(
                                     item,
                                     modifier = Modifier.padding(vertical = verticalArrangement),
@@ -464,7 +473,11 @@ fun TitlesGrid(
                                     onSwitchStoryline = onSwitchStoryline,
                                     onLoadMediaUrls = { loadDynamicMediaUrls(item.id) },
                                     dynamicMediaUrls = dynamicMediaUrls[item.id],
-                                    titleSorting = titleSorting
+                                    onImageChanged = { setCurrentTitleImage(item.id, it) },
+                                    titleSorting = titleSorting,
+                                    sanitizeCopiedText = copyPlainText,
+                                    imagePagerState = imagePagerState,
+                                    scrollState = scrollState
                                 )
 
                                 if (isPartiallyObscured) {

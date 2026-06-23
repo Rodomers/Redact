@@ -80,6 +80,9 @@ object MewsRepository {
     lateinit var notificationsGranted: StateFlow<Boolean>
     lateinit var currentLanguage: StateFlow<String?>
     lateinit var parserBatchSize: StateFlow<Int>
+    lateinit var sanitizeCopiedText: StateFlow<Boolean>
+    lateinit var saveUnreadTitles: StateFlow<Boolean>
+    lateinit var enableUpdateNotification: StateFlow<Boolean>
 
     private val _context = MutableStateFlow<Context?>(null)
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
@@ -183,6 +186,9 @@ object MewsRepository {
         titlesPeriod = createSettingFlow({ it.titlesPeriod }, TitlesPeriod.HRS_24)
         titlesKeeping = createSettingFlow({ it.titlesKeeping }, TitlesKeeping.DAYS_1)
         titlesAutoUpdateFrequency = createSettingFlow({ it.titlesAutoUpdateFrequency }, AutoUpdateFrequency.FREQ_24)
+        sanitizeCopiedText = createSettingFlow( { it.sanitizeCopiedText }, false)
+        saveUnreadTitles = createSettingFlow(  { it.saveUnreadTitles }, false)
+        enableUpdateNotification = createSettingFlow({ it.enableUpdateNotification }, false)
         llmModel = createSettingFlow({ it.llmModel }, GeminiModelOption.FLASH_LATEST)
 
         userApiKey = createSettingFlow({
@@ -445,9 +451,10 @@ object MewsRepository {
         }
     }
 
-    fun delTitles(time: Long? = null) {
+    fun delTitles(time: Long? = null, onlyRead: Boolean = false) {
         externalScope.launch(Dispatchers.IO) {
-            titleDao.deleteBeforeUpdateTime(time ?: 0)
+            if (!onlyRead) titleDao.deleteBeforeUpdateTime(time ?: 0)
+            else titleDao.deleteReadItemsBeforeUpdateTime(time ?: 0)
         }
     }
 
@@ -648,6 +655,9 @@ object MewsRepository {
     fun setTitlesAutoUpdateFrequency(newValue: AutoUpdateFrequency) = updateSetting { it.copy(titlesAutoUpdateFrequency = newValue) }
     fun setUserApiKey(newValue: String) = updateSetting { it.copy(userApiKey = newValue) }
     fun setShowDates(newValue: Boolean) = updateSetting { it.copy(showDates = newValue) }
+    fun setSanitizeCopiedText(newValue: Boolean) = updateSetting { it.copy(sanitizeCopiedText = newValue) }
+    fun setSaveUnreadTitles(newValue: Boolean) = updateSetting { it.copy(saveUnreadTitles = newValue) }
+    fun setEnableUpdateNotification(newValue: Boolean) = updateSetting { it.copy(enableUpdateNotification = newValue) }
 
     fun setRssUpdateInterval(context: Context, newValue: Int) {
         externalScope.launch {
@@ -692,7 +702,8 @@ object MewsRepository {
 
     fun setNotificationsGranted(newValue: Boolean) {
         externalScope.launch {
-            settingsManager.updateSettings { it.copy(notificationsGranted = newValue, titlesAutoUpdate = if(!newValue) false else it.titlesAutoUpdate) }
+            settingsManager.updateSettings { it.copy(notificationsGranted = newValue, titlesAutoUpdate = if (!newValue) false else it.titlesAutoUpdate,
+            enableUpdateNotification = if (!newValue) false else it.enableUpdateNotification) }
         }
     }
 
