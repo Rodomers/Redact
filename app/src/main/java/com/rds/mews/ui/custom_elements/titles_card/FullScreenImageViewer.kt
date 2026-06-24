@@ -121,7 +121,6 @@ fun FullScreenImageViewer(
                 isClosing = true
                 coroutineScope.launch {
                     onPageChanged(fullScreenPagerState.currentPage)
-//                    delay(16.milliseconds)
                     launch {
                         swipeDismissY.animateTo(0f, animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessLow))
                     }

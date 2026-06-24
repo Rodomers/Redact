@@ -665,6 +665,10 @@ private fun ExpandedCardContent(
         }
     }
 
+    LaunchedEffect(imagePagerState.currentPage) {
+        onImageChanged(imagePagerState.currentPage)
+    }
+
     val pullThresholdPx = with(density) { 90.dp.toPx() }
     val maxPullPx = with(density) { 135.dp.toPx() }
 
@@ -951,7 +955,6 @@ private fun ExpandedCardContent(
                                             state = imagePagerState,
                                             modifier = Modifier.fillMaxSize(),
                                         ) { pageIndex ->
-                                            onImageChanged(pageIndex)
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()

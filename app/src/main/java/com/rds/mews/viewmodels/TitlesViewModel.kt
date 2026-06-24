@@ -56,8 +56,6 @@ import com.rds.mews.localcore.TitleStatus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 
 class TitlesViewModel(
     private val application: Application,
@@ -370,52 +368,58 @@ class TitlesViewModel(
             val allMessages = sources?.flatMap { it.messages } ?: emptyList()
             val telegramLinks = allMessages.filter { it.link.contains("t.me") }
 
-            if (telegramLinks.isEmpty()) {
-                val processedUrls = mediaObjects.map { media ->
-                    MediaWithSource(
-                        mediaLink = media.mediaLink.substringBefore("?"),
-                        message = media.message
-                    )
-                }.filter { media ->
-                    val cleanUrl = media.mediaLink.lowercase()
-                    !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
-                }.distinctBy { it.mediaLink }
-                _dynamicMediaUrls.update { it + (titleId to processedUrls) }
-                return@launch
-            }
+            val initialProcessedUrls = mediaObjects.map { media ->
+                MediaWithSource(
+                    mediaLink = media.mediaLink.substringBefore("?"),
+                    message = media.message
+                )
+            }.filter { media ->
+                val cleanUrl = media.mediaLink.lowercase()
+                !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
+            }.distinctBy { it.mediaLink }
+
+            _dynamicMediaUrls.update { it + (titleId to initialProcessedUrls) }
+
+            if (telegramLinks.isEmpty()) return@launch
 
             withContext(Dispatchers.IO) {
-                val liveUrls = mutableListOf<MediaWithSource>()
                 val scraper = TelegramRssClient(repository.proxyEnabled.value)
-                val jobs = telegramLinks.map { message ->
-                    async {
+                telegramLinks.forEach { message ->
+                    launch {
                         try {
-                            scraper.scrapeEmbedMedia(message.link).map { MediaWithSource(it, message) }
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
+                            val result = scraper.scrapeEmbedMedia(message.link)
+                                .map { MediaWithSource(it, message) }
+
+                            if (result.isNotEmpty()) {
+                                _dynamicMediaUrls.update { currentMap ->
+                                    val existingList = currentMap[titleId] ?: emptyList()
+                                    val allScrapedLinks = (existingList + result)
+                                        .filter { !it.mediaLink.contains("telesco.pe") }
+                                        .groupBy { it.message?.link }
+
+                                    val mergedList = mediaObjects.flatMap { originalMedia ->
+                                        if (originalMedia.mediaLink.contains("telesco.pe")) {
+                                            val scraped = allScrapedLinks[originalMedia.message?.link]
+                                            scraped ?: listOf(originalMedia)
+                                        } else {
+                                            listOf(originalMedia)
+                                        }
+                                    }.map { media ->
+                                        MediaWithSource(
+                                            mediaLink = media.mediaLink.substringBefore("?"),
+                                            message = media.message
+                                        )
+                                    }.filter { media ->
+                                        val cleanUrl = media.mediaLink.lowercase()
+                                        !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
+                                    }.distinctBy { it.mediaLink }
+
+                                    currentMap + (titleId to mergedList)
+                                }
+                            }
+                        } catch (e: Exception) { }
                     }
                 }
-                val results = jobs.awaitAll().flatten()
-                liveUrls.addAll(results)
-
-                val convertedLiveObjects = liveUrls.map { item ->
-                    MediaWithSource(mediaLink = item.mediaLink, message = item.message)
-                }
-
-                val oldObjects = mediaObjects.filter { !it.mediaLink.contains("telesco.pe") }
-
-                val finalObjects = (convertedLiveObjects + oldObjects).map { media ->
-                    MediaWithSource(
-                        mediaLink = media.mediaLink.substringBefore("?"),
-                        message = media.message
-                    )
-                }.filter { media ->
-                    val cleanUrl = media.mediaLink.lowercase()
-                    !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
-                }.distinctBy { it.mediaLink }
-
-                _dynamicMediaUrls.update { it + (titleId to finalObjects) }
             }
         }
     }

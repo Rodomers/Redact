@@ -449,10 +449,7 @@ fun TitlesGrid(
                             Box(modifier = Modifier.weight(1f)) {
                                 val imagePagerState = rememberPagerState(initialPage = statesItem?.currentImage ?: 0, pageCount = { dynamicMediaUrls[item.id]?.size ?: 0})
                                 val scrollState = rememberScrollState()
-                                var clickedImageIndex by rememberSaveable { mutableStateOf(
-                                    if (statesItem?.fullscreenImage ?: false) statesItem.currentImage
-                                    else null
-                                ) }
+                                val clickedImageIndex = if (statesItem?.fullscreenImage == true) statesItem.currentImage else null
 
                                 TitlesCard(
                                     item,
@@ -462,16 +459,13 @@ fun TitlesGrid(
                                     onToggleExpanded = {
                                         onToggleExpanded(item.id)
                                         markTitleAsRead(item.id, true)
-                                                       },
+                                    },
                                     rememberPage = { page -> rememberCardPage(item.id, page) },
                                     noTime = !innerTime,
                                     showSnippet = showSnippets,
                                     onBanTheme = onBanTheme,
                                     sources = sources,
                                     changeSourceState = changeSourceState,
-//                                    backgroundColor = if (read)
-//                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.5f)
-//                                    else MaterialTheme.colorScheme.secondaryContainer,
                                     backgroundColor = MaterialTheme.colorScheme.secondaryContainer,
                                     expandable = lastTitlesUpdateExists(),
                                     markAsUnread = {
@@ -489,7 +483,6 @@ fun TitlesGrid(
                                     clickedImageIndex = clickedImageIndex,
                                     onImageClicked = { flag ->
                                         setFullscreenView(item.id, flag)
-                                        clickedImageIndex = if (flag) statesItem?.currentImage else null
                                     }
                                 )
 
