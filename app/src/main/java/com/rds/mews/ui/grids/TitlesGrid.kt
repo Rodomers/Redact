@@ -43,6 +43,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -76,7 +78,7 @@ import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
-import com.rds.mews.ui.custom_elements.TitlesCard
+import com.rds.mews.ui.custom_elements.titles_card.TitlesCard
 import com.rds.mews.ui.custom_elements.customHeader
 import com.rds.mews.viewmodels.TitlesViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -186,7 +188,8 @@ fun TitlesScreen(
         lastTitlesUpdateExists = viewModel::lastTitlesUpdateExists,
         onSwitchStoryline = viewModel::switchStorylineAndScroll,
         loadDynamicMediaUrls = viewModel::loadDynamicMediaUrls,
-        setCurrentTitleImage = viewModel::setCurrentTitleImage
+        setCurrentTitleImage = viewModel::setCurrentTitleImage,
+        setFullscreenView = viewModel::setFullscreenImageForTitle
     )
 }
 
@@ -231,7 +234,8 @@ fun TitlesGrid(
     lastTitlesUpdateExists: () -> Boolean,
     onSwitchStoryline: (Long) -> Unit,
     loadDynamicMediaUrls: (Long) -> Unit,
-    setCurrentTitleImage: (Long, Int) -> Unit
+    setCurrentTitleImage: (Long, Int) -> Unit,
+    setFullscreenView:(Long, Boolean) -> Unit
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
 
@@ -445,6 +449,10 @@ fun TitlesGrid(
                             Box(modifier = Modifier.weight(1f)) {
                                 val imagePagerState = rememberPagerState(initialPage = statesItem?.currentImage ?: 0, pageCount = { dynamicMediaUrls[item.id]?.size ?: 0})
                                 val scrollState = rememberScrollState()
+                                var clickedImageIndex by rememberSaveable { mutableStateOf(
+                                    if (statesItem?.fullscreenImage ?: false) statesItem.currentImage
+                                    else null
+                                ) }
 
                                 TitlesCard(
                                     item,
@@ -477,7 +485,12 @@ fun TitlesGrid(
                                     titleSorting = titleSorting,
                                     sanitizeCopiedText = copyPlainText,
                                     imagePagerState = imagePagerState,
-                                    scrollState = scrollState
+                                    scrollState = scrollState,
+                                    clickedImageIndex = clickedImageIndex,
+                                    onImageClicked = { flag ->
+                                        setFullscreenView(item.id, flag)
+                                        clickedImageIndex = if (flag) statesItem?.currentImage else null
+                                    }
                                 )
 
                                 if (isPartiallyObscured) {

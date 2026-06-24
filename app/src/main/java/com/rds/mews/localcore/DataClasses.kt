@@ -53,7 +53,8 @@ data class TitleCardStates(
     var currentPage: Int = 0,
     var sources: List<SourceMessages>? = null,
     val read: Boolean = false,
-    val currentImage: Int = 0
+    val currentImage: Int = 0,
+    val fullscreenImage: Boolean = false
 )
 
 enum class ArrowPosition {

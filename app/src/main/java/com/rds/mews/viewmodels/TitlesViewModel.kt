@@ -56,6 +56,8 @@ import com.rds.mews.localcore.TitleStatus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 
 class TitlesViewModel(
     private val application: Application,
@@ -327,6 +329,15 @@ class TitlesViewModel(
         }
     }
 
+    fun setFullscreenImageForTitle(id: Long, state: Boolean) {
+        _titleCardStates.update { currentSet ->
+            currentSet.map {
+                if (it.id == id) { it.copy(fullscreenImage = state) }
+                else it
+            }.toSet()
+        }
+    }
+
     fun changeTitleSourceState(id: Long, source: String) {
         _titleCardStates.update { currentSet ->
             currentSet.map {
@@ -376,12 +387,17 @@ class TitlesViewModel(
             withContext(Dispatchers.IO) {
                 val liveUrls = mutableListOf<MediaWithSource>()
                 val scraper = TelegramRssClient(repository.proxyEnabled.value)
-                for (message in telegramLinks) {
-                    try {
-                        val result = scraper.scrapeEmbedMedia(message.link).map { MediaWithSource(it, message) }
-                        liveUrls.addAll(result)
-                    } catch (e: Exception) { }
+                val jobs = telegramLinks.map { message ->
+                    async {
+                        try {
+                            scraper.scrapeEmbedMedia(message.link).map { MediaWithSource(it, message) }
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                    }
                 }
+                val results = jobs.awaitAll().flatten()
+                liveUrls.addAll(results)
 
                 val convertedLiveObjects = liveUrls.map { item ->
                     MediaWithSource(mediaLink = item.mediaLink, message = item.message)
@@ -505,7 +521,8 @@ class TitlesViewModel(
                             read = title.isRead,
                             currentPage = oldState?.currentPage ?: 0,
                             sources = newSources,
-                            currentImage = oldState?.currentImage ?: 0
+                            currentImage = oldState?.currentImage ?: 0,
+                            fullscreenImage = oldState?.fullscreenImage ?: false
                         )
                     }.toSet()
                 }

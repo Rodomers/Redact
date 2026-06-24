@@ -1,11 +1,10 @@
-package com.rds.mews.ui.custom_elements
+package com.rds.mews.ui.custom_elements.titles_card
 
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
-import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -43,10 +42,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -56,15 +53,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,26 +77,18 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -113,18 +99,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.Velocity
-import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.findViewTreeLifecycleOwner
-import androidx.lifecycle.findViewTreeViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.savedstate.findViewTreeSavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import coil.compose.AsyncImage
-import coil.compose.AsyncImagePainter
 import com.rds.mews.R
 import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.localcore.IconButtonInputs
@@ -135,14 +113,17 @@ import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.text_filters.TextSanitizer
+import com.rds.mews.ui.custom_elements.AnimatedSegmentedControl
+import com.rds.mews.ui.custom_elements.CustomDropdown
+import com.rds.mews.ui.custom_elements.CustomIconButton
+import com.rds.mews.ui.custom_elements.CustomTextButton
+import com.rds.mews.ui.custom_elements.ExpandableContainer
+import com.rds.mews.ui.custom_elements.customHeader
 import com.rds.mews.ui.theme.Shapes
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import java.util.UUID
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.abs
 
 @Composable
 fun TitlesCard(
@@ -167,6 +148,8 @@ fun TitlesCard(
     sanitizeCopiedText: Boolean = false,
     imagePagerState: PagerState,
     scrollState: ScrollState,
+    clickedImageIndex: Int?,
+    onImageClicked: (Boolean) -> Unit,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
@@ -261,7 +244,9 @@ fun TitlesCard(
                 onLoadMediaUrls = onLoadMediaUrls,
                 sanitizeCopiedText = sanitizeCopiedText,
                 imagePagerState = imagePagerState,
-                scrollState = scrollState
+                scrollState = scrollState,
+                clickedImageIndex = clickedImageIndex,
+                onImageClicked = onImageClicked
             )
         }
     }
@@ -292,46 +277,6 @@ private fun SnippetText(
         overflow = TextOverflow.Ellipsis,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-}
-
-@Composable
-fun RootViewOverlay(
-    content: @Composable () -> Unit
-) {
-    val view = LocalView.current
-    val context = LocalContext.current
-    val parentComposition = rememberCompositionContext()
-    val overlayId = rememberSaveable { UUID.randomUUID() }
-
-    DisposableEffect(overlayId) {
-        val activity = context.findActivity() ?: return@DisposableEffect onDispose {}
-        val rootViewGroup = activity.window.decorView as ViewGroup
-
-        val composeView = ComposeView(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            setParentCompositionContext(parentComposition)
-            setViewTreeLifecycleOwner(view.findViewTreeLifecycleOwner())
-            setViewTreeViewModelStoreOwner(view.findViewTreeViewModelStoreOwner())
-            setViewTreeSavedStateRegistryOwner(view.findViewTreeSavedStateRegistryOwner())
-            setContent {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { }
-                ) {
-                    content()
-                }
-            }
-        }
-        rootViewGroup.addView(composeView)
-        onDispose { rootViewGroup.removeView(composeView) }
-    }
 }
 
 private fun Context.findActivity(): Activity? {
@@ -368,7 +313,9 @@ private fun HeroExpansionContent(
     onImageChanged: (Int) -> Unit,
     sanitizeCopiedText: Boolean,
     imagePagerState: PagerState,
-    scrollState: ScrollState
+    scrollState: ScrollState,
+    clickedImageIndex: Int?,
+    onImageClicked: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -485,7 +432,9 @@ private fun HeroExpansionContent(
                     sanitizeCopiedText = sanitizeCopiedText,
                     imagePagerState = imagePagerState,
                     scrollState = scrollState,
-                    onImageChanged = onImageChanged
+                    onImageChanged = onImageChanged,
+                    clickedImageIndex = clickedImageIndex,
+                    onImageClicked = onImageClicked
                 )
             }
         }
@@ -660,46 +609,6 @@ private fun PullToSwitchIndicator(text: String, progress: Float, modifier: Modif
     }
 }
 
-@Composable
-private fun DynamicPagerIndicator(
-    currentPage: Int,
-    pageCount: Int,
-    modifier: Modifier = Modifier
-) {
-    if (pageCount <= 1) return
-    val maxVisible = 5
-    Row(
-        modifier = modifier
-            .background(Color.Black.copy(alpha = 0.4f), Shapes.large)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        val start = (currentPage - 2).coerceIn(0, (pageCount - maxVisible).coerceAtLeast(0))
-        val end = (start + maxVisible - 1).coerceAtMost(pageCount - 1)
-        for (i in start..end) {
-            val isSelected = i == currentPage
-            val size = if (isSelected) {
-                9.dp
-            } else if (i == start && start > 0) {
-                4.dp
-            } else if (i == end && end < pageCount - 1) {
-                4.dp
-            } else {
-                7.dp
-            }
-            Box(
-                modifier = Modifier
-                    .size(size)
-                    .clip(CircleShape)
-                    .background(
-                        if (isSelected) Color.White else Color.White.copy(alpha = 0.5f)
-                    )
-            )
-        }
-    }
-}
-
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 private fun ExpandedCardContent(
@@ -726,7 +635,9 @@ private fun ExpandedCardContent(
     onImageChanged: (Int) -> Unit,
     sanitizeCopiedText: Boolean,
     imagePagerState: PagerState,
-    scrollState: ScrollState
+    scrollState: ScrollState,
+    clickedImageIndex: Int?,
+    onImageClicked: (Boolean) -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -736,7 +647,6 @@ private fun ExpandedCardContent(
     val handler = LocalUriHandler.current
     val haptics = LocalHapticFeedback.current
 
-//    val imagePagerState = rememberPagerState { dynamicMediaUrls?.size ?: 0 }
     val imageBoundsMap = remember { mutableMapOf<Int, Rect>() }
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
@@ -748,8 +658,6 @@ private fun ExpandedCardContent(
 
     var pullOffset by remember { mutableFloatStateOf(0f) }
     var hasTriggeredHaptic by remember { mutableStateOf(false) }
-//    val scrollState = rememberScrollState()
-    var clickedImageIndex by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(title.id, sources) {
         if (dynamicMediaUrls == null) {
@@ -885,7 +793,7 @@ private fun ExpandedCardContent(
                             drawRect(
                                 color = headerEndColor,
                                 topLeft = Offset.Zero,
-                                size = androidx.compose.ui.geometry.Size(
+                                size = Size(
                                     width = size.width * expansionProgress,
                                     height = size.height
                                 )
@@ -1050,7 +958,7 @@ private fun ExpandedCardContent(
                                                     .onGloballyPositioned { coordinates ->
                                                         imageBoundsMap[pageIndex] = coordinates.boundsInWindow()
                                                     }
-                                                    .clickable { clickedImageIndex = pageIndex }
+                                                    .clickable { onImageClicked(true) }
                                             ) {
                                                 AsyncImage(
                                                     model = dynamicMediaUrls[pageIndex].mediaLink,
@@ -1081,259 +989,17 @@ private fun ExpandedCardContent(
                                     }
 
                                     if (clickedImageIndex != null) {
-                                        RootViewOverlay {
-                                            val initialPage = clickedImageIndex!!
-                                            val fullScreenPagerState = rememberPagerState(initialPage = initialPage) { dynamicMediaUrls.size }
-
-                                            val transitionAnim = remember { Animatable(0f) }
-                                            var isClosing by remember { mutableStateOf(false) }
-                                            val swipeDismissY = remember { Animatable(0f) }
-
-                                            LaunchedEffect(Unit) {
-                                                transitionAnim.animateTo(
-                                                    targetValue = 1f,
-                                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMedium)
-                                                )
-                                            }
-
-                                            LaunchedEffect(fullScreenPagerState.currentPage) {
-                                                imagePagerState.scrollToPage(fullScreenPagerState.currentPage)
-                                            }
-
-                                            val closeWithAnimation: () -> Unit = {
-                                                if (!isClosing) {
-                                                    isClosing = true
-                                                    coroutineScope.launch {
-                                                        imagePagerState.scrollToPage(fullScreenPagerState.currentPage)
-                                                        delay(16)
-                                                        launch {
-                                                            swipeDismissY.animateTo(0f, animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium))
-                                                        }
-                                                        transitionAnim.animateTo(
-                                                            targetValue = 0f,
-                                                            animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
-                                                        )
-                                                        clickedImageIndex = null
-                                                    }
+                                        FullScreenImageViewer(
+                                            initialPage = clickedImageIndex,
+                                            dynamicMediaUrls = dynamicMediaUrls,
+                                            imageBoundsMap = imageBoundsMap,
+                                            onClose = { onImageClicked(false) },
+                                            onPageChanged = { page ->
+                                                coroutineScope.launch {
+                                                    imagePagerState.scrollToPage(page)
                                                 }
                                             }
-
-                                            BackHandler {
-                                                closeWithAnimation()
-                                            }
-
-                                            val dynamicThemeSurfaceColor = MaterialTheme.colorScheme.surface
-                                            val backgroundAlpha = (transitionAnim.value * 0.98f) * (1f - (swipeDismissY.value / 600f)).coerceIn(0f, 1f)
-
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .background(dynamicThemeSurfaceColor.copy(alpha = backgroundAlpha))
-                                            ) {
-                                                val targetBounds = imageBoundsMap[fullScreenPagerState.currentPage] ?: Rect.Zero
-                                                val screenWidth = with(density) { config.screenWidthDp.dp.toPx() }
-                                                val screenHeight = with(density) { config.screenHeightDp.dp.toPx() }
-
-                                                val currentLeft = targetBounds.left + (0f - targetBounds.left) * transitionAnim.value
-                                                val currentTop = targetBounds.top + (0f - targetBounds.top) * transitionAnim.value + (swipeDismissY.value * transitionAnim.value)
-                                                val currentWidth = targetBounds.width + (screenWidth - targetBounds.width) * transitionAnim.value
-                                                val currentHeight = targetBounds.height + (screenHeight - targetBounds.height) * transitionAnim.value
-                                                val cornerSize = 16.dp * (1f - transitionAnim.value)
-
-                                                Box(
-                                                    modifier = Modifier
-                                                        .offset { IntOffset(currentLeft.roundToInt(), currentTop.roundToInt()) }
-                                                        .size(with(density) { currentWidth.toDp() }, with(density) { currentHeight.toDp() })
-                                                        .clip(RoundedCornerShape(cornerSize.coerceAtLeast(0.dp)))
-                                                ) {
-                                                    HorizontalPager(
-                                                        state = fullScreenPagerState,
-                                                        modifier = Modifier.fillMaxSize(),
-                                                        userScrollEnabled = transitionAnim.value == 1f && swipeDismissY.value == 0f
-                                                    ) { page ->
-                                                        val scale = remember { Animatable(1f) }
-                                                        val offsetX = remember { Animatable(0f) }
-                                                        val offsetY = remember { Animatable(0f) }
-
-                                                        var imageSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
-                                                        var containerSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
-
-                                                        val actualImageWidth = remember(imageSize, containerSize) {
-                                                            if (imageSize.width > 0 && imageSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
-                                                                val scaleFactor = minOf(
-                                                                    containerSize.width / imageSize.width,
-                                                                    containerSize.height / imageSize.height
-                                                                )
-                                                                imageSize.width * scaleFactor
-                                                            } else {
-                                                                containerSize.width
-                                                            }
-                                                        }
-
-                                                        val actualImageHeight = remember(imageSize, containerSize) {
-                                                            if (imageSize.width > 0 && imageSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
-                                                                val scaleFactor = minOf(
-                                                                    containerSize.width / imageSize.width,
-                                                                    containerSize.height / imageSize.height
-                                                                )
-                                                                imageSize.height * scaleFactor
-                                                            } else {
-                                                                containerSize.height
-                                                            }
-                                                        }
-
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .fillMaxSize()
-                                                                .pointerInput(Unit) {
-                                                                    detectTapGestures(
-                                                                        onDoubleTap = {
-                                                                            coroutineScope.launch {
-                                                                                if (scale.value > 1f) {
-                                                                                    launch { scale.animateTo(1f) }
-                                                                                    launch { offsetX.animateTo(0f) }
-                                                                                    launch { offsetY.animateTo(0f) }
-                                                                                } else {
-                                                                                    launch { scale.animateTo(2.5f) }
-                                                                                }
-                                                                            }
-                                                                        },
-                                                                        onTap = {
-                                                                            closeWithAnimation()
-                                                                        }
-                                                                    )
-                                                                }
-                                                                .pointerInput(actualImageWidth, actualImageHeight) {
-                                                                    awaitEachGesture {
-                                                                        awaitFirstDown(requireUnconsumed = false)
-                                                                        var zoomActive = false
-                                                                        var isVerticalSwipe = false
-                                                                        var firstPan = true
-
-                                                                        do {
-                                                                            val event = awaitPointerEvent()
-                                                                            val zoom = event.calculateZoom()
-                                                                            val pan = event.calculatePan()
-
-                                                                            if (scale.value > 1f) {
-                                                                                event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                                                                val newScale = (scale.value * zoom).coerceIn(1f, 5f)
-                                                                                coroutineScope.launch { scale.snapTo(newScale) }
-
-                                                                                if (scale.value > 1f) {
-                                                                                    val maxX = ((actualImageWidth * (scale.value - 1f)) / 2f).coerceAtLeast(0f)
-                                                                                    val maxY = ((actualImageHeight * (scale.value - 1f)) / 2f).coerceAtLeast(0f)
-                                                                                    val newX = offsetX.value + pan.x
-                                                                                    val newY = offsetY.value + pan.y
-
-                                                                                    coroutineScope.launch {
-                                                                                        offsetX.snapTo(newX.coerceIn(-maxX, maxX))
-                                                                                        offsetY.snapTo(newY.coerceIn(-maxY, maxY))
-                                                                                    }
-                                                                                }
-                                                                            } else {
-                                                                                if (zoom !in 0.99f..1.01f) {
-                                                                                    zoomActive = true
-                                                                                }
-                                                                                if (pan != Offset.Zero && !zoomActive) {
-                                                                                    if (firstPan) {
-                                                                                        isVerticalSwipe = abs(pan.y) > abs(pan.x)
-                                                                                        firstPan = false
-                                                                                    }
-                                                                                    if (isVerticalSwipe) {
-                                                                                        event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                                                                        val targetY = swipeDismissY.value + pan.y
-                                                                                        if (targetY > 0f) {
-                                                                                            coroutineScope.launch { swipeDismissY.snapTo(targetY) }
-                                                                                        }
-                                                                                    }
-                                                                                }
-                                                                                if (zoomActive) {
-                                                                                    val newScale = (scale.value * zoom).coerceIn(1f, 5f)
-                                                                                    coroutineScope.launch { scale.snapTo(newScale) }
-                                                                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                                                                }
-                                                                            }
-                                                                        } while (event.changes.any { it.pressed })
-
-                                                                        if (scale.value < 1.05f) {
-                                                                            coroutineScope.launch {
-                                                                                scale.animateTo(1f)
-                                                                                offsetX.animateTo(0f)
-                                                                                offsetY.animateTo(0f)
-                                                                            }
-                                                                        }
-                                                                        if (swipeDismissY.value > 180f) {
-                                                                            closeWithAnimation()
-                                                                        } else {
-                                                                            coroutineScope.launch {
-                                                                                swipeDismissY.animateTo(0f)
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                        ) {
-                                                            AsyncImage(
-                                                                model = dynamicMediaUrls[page].mediaLink,
-                                                                contentDescription = null,
-                                                                onState = { state ->
-                                                                    if (state is AsyncImagePainter.State.Success) {
-                                                                        imageSize = state.painter.intrinsicSize
-                                                                    }
-                                                                },
-                                                                modifier = Modifier
-                                                                    .fillMaxSize()
-                                                                    .onGloballyPositioned { coordinates ->
-                                                                        containerSize = androidx.compose.ui.geometry.Size(
-                                                                            coordinates.size.width.toFloat(),
-                                                                            coordinates.size.height.toFloat()
-                                                                        )
-                                                                    }
-                                                                    .graphicsLayer(
-                                                                        scaleX = scale.value,
-                                                                        scaleY = scale.value,
-                                                                        translationX = offsetX.value,
-                                                                        translationY = offsetY.value
-                                                                    ),
-                                                                contentScale = ContentScale.Fit
-                                                            )
-                                                        }
-                                                    }
-                                                }
-
-                                                if (transitionAnim.value > 0.1f) {
-                                                    Column(
-                                                        modifier = Modifier
-                                                            .align(Alignment.BottomStart)
-                                                            .padding(bottom = 24.dp)
-                                                            .alpha(transitionAnim.value * (1f - (swipeDismissY.value / 400f)).coerceIn(0f, 1f))
-                                                            .fillMaxWidth(),
-                                                        horizontalAlignment = Alignment.CenterHorizontally
-                                                    ) {
-                                                        val currentMedia = dynamicMediaUrls[fullScreenPagerState.currentPage]
-                                                        val specificSource = currentMedia.message?.source ?: "-"
-                                                        val specificTime = currentMedia.message?.time ?: title.eventTime
-                                                        val link = currentMedia.message?.link
-
-                                                        CustomTextButton(
-                                                            inputs = TextButtonInputs(
-                                                                text = "$specificSource • ${getFormattedTimeUnix(specificTime)}",
-                                                                action = { link?.let { handler.openUri(it) } }
-                                                            ),
-                                                            defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                            shape = Shapes.large
-                                                        )
-
-                                                        Spacer(modifier = Modifier.height(16.dp))
-
-                                                        DynamicPagerIndicator(
-                                                            currentPage = fullScreenPagerState.currentPage,
-                                                            pageCount = dynamicMediaUrls.size
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        )
                                     }
                                 }
 
@@ -1350,7 +1016,9 @@ private fun ExpandedCardContent(
                                                     text = keyword,
                                                     action = {
                                                         onBanTheme(keyword)
-                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        haptics.performHapticFeedback(
+                                                            HapticFeedbackType.LongPress
+                                                        )
                                                     },
                                                     toast = stringResource(R.string.titles_card_banned)
                                                 ),
@@ -1426,13 +1094,34 @@ private fun ExpandedCardContent(
                                         Column(modifier = Modifier.fillMaxWidth()) {
                                             ExpandableContainer(visible = state) {
                                                 Box(modifier = Modifier.padding(bottom = 16.dp)) {
-                                                    FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 5) {
+                                                    FlowRow(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.spacedBy(
+                                                            8.dp
+                                                        ),
+                                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                                        maxItemsInEachRow = 5
+                                                    ) {
                                                         messages.forEach { item ->
-                                                            val padding = remember(item.originalText.length, minLength, maxLength) {
-                                                                if (maxLength == minLength) 12.dp + (48.dp * (item.originalText.length / 200f).coerceIn(0f, 1f))
+                                                            val padding = remember(
+                                                                item.originalText.length,
+                                                                minLength,
+                                                                maxLength
+                                                            ) {
+                                                                if (maxLength == minLength) 12.dp + (48.dp * (item.originalText.length / 200f).coerceIn(
+                                                                    0f,
+                                                                    1f
+                                                                ))
                                                                 else 12.dp + (48.dp * ((item.originalText.length - minLength).toFloat() / (maxLength - minLength)))
                                                             }
-                                                            CustomTextButton(inputs = TextButtonInputs(getFormattedTimeUnix(item.time), { handler.openUri(item.link) }), horizontalPadding = padding, defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer, shape = Shapes.large)
+                                                            CustomTextButton(
+                                                                inputs = TextButtonInputs(
+                                                                    getFormattedTimeUnix(item.time),
+                                                                    { handler.openUri(item.link) }),
+                                                                horizontalPadding = padding,
+                                                                defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                                shape = Shapes.large
+                                                            )
                                                         }
                                                     }
                                                 }
@@ -1469,7 +1158,19 @@ private fun ExpandedCardContent(
                     .wrapContentHeight()
                     .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     AnimatedSegmentedControl(
-                        items = listOf(stringResource(R.string.titles_card_text) to { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, stringResource(R.string.titles_card_source) to { coroutineScope.launch { pagerState.animateScrollToPage(1) } }),
+                        items = listOf(
+                            stringResource(R.string.titles_card_text) to {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(
+                                        0
+                                    )
+                                }
+                            },
+                            stringResource(R.string.titles_card_source) to {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(1)
+                                }
+                            }),
                         selectedIndex = pagerState.currentPage,
                         modifier = Modifier.padding(bottom = 8.dp),
                         backgroundColor = bottomPanelItemsColor,
@@ -1479,7 +1180,12 @@ private fun ExpandedCardContent(
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     CustomIconButton(
-                        inputs = IconButtonInputs(Icons.Default.MoreVert, { dropdownTransitionState.targetState = !dropdownTransitionState.currentState }),
+                        inputs = IconButtonInputs(
+                            Icons.Default.MoreVert,
+                            {
+                                dropdownTransitionState.targetState =
+                                    !dropdownTransitionState.currentState
+                            }),
                         modifier = Modifier
                             .size(40.dp)
                             .padding(bottom = 6.dp)
@@ -1489,12 +1195,23 @@ private fun ExpandedCardContent(
                             },
                         iconModifier = Modifier.size(18.dp),
                         defaultBackgroundColor = bottomPanelItemsColor,
-                        transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.7f),
+                        transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(
+                            alpha = 0.7f
+                        ),
                         transitionState = dropdownTransitionState,
                         shape = Shapes.large
                     )
                     if (dropdownTransitionState.currentState || dropdownTransitionState.targetState) {
-                        CustomDropdown(transitionState = dropdownTransitionState, buttons = buttons, inputBounds = buttonBounds, config = config, density = density, onDismissRequest = { dropdownTransitionState.targetState = false }, arrowPosition = ArrowPosition.BottomRight, backgroundColor = MaterialTheme.colorScheme.secondaryContainer)
+                        CustomDropdown(
+                            transitionState = dropdownTransitionState,
+                            buttons = buttons,
+                            inputBounds = buttonBounds,
+                            config = config,
+                            density = density,
+                            onDismissRequest = { dropdownTransitionState.targetState = false },
+                            arrowPosition = ArrowPosition.BottomRight,
+                            backgroundColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
                     }
                 }
             }
