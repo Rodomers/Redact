@@ -23,6 +23,7 @@ class RssFetcher(
     enableProxy: Boolean = false
 ) {
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.HUB_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = false)
+    private val minifluxClient = MinifluxClient(httpClient)
 
     suspend fun fetchAndStoreAll(messAliveTime: Long = 0L, maxTimeHours: Int = 168): FetchResult {
         val sourceList = try {
@@ -37,100 +38,112 @@ class RssFetcher(
         var feedsNotModified = 0
         val errors = mutableListOf<String>()
 
-        val rfc1123Format = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US).apply {
-            timeZone = java.util.TimeZone.getTimeZone("GMT")
+        val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
         }
 
         for (source in sourceList) {
+            val isTelegram = SourceType.fromId(source.sourceType) == SourceType.TELEGRAM
+            var processedSuccessfully = false
+
             try {
-                var fetchUrl = source.feedUrl
-                val lastUpdated = source.lastSyncTime
-                val currentTime = System.currentTimeMillis()
-                val timeSinceLastUpdate = currentTime - lastUpdated
+                val feedId = minifluxClient.getFeedIdByUrl(source.feedUrl)
+                    ?: throw RuntimeException("Feed ID not found in Miniflux")
 
-                if (lastUpdated > 0L && timeSinceLastUpdate < 15 * 60 * 1000L) {
+                val entries = minifluxClient.getEntries(feedId, source.lastSyncTime, 100)
+
+                if (entries.isEmpty()) {
                     feedsNotModified++
                     feedsProcessed++
                     continue
                 }
 
-                val sourceUpdateDelta: Long? = if (lastUpdated == 0L) null else timeSinceLastUpdate / 1000
-
-                if (SourceType.fromId(source.sourceType) == SourceType.TELEGRAM) {
-                    val channelName = fetchUrl.split("/").last().trim()
-                    fetchUrl = buildTelegramRssUrl(channelName)
-                    if (sourceUpdateDelta != null) fetchUrl = "$fetchUrl&filter_time=${sourceUpdateDelta}"
-                }
-
-                val headers = mutableMapOf<String, String>()
-
-                if (lastUpdated > 0L) {
-                    headers["If-Modified-Since"] = rfc1123Format.format(Date(lastUpdated))
-                }
-
-                source.etagHash?.let { etag ->
-                    headers["If-None-Match"] = etag
-                }
-
-                val response = httpClient.request("GET", fetchUrl, null, headers)
-
-                if (response.status == 304) {
-                    feedsNotModified++
-                    feedsProcessed++
-                    continue
-                }
-
-                if (response.status != 200) {
-                    errors.add("Ошибка HTTP ${response.status} при загрузке ${source.feedUrl}")
-                    continue
-                }
-
-                val newEtag = response.headers.entries.firstOrNull { it.key.equals("ETag", ignoreCase = true) }?.value
-                if (!newEtag.isNullOrBlank() && newEtag != source.etagHash) {
-                    MewsRepository.updateSourceEtag(source.id, newEtag)
-                }
-
-                val xmlContent = response.body
-                if (xmlContent.isBlank()) continue
-
-                val doc = Jsoup.parse(xmlContent, fetchUrl, Parser.xmlParser())
-
-                if (doc.selectFirst("rss, feed, channel") == null) throw RuntimeException("Invalid feed format")
-
-                val items = parseRssItems(doc)
-
-                for (item in items) {
-                    val link = item.link ?: continue
-
-                    if (MewsRepository.getMessageByLink(link) != null) {
+                for (entry in entries) {
+                    if (MewsRepository.getMessageByLink(entry.url) != null) {
                         itemsSkipped++
                         continue
                     }
 
-                    val time = item.pubDateMillis ?: System.currentTimeMillis()
-                    val maxAgeMillis = maxTimeHours * 60 * 60 * 1000L
+                    val pubTime = try { isoFormat.parse(entry.published_at)?.time ?: System.currentTimeMillis() } catch (_: Exception) { System.currentTimeMillis() }
+                    var text = entry.content.trim()
 
-                    if ((System.currentTimeMillis() - time) > maxAgeMillis) {
-                        itemsSkipped++
-                        continue
-                    }
-
-                    var text = buildMessageText(item)
                     if (text.length < 300) {
-                        val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), link, httpClient)
-                        if (!fullText.isNullOrBlank()) {
-                            text = "${item.title ?: ""}\n\n$fullText".trim()
+                        val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), entry.url, httpClient)
+                        if (!fullText.isNullOrBlank()) text = "${entry.title}\n\n$fullText".trim()
+                    }
+
+                    val mediaUrls = mutableSetOf<String>()
+                    if (entry.content.isNotBlank()) {
+                        val htmlDoc = Jsoup.parse(entry.content)
+                        htmlDoc.select("img, video").forEach { el ->
+                            val src = el.attr("src")
+                            if (src.isNotBlank()) mediaUrls.add(src)
                         }
                     }
-                    MewsRepository.addMessage(sourceId = source.id, messageTime = time, link = link, messageText = text, mediaUrls = item.mediaUrls)
+
+                    MewsRepository.addMessage(source.id, pubTime, entry.url, text, mediaUrls = mediaUrls.toList())
                     itemsAdded++
                 }
-                feedsProcessed++
 
-            } catch (e: Exception) {
-                errors.add("Ошибка при обработке RSS (id=${source.id}, link=${source.feedUrl}): ${e.message}")
-            } finally {
-                MewsRepository.messageTimeKill(864000)
+                feedsProcessed++
+                processedSuccessfully = true
+
+            } catch (minifluxException: Exception) {
+                errors.add("Miniflux недоступен для источника ${source.id} (${minifluxException.message}). Запуск локального парсинга.")
+            }
+
+            if (!processedSuccessfully) {
+                try {
+                    var fetchUrl = source.feedUrl
+
+                    if (isTelegram) {
+                        val channelName = source.feedUrl.split("/").last().trim()
+                        fetchUrl = buildTelegramRssUrl(channelName)
+                        val lastUpdated = source.lastSyncTime
+                        if (lastUpdated > 0L) {
+                            val delta = (System.currentTimeMillis() - lastUpdated) / 1000
+                            fetchUrl = "$fetchUrl&filter_time=$delta"
+                        }
+                    }
+
+                    val response = httpClient.request("GET", fetchUrl, null, emptyMap())
+                    if (response.status != 200) {
+                        errors.add("Локальный фолбек также отклонен: HTTP ${response.status} для ${source.feedUrl}")
+                        continue
+                    }
+
+                    val xmlContent = response.body
+                    if (xmlContent.isBlank()) continue
+
+                    val doc = Jsoup.parse(xmlContent, fetchUrl, Parser.xmlParser())
+                    val items = parseRssItems(doc)
+
+                    for (item in items) {
+                        val link = item.link ?: continue
+                        if (MewsRepository.getMessageByLink(link) != null) {
+                            itemsSkipped++
+                            continue
+                        }
+
+                        val time = item.pubDateMillis ?: System.currentTimeMillis()
+                        var text = buildMessageText(item)
+
+                        if (text.length < 300) {
+                            val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), link, httpClient)
+                            if (!fullText.isNullOrBlank()) text = "${item.title ?: ""}\n\n$fullText".trim()
+                        }
+
+                        MewsRepository.addMessage(source.id, time, link, text, mediaUrls = item.mediaUrls)
+                        itemsAdded++
+                    }
+
+                    feedsProcessed++
+
+                } catch (fallbackException: Exception) {
+                    errors.add("Критический сбой всех уровней парсинга для источника ${source.id}: ${fallbackException.message}")
+                } finally {
+                    MewsRepository.messageTimeKill(864000)
+                }
             }
         }
         return FetchResult(feedsProcessed, itemsAdded, itemsSkipped, feedsNotModified, errors)
