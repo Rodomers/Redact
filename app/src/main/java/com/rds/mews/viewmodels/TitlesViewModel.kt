@@ -172,6 +172,7 @@ class TitlesViewModel(
     private val _dynamicMediaUrls = MutableStateFlow<Map<Long, List<MediaWithSource>>>(emptyMap())
     val dynamicMediaUrls: StateFlow<Map<Long, List<MediaWithSource>>> = _dynamicMediaUrls.asStateFlow()
 
+
     fun toggleEmptyMess(newValue: Boolean) {
         _showEmptyMessage.value = newValue
     }
@@ -355,69 +356,67 @@ class TitlesViewModel(
         }
     }
 
-    fun loadDynamicMediaUrls(titleId: Long) {
-        if (_dynamicMediaUrls.value.containsKey(titleId)) return
+    fun loadDynamicMediaUrls(titleId: Long, fromZero: Boolean = false) {
+        if (fromZero) _dynamicMediaUrls.update { currentMap ->
+            currentMap - titleId
+        }
+        else if (_dynamicMediaUrls.value.containsKey(titleId)) return
 
         val targetTitle = _titles.value.find { it.id == titleId } ?: return
         val mediaObjects = targetTitle.mediaUrls
 
         val targetState = _titleCardStates.value.find { it.id == titleId }
         val sources = targetState?.sources
+        val allMessages = sources?.flatMap { it.messages } ?: emptyList()
+        val telegramLinks = allMessages.filter { it.link.contains("t.me") }
+
+        val validOriginals = mediaObjects.map { media ->
+            MediaWithSource(
+                mediaLink = media.mediaLink.substringBefore("?"),
+                message = media.message
+            )
+        }.filter { media ->
+            val cleanUrl = media.mediaLink.lowercase()
+            !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") &&
+                    !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv") &&
+                    !cleanUrl.contains("telesco.pe") && !cleanUrl.contains("cdn-telegram.org")
+        }.distinctBy { it.mediaLink }
+
+        if (telegramLinks.isEmpty()) {
+            _dynamicMediaUrls.update { it + (titleId to validOriginals) }
+            return
+        }
 
         viewModelScope.launch {
-            val allMessages = sources?.flatMap { it.messages } ?: emptyList()
-            val telegramLinks = allMessages.filter { it.link.contains("t.me") }
-
-            val initialProcessedUrls = mediaObjects.map { media ->
-                MediaWithSource(
-                    mediaLink = media.mediaLink.substringBefore("?"),
-                    message = media.message
-                )
-            }.filter { media ->
-                val cleanUrl = media.mediaLink.lowercase()
-                !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
-            }.distinctBy { it.mediaLink }
-
-            _dynamicMediaUrls.update { it + (titleId to initialProcessedUrls) }
-
-            if (telegramLinks.isEmpty()) return@launch
-
             withContext(Dispatchers.IO) {
                 val scraper = TelegramRssClient(repository.proxyEnabled.value)
                 telegramLinks.forEach { message ->
                     launch {
                         try {
-                            val result = scraper.scrapeEmbedMedia(message.link)
+                            val scrapedUrls = scraper.scrapeEmbedMedia(message.link)
                                 .map { MediaWithSource(it, message) }
+                                .filter { media ->
+                                    val cleanUrl = media.mediaLink.lowercase()
+                                    !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") &&
+                                            !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
+                                }
 
-                            if (result.isNotEmpty()) {
+                            if (scrapedUrls.isNotEmpty()) {
                                 _dynamicMediaUrls.update { currentMap ->
-                                    val existingList = currentMap[titleId] ?: emptyList()
-                                    val allScrapedLinks = (existingList + result)
-                                        .filter { !it.mediaLink.contains("telesco.pe") }
-                                        .groupBy { it.message?.link }
-
-                                    val mergedList = mediaObjects.flatMap { originalMedia ->
-                                        if (originalMedia.mediaLink.contains("telesco.pe")) {
-                                            val scraped = allScrapedLinks[originalMedia.message?.link]
-                                            scraped ?: listOf(originalMedia)
-                                        } else {
-                                            listOf(originalMedia)
-                                        }
-                                    }.map { media ->
-                                        MediaWithSource(
-                                            mediaLink = media.mediaLink.substringBefore("?"),
-                                            message = media.message
-                                        )
-                                    }.filter { media ->
-                                        val cleanUrl = media.mediaLink.lowercase()
-                                        !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") && !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
-                                    }.distinctBy { it.mediaLink }
-
-                                    currentMap + (titleId to mergedList)
+                                    val existingList = currentMap[titleId] ?: validOriginals
+                                    val updatedList = (existingList + scrapedUrls).distinctBy { it.mediaLink }
+                                    currentMap + (titleId to updatedList)
+                                }
+                            } else {
+                                _dynamicMediaUrls.update { currentMap ->
+                                    if (!currentMap.containsKey(titleId)) currentMap + (titleId to validOriginals) else currentMap
                                 }
                             }
-                        } catch (e: Exception) { }
+                        } catch (e: Exception) {
+                            _dynamicMediaUrls.update { currentMap ->
+                                if (!currentMap.containsKey(titleId)) currentMap + (titleId to validOriginals) else currentMap
+                            }
+                        }
                     }
                 }
             }

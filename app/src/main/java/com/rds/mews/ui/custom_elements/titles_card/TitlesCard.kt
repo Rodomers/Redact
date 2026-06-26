@@ -103,6 +103,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import coil.size.Precision
 import com.rds.mews.R
 import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.localcore.IconButtonInputs
@@ -660,9 +663,9 @@ private fun ExpandedCardContent(
     var hasTriggeredHaptic by remember { mutableStateOf(false) }
 
     LaunchedEffect(title.id, sources) {
-        if (dynamicMediaUrls == null) {
-            onLoadMediaUrls()
-        }
+//        if (dynamicMediaUrls == null) {
+//        }
+        onLoadMediaUrls()
     }
 
     LaunchedEffect(imagePagerState.currentPage) {
@@ -964,7 +967,12 @@ private fun ExpandedCardContent(
                                                     .clickable { onImageClicked(true) }
                                             ) {
                                                 AsyncImage(
-                                                    model = dynamicMediaUrls[pageIndex].mediaLink,
+                                                    model = ImageRequest.Builder(context)
+                                                        .data(dynamicMediaUrls[pageIndex].mediaLink)
+                                                        .precision(Precision.EXACT)
+                                                        .diskCachePolicy(CachePolicy.ENABLED)
+                                                        .memoryCachePolicy(CachePolicy.ENABLED)
+                                                        .build(),
                                                     contentDescription = null,
                                                     modifier = Modifier
                                                         .fillMaxSize()
@@ -974,7 +982,12 @@ private fun ExpandedCardContent(
                                                 )
 
                                                 AsyncImage(
-                                                    model = dynamicMediaUrls[pageIndex].mediaLink,
+                                                    model = ImageRequest.Builder(context)
+                                                        .data(dynamicMediaUrls[pageIndex].mediaLink)
+                                                        .precision(Precision.EXACT)
+                                                        .diskCachePolicy(CachePolicy.ENABLED)
+                                                        .memoryCachePolicy(CachePolicy.ENABLED)
+                                                        .build(),
                                                     contentDescription = null,
                                                     modifier = Modifier.fillMaxSize(),
                                                     contentScale = ContentScale.Fit
