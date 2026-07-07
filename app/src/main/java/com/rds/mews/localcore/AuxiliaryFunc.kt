@@ -18,7 +18,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -142,7 +141,7 @@ fun setRssUpdate(context: Context, sources: Boolean = false, intervalMin: Int = 
     )
 }
 
-fun setParserUpdate(context: Context, isImmediateSetup: Boolean = false, intervalMin: Int = 30) {
+fun setParserUpdate(context: Context, isImmediateSetup: Boolean = false, intervalMin: Long = 30) {
     val constraints = Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED)
         .build()

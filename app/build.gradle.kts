@@ -15,12 +15,13 @@ kotlin {
 
 android {
     namespace = "com.rds.mews"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.rds.mews"
         minSdk = 26
-        targetSdk = 36
+        //noinspection EditedTargetSdkVersion
+        targetSdk = 37
         versionCode = 100002
         versionName = "1.0.0-beta.2"
 
@@ -30,6 +31,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -53,6 +55,18 @@ android {
             version = "3.22.1"
         }
     }
+    // 4 кб файлик выкинул
+    packaging {
+        resources {
+            excludes += "**/dump_syms.bin"
+            excludes += "**/linux/dump_syms.bin"
+            excludes += "**/linux/**/dump_syms.bin"
+        }
+    }
+
+    androidResources {
+        ignoreAssetsPattern = "!.*/dump_syms.bin:!.*/linux/dump_syms.bin"
+    }
 }
 
 dependencies {
@@ -74,23 +88,23 @@ dependencies {
     implementation(libs.androidx.runtime)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.ui.graphics)
-    implementation(libs.ui)
+//    implementation(libs.ui)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
-    implementation(libs.ktor.serialization.kotlinx.json.v237)
-    implementation(libs.kotlinx.serialization.json.v163)
+//    implementation(libs.ktor.serialization.kotlinx.json.v237)
+//    implementation(libs.kotlinx.serialization.json.v163)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.material3)
     implementation(libs.firebase.crashlytics.buildtools)
     implementation(libs.androidx.foundation.layout)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.glance)
-    implementation(libs.androidx.compose.animation)
+//    implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.animation.core)
     implementation(libs.androidx.compose.ui.text)
-    implementation(libs.androidx.compose.ui)
+//    implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.animation)
     implementation(libs.androidx.compose.ui.ui)
     implementation(libs.compose.markdown)

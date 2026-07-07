@@ -355,7 +355,7 @@ object MewsRepository {
         }
 
         AlarmScheduler.cancel(context, true)
-        setParserUpdate(context, intervalMin = rssUpdateInterval.value, isImmediateSetup = true)
+        setParserUpdate(context, intervalMin = rssUpdateInterval.value.toLong(), isImmediateSetup = true)
     }
 
     suspend fun getSource(id: Long): RSS? = withContext(Dispatchers.IO) {
@@ -663,7 +663,7 @@ object MewsRepository {
         externalScope.launch {
             settingsManager.updateSettings { it.copy(rssUpdateInterval = newValue) }
             AlarmScheduler.cancel(context, true)
-            setParserUpdate(context, intervalMin = newValue)
+            setParserUpdate(context, intervalMin = newValue.toLong())
         }
     }
 

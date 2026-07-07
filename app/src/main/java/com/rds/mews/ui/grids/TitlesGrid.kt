@@ -403,7 +403,8 @@ fun TitlesGrid(
                         .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
                     isExpanded = groupStates.find { it.group == date }?.expanded ?: true,
                     onHeaderClick = { changeGroupState(date) },
-                    expandable = lastTitlesUpdateExists()
+                    expandable = lastTitlesUpdateExists(),
+                    bottomPadding = 0.dp
                 )
                 globalIndex++
                 val currentGroupStartIndex = globalIndex

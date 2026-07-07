@@ -958,13 +958,14 @@ private fun ExpandedCardContent(
                                             state = imagePagerState,
                                             modifier = Modifier.fillMaxSize(),
                                         ) { pageIndex ->
+                                            val isImageFullOpened = clickedImageIndex == pageIndex
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
                                                     .onGloballyPositioned { coordinates ->
                                                         imageBoundsMap[pageIndex] = coordinates.boundsInWindow()
                                                     }
-                                                    .clickable { onImageClicked(true) }
+                                                    .clickable(enabled = !isImageFullOpened) { onImageClicked(true) }
                                             ) {
                                                 AsyncImage(
                                                     model = ImageRequest.Builder(context)
@@ -989,7 +990,11 @@ private fun ExpandedCardContent(
                                                         .memoryCachePolicy(CachePolicy.ENABLED)
                                                         .build(),
                                                     contentDescription = null,
-                                                    modifier = Modifier.fillMaxSize(),
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .graphicsLayer {
+                                                            alpha = if (isImageFullOpened) 0f else 1f
+                                                        },
                                                     contentScale = ContentScale.Fit
                                                 )
                                             }
@@ -1098,6 +1103,7 @@ private fun ExpandedCardContent(
                             val allMessages = remember(sources) { sources.flatMap { it.messages } }
                             val minLength = remember(allMessages) { allMessages.minOfOrNull { it.originalText.length } ?: 0 }
                             val maxLength = remember(allMessages) { allMessages.maxOfOrNull { it.originalText.length } ?: 1 }
+                            val headerColor = MaterialTheme.colorScheme.secondaryContainer
                             LazyVerticalGrid(modifier = Modifier
                                 .padding(horizontal = 8.dp)
                                 .fillMaxWidth(), columns = GridCells.Fixed(1)) {
@@ -1105,11 +1111,11 @@ private fun ExpandedCardContent(
                                     val source = pack.source
                                     val state = pack.state
                                     val messages = pack.messages
-                                    customHeader(text = source, isExpanded = state, onHeaderClick = { changeSourceState(title.id, source) }, fontSize = 18.sp)
+                                    customHeader(text = source, isExpanded = state, onHeaderClick = { changeSourceState(title.id, source) }, fontSize = 16.sp, buttonsColor = headerColor)
                                     item(key = "${title.id}_$source") {
                                         Column(modifier = Modifier.fillMaxWidth()) {
                                             ExpandableContainer(visible = state) {
-                                                Box(modifier = Modifier.padding(bottom = 16.dp)) {
+                                                Box(modifier = Modifier.padding(start = 16.dp, bottom = 16.dp)) {
                                                     FlowRow(
                                                         modifier = Modifier.fillMaxWidth(),
                                                         horizontalArrangement = Arrangement.spacedBy(
@@ -1135,7 +1141,7 @@ private fun ExpandedCardContent(
                                                                     getFormattedTimeUnix(item.time),
                                                                     { handler.openUri(item.link) }),
                                                                 horizontalPadding = padding,
-                                                                defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                                defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.9f),
                                                                 shape = Shapes.large
                                                             )
                                                         }

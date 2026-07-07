@@ -53,7 +53,6 @@ class BubblePopupPositionProvider(
         val anchorCenterX = this.anchorBounds.left + this.anchorBounds.width / 2f
         val anchorCenterY = this.anchorBounds.top + this.anchorBounds.height / 2f
 
-        // Выполняем все вычисления в Float для точности
         val popupX: Float
         val popupY: Float
 
@@ -121,7 +120,6 @@ class BubblePopupPositionProvider(
             }
         }
 
-        // Округляем до ближайшего целого числа перед возвратом IntOffset
         return IntOffset(popupX.roundToInt(), popupY.roundToInt())
     }
 }

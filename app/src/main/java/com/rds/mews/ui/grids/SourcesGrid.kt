@@ -211,7 +211,8 @@ fun SourcesGrid(
             customHeader(
                 textId = sourcesTypeInterpreter(source),
                 isExpanded = isExpanded,
-                onHeaderClick = { changeGroupState(source) }
+                onHeaderClick = { changeGroupState(source) },
+                modifier = Modifier.padding(bottom = 6.dp)
             )
 
             items(

@@ -104,6 +104,7 @@ fun FullScreenImageViewer(
         val transitionAnim = remember { Animatable(0f) }
         var isClosing by remember { mutableStateOf(false) }
         val swipeDismissY = remember { Animatable(0f) }
+        var isUiVisible by remember { mutableStateOf(true) }
 
         LaunchedEffect(Unit) {
             transitionAnim.animateTo(
@@ -136,12 +137,11 @@ fun FullScreenImageViewer(
         BackHandler { closeWithAnimation() }
 
         val dynamicThemeSurfaceColor = MaterialTheme.colorScheme.surface
-        val backgroundAlpha = (transitionAnim.value * 0.98f) * (1f - (abs(swipeDismissY.value) / 600f)).coerceIn(0f, 1f)
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(dynamicThemeSurfaceColor.copy(alpha = backgroundAlpha))
+                .background(dynamicThemeSurfaceColor)
         ) {
             val targetBounds = imageBoundsMap[fullScreenPagerState.currentPage] ?: Rect.Zero
             val screenWidth = with(density) { config.screenWidthDp.dp.toPx() }
@@ -188,20 +188,34 @@ fun FullScreenImageViewer(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(Unit) {
+                            .pointerInput(actualImageWidth, actualImageHeight, containerSize) {
                                 detectTapGestures(
-                                    onDoubleTap = {
+                                    onDoubleTap = { tapOffset ->
                                         coroutineScope.launch {
-                                            if (scale.value > 1f) {
+                                            if (scale.value > 1.05f) {
                                                 launch { scale.animateTo(1f) }
                                                 launch { offsetX.animateTo(0f) }
                                                 launch { offsetY.animateTo(0f) }
                                             } else {
-                                                launch { scale.animateTo(2.5f) }
+                                                val targetScale = 2.5f
+                                                val containerCenter = Offset(containerSize.width / 2f, containerSize.height / 2f)
+                                                val tapFromCenter = tapOffset - containerCenter
+
+                                                val targetX = -tapFromCenter.x * (targetScale - 1f)
+                                                val targetY = -tapFromCenter.y * (targetScale - 1f)
+
+                                                val maxX = maxOf(0f, (actualImageWidth * targetScale - containerSize.width) / 2f)
+                                                val maxY = maxOf(0f, (actualImageHeight * targetScale - containerSize.height) / 2f)
+
+                                                launch { scale.animateTo(targetScale) }
+                                                launch { offsetX.animateTo(targetX.coerceIn(-maxX, maxX)) }
+                                                launch { offsetY.animateTo(targetY.coerceIn(-maxY, maxY)) }
                                             }
                                         }
                                     },
-                                    onTap = { closeWithAnimation() }
+                                    onTap = {
+                                        isUiVisible = !isUiVisible
+                                    }
                                 )
                             }
                             .pointerInput(actualImageWidth, actualImageHeight) {
@@ -297,7 +311,7 @@ fun FullScreenImageViewer(
             }
 
             AnimatedVisibility(
-                visible = transitionAnim.value > 0.05f && abs(swipeDismissY.value) < 100f,
+                visible = isUiVisible && transitionAnim.value > 0.05f && abs(swipeDismissY.value) < 100f,
                 enter = fadeIn(animationSpec = tween(300)),
                 exit = fadeOut(animationSpec = tween(200)),
                 modifier = Modifier

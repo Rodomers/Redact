@@ -275,7 +275,6 @@ fun MewsTheme(
             dynamicColor &&
             appTheme == AppTheme.MATERIAL
 
-    // 3. Выбираем цветовую схему
     val colorScheme = when {
         useDynamicColor -> {
             if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

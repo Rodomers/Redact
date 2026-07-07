@@ -661,6 +661,7 @@ fun SettingsGrid(
                                 initialSelectedIndex = state.darkThemes.indexOfFirst(state.darkTheme::equals)
                             )
                         }
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
@@ -763,6 +764,7 @@ fun SettingsGrid(
                                 transitionState = autoUpdateBtnState
                             )
                         }
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
@@ -839,6 +841,7 @@ fun SettingsGrid(
                                 )
                             }
                         }
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }

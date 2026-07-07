@@ -67,7 +67,7 @@ class ParserWorker(
                 val httpClient = SharedHttpClient.createInstance(
                     MewsRepository.HUB_ADDRESS,
                     MewsRepository.SERVER_KEY,
-                    false
+                    enableProxy
                 )
                 val minifluxClient = MinifluxClient(httpClient)
                 val sourcesQueue = MewsRepository.getSourcesQueue()
@@ -77,7 +77,7 @@ class ParserWorker(
                         processSource(
                         source,
                         minifluxClient,
-                        false
+                        enableProxy
                     )
                 }
 
