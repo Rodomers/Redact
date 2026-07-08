@@ -557,6 +557,16 @@ object MewsRepository {
         }
     }
 
+    suspend fun getProcessedMessageIds(sinceMs: Long): Set<Long> = withContext(Dispatchers.IO) {
+        val recentTitles = titleDao.getChildfreeTitlesFlow().first()
+            .filter { titleDao.getChildTitle(it.id) == null && it.eventTime >= sinceMs && it.status != TitleStatus.PROCESSING.statusId }
+        val ids = mutableSetOf<Long>()
+        for (title in recentTitles) {
+            ids.addAll(titleDao.getMessageIdsForTitle(title.id))
+        }
+        ids
+    }
+
     suspend fun addTitle(
         newTimeVal: Long,
         newTitle: String,

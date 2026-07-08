@@ -350,11 +350,20 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             val rawMessages = if (!isRetryMode) {
                 val msgs = MewsRepository.getUniqueMessagesList(messageSeconds)
-                if (msgs.isEmpty()) {
+
+                val processedMessageIds = try {
+                    MewsRepository.getProcessedMessageIds(System.currentTimeMillis() - (72 * 60 * 60 * 1000L))
+                } catch (_: Exception) {
+                    emptySet()
+                }
+
+                val finalMsgs = msgs.filter { it.id !in processedMessageIds }
+
+                if (finalMsgs.isEmpty()) {
                     safeReadyFunc(readyFunc)
                     return SummarizationResult.Failure(SummarizationErrorType.NO_NEWS_TO_ANALYZE)
                 }
-                msgs.map { it.copy(originalText = "") }
+                finalMsgs.map { it.copy(originalText = "") }
             } else { emptyList() }
 
             val currentLanguage = try {
