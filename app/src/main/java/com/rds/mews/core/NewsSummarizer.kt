@@ -698,7 +698,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         val unique = mutableListOf<Message>()
         messages.forEach { msg ->
             val cleanMsg = TextSanitizer.sanitize(msg.cleanText)
-            val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.cleanText), cleanMsg, 0.95) }
+            val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.cleanText), cleanMsg, 0.8) }
             if (!exists) unique.add(msg)
         }
         return unique
@@ -752,10 +752,11 @@ class NewsSummarizer(private val llm: LLMClient) {
     }
 
     private fun mergeIntoGlobal(newTopics: List<Topics>, globalCache: MutableList<Topics>) {
+        val keywordMatches = 2
         newTopics.forEach { candidate ->
             val existingIndex = globalCache.indexOfFirst { existing ->
                 var isKeywordMatch = false
-                if (existing.keywords.size >= 3 && candidate.keywords.size >= 3) {
+                if (existing.keywords.size >= keywordMatches && candidate.keywords.size >= keywordMatches) {
                     var matchCount = 0
                     for (k1 in existing.keywords) {
                         for (k2 in candidate.keywords) {
@@ -765,7 +766,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                             }
                         }
                     }
-                    if (matchCount >= 3) isKeywordMatch = true
+                    if (matchCount >= keywordMatches) isKeywordMatch = true
                 }
                 isKeywordMatch || TextComparator.areSimilar(existing.title, candidate.title, 0.85)
             }
@@ -867,7 +868,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 ЛИМИТЫ (СТРОГО): Максимальное количество тем: $maxLimit. Если событий больше — выбери самые резонансные и значимые. Мелкие, локальные или малозначительные новости ИГНОРИРУЙ.
                 Группируй новости по Сюжетным Линиям:
                 1. Цепочка событий (ОСТАВЛЯТЬ ВМЕСТЕ): Например, событие + реакция + последствия = ОДНА тема.
-                2. Сюжетная кластеризация (БАЛАНС): Объединяй события в одну тему, ТОЛЬКО если они являются частями одного развивающегося сюжета или конфликта. СТРОГИЙ ЗАПРЕТ НА КАТЕГОРИИ: Категорически запрещено создавать общие рубрики ('Политика', 'Спорт'). Если события не связаны прямой причинно-следственной связью, они должны быть в РАЗНЫХ темах.
+                2. Сюжетная кластеризация: Объединяй события в одну тему ТОЛЬКО при наличии прямой причинно-следственной связи, игнорируя территориальные совпадения. Строгий запрет на общие рубрики.
                 ФИЛЬТРАЦИЯ (СТРОГО): Игнорируй: рекламу, розыгрыши призов, итоги конкурсов, спам, а также темы: '$banned'.
                 ИНСТРУКЦИИ ЗАГОЛОВКОВ: Пиши в стиле Smart Casual: живые, человеческие заголовки без канцелярита.
                 Верни JSON массив: [{"title": "Заголовок", "id": [101, 105], "keywords": ["тег1", "тег2"], "weight": 8}].
@@ -998,7 +999,7 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                     val original = batch.find { it.first.ids?.contains(id) == true }
 
-                    if (summary.trim() == "REJECTED" || summary.isBlank()) {
+                    if (summary.trim() == "REJECTED" || summary.trim().length <= 15) {
                         if (original != null) {
                             MewsRepository.deleteTitleById(original.first.id)
                         }
@@ -1047,11 +1048,11 @@ class NewsSummarizer(private val llm: LLMClient) {
         val prompt = """
         Ты — аналитик и обозреватель. Твоя цель — написать подробный лонгрид или развернутую статью, объем которой прямо пропорционален количеству входных данных. Запрещено искусственно сжимать текст.
         Инструкции:
-        1. СТИЛЬ: Smart Casual. Живой, вовлекающий язык без канцеляризмов. Используй абзацы для структурирования (каждая новая мысль или этап события — новый абзац).
+        1. СТИЛЬ: Smart Casual с упором на литературность и читаемость. Строгая новостная объективность без эмоциональных оценок.
         2. ДЕТАЛИЗАЦИЯ И ФАКТОЛОГИЯ: Пиши максимально развернуто. Твоя задача не сделать краткую выжимку, а литературно объединить все факты. Перенеси из источника 100% конкретных цифр, имен, названий организаций, деталей и точных цитат.
         3. КРИТИЧЕСКИЙ ЗАПРЕТ: Запрещено генерировать данные, имена, номера и последствия, отсутствующие во входящем JSON.
-        4. ФОРМАТИРОВАНИЕ: Используй Markdown. Выделяй **жирным шрифтом** ключевые имена, даты, организации и термины. Разделяй длинные или сложные сюжеты логическими подзаголовками. Строгий запрет: маркированные списки разрешены только при перечислении 3 и более элементов.
-        5. УМНАЯ ФИЛЬТРАЦИЯ: Обязательно верни JSON-объект для каждого переданного id. Если текст состоит из рекламы, спама или посвящен нежелательным темам ('$banned'), верни строгое значение 'summary': 'REJECTED'.
+        4. ФОРМАТИРОВАНИЕ: Выделяй жирным шрифтом ключевые имена, даты, организации и термины. Разделяй длинные или сложные сюжеты логическими абзацами.
+        5. УМНАЯ ФИЛЬТРАЦИЯ: Если текст несет спам или запрещенные темы ('$banned'), верни строго слово REJECTED без дополнительных символов.
         6. ЯЗЫК: ${lang}.
         7. ПРЕДОХРАНИТЕЛЬ СЮЖЕТОВ: Если внутри одного id сгруппировано несколько связанных под-событий, ты обязан ПОДРОБНО РАСКРЫТЬ суть каждого из них. Сжатие фактов до размытых формулировок категорически запрещено. Выделяй разные аспекты, реакции или хронологию событий отдельными абзацами.
         ФОРМАТ ОТВЕТА (СТРОГО JSON):
