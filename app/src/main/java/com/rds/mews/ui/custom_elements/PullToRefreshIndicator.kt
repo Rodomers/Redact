@@ -8,11 +8,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -27,10 +33,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.rds.mews.localcore.IconButtonInputs
 import com.rds.mews.ui.theme.Shapes
+import com.rds.mews.R
+import androidx.compose.foundation.layout.Spacer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,10 +51,11 @@ fun CustomPullToRefreshIndicator(
     progress: Float,
     isCollapsed: Boolean,
     onCollapseChange: (Boolean) -> Unit,
+    onCancellation: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val expandedHeight = 56.dp
-    val collapsedHeight = 12.dp
+    val expandedHeight = 50.dp
+    val collapsedHeight = 8.dp
 
     val animatedHeight by animateDpAsState(
         targetValue = if (isCollapsed) collapsedHeight else expandedHeight,
@@ -91,7 +102,7 @@ fun CustomPullToRefreshIndicator(
                 alpha = indicatorAlpha
             }
             .padding(horizontal = 8.dp)
-            .padding(top = 1.dp)
+            .padding(top = if (!isCollapsed) 1.dp else 0.dp)
             .fillMaxWidth()
     ) {
         Surface(
@@ -134,8 +145,10 @@ fun CustomPullToRefreshIndicator(
                 if (textAlpha > 0f) {
                     Box(
                         modifier = Modifier
+                            .fillMaxWidth()
                             .align(Alignment.Center)
-                            .graphicsLayer { alpha = textAlpha }
+                            .graphicsLayer { alpha = textAlpha },
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = statusText,
@@ -146,6 +159,21 @@ fun CustomPullToRefreshIndicator(
                             maxLines = 1,
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            val toastText = stringResource(R.string.update_cancelled)
+                            CustomIconButton(
+                                inputs = IconButtonInputs(
+                                    icon = Icons.Default.Clear,
+                                    action = onCancellation,
+                                    toast = toastText
+                                ),
+                                defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = CircleShape,
+                                modifier = Modifier.size(34.dp)
+                            )
+                            Spacer(modifier = Modifier.size(8.dp))
+                        }
+
                     }
                 }
             }

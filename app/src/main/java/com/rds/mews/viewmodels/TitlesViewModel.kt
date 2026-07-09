@@ -53,6 +53,7 @@ import com.rds.mews.core.TelegramRssClient
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.TitleStatus
+import com.rds.mews.localcore.cancelTitlesUpdate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -343,9 +344,10 @@ class TitlesViewModel(
                 if (it.id == id && it.sources != null) {
                     it.copy(
                         sources = (it.sources as Iterable<SourceMessages>).map { currentItem ->
+                            val sourceName = if (currentItem.source != null) currentItem.source.currentName ?: currentItem.source.originalName else "null"
                             SourceMessages(
                                 source = currentItem.source,
-                                state = if (currentItem.source == source) !currentItem.state else currentItem.state,
+                                state = if (sourceName == source) !currentItem.state else currentItem.state,
                                 messages = currentItem.messages
                             )
                         }.toList()
@@ -354,6 +356,10 @@ class TitlesViewModel(
                 else it
             }.toSet()
         }
+    }
+
+    fun stopTitlesUpdate(context: Context) {
+        viewModelScope.launch { cancelTitlesUpdate(context) }
     }
 
     fun loadDynamicMediaUrls(titleId: Long, fromZero: Boolean = false) {

@@ -86,8 +86,10 @@ class ParserWorker(
             Result.success()
         } catch (e: IOException) {
             Result.retry()
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
+        }  catch (e: Exception) {
+            if (e is CancellationException) {
+                throw e
+            }
             Log.e("ParserWorker", "Global pipeline failure", e)
             Result.failure()
         }

@@ -963,9 +963,14 @@ private fun ExpandedCardContent(
                                                 modifier = Modifier
                                                     .fillMaxSize()
                                                     .onGloballyPositioned { coordinates ->
-                                                        imageBoundsMap[pageIndex] = coordinates.boundsInWindow()
+                                                        imageBoundsMap[pageIndex] =
+                                                            coordinates.boundsInWindow()
                                                     }
-                                                    .clickable(enabled = !isImageFullOpened) { onImageClicked(true) }
+                                                    .clickable(enabled = !isImageFullOpened) {
+                                                        onImageClicked(
+                                                            true
+                                                        )
+                                                    }
                                             ) {
                                                 AsyncImage(
                                                     model = ImageRequest.Builder(context)
@@ -993,7 +998,8 @@ private fun ExpandedCardContent(
                                                     modifier = Modifier
                                                         .fillMaxSize()
                                                         .graphicsLayer {
-                                                            alpha = if (isImageFullOpened) 0f else 1f
+                                                            alpha =
+                                                                if (isImageFullOpened) 0f else 1f
                                                         },
                                                     contentScale = ContentScale.Fit
                                                 )
@@ -1111,7 +1117,16 @@ private fun ExpandedCardContent(
                                     val source = pack.source
                                     val state = pack.state
                                     val messages = pack.messages
-                                    customHeader(text = source, isExpanded = state, onHeaderClick = { changeSourceState(title.id, source) }, fontSize = 16.sp, buttonsColor = headerColor)
+                                    val sourceName = if (source != null) source.currentName ?: source.originalName else "null"
+                                    customHeader(
+                                        text = sourceName,
+                                        isExpanded = state,
+                                        onHeaderClick = { changeSourceState(title.id, sourceName) },
+                                        onTextClick = { if (source != null) handler.openUri(source.websiteUrl) },
+                                        fontSize = 16.sp,
+                                        buttonsColor = headerColor,
+                                        modifier = Modifier.height(55.dp)
+                                    )
                                     item(key = "${title.id}_$source") {
                                         Column(modifier = Modifier.fillMaxWidth()) {
                                             ExpandableContainer(visible = state) {

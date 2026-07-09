@@ -3,6 +3,7 @@ package com.rds.mews.repositories
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.MutableState
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.rds.mews.GeminiApiKeyProvider
@@ -26,6 +27,7 @@ import com.rds.mews.database.TitleMessageMap
 import com.rds.mews.localcore.*
 import com.rds.mews.settings_manager.AppSettings
 import com.rds.mews.settings_manager.SettingsManager
+import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.text_filters.TextSanitizer
 import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.workers.AlarmScheduler
@@ -271,7 +273,7 @@ object MewsRepository {
                                         id = message.id,
                                         time = message.pubTime,
                                         link = message.link,
-                                        source = getSource(message.sourceId)?.currentName ?: "",
+                                        source = getSource(message.sourceId),
                                         originalText = "",
                                         cleanText = ""
                                     )
@@ -327,6 +329,9 @@ object MewsRepository {
 
     val geminiModelsList: List<GeminiModelOption> get() = GeminiModelOption.entries
     val defaultModel: GeminiModelOption get() = GeminiModelOption.FLASH_LITE_LATEST
+
+    private val _stoppedManually = MutableStateFlow(false)
+    var stoppedManually: StateFlow<Boolean> = _stoppedManually.asStateFlow()
 
     suspend fun checkGeminiApiKey(key: String): Boolean {
         return validateGeminiKey(key, PROXY_ADDRESS, SERVER_KEY, proxyEnabled.value)
@@ -496,11 +501,10 @@ object MewsRepository {
         if (idList.isEmpty()) return@withContext null
 
         val targetMsgs = messageDao.getMessagesByIds(idList)
-        val allSources = sourceDao.getAllSourcesFlow().first().associateBy { it.id }
 
         val result = targetMsgs.map { msg ->
-            val sourceName = allSources[msg.sourceId]?.let { it.customName ?: it.originalName } ?: "Unknown"
-            Message(msg.id, msg.pubTime, msg.link, sourceName, msg.originalText, msg.cleanText)
+            val source = getSource(msg.sourceId)
+            Message(msg.id, msg.pubTime, msg.link, source, msg.originalText, msg.cleanText)
         }
         result.ifEmpty { null }
     }
@@ -513,11 +517,9 @@ object MewsRepository {
             messageDao.getAllMessagesOneShot()
         }
 
-        val allSources = sourceDao.getAllSourcesFlow().first().associateBy { it.id }
-
         entities.map { msg ->
-            val sourceName = allSources[msg.sourceId]?.let { it.customName ?: it.originalName } ?: "Unknown"
-            Message(msg.id, msg.pubTime, msg.link, sourceName, msg.originalText, msg.cleanText)
+            val source = getSource(msg.sourceId)
+            Message(msg.id, msg.pubTime, msg.link, source, msg.originalText, msg.cleanText)
         }
     }
 
@@ -529,11 +531,9 @@ object MewsRepository {
             messageDao.getAllUniqueMessagesOneShot()
         }
 
-        val allSources = sourceDao.getAllSourcesFlow().first().associateBy { it.id }
-
         entities.map { msg ->
-            val sourceName = allSources[msg.sourceId]?.let { it.customName ?: it.originalName } ?: "Unknown"
-            Message(msg.id, msg.pubTime, msg.link, sourceName, msg.originalText, msg.cleanText)
+            val source = getSource(msg.sourceId)
+            Message(msg.id, msg.pubTime, msg.link, source, msg.originalText, msg.cleanText)
         }
     }
 
@@ -549,7 +549,7 @@ object MewsRepository {
                     mess.id,
                     mess.pubTime,
                     mess.link,
-                    getSource(mess.sourceId)?.currentName ?: "null",
+                    getSource(mess.sourceId),
                     mess.originalText,
                     mess.cleanText
                 )
@@ -720,8 +720,13 @@ object MewsRepository {
     fun setCurrentLanguage(newValue: String) = updateSetting { it.copy(currentLanguage = newValue) }
     fun setParserBatchSize(newValue: Int) = updateSetting { it.copy(parserBatchSize = newValue) }
 
+    fun setStoppedManually(value: Boolean) {
+        _stoppedManually.value = value
+    }
+
     fun saveLastError(failure: SummarizationResult.Failure) {
-        externalScope.launch { settingsManager.saveLastError(failure) }
+        if (failure.type == SummarizationErrorType.JOB_CANCELLED && _stoppedManually.value) _stoppedManually.value = false
+        else externalScope.launch { settingsManager.saveLastError(failure) }
     }
 
     fun clearError() {

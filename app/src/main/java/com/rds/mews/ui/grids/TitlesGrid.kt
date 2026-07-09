@@ -189,7 +189,8 @@ fun TitlesScreen(
         onSwitchStoryline = viewModel::switchStorylineAndScroll,
         loadDynamicMediaUrls = viewModel::loadDynamicMediaUrls,
         setCurrentTitleImage = viewModel::setCurrentTitleImage,
-        setFullscreenView = viewModel::setFullscreenImageForTitle
+        setFullscreenView = viewModel::setFullscreenImageForTitle,
+        stopTitlesUpdate = viewModel::stopTitlesUpdate
     )
 }
 
@@ -235,7 +236,8 @@ fun TitlesGrid(
     onSwitchStoryline: (Long) -> Unit,
     loadDynamicMediaUrls: (Long) -> Unit,
     setCurrentTitleImage: (Long, Int) -> Unit,
-    setFullscreenView:(Long, Boolean) -> Unit
+    setFullscreenView:(Long, Boolean) -> Unit,
+    stopTitlesUpdate: (Context) -> Unit
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
 
@@ -334,6 +336,7 @@ fun TitlesGrid(
                 progress = updatingProgress,
                 isCollapsed = indicatorCollapsed,
                 onCollapseChange = { onIndicatorClick() },
+                onCancellation = { stopTitlesUpdate(context) }
             )
         }
     ) {

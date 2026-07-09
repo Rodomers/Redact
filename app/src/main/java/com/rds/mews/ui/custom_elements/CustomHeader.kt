@@ -59,6 +59,7 @@ fun LazyGridScope.customHeader(
     textId: Int? = null,
     isExpanded: Boolean = false,
     onHeaderClick: () -> Unit = {},
+    onTextClick: (() -> Unit)? = null,
     expandable: Boolean = true,
     fontSize: TextUnit = 26.sp,
     buttonsColor: Color? = null,
@@ -97,14 +98,14 @@ fun LazyGridScope.customHeader(
             CustomTextButton(
                 inputs = TextButtonInputs(
                     text = titleText,
-                    action = onHeaderClick
+                    action = onTextClick ?: onHeaderClick
                 ),
                 fontSize = fontSize,
                 fontWeight = FontWeight.Bold,
                 enabled = expandable,
                 defaultBackgroundColor = btnColor,
                 shape = shape,
-                modifier = Modifier.fillMaxHeight()
+                modifier = Modifier.fillMaxHeight(),
             )
 
             Spacer(modifier = Modifier.weight(1f))

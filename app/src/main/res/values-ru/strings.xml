@@ -141,6 +141,7 @@
     <string name="filtering_topics">Фильтрую базар…</string>
     <string name="summarizing">Резюмирую…</string>
     <string name="restart_updating">Перезапуск</string>
+    <string name="update_cancelled">Обновление отменено.</string>
 
     <string name="err_header_success">Успех</string>
     <string name="err_text_success">Мы не знаем, почему это здесь. Обновление прошло успешно.</string>

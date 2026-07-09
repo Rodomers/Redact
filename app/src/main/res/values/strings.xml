@@ -139,6 +139,7 @@
     <string name="filtering_topics">Filtering topics…</string>
     <string name="summarizing">Summarizing…</string>
     <string name="restart_updating">Restart</string>
+    <string name="update_cancelled">Update cancelled.</string>
 
     <string name="err_header_success">Success</string>
     <string name="err_text_success">We have no idea why you are seeing this. The update was actually successful.</string>

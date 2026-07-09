@@ -11,7 +11,7 @@ data class Message(
     var id: Long,
     var time: Long,
     var link: String,
-    var source: String,
+    var source: RSS?,
     var originalText: String,
     var cleanText: String
 )
@@ -163,7 +163,7 @@ data class SourcesGroupState(val group: SourceType, val expanded: Boolean)
 data class TitlesGroupState(val group: TimeDate, val expanded: Boolean)
 data class SettingsGroupState(val group: Int, val expanded: Boolean)
 
-data class SourceMessages(val source: String, val state: Boolean, val messages: List<Message>)
+data class SourceMessages(val source: RSS?, val state: Boolean, val messages: List<Message>)
 data class TimeDate(val number: Int? = null, val date: Int, val time: String)
 
 data class TextButtonInputs(

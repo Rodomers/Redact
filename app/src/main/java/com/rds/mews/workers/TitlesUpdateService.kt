@@ -32,9 +32,16 @@ class TitlesUpdateService : Service() {
     companion object {
         const val NOTIFICATION_ID = 101
         const val CHANNEL_ID = "TitlesUpdateChannel"
+        const val ACTION_STOP_SERVICE = "com.rds.mews.ACTION_STOP_TITLES_SERVICE"
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP_SERVICE) {
+            job.cancel()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         val oneTimeUpdate = intent?.getBooleanExtra("oneTimeUpdate", false) ?: false
         startForeground(NOTIFICATION_ID, createNotification())
 

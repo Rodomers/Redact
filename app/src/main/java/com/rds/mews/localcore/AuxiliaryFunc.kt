@@ -11,6 +11,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import androidx.collection.IntList
 import androidx.collection.intListOf
 import androidx.compose.ui.unit.IntRect
@@ -25,6 +26,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.rds.mews.R
@@ -33,6 +35,10 @@ import com.rds.mews.workers.ParserWorker
 import com.rds.mews.workers.RssUpdateWorker
 import com.rds.mews.workers.TitlesUpdateService
 import com.rds.mews.workers.TitlesUpdateWorker
+import androidx.work.await
+import com.rds.mews.repositories.MewsRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -139,6 +145,30 @@ fun setRssUpdate(context: Context, sources: Boolean = false, intervalMin: Int = 
         ExistingPeriodicWorkPolicy.REPLACE,
         workRequest
     )
+}
+
+suspend fun cancelTitlesUpdate(context: Context) {
+    withContext(Dispatchers.IO) {
+        val workManager = WorkManager.getInstance(context)
+        val info = workManager.getWorkInfosByTag("titles_update_work").get().find { it.state == WorkInfo.State.RUNNING }
+        if (info != null) {
+            workManager.cancelWorkById(info.id)
+            Log.d("WORKER_CANCELLED", "Найден и отменён выполняющийся titles_update_work.")
+            MewsRepository.setStoppedManually(true)
+        }
+    }
+    val intent = Intent(context, TitlesUpdateService::class.java).apply {
+        action = TitlesUpdateService.ACTION_STOP_SERVICE
+    }
+
+    try {
+        context.startService(intent)
+        MewsRepository.setStoppedManually(true)
+    } catch (e: Exception) {
+        Log.e("SERVICE_CANCEL", "Запрещен запуск сервиса из фона. Принудительная остановка через stopService.", e)
+        context.stopService(intent)
+        MewsRepository.setStoppedManually(true)
+    }
 }
 
 fun setParserUpdate(context: Context, isImmediateSetup: Boolean = false, intervalMin: Long = 30) {
