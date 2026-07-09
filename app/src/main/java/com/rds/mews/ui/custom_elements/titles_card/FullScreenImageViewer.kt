@@ -137,11 +137,13 @@ fun FullScreenImageViewer(
         BackHandler { closeWithAnimation() }
 
         val dynamicThemeSurfaceColor = MaterialTheme.colorScheme.surface
+        val swipeAlpha = (1f - (abs(swipeDismissY.value) / 800f)).coerceIn(0f, 1f)
+        val backgroundAlpha = transitionAnim.value * swipeAlpha
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(dynamicThemeSurfaceColor)
+                .background(dynamicThemeSurfaceColor.copy(alpha = backgroundAlpha))
         ) {
             val targetBounds = imageBoundsMap[fullScreenPagerState.currentPage] ?: Rect.Zero
             val screenWidth = with(density) { config.screenWidthDp.dp.toPx() }
@@ -324,7 +326,7 @@ fun FullScreenImageViewer(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     val currentMedia = dynamicMediaUrls[fullScreenPagerState.currentPage]
-                    val specificSource = currentMedia.message?.source ?: "-"
+                    val specificSource = currentMedia.message?.source?.currentName ?: currentMedia.message?.source?.originalName ?: "null"
                     val specificTime = currentMedia.message?.time ?: 0L
                     val link = currentMedia.message?.link
 
