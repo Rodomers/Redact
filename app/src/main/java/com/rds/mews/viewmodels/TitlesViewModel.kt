@@ -136,7 +136,7 @@ class TitlesViewModel(
             else -> actuals.filter { it.status == TitleStatus.DEFAULT.statusId }
         }
 
-        val finalFiltered = greetings + filteredActuals
+        val finalFiltered = if (greetings.isNotEmpty()) greetings else filteredActuals
 
         finalFiltered.groupBy { title ->
             getDateFromUnix(title.eventTime, today).copy(time = "00:00")
@@ -479,7 +479,6 @@ class TitlesViewModel(
             ) { titles, expand, greetings ->
                 Triple(titles, expand, greetings)
             }.collect { (titleListFromDb, currentExpandSources, greetingList) ->
-
                 val actualTitles = titleListFromDb.filter { it.status == TitleStatus.DEFAULT.statusId }
                 val hasHiddenItems = actualTitles.size != titleListFromDb.size
 

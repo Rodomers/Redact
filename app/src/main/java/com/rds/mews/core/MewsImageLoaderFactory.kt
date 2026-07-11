@@ -38,11 +38,12 @@ class MewsImageLoaderFactory(private val context: Context) : ImageLoaderFactory 
             .diskCache {
                 DiskCache.Builder()
                     .directory(context.cacheDir.resolve("mews_image_cache"))
-                    .maxSizeBytes(1024 * 1024 * 100)
+                    .maxSizeBytes(1024 * 1024 * 50)
                     .build()
             }
             .diskCachePolicy(CachePolicy.ENABLED)
             .memoryCachePolicy(CachePolicy.ENABLED)
+            .crossfade(200)
             .build()
     }
 }

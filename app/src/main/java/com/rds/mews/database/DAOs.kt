@@ -43,6 +43,12 @@ interface SourceDao {
 
     @Query("UPDATE sources SET etag_hash = :etag WHERE id = :id")
     suspend fun updateEtag(id: Long, etag: String?)
+
+    @Query("UPDATE sources SET summarizing_last_sync = last_sync_time WHERE id = :sourceId")
+    suspend fun updateSummarizingSyncToLastSync(sourceId: Long)
+
+    @Query("UPDATE sources SET summarizing_last_sync = last_sync_time")
+    suspend fun updateAllSummarizingSyncToLastSync()
 }
 
 @Dao
@@ -73,6 +79,15 @@ interface MessageDao {
 
     @Query("SELECT * FROM messages WHERE link IN (:links)")
     suspend fun getMessagesByLinks(links: List<String>): List<MessageEntity>
+
+    @Query("""
+        SELECT m.* FROM messages m
+        INNER JOIN sources s ON m.source_id = s.id
+        WHERE m.is_duplicate = 0 
+          AND m.pub_time > COALESCE(s.summarizing_last_sync, :userTimeMs)
+        ORDER BY m.pub_time ASC
+    """)
+    suspend fun getUniqueMessagesForSummarizing(userTimeMs: Long): List<MessageEntity>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(message: MessageEntity): Long

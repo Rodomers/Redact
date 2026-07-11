@@ -43,8 +43,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -55,7 +53,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -241,13 +238,14 @@ fun TitlesGrid(
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
 
-    val config = LocalConfiguration.current
-    var updates = 0
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val pullToRefreshState = rememberPullToRefreshState()
     val lastUpdatedDate = remember(groupedItems) { mutableStateOf(getDateFromUnix(lastTitlesUpdate)) }
+    val expandedCardId = remember(titlesCardStates) {
+        titlesCardStates.firstOrNull { it.expanded }?.id ?: -1L
+    }
 
     var allowPullToRefresh by remember { mutableStateOf(false) }
 
@@ -272,18 +270,25 @@ fun TitlesGrid(
         if (!lastTitlesUpdateExists() && groupedItems.isEmpty()) showGreeting(context)
     }
 
-    LaunchedEffect(config, updates) {
-        val cardId = titlesCardStates.firstOrNull { it.expanded }?.id ?: -1
-        if (cardId != -1L) {
+    LaunchedEffect(groupedItems.keys) {
+        if (expandedCardId != -1L && groupedItems.isNotEmpty()) {
             var globIndex = 0
-            var item = 0
+            var item = -1
+
             for ((_, items) in groupedItems) {
                 globIndex++
-                val itIndex = items.indexOfFirst { it.id == cardId }
-                if (itIndex != -1) item = itIndex + globIndex
+                val itIndex = items.indexOfFirst { it.id == expandedCardId }
+                if (itIndex != -1) {
+                    item = itIndex + globIndex
+                    break
+                }
                 globIndex += items.size
             }
-            scrollToItem(item)
+
+            if (item != -1) {
+                onToggleExpanded(expandedCardId)
+                scrollToItem(item)
+            }
         }
     }
 
@@ -422,8 +427,6 @@ fun TitlesGrid(
                     val isExpanded = statesItem?.expanded ?: false
                     val pagerState = rememberPagerState(initialPage = statesItem?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
                     val sources = statesItem?.sources
-
-                    if (isExpanded) updates++
 
                     val isPartiallyObscured by remember {
                         derivedStateOf {

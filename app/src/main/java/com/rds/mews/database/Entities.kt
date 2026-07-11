@@ -36,7 +36,8 @@ data class SourceEntity(
     @ColumnInfo(name = "last_sync_time") val lastSyncTime: Long,
     @ColumnInfo(name = "err_count") val errCount: Int,
     @ColumnInfo(name = "last_err_msg") val lastErrMsg: String? = null,
-    @ColumnInfo(name = "etag_hash") val etagHash: String? = null
+    @ColumnInfo(name = "etag_hash") val etagHash: String? = null,
+    @ColumnInfo(name = "summarizing_last_sync") val summarizingLastSync: Long? = null
 )
 
 @Entity(

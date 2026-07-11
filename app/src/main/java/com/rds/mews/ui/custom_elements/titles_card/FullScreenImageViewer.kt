@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -220,7 +221,7 @@ fun FullScreenImageViewer(
                                     }
                                 )
                             }
-                            .pointerInput(actualImageWidth, actualImageHeight) {
+                            .pointerInput(actualImageWidth, actualImageHeight, containerSize) {
                                 awaitEachGesture {
                                     awaitFirstDown(requireUnconsumed = false)
                                     var zoomActive = false
@@ -231,22 +232,39 @@ fun FullScreenImageViewer(
                                         val event = awaitPointerEvent()
                                         val zoom = event.calculateZoom()
                                         val pan = event.calculatePan()
+                                        val centroid = event.calculateCentroid()
 
-                                        if (scale.value > 1f) {
+                                        val isZooming = zoom != 1f && centroid != Offset.Unspecified
+
+                                        if (scale.value > 1f || isZooming) {
                                             event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                            val newScale = (scale.value * zoom).coerceIn(1f, 5f)
-                                            coroutineScope.launch { scale.snapTo(newScale) }
 
-                                            if (scale.value > 1f) {
-                                                val maxX = (maxOf(0f, (actualImageWidth * scale.value) - containerSize.width)) / 2f
-                                                val maxY = (maxOf(0f, (actualImageHeight * scale.value) - containerSize.height)) / 2f
-                                                val newX = offsetX.value + pan.x
-                                                val newY = offsetY.value + pan.y
+                                            val oldScale = scale.value
+                                            val newScale = (oldScale * zoom).coerceIn(1f, 5f)
 
-                                                coroutineScope.launch {
-                                                    offsetX.snapTo(newX.coerceIn(-maxX, maxX))
-                                                    offsetY.snapTo(newY.coerceIn(-maxY, maxY))
-                                                }
+                                            val maxX = maxOf(0f, (actualImageWidth * newScale - containerSize.width) / 2f)
+                                            val maxY = maxOf(0f, (actualImageHeight * newScale - containerSize.height) / 2f)
+
+                                            val targetX: Float
+                                            val targetY: Float
+
+                                            if (isZooming) {
+                                                val containerCenter = Offset(containerSize.width / 2f, containerSize.height / 2f)
+
+                                                val targetOffsetX = offsetX.value + pan.x
+                                                val targetOffsetY = offsetY.value + pan.y
+
+                                                targetX = targetOffsetX - (centroid.x - containerCenter.x - targetOffsetX) * (zoom - 1f)
+                                                targetY = targetOffsetY - (centroid.y - containerCenter.y - targetOffsetY) * (zoom - 1f)
+                                            } else {
+                                                targetX = offsetX.value + pan.x
+                                                targetY = offsetY.value + pan.y
+                                            }
+
+                                            coroutineScope.launch {
+                                                scale.snapTo(newScale)
+                                                offsetX.snapTo(targetX.coerceIn(-maxX, maxX))
+                                                offsetY.snapTo(targetY.coerceIn(-maxY, maxY))
                                             }
                                         } else {
                                             if (zoom !in 0.99f..1.01f) zoomActive = true
@@ -261,7 +279,7 @@ fun FullScreenImageViewer(
                                                     coroutineScope.launch { swipeDismissY.snapTo(targetY) }
                                                 }
                                             }
-                                            if (zoomActive) {
+                                            if (zoomActive && zoom != 1f) {
                                                 val newScale = (scale.value * zoom).coerceIn(1f, 5f)
                                                 coroutineScope.launch { scale.snapTo(newScale) }
                                                 event.changes.forEach { if (it.positionChanged()) it.consume() }

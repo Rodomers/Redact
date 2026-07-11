@@ -138,7 +138,7 @@ object MewsRepository {
         this.database = Room.databaseBuilder(appContext, AppDatabase::class.java, "MainDB")
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4,
-                AppDatabase.MIGRATION_4_5)
+                AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6)
             .build()
         this.sourceDao = database.sourceDao()
         this.messageDao = database.messageDao()
@@ -432,6 +432,13 @@ object MewsRepository {
         }
     }
 
+    fun setSourceSummarizingSyncTime(sourceId: Long? = null) {
+        externalScope.launch(Dispatchers.IO) {
+            if (sourceId == null) sourceDao.updateAllSummarizingSyncToLastSync()
+            else sourceDao.updateSummarizingSyncToLastSync(sourceId)
+        }
+    }
+
     fun startTitlesUpdate(context: Context) {
         setTitlesUpdate(context)
     }
@@ -528,8 +535,17 @@ object MewsRepository {
             val timeMs = System.currentTimeMillis() - (timeSeconds * 1000)
             messageDao.getUniqueMessagesAfterTimeOneShot(timeMs)
         } else {
-            messageDao.getAllUniqueMessagesOneShot()
+            messageDao.getUniqueMessagesForSummarizing(lastTitlesUpdate.first())
         }
+
+        entities.map { msg ->
+            val source = getSource(msg.sourceId)
+            Message(msg.id, msg.pubTime, msg.link, source, msg.originalText, msg.cleanText)
+        }
+    }
+
+    suspend fun getAllUniqueMessages(): List<Message> = withContext(Dispatchers.IO) {
+        val entities = messageDao.getAllUniqueMessagesOneShot()
 
         entities.map { msg ->
             val source = getSource(msg.sourceId)

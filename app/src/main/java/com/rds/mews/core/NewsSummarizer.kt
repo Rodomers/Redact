@@ -1,6 +1,7 @@
 package com.rds.mews.core
 
 import android.util.Log
+import com.rds.mews.database.TitleEntity
 import com.rds.mews.localcore.Message
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.TitleStatus
@@ -349,7 +350,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
 
             val rawMessages = if (!isRetryMode) {
-                val msgs = MewsRepository.getUniqueMessagesList(messageSeconds)
+                val msgs = MewsRepository.getUniqueMessagesList()
 
                 val processedMessageIds = try {
                     MewsRepository.getProcessedMessageIds(System.currentTimeMillis() - (72 * 60 * 60 * 1000L))
@@ -439,15 +440,17 @@ class NewsSummarizer(private val llm: LLMClient) {
                         }
                     }
 
-                    val needed = maxTopics - finalSelected.size
+                    val extractionLimit = (maxTopics * 1.5).toInt()
+                    val needed = extractionLimit - finalSelected.size
                     if (needed > 0) {
                         finalSelected.addAll(pool.sortedByDescending { it.weight }.take(needed))
                     }
 
-                    val finalTopics = finalSelected.sortedByDescending { it.weight }.take(maxTopics)
+                    val finalTopics = finalSelected.sortedByDescending { it.weight }.take(extractionLimit)
                     finalTopics.forEach { saveTopicToDb(it) }
 
                     MewsRepository.setLastTitlesUpdate(extractionTime)
+                    MewsRepository.setSourceSummarizingSyncTime()
                     baseProgress = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress }
                 } catch (e: GeminiException) {
                     safeReadyFunc(readyFunc)
@@ -460,23 +463,96 @@ class NewsSummarizer(private val llm: LLMClient) {
             }
 
             val titlesToSummarize = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId)
-            if (titlesToSummarize.isEmpty()) {
+            val normalTitles = titlesToSummarize.filter { it.keywords.firstOrNull()?.lowercase() != "другое" }.sortedByDescending { it.weight }
+            val blitzTitles = titlesToSummarize.filter { it.keywords.firstOrNull()?.lowercase() == "другое" }.sortedByDescending { it.weight }
+            val processingQueue = (normalTitles + blitzTitles).toMutableList()
+
+            if (processingQueue.isEmpty()) {
                 safeReadyFunc(readyFunc)
                 return SummarizationResult.Success
             }
 
-            totalItemsToProcess = titlesToSummarize.size
+            totalItemsToProcess = processingQueue.size
             processedItemsCount = 0
-            val batches = titlesToSummarize.chunked(10)
+
+            val preHistory = try {
+                MewsRepository.getRecentTitlesForStorylines(System.currentTimeMillis() - (72 * 60 * 60 * 1000L)).toMutableList()
+            } catch (_: Exception) {
+                mutableListOf()
+            }
+
+            val sessionMinId = processingQueue.minOfOrNull { it.id } ?: 0L
+            var successCount = if (isRetryMode) {
+                preHistory.count { it.id >= sessionMinId }
+            } else {
+                0
+            }
+
+            val processedTopicsSignatures = mutableListOf<Pair<String, List<String>>>()
+            preHistory.filter { it.id >= sessionMinId }.forEach {
+                processedTopicsSignatures.add(Pair(it.title, it.keywords))
+            }
+
             val availableProgressSpace = 0.95f - baseProgress
-            var successCount = 0
             var lastError: SummarizationErrorType? = null
 
-            val summarizedTopicsData = mutableListOf<Triple<Long, Long, Pair<String, String>>>()
-
             coroutineScope {
-                batches.forEachIndexed { index, batch ->
+                while (processingQueue.isNotEmpty() && successCount < maxTopics) {
+                    val batch = processingQueue.take(0).toMutableList()
+                    val iterator = processingQueue.iterator()
+
+                    while (iterator.hasNext() && batch.size < 10) {
+                        val nextItemIsOther = processingQueue.first().keywords.firstOrNull()?.equals("другое", ignoreCase = true) == true
+                        val batchIsOther = batch.firstOrNull()?.keywords?.firstOrNull()?.equals("другое", ignoreCase = true) == true
+                        if (batch.isNotEmpty() && nextItemIsOther != batchIsOther) break
+
+                        val candidate = iterator.next()
+                        iterator.remove()
+
+                        val isDuplicate = processedTopicsSignatures.any { (procTitle, procKeywords) ->
+                            var keywordMatches = 0
+                            val candidateTags = candidate.keywords.drop(1)
+                            val procTags = procKeywords.drop(1)
+                            for (tk in candidateTags) {
+                                for (pk in procTags) {
+                                    if (tk.equals(pk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), pk.lowercase(), 0.85)) {
+                                        keywordMatches++
+                                        break
+                                    }
+                                }
+                            }
+                            keywordMatches > 3 || TextComparator.areSimilar(candidate.title, procTitle, 0.65)
+                        }
+
+                        if (isDuplicate) {
+                            try { MewsRepository.deleteTitleById(candidate.id) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
+                            processedItemsCount++
+                        } else {
+                            batch.add(candidate)
+                        }
+                    }
+
+                    if (batch.isEmpty()) continue
+
                     MewsRepository.setUpdatingState("summarizing_topics")
+
+                    val preTopicToHistorySummary = mutableMapOf<Long, String>()
+
+                    for (topic in batch) {
+                        val tkFirst = topic.keywords.firstOrNull()?.lowercase() ?: ""
+                        if (tkFirst == "другое" || TextComparator.areSimilar(tkFirst, "другое", 0.85)) {
+                            continue
+                        }
+
+                        val bestMatchId = findBestMatch(topic, null, preHistory)
+
+                        if (bestMatchId != null) {
+                            val matchedItem = preHistory.find { it.id == bestMatchId }
+                            if (matchedItem != null) {
+                                preTopicToHistorySummary[topic.id] = matchedItem.summary
+                            }
+                        }
+                    }
 
                     val topicsData = batch.mapNotNull { topic ->
                         val messageIds = topic.ids ?: emptyList()
@@ -496,7 +572,11 @@ class NewsSummarizer(private val llm: LLMClient) {
                             null
                         } else {
                             val uniqueTextsForSummary = deduplicateForSummaryPayload(suitableMessages)
-                            val contentPayload = uniqueTextsForSummary.joinToString("\n") { "— ${it.cleanText.take(SINGLE_NEWS_CHAR_LIMIT)}" }
+                            var contentPayload = uniqueTextsForSummary.joinToString("\n") { "— ${it.cleanText.take(SINGLE_NEWS_CHAR_LIMIT)}" }
+                            val historySummary = preTopicToHistorySummary[topic.id]
+                            if (historySummary != null) {
+                                contentPayload = "ПРЕДЫДУЩИЙ КОНТЕКСТ СЮЖЕТА:\n$historySummary\n\n$contentPayload"
+                            }
                             Triple(topic, suitableMessages, contentPayload)
                         }
                     }
@@ -515,18 +595,67 @@ class NewsSummarizer(private val llm: LLMClient) {
                                             continue
                                         }
 
-                                        val newTimeVal = suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
+                                        val tkFirst = topic.keywords.firstOrNull()?.lowercase() ?: ""
+                                        val isOther = tkFirst == "другое" || TextComparator.areSimilar(tkFirst, "другое", 0.85)
 
-                                        MewsRepository.updateTitle(
-                                            id = topic.id,
-                                            newTimeVal = newTimeVal,
-                                            newTitle = newTitle,
-                                            summary = summary,
-                                            parentId = null
-                                        )
+                                        val newTimeVal = if (isOther) {
+                                            System.currentTimeMillis()
+                                        } else {
+                                            suitableMessages.minOfOrNull { it.time } ?: System.currentTimeMillis()
+                                        }
 
-                                        summarizedTopicsData.add(Triple(topic.id, newTimeVal, Pair(newTitle, summary)))
-                                        successCount++
+                                        var bestMatchId: Long? = null
+
+                                        if (!isOther) {
+                                            val filteredHistory = preHistory.filter { historyItem ->
+                                                historyItem.id != topic.id && !(historyItem.eventTime > newTimeVal || (historyItem.eventTime == newTimeVal && historyItem.id >= topic.id))
+                                            }
+                                            bestMatchId = findBestMatch(topic, summary, filteredHistory)
+                                        }
+
+                                        var absorbed = false
+                                        if (bestMatchId != null) {
+                                            val parentTopic = preHistory.find { it.id == bestMatchId }
+                                            val isParentUnread = parentTopic?.isRead == false
+                                            val isParentRecent = parentTopic != null && (System.currentTimeMillis() - parentTopic.eventTime) <= 72 * 3600_000L
+
+                                            if (parentTopic != null && isParentUnread && isParentRecent) {
+                                                val updateLabel = if (currentLanguage == "russian") "Обновлено" else "Updated"
+                                                val combinedSummary = "${parentTopic.summary}\n\n--- $updateLabel ---\n\n$summary"
+                                                MewsRepository.updateTitle(
+                                                    id = bestMatchId,
+                                                    newTimeVal = newTimeVal,
+                                                    newTitle = parentTopic.title,
+                                                    summary = combinedSummary,
+                                                    parentId = null
+                                                )
+                                                MewsRepository.deleteTitleById(topic.id)
+                                                absorbed = true
+                                                val pIndex = preHistory.indexOfFirst { it.id == bestMatchId }
+                                                if (pIndex != -1) preHistory[pIndex] = parentTopic.copy(summary = combinedSummary)
+                                            } else {
+                                                MewsRepository.updateTitle(
+                                                    id = topic.id,
+                                                    newTimeVal = newTimeVal,
+                                                    newTitle = newTitle,
+                                                    summary = summary,
+                                                    parentId = bestMatchId
+                                                )
+                                            }
+                                        } else {
+                                            MewsRepository.updateTitle(
+                                                id = topic.id,
+                                                newTimeVal = newTimeVal,
+                                                newTitle = newTitle,
+                                                summary = summary,
+                                                parentId = null
+                                            )
+                                        }
+
+                                        if (!absorbed) {
+                                            successCount++
+                                            processedTopicsSignatures.add(Pair(newTitle, topic.keywords))
+                                        }
                                     } catch (e: kotlinx.coroutines.CancellationException) {
                                         throw e
                                     } catch(_: Exception) {
@@ -536,16 +665,14 @@ class NewsSummarizer(private val llm: LLMClient) {
                                 if (lastError == null) lastError = SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
                             }
 
-                            if (isRetryMode) {
-                                val successIds = results.map { (_, _, originalData) -> originalData.first.id }.toSet()
-                                for ((topic, _, _) in topicsData) {
-                                    if (topic.id !in successIds) {
-                                        try {
-                                            MewsRepository.deleteTitleById(topic.id)
-                                        } catch (e: kotlinx.coroutines.CancellationException) {
-                                            throw e
-                                        } catch(_: Exception) {
-                                        }
+                            val successIds = results.map { (_, _, originalData) -> originalData.first.id }.toSet()
+                            for ((topic, _, _) in topicsData) {
+                                if (topic.id !in successIds) {
+                                    try {
+                                        MewsRepository.deleteTitleById(topic.id)
+                                    } catch (e: kotlinx.coroutines.CancellationException) {
+                                        throw e
+                                    } catch(_: Exception) {
                                     }
                                 }
                             }
@@ -555,6 +682,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                 e.errorType == SummarizationErrorType.NO_NETWORK ||
                                 e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) {
                                 lastError = e.errorType
+                                break
                             } else {
                                 for ((t, _, _) in topicsData) {
                                     try { MewsRepository.deleteTitleById(t.id) }
@@ -574,81 +702,15 @@ class NewsSummarizer(private val llm: LLMClient) {
                 }
             }
 
-            if (successCount > 0) {
+            processingQueue.forEach {
                 try {
-                    val history = MewsRepository.getRecentTitlesForStorylines(System.currentTimeMillis() - (72 * 60 * 60 * 1000L)).toMutableList()
-                    val sortedSummarized = summarizedTopicsData.sortedBy { it.second }
-                    val minKeywordMatches = 2
-
-                    for ((topicId, topicTime, titleAndSummary) in sortedSummarized) {
-                        val (newTitle, summary) = titleAndSummary
-                        val currentTopic = history.find { it.id == topicId }
-
-                        if (currentTopic != null) {
-                            var bestMatchId: Long? = null
-                            var maxScore = 0.0
-
-                            for (historyItem in history) {
-                                if (historyItem.id == topicId) continue
-                                if (historyItem.eventTime > topicTime || (historyItem.eventTime == topicTime && historyItem.id >= topicId)) continue
-
-                                var keywordMatches = 0
-                                println(
-                                    "current keywords: ${currentTopic.keywords.joinToString(", ")},\nhistory keywords: ${
-                                        historyItem.keywords.joinToString(
-                                            ", "
-                                        )
-                                    }"
-                                )
-                                for (tk in currentTopic.keywords) {
-                                    for (hk in historyItem.keywords) {
-                                        if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.85)) {
-                                            keywordMatches++
-                                            break
-                                        }
-                                    }
-                                }
-
-                                if (keywordMatches > minKeywordMatches) {
-                                    bestMatchId = historyItem.id
-                                    break
-                                }
-
-                                val match45Title = TextComparator.areSimilar(newTitle, historyItem.title, 0.45)
-                                val match45Summary = TextComparator.areSimilar(summary, historyItem.summary, 0.45)
-
-                                if (keywordMatches >= minKeywordMatches && (match45Title || match45Summary)) {
-                                    var currentScore = keywordMatches.toDouble()
-                                    if (match45Title) currentScore += 0.5
-                                    if (match45Summary) currentScore += 0.5
-
-                                    if (currentScore > maxScore) {
-                                        maxScore = currentScore
-                                        bestMatchId = historyItem.id
-                                    }
-                                }
-                            }
-
-                            if (bestMatchId != null) {
-                                history.removeIf { it.id == bestMatchId }
-                                MewsRepository.updateTitle(
-                                    id = topicId,
-                                    newTimeVal = topicTime,
-                                    newTitle = newTitle,
-                                    summary = summary,
-                                    parentId = bestMatchId
-                                )
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    if (e !is kotlinx.coroutines.CancellationException) {
-                        Log.e(TAG, "Storylines matching failed", e)
-                    } else throw e
-                }
+                    MewsRepository.deleteTitleById(it.id)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch(_: Exception) {}
             }
 
-            if (successCount == 0 && titlesToSummarize.isNotEmpty()) {
+            if (successCount == 0 && totalItemsToProcess > 0) {
                 val error = lastError ?: SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
                 safeReadyFunc(readyFunc)
                 return SummarizationResult.Failure(error)
@@ -874,12 +936,13 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             val prompt = """
                 Проанализируй новости и выдели ОТДЕЛЬНЫЕ новостные события.
-                ЛИМИТЫ (СТРОГО): Максимальное количество тем: $maxLimit. Если событий больше — выбери самые резонансные и значимые. Мелкие, локальные или малозначительные новости ИГНОРИРУЙ.
+                ЛИМИТЫ (СТРОГО): Максимальное количество тем: $maxLimit. Если событий больше — выбери самые резонансные и значимые.
                 Группируй новости по Сюжетным Линиям:
                 1. Цепочка событий (ОСТАВЛЯТЬ ВМЕСТЕ): Например, событие + реакция + последствия = ОДНА тема.
-                2. Сюжетная кластеризация: Объединяй события в одну тему ТОЛЬКО при наличии прямой причинно-следственной связи, игнорируя территориальные совпадения. Строгий запрет на общие рубрики.
+                2. Сюжетная кластеризация: Объединяй события в одну тему ТОЛЬКО при наличии прямой причинно-следственной связи, игнорируя территориальные совпадения. Старайся не объединять события из разных стран в одну тему, если они не являются частью одного прямого международного конфликта или сделки.
                 ФИЛЬТРАЦИЯ (СТРОГО): Игнорируй: рекламу, розыгрыши призов, итоги конкурсов, спам, а также темы: '$banned'.
                 ИНСТРУКЦИИ ЗАГОЛОВКОВ: Пиши в стиле Smart Casual: живые, человеческие заголовки без канцелярита.
+                Первым тегом в массиве keywords всегда должна идти общая макрокатегория (Политика, Экономика, Технологии и т.д.), остальные 2-4 тега — специфика. Если остаются мелкие разрозненные новости, объедини их в одну тему с названием "Другое" (на языке $lang). Для этой темы обязательно укажи тег "Другое" (на языке $lang) первым. Если в списке '$banned' присутствует тег "Другое", эту тему не создавай.
                 Верни JSON массив: [{"title": "Заголовок", "id": [101, 105], "keywords": ["тег1", "тег2"], "weight": 8}].
                 weight - важность (1-10). keywords - 3-5 ключевых слов. Язык: $lang.
                 Новости: $sanitizedBatch
@@ -980,8 +1043,9 @@ class NewsSummarizer(private val llm: LLMClient) {
 
         try {
             rateLimiter.waitIfNeeded()
+            val isBlitz = batch.all { it.first.keywords.firstOrNull()?.equals("другое", ignoreCase = true) == true }
             val response = try {
-                withTimeout(180000L) { sumTopicsBatch(llm, batch, bannedWords, lang) }
+                withTimeout(180000L) { sumTopicsBatch(llm, batch, bannedWords, lang, isBlitz) }
             } catch (e: GeminiException) {
                 if (e.errorType == SummarizationErrorType.RATE_LIMIT_EXCEEDED) rateLimiter.penalize()
                 if (e.errorType == SummarizationErrorType.CONTENT_BLOCKED) {
@@ -1045,7 +1109,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         }
     }
 
-    private suspend fun sumTopicsBatch(llm: LLMClient, data: List<Triple<Topics, List<Message>, String>>, banned: String, lang: String): String {
+    private suspend fun sumTopicsBatch(llm: LLMClient, data: List<Triple<Topics, List<Message>, String>>, banned: String, lang: String, isBlitz: Boolean): String {
         val jsonInput = JSONArray(data.map { (t, _, txt) ->
             JSONObject().apply {
                 put("id", t.ids?.firstOrNull() ?: 0L)
@@ -1054,21 +1118,79 @@ class NewsSummarizer(private val llm: LLMClient) {
             }
         })
 
-        val prompt = """
-        Ты — аналитик и обозреватель. Твоя цель — написать подробный лонгрид или развернутую статью, объем которой прямо пропорционален количеству входных данных. Запрещено искусственно сжимать текст.
-        Инструкции:
-        1. СТИЛЬ: Smart Casual с упором на литературность и читаемость. Строгая новостная объективность без эмоциональных оценок.
-        2. ДЕТАЛИЗАЦИЯ И ФАКТОЛОГИЯ: Пиши максимально развернуто. Твоя задача не сделать краткую выжимку, а литературно объединить все факты. Перенеси из источника 100% конкретных цифр, имен, названий организаций, деталей и точных цитат.
-        3. КРИТИЧЕСКИЙ ЗАПРЕТ: Запрещено генерировать данные, имена, номера и последствия, отсутствующие во входящем JSON.
-        4. ФОРМАТИРОВАНИЕ: Выделяй жирным шрифтом ключевые имена, даты, организации и термины. Разделяй длинные или сложные сюжеты логическими абзацами.
-        5. УМНАЯ ФИЛЬТРАЦИЯ: Если текст несет спам или запрещенные темы ('$banned'), верни строго слово REJECTED без дополнительных символов.
-        6. ЯЗЫК: ${lang}.
-        7. ПРЕДОХРАНИТЕЛЬ СЮЖЕТОВ: Если внутри одного id сгруппировано несколько связанных под-событий, ты обязан ПОДРОБНО РАСКРЫТЬ суть каждого из них. Сжатие фактов до размытых формулировок категорически запрещено. Выделяй разные аспекты, реакции или хронологию событий отдельными абзацами.
-        ФОРМАТ ОТВЕТА (СТРОГО JSON):
-        [{"id": <id из input>, "title": "<заголовок>", "summary": "<отформатированный текст статьи или строго "REJECTED">"}]
-        Ввод: $jsonInput
-        """.trimIndent()
+        val prompt = if (isBlitz) {
+            """
+            Ты — аналитик и обозреватель. Твоя цель — написать краткий дайджест микроновостей. Форматируй ответ как маркированный список, где каждое событие описано 1-2 предложениями с собственным кратким подзаголовком. Запрещено писать единый связный лонгрид.
+            Инструкции:
+            1. КРИТИЧЕСКИЙ ЗАПРЕТ: Запрещено генерировать данные, имена, номера и последствия, отсутствующие во входящем JSON.
+            2. УМНАЯ ФИЛЬТРАЦИЯ: Если текст несет спам или запрещенные темы ('$banned'), верни строго слово REJECTED без дополнительных символов.
+            3. ЯЗЫК: $lang.
+            4. ТОЧНОСТЬ ДАННЫХ: СТРОГО запрещено обобщать статистику, суммы, даты и конкретные показатели. Переноси их из исходного текста без изменений. Наиболее важные заявления и цитаты передавай исключительно прямой речью в кавычках («»), без пересказа своими словами.
+            ФОРМАТ ОТВЕТА (СТРОГО JSON):
+            [{"id": <id из input>, "title": "<заголовок>", "summary": "<отформатированный текст статьи или строго "REJECTED">"}]
+            Ввод: $jsonInput
+            """.trimIndent()
+        } else {
+            """
+            Ты — аналитик и обозреватель. Твоя цель — написать подробный лонгрид или развернутую статью, объем которой прямо пропорционален количеству входных данных. Запрещено искусственно сжимать текст.
+            Инструкции:
+            1. СТИЛЬ: Smart Casual с упором на литературность и читаемость. Строгая новостная объективность без эмоциональных оценок.
+            2. ДЕТАЛИЗАЦИЯ И ФАКТОЛОГИЯ: Пиши максимально развернуто. Твоя задача не сделать краткую выжимку, а литературно объединить все факты. Перенеси из источника 100% конкретных цифр, имен, названий организаций, деталей и точных цитат.
+            3. КРИТИЧЕСКИЙ ЗАПРЕТ: Запрещено генерировать данные, имена, номера и последствия, отсутствующие во входящем JSON.
+            4. ФОРМАТИРОВАНИЕ: Выделяй жирным шрифтом ключевые имена, даты, организации и термины. Разделяй длинные или сложные сюжеты логическими абзацами.
+            5. УМНАЯ ФИЛЬТРАЦИЯ: Если текст несет спам или запрещенные темы ('$banned'), верни строго слово REJECTED без дополнительных символов.
+            6. ЯЗЫК: $lang.
+            7. ПРЕДОХРАНИТЕЛЬ СЮЖЕТОВ: Если внутри одного id сгруппировано несколько связанных под-событий, ты обязан ПОДРОБНО РАСКРЫТЬ суть каждого из них. Сжатие фактов до размытых формулировок категорически запрещено. Выделяй разные аспекты, реакции или хронологию событий отдельными абзацами.
+            8. ТОЧНОСТЬ ДАННЫХ: СТРОГО запрещено обобщать статистику, суммы, даты и конкретные показатели. Переноси их из исходного текста без изменений. Наиболее важные заявления и цитаты передавай исключительно прямой речью в кавычках («»), без пересказа своими словами.
+            ФОРМАТ ОТВЕТА (СТРОГО JSON):
+            [{"id": <id из input>, "title": "<заголовок>", "summary": "<отформатированный текст статьи или строго "REJECTED">"}]
+            Ввод: $jsonInput
+            """.trimIndent()
+        }
 
         return llm.sendPrompt(prompt)
+    }
+
+    private fun findBestMatch(topic: Topics, summaryToCompare: String?, history: List<TitleEntity>): Long? {
+        var bestMatchId: Long? = null
+        var maxScore = 0.0
+        val minKeywordMatches = 2
+        val topicTags = topic.keywords.drop(1)
+
+        for (historyItem in history) {
+            val hkFirst = historyItem.keywords.firstOrNull()?.lowercase() ?: ""
+            if (hkFirst == "другое" || TextComparator.areSimilar(hkFirst, "другое", 0.85)) continue
+
+            val historyTags = historyItem.keywords.drop(1)
+            var keywordMatches = 0
+
+            for (tk in topicTags) {
+                for (hk in historyTags) {
+                    if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.85)) {
+                        keywordMatches++
+                        break
+                    }
+                }
+            }
+
+            if (keywordMatches >= minKeywordMatches) {
+                var currentScore = keywordMatches.toDouble()
+                if (summaryToCompare != null) {
+                    if (TextComparator.areSimilar(summaryToCompare, historyItem.summary, 0.45)) {
+                        currentScore += 0.5
+                    }
+                } else {
+                    if (TextComparator.areSimilar(topic.title, historyItem.title, 0.45)) {
+                        currentScore += 0.5
+                    }
+                }
+
+                if (currentScore > maxScore) {
+                    maxScore = currentScore
+                    bestMatchId = historyItem.id
+                }
+            }
+        }
+        return bestMatchId
     }
 }

@@ -959,6 +959,14 @@ private fun ExpandedCardContent(
                                             modifier = Modifier.fillMaxSize(),
                                         ) { pageIndex ->
                                             val isImageFullOpened = clickedImageIndex == pageIndex
+                                            val imageRequest = remember(dynamicMediaUrls[pageIndex].mediaLink) {
+                                                ImageRequest.Builder(context)
+                                                    .data(dynamicMediaUrls[pageIndex].mediaLink)
+                                                    .diskCachePolicy(CachePolicy.ENABLED)
+                                                    .memoryCachePolicy(CachePolicy.ENABLED)
+                                                    .build()
+                                            }
+
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -973,12 +981,7 @@ private fun ExpandedCardContent(
                                                     }
                                             ) {
                                                 AsyncImage(
-                                                    model = ImageRequest.Builder(context)
-                                                        .data(dynamicMediaUrls[pageIndex].mediaLink)
-                                                        .precision(Precision.EXACT)
-                                                        .diskCachePolicy(CachePolicy.ENABLED)
-                                                        .memoryCachePolicy(CachePolicy.ENABLED)
-                                                        .build(),
+                                                    model = imageRequest,
                                                     contentDescription = null,
                                                     modifier = Modifier
                                                         .fillMaxSize()
@@ -988,12 +991,7 @@ private fun ExpandedCardContent(
                                                 )
 
                                                 AsyncImage(
-                                                    model = ImageRequest.Builder(context)
-                                                        .data(dynamicMediaUrls[pageIndex].mediaLink)
-                                                        .precision(Precision.EXACT)
-                                                        .diskCachePolicy(CachePolicy.ENABLED)
-                                                        .memoryCachePolicy(CachePolicy.ENABLED)
-                                                        .build(),
+                                                    model = imageRequest,
                                                     contentDescription = null,
                                                     modifier = Modifier
                                                         .fillMaxSize()
