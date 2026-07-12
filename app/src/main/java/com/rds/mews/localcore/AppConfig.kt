@@ -1,7 +1,6 @@
 package com.rds.mews.localcore
 
 import com.rds.mews.R
-import com.rds.mews.localcore.TitleSorting.OLDEST
 import com.rds.mews.localcore.TitlesPeriod.ADAPTIVE
 import kotlinx.serialization.Serializable
 
@@ -183,7 +182,7 @@ enum class SourceType(val id: Int) {
 }
 
 @Serializable
-enum class SummarizingStatus(val stringId: Int, val id: Int) {
+enum class UpdatingState(val stringId: Int, val id: Int) {
     DEFAULT(R.string.update, 0),
     UPDATING(R.string.updating, 1),
     PARSING(R.string.parsing, 2),
@@ -192,7 +191,7 @@ enum class SummarizingStatus(val stringId: Int, val id: Int) {
     SUMMARIZING(R.string.summarizing, 5);
 
     companion object {
-        fun fromId(key: Int): SummarizingStatus {
+        fun fromId(key: Int): UpdatingState {
             return entries.find { it.id == key } ?: DEFAULT
         }
     }

@@ -68,11 +68,11 @@ interface MessageDao {
     @Query("SELECT * FROM messages ORDER BY pub_time ASC")
     suspend fun getAllMessagesOneShot(): List<MessageEntity>
 
-    @Query("SELECT * FROM messages WHERE pub_time > :timeMs AND is_duplicate = 0 ORDER BY pub_time ASC")
-    suspend fun getUniqueMessagesAfterTimeOneShot(timeMs: Long): List<MessageEntity>
+    @Query("SELECT id, source_id, link, pub_time, clean_text FROM messages WHERE pub_time > :timeMs AND is_duplicate = 0 ORDER BY pub_time ASC")
+    suspend fun getUniqueMessagesAfterTimeOneShot(timeMs: Long): List<MessageSummaryProjection>
 
-    @Query("SELECT * FROM messages WHERE is_duplicate = 0 ORDER BY pub_time ASC")
-    suspend fun getAllUniqueMessagesOneShot(): List<MessageEntity>
+    @Query("SELECT id, source_id, link, pub_time, clean_text FROM messages WHERE is_duplicate = 0 ORDER BY pub_time ASC")
+    suspend fun getAllUniqueMessagesOneShot(): List<MessageSummaryProjection>
 
     @Query("SELECT * FROM messages WHERE id IN (:ids)")
     suspend fun getMessagesByIds(ids: List<Long>): List<MessageEntity>
@@ -81,13 +81,25 @@ interface MessageDao {
     suspend fun getMessagesByLinks(links: List<String>): List<MessageEntity>
 
     @Query("""
-        SELECT m.* FROM messages m
-        INNER JOIN sources s ON m.source_id = s.id
-        WHERE m.is_duplicate = 0 
-          AND m.pub_time > COALESCE(s.summarizing_last_sync, :userTimeMs)
-        ORDER BY m.pub_time ASC
-    """)
-    suspend fun getUniqueMessagesForSummarizing(userTimeMs: Long): List<MessageEntity>
+    SELECT m.id, m.source_id, m.link, m.pub_time, m.clean_text 
+    FROM messages m
+    INNER JOIN sources s ON m.source_id = s.id
+    WHERE m.is_duplicate = 0 
+      AND m.pub_time > COALESCE(s.summarizing_last_sync, :userTimeMs)
+    ORDER BY m.pub_time ASC
+""")
+    suspend fun getUniqueMessagesForSummarizing(userTimeMs: Long): List<MessageSummaryProjection>
+
+
+    @Query(
+        """
+    SELECT map.message_id 
+    FROM title_message_map map
+    INNER JOIN messages m ON map.message_id = m.id
+    WHERE :sinceTimestamp IS NULL OR m.pub_time > :sinceTimestamp
+    """
+    )
+    suspend fun getAllUsedMessages(sinceTimestamp: Long?): List<Long>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(message: MessageEntity): Long
@@ -177,6 +189,9 @@ interface TitleDao {
 
     @Query("SELECT * FROM titles WHERE status = :processingStatusId")
     suspend fun getTitlesNotProcessing(processingStatusId: Int): List<TitleEntity>
+
+    @Query("SELECT update_time FROM titles")
+    suspend fun getAllUpdateTimes(): List<Long>
 
     @Query("SELECT message_id FROM title_message_map WHERE title_id = :titleId")
     suspend fun getMessageIdsForTitle(titleId: Long): List<Long>

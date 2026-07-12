@@ -89,6 +89,7 @@ import com.rds.mews.ui.theme.Shapes
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.TitleSorting
+import com.rds.mews.localcore.UpdatingState
 import com.rds.mews.viewmodels.TitlesScrollEvent
 
 @Composable
@@ -154,7 +155,7 @@ fun TitlesScreen(
         groupStates = groupStates,
         modifier = modifier,
         isRefreshing = isRefreshing,
-        updatingState = updatingState ?: "updating",
+        updatingState = updatingState,
         updatingProgress = updatingProgress,
         indicatorCollapsed = isIndicatorCollapsed,
         showEmptyMess = showEmptyMess,
@@ -201,7 +202,7 @@ fun TitlesGrid(
     groupStates: List<TitlesGroupState>,
     modifier: Modifier,
     isRefreshing: Boolean,
-    updatingState: String,
+    updatingState: UpdatingState,
     updatingProgress: Float,
     indicatorCollapsed: Boolean,
     showEmptyMess: Boolean,
@@ -337,7 +338,7 @@ fun TitlesGrid(
                 modifier = Modifier
                     .align(Alignment.TopCenter),
                 isRefreshing = isRefreshing,
-                statusText = context.getString(updatingStateInterpreter(updatingState)),
+                statusText = context.getString(updatingState.stringId),
                 progress = updatingProgress,
                 isCollapsed = indicatorCollapsed,
                 onCollapseChange = { onIndicatorClick() },

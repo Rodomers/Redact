@@ -43,6 +43,8 @@ import com.rds.mews.viewmodels.SourcesViewModelFactory
 import com.rds.mews.viewmodels.TitlesScrollEvent
 import com.rds.mews.viewmodels.TitlesViewModel
 import com.rds.mews.viewmodels.TitlesViewModelFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -6,6 +6,7 @@ import com.rds.mews.core.NewsSummarizer
 import com.rds.mews.core.RssFetcher
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.TitlesPeriod
+import com.rds.mews.localcore.UpdatingState
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.settings_manager.SummarizationErrorType
 import kotlinx.coroutines.Dispatchers
@@ -52,7 +53,7 @@ class TitlesUpdater() {
             val summarizer = NewsSummarizer(llmClient)
 
             MewsRepository.setUpdatingTitles(true)
-            MewsRepository.setUpdatingState("updating")
+            MewsRepository.setUpdatingState(UpdatingState.UPDATING)
 
             currentCoroutineContext().ensureActive()
 
@@ -60,7 +61,7 @@ class TitlesUpdater() {
 
             val lastRssTime = MewsRepository.lastRssUpdate.first()
             if (System.currentTimeMillis() - lastRssTime > 900000L) {
-                MewsRepository.setUpdatingState("parsing")
+                MewsRepository.setUpdatingState(UpdatingState.PARSING)
                 fetcher.fetchAndStoreAll()
             }
             MewsRepository.setLastRssUpdate(System.currentTimeMillis())
@@ -128,7 +129,7 @@ class TitlesUpdater() {
 
             withContext(Dispatchers.IO) { delay(500L.milliseconds) }
 
-            MewsRepository.setUpdatingState("off")
+            MewsRepository.setUpdatingState(UpdatingState.DEFAULT)
             MewsRepository.setUpdatingProgress(0f)
         }
 

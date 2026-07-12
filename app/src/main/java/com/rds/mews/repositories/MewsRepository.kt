@@ -3,7 +3,6 @@ package com.rds.mews.repositories
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
-import androidx.compose.runtime.MutableState
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.rds.mews.GeminiApiKeyProvider
@@ -53,8 +52,8 @@ object MewsRepository {
 
     lateinit var lastError: StateFlow<SummarizationResult.Failure?>
     lateinit var lastTitlesUpdate: StateFlow<Long>
-    lateinit var updatingState: StateFlow<String?>
-    lateinit var updatingProgress: StateFlow<Float>
+//    lateinit var updatingState: StateFlow<String?>
+//    lateinit var updatingProgress: StateFlow<Float>
     lateinit var bannedNewsFlow: StateFlow<Set<String>>
 
     lateinit var darkTheme: StateFlow<DarkTheme>
@@ -102,6 +101,12 @@ object MewsRepository {
     private val _updatingTitles = MutableStateFlow(false)
     val updatingTitles = _updatingTitles.asStateFlow()
 
+    private val _updatingState = MutableStateFlow(UpdatingState.DEFAULT)
+    val updatingState = _updatingState.asStateFlow()
+
+    private val _updatingProgress = MutableStateFlow(0f)
+    val updatingProgress = _updatingProgress.asStateFlow()
+
     const val CURRENT_THEME = "current_theme"
     const val IS_MONET = "is_monet"
     const val TITLES_NUM = "titles_num"
@@ -137,6 +142,9 @@ object MewsRepository {
 
         this.database = Room.databaseBuilder(appContext, AppDatabase::class.java, "MainDB")
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+//            .setQueryCallback({ sqlQuery, bindArgs ->
+//                Log.d("ROOM_QUERY", "Выполнение: $sqlQuery | Параметры: $bindArgs")
+//            }, java.util.concurrent.Executors.newSingleThreadExecutor())
             .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4,
                 AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6)
             .build()
@@ -175,8 +183,8 @@ object MewsRepository {
                 .stateIn(externalScope, SharingStarted.Eagerly, default)
         }
 
-        updatingState = createSettingFlow({ it.updatingState }, "off")
-        updatingProgress = createSettingFlow({ it.updatingProgress }, 0f)
+//        updatingState = createSettingFlow({ it.updatingState }, "off")
+//        updatingProgress = createSettingFlow({ it.updatingProgress }, 0f)
         lastTitlesUpdate = createSettingFlow({ it.lastTitlesUpdate }, 0L)
         bannedNewsFlow = createSettingFlow({ it.bannedNews }, emptySet())
 
@@ -530,9 +538,8 @@ object MewsRepository {
         }
     }
 
-    suspend fun getUniqueMessagesList(timeSeconds: Long? = null): List<Message> = withContext(Dispatchers.IO) {
-        val entities = if (timeSeconds != null) {
-            val timeMs = System.currentTimeMillis() - (timeSeconds * 1000)
+    suspend fun getUniqueMessagesList(timeMs: Long? = null): List<Message> = withContext(Dispatchers.IO) {
+        val entities = if (timeMs != null) {
             messageDao.getUniqueMessagesAfterTimeOneShot(timeMs)
         } else {
             messageDao.getUniqueMessagesForSummarizing(lastTitlesUpdate.first())
@@ -540,7 +547,7 @@ object MewsRepository {
 
         entities.map { msg ->
             val source = getSource(msg.sourceId)
-            Message(msg.id, msg.pubTime, msg.link, source, msg.originalText, msg.cleanText)
+            Message(msg.id, msg.pubTime, msg.link, source, "", msg.cleanText)
         }
     }
 
@@ -549,8 +556,37 @@ object MewsRepository {
 
         entities.map { msg ->
             val source = getSource(msg.sourceId)
-            Message(msg.id, msg.pubTime, msg.link, source, msg.originalText, msg.cleanText)
+            Message(msg.id, msg.pubTime, msg.link, source, "", msg.cleanText)
         }
+    }
+
+    suspend fun getTitlesUpdateTimeMarks(): List<Long> = withContext(Dispatchers.IO) {
+        return@withContext titleDao.getAllUpdateTimes().distinct().sortedDescending()
+    }
+
+    suspend fun getTargetWindowTimeMark(windowMs: Long = 4 * 3600 * 1000L): Long? = withContext(
+        Dispatchers.IO) {
+        val currentTime = System.currentTimeMillis()
+        if ((currentTime - lastTitlesUpdate.first()) >= windowMs) return@withContext null
+        return@withContext getTitlesUpdateTimeMarks().firstOrNull { currentTime - it >= windowMs }
+    }
+
+    suspend fun getAllUsedMessageIds(windowMs: Long? = null): List<Long> = withContext(Dispatchers.IO) {
+        val time = if (windowMs == null) null else System.currentTimeMillis() - windowMs
+        return@withContext messageDao.getAllUsedMessages(time).distinct()
+    }
+
+    suspend fun findLastChild(titleId: Long): Long = withContext(Dispatchers.IO) {
+        var selectedTopic = titleId
+        var childTopic = titleDao.getChildTitle(selectedTopic)?.id
+        var depth = 0
+        val maxDepth = 15
+        while (childTopic != null && depth <= maxDepth) {
+            depth++
+            selectedTopic = childTopic
+            childTopic = titleDao.getChildTitle(selectedTopic)?.id
+        }
+        return@withContext selectedTopic
     }
 
     suspend fun getCleanTextsInWindow(timeStart: Long, timeEnd: Long): List<String> = withContext(Dispatchers.IO) {
@@ -573,15 +609,15 @@ object MewsRepository {
         }
     }
 
-    suspend fun getProcessedMessageIds(sinceMs: Long): Set<Long> = withContext(Dispatchers.IO) {
-        val recentTitles = titleDao.getChildfreeTitlesFlow().first()
-            .filter { titleDao.getChildTitle(it.id) == null && it.eventTime >= sinceMs && it.status != TitleStatus.PROCESSING.statusId }
-        val ids = mutableSetOf<Long>()
-        for (title in recentTitles) {
-            ids.addAll(titleDao.getMessageIdsForTitle(title.id))
-        }
-        ids
-    }
+//    suspend fun getProcessedMessageIds(sinceMs: Long): Set<Long> = withContext(Dispatchers.IO) {
+//        val recentTitles = titleDao.getChildfreeTitlesFlow().first()
+//            .filter { titleDao.getChildTitle(it.id) == null && it.eventTime >= sinceMs && it.status != TitleStatus.PROCESSING.statusId }
+//        val ids = mutableSetOf<Long>()
+//        for (title in recentTitles) {
+//            ids.addAll(titleDao.getMessageIdsForTitle(title.id))
+//        }
+//        ids
+//    }
 
     suspend fun addTitle(
         newTimeVal: Long,
@@ -697,8 +733,8 @@ object MewsRepository {
     fun setProxyEnabled(newValue: Boolean) = updateSetting { it.copy(enableProxy = newValue) }
     fun setLastTitlesUpdate(newValue: Long) = updateSetting { it.copy(lastTitlesUpdate = newValue) }
     fun setUpdatingTitles(newValue: Boolean) { _updatingTitles.value = newValue }
-    fun setUpdatingState(newValue: String) = updateSetting { it.copy(updatingState = newValue) }
-    fun setUpdatingProgress(newValue: Float) = updateSetting { it.copy(updatingProgress = newValue) }
+    fun setUpdatingState(newValue: UpdatingState) { _updatingState.value = newValue }
+    fun setUpdatingProgress(newValue: Float) { _updatingProgress.value = newValue.coerceIn(0f, 1f) }
     fun setBannedNews(newValue: Set<String>) = updateSetting { it.copy(bannedNews = newValue) }
 
     fun addBannedNew(newValue: String) {
@@ -738,6 +774,7 @@ object MewsRepository {
 
     fun setStoppedManually(value: Boolean) {
         _stoppedManually.value = value
+        _updatingProgress.value = 0f
     }
 
     fun saveLastError(failure: SummarizationResult.Failure) {

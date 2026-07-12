@@ -53,6 +53,7 @@ import com.rds.mews.core.TelegramRssClient
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.TitleStatus
+import com.rds.mews.localcore.UpdatingState
 import com.rds.mews.localcore.cancelTitlesUpdate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -108,7 +109,7 @@ class TitlesViewModel(
     val expandSources: StateFlow<Boolean> = repository.expandSources
     val copyPlainText: StateFlow<Boolean> = repository.sanitizeCopiedText
     val titleSorting: StateFlow<TitleSorting> = repository.titleSorting
-    val updatingState: StateFlow<String?> = repository.updatingState
+    val updatingState: StateFlow<UpdatingState> = repository.updatingState
     val updatingProgress: StateFlow<Float> = repository.updatingProgress
 
     val innerTimestamps: StateFlow<Boolean> = repository.innerTimestamps.stateIn(viewModelScope,

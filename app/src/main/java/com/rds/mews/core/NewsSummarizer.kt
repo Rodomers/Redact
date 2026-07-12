@@ -5,6 +5,7 @@ import com.rds.mews.database.TitleEntity
 import com.rds.mews.localcore.Message
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.TitleStatus
+import com.rds.mews.localcore.UpdatingState
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.settings_manager.GeminiException
 import com.rds.mews.settings_manager.SummarizationErrorType
@@ -25,6 +26,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.io.Closeable
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 
 class SmartRateLimiter(private val minIntervalMs: Long = 4500L) {
@@ -314,7 +316,8 @@ class NewsSummarizer(private val llm: LLMClient) {
         val weight: Int = 0,
         val id: Long = 0,
         val status: Int = 0,
-        val keywords: List<String> = emptyList()
+        val keywords: List<String> = emptyList(),
+        val isBlitz: Boolean = false
     )
     data class GroupedMessage(
         val representative: Message,
@@ -344,21 +347,26 @@ class NewsSummarizer(private val llm: LLMClient) {
         readyFunc: () -> Unit,
         filterTopics: Boolean = true
     ): SummarizationResult {
-        MewsRepository.setUpdatingState("extracting_topics")
+        MewsRepository.setUpdatingState(UpdatingState.EXTRACTING)
         try {
             val isRetryMode = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId).isNotEmpty()
             val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
 
             val rawMessages = if (!isRetryMode) {
-                val msgs = MewsRepository.getUniqueMessagesList()
+                val target = MewsRepository.getTargetWindowTimeMark()
+                val msgs = MewsRepository.getUniqueMessagesList(target)
+
+                Log.d(TAG, "msgs size: ${msgs.size}, target time: $target")
 
                 val processedMessageIds = try {
-                    MewsRepository.getProcessedMessageIds(System.currentTimeMillis() - (72 * 60 * 60 * 1000L))
+                    MewsRepository.getAllUsedMessageIds(messageSeconds * 1000L)
                 } catch (_: Exception) {
                     emptySet()
                 }
 
                 val finalMsgs = msgs.filter { it.id !in processedMessageIds }
+
+                Log.d(TAG, "final msgs size: ${finalMsgs.size}")
 
                 if (finalMsgs.isEmpty()) {
                     safeReadyFunc(readyFunc)
@@ -392,7 +400,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     processedItemsCount = 0
                     val availableSpace = 0.4f
 
-                    MewsRepository.setUpdatingState("extracting_topics")
+                    MewsRepository.setUpdatingState(UpdatingState.EXTRACTING)
 
                     for (msg in sortedMessages) {
                         while (msg.time > currentWindowEnd) {
@@ -411,7 +419,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     }
 
                     val mergedTopics = if (filterTopics && globalApprovedTopics.isNotEmpty()) {
-                        MewsRepository.setUpdatingState("filtering_topics")
+                        MewsRepository.setUpdatingState(UpdatingState.FILTERING)
                         try {
                             smartMergeTopics(globalApprovedTopics, currentLanguage, 0, bannedWords)
                         } catch (e: Exception) {
@@ -463,8 +471,8 @@ class NewsSummarizer(private val llm: LLMClient) {
             }
 
             val titlesToSummarize = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId)
-            val normalTitles = titlesToSummarize.filter { it.keywords.firstOrNull()?.lowercase() != "другое" }.sortedByDescending { it.weight }
-            val blitzTitles = titlesToSummarize.filter { it.keywords.firstOrNull()?.lowercase() == "другое" }.sortedByDescending { it.weight }
+            val normalTitles = titlesToSummarize.filter { !it.isBlitz }.sortedByDescending { it.weight }
+            val blitzTitles = titlesToSummarize.filter { it.isBlitz }.sortedByDescending { it.weight }
             val processingQueue = (normalTitles + blitzTitles).toMutableList()
 
             if (processingQueue.isEmpty()) {
@@ -476,7 +484,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             processedItemsCount = 0
 
             val preHistory = try {
-                MewsRepository.getRecentTitlesForStorylines(System.currentTimeMillis() - (72 * 60 * 60 * 1000L)).toMutableList()
+                MewsRepository.getRecentTitlesForStorylines(System.currentTimeMillis() - (72 * 60 * 60 * 1000L)).filter { it.updateTime != MewsRepository.lastTitlesUpdate.first() }.toMutableList()
             } catch (_: Exception) {
                 mutableListOf()
             }
@@ -502,8 +510,8 @@ class NewsSummarizer(private val llm: LLMClient) {
                     val iterator = processingQueue.iterator()
 
                     while (iterator.hasNext() && batch.size < 10) {
-                        val nextItemIsOther = processingQueue.first().keywords.firstOrNull()?.equals("другое", ignoreCase = true) == true
-                        val batchIsOther = batch.firstOrNull()?.keywords?.firstOrNull()?.equals("другое", ignoreCase = true) == true
+                        val nextItemIsOther = processingQueue.first().isBlitz
+                        val batchIsOther = batch.firstOrNull()?.isBlitz ?: false
                         if (batch.isNotEmpty() && nextItemIsOther != batchIsOther) break
 
                         val candidate = iterator.next()
@@ -534,13 +542,12 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                     if (batch.isEmpty()) continue
 
-                    MewsRepository.setUpdatingState("summarizing_topics")
+                    MewsRepository.setUpdatingState(UpdatingState.SUMMARIZING)
 
                     val preTopicToHistorySummary = mutableMapOf<Long, String>()
 
                     for (topic in batch) {
-                        val tkFirst = topic.keywords.firstOrNull()?.lowercase() ?: ""
-                        if (tkFirst == "другое" || TextComparator.areSimilar(tkFirst, "другое", 0.85)) {
+                        if (topic.isBlitz) {
                             continue
                         }
 
@@ -595,8 +602,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                             continue
                                         }
 
-                                        val tkFirst = topic.keywords.firstOrNull()?.lowercase() ?: ""
-                                        val isOther = tkFirst == "другое" || TextComparator.areSimilar(tkFirst, "другое", 0.85)
+                                        val isOther = topic.isBlitz
 
                                         val newTimeVal = if (isOther) {
                                             System.currentTimeMillis()
@@ -639,7 +645,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                                     newTimeVal = newTimeVal,
                                                     newTitle = newTitle,
                                                     summary = summary,
-                                                    parentId = bestMatchId
+                                                    parentId = MewsRepository.findLastChild(bestMatchId)
                                                 )
                                             }
                                         } else {
@@ -769,7 +775,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         val unique = mutableListOf<Message>()
         messages.forEach { msg ->
             val cleanMsg = TextSanitizer.sanitize(msg.cleanText)
-            val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.cleanText), cleanMsg, 0.8) }
+            val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.cleanText), cleanMsg, 0.85) }
             if (!exists) unique.add(msg)
         }
         return unique
@@ -846,9 +852,11 @@ class NewsSummarizer(private val llm: LLMClient) {
                 val existing = globalCache[existingIndex]
                 val combinedIds = (existing.ids.orEmpty() + candidate.ids.orEmpty()).distinct()
                 val maxWeight = max(existing.weight, candidate.weight)
-                val combinedKeywords = (existing.keywords + candidate.keywords)
+                val firstTags = listOfNotNull(existing.keywords.firstOrNull(), candidate.keywords.firstOrNull()).distinctBy { it.lowercase() }
+                val combinedKeywords = (firstTags + existing.keywords.drop(1) + candidate.keywords.drop(1))
                     .distinctBy { it.lowercase() }
                     .take(8)
+
 
                 globalCache[existingIndex] = existing.copy(
                     ids = combinedIds,
@@ -942,9 +950,12 @@ class NewsSummarizer(private val llm: LLMClient) {
                 2. Сюжетная кластеризация: Объединяй события в одну тему ТОЛЬКО при наличии прямой причинно-следственной связи, игнорируя территориальные совпадения. Старайся не объединять события из разных стран в одну тему, если они не являются частью одного прямого международного конфликта или сделки.
                 ФИЛЬТРАЦИЯ (СТРОГО): Игнорируй: рекламу, розыгрыши призов, итоги конкурсов, спам, а также темы: '$banned'.
                 ИНСТРУКЦИИ ЗАГОЛОВКОВ: Пиши в стиле Smart Casual: живые, человеческие заголовки без канцелярита.
-                Первым тегом в массиве keywords всегда должна идти общая макрокатегория (Политика, Экономика, Технологии и т.д.), остальные 2-4 тега — специфика. Если остаются мелкие разрозненные новости, объедини их в одну тему с названием "Другое" (на языке $lang). Для этой темы обязательно укажи тег "Другое" (на языке $lang) первым. Если в списке '$banned' присутствует тег "Другое", эту тему не создавай.
-                Верни JSON массив: [{"title": "Заголовок", "id": [101, 105], "keywords": ["тег1", "тег2"], "weight": 8}].
-                weight - важность (1-10). keywords - 3-5 ключевых слов. Язык: $lang.
+                Первым тегом в массиве keywords всегда должна идти общая макрокатегория (Политика, Экономика, Технологии и т.д.), остальные 2-4 тега — специфика. 
+                Если остаются мелкие разрозненные новости, объедини их в одну тему с названием "Другое" (на языке $lang). Для этой темы обязательно укажи тег "Другое" (на языке $lang) первым и установи флаг isBlitz в значение true. Для всех обычных тем флаг isBlitz всегда должен быть false.
+                Если в списке '$banned' присутствует тег "Другое", эту тему не создавай.
+    
+                Верни JSON массив: [{"title": "Заголовок", "id": [101, 105], "keywords": ["тег1", "тег2"], "weight": 8, "isBlitz": false}].
+                weight - важность (1-10). keywords - 3-5 ключевых слов. isBlitz - boolean флаг (true только для сборных тем "Другое"). Язык: $lang.
                 Новости: $sanitizedBatch
             """.trimIndent()
 
@@ -990,7 +1001,9 @@ class NewsSummarizer(private val llm: LLMClient) {
                         }
                     }
 
-                    topics.add(Topics(title, fullIdList, w, keywords = keywordsList))
+                    val isBlitz = obj.optBoolean("isBlitz", false) || keywordsList.firstOrNull()?.equals("другое", ignoreCase = true) == true
+
+                    topics.add(Topics(title, fullIdList, w, keywords = keywordsList, isBlitz = isBlitz))
                 } catch (_: Exception) {
                     continue
                 }
@@ -1043,7 +1056,7 @@ class NewsSummarizer(private val llm: LLMClient) {
 
         try {
             rateLimiter.waitIfNeeded()
-            val isBlitz = batch.all { it.first.keywords.firstOrNull()?.equals("другое", ignoreCase = true) == true }
+            val isBlitz = batch.all { it.first.isBlitz }
             val response = try {
                 withTimeout(180000L) { sumTopicsBatch(llm, batch, bannedWords, lang, isBlitz) }
             } catch (e: GeminiException) {
@@ -1123,7 +1136,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             Ты — аналитик и обозреватель. Твоя цель — написать краткий дайджест микроновостей. Форматируй ответ как маркированный список, где каждое событие описано 1-2 предложениями с собственным кратким подзаголовком. Запрещено писать единый связный лонгрид.
             Инструкции:
             1. КРИТИЧЕСКИЙ ЗАПРЕТ: Запрещено генерировать данные, имена, номера и последствия, отсутствующие во входящем JSON.
-            2. УМНАЯ ФИЛЬТРАЦИЯ: Если текст несет спам или запрещенные темы ('$banned'), верни строго слово REJECTED без дополнительных символов.
+            2. УМНАЯ ФИЛЬТРАЦИЯ: Если новость содержит запрещенные темы или спам ('$banned') вместе с разрешенным контекстом, ПОЛНОСТЬЮ ИГНОРИРУЙ/ВЫРЕЗАЙ запрещенные детали и переписывай новость исключительно на основе оставшейся разрешенной информации. Возвращай строго слово REJECTED в поле "summary" только в крайнем случае — если после удаления запрещенного контента в новости вообще не осталось полезного смысла.
             3. ЯЗЫК: $lang.
             4. ТОЧНОСТЬ ДАННЫХ: СТРОГО запрещено обобщать статистику, суммы, даты и конкретные показатели. Переноси их из исходного текста без изменений. Наиболее важные заявления и цитаты передавай исключительно прямой речью в кавычках («»), без пересказа своими словами.
             ФОРМАТ ОТВЕТА (СТРОГО JSON):
@@ -1138,7 +1151,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             2. ДЕТАЛИЗАЦИЯ И ФАКТОЛОГИЯ: Пиши максимально развернуто. Твоя задача не сделать краткую выжимку, а литературно объединить все факты. Перенеси из источника 100% конкретных цифр, имен, названий организаций, деталей и точных цитат.
             3. КРИТИЧЕСКИЙ ЗАПРЕТ: Запрещено генерировать данные, имена, номера и последствия, отсутствующие во входящем JSON.
             4. ФОРМАТИРОВАНИЕ: Выделяй жирным шрифтом ключевые имена, даты, организации и термины. Разделяй длинные или сложные сюжеты логическими абзацами.
-            5. УМНАЯ ФИЛЬТРАЦИЯ: Если текст несет спам или запрещенные темы ('$banned'), верни строго слово REJECTED без дополнительных символов.
+            5. УМНАЯ ФИЛЬТРАЦИЯ: Если новость содержит запрещенные темы или спам ('$banned') вместе с разрешенным контекстом, ПОЛНОСТЬЮ ИГНОРИРУЙ/ВЫРЕЗАЙ запрещенные детали и переписывай новость исключительно на основе оставшейся разрешенной информации. Возвращай строго слово REJECTED в поле "summary" только в крайнем случае — если после удаления запрещенного контента в новости вообще не осталось полезного смысла.
             6. ЯЗЫК: $lang.
             7. ПРЕДОХРАНИТЕЛЬ СЮЖЕТОВ: Если внутри одного id сгруппировано несколько связанных под-событий, ты обязан ПОДРОБНО РАСКРЫТЬ суть каждого из них. Сжатие фактов до размытых формулировок категорически запрещено. Выделяй разные аспекты, реакции или хронологию событий отдельными абзацами.
             8. ТОЧНОСТЬ ДАННЫХ: СТРОГО запрещено обобщать статистику, суммы, даты и конкретные показатели. Переноси их из исходного текста без изменений. Наиболее важные заявления и цитаты передавай исключительно прямой речью в кавычках («»), без пересказа своими словами.
@@ -1155,18 +1168,22 @@ class NewsSummarizer(private val llm: LLMClient) {
         var bestMatchId: Long? = null
         var maxScore = 0.0
         val minKeywordMatches = 2
-        val topicTags = topic.keywords.drop(1)
+        val topicTags = topic.keywords
+
+        if (topic.isBlitz) return null
 
         for (historyItem in history) {
             val hkFirst = historyItem.keywords.firstOrNull()?.lowercase() ?: ""
             if (hkFirst == "другое" || TextComparator.areSimilar(hkFirst, "другое", 0.85)) continue
 
-            val historyTags = historyItem.keywords.drop(1)
+//            Попытка отбросить общий тэг темы
+//            val historyTags = historyItem.keywords.drop(1)
+            val historyTags = historyItem.keywords
             var keywordMatches = 0
 
             for (tk in topicTags) {
                 for (hk in historyTags) {
-                    if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.85)) {
+                    if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.8)) {
                         keywordMatches++
                         break
                     }
@@ -1174,16 +1191,15 @@ class NewsSummarizer(private val llm: LLMClient) {
             }
 
             if (keywordMatches >= minKeywordMatches) {
-                var currentScore = keywordMatches.toDouble()
-                if (summaryToCompare != null) {
-                    if (TextComparator.areSimilar(summaryToCompare, historyItem.summary, 0.45)) {
-                        currentScore += 0.5
-                    }
-                } else {
-                    if (TextComparator.areSimilar(topic.title, historyItem.title, 0.45)) {
-                        currentScore += 0.5
-                    }
-                }
+                var currentScore = keywordMatches.toDouble() / min(topicTags.size, historyTags.size).coerceAtLeast(1)
+                val threshold = if (summaryToCompare != null) TextComparator.countThreshold(
+                    summaryToCompare.lowercase(),
+                    historyItem.summary.lowercase()
+                ) else TextComparator.countThreshold(
+                    topic.title.lowercase(),
+                    historyItem.title.lowercase()
+                )
+                if (threshold >= 0.45) currentScore += threshold
 
                 if (currentScore > maxScore) {
                     maxScore = currentScore
@@ -1191,6 +1207,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 }
             }
         }
+
         return bestMatchId
     }
 }

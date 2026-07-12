@@ -16,6 +16,13 @@ object TextComparator {
         return calculateWeightedJacquard(text1, text2) >= threshold
     }
 
+    fun countThreshold(text1: String, text2: String): Double {
+        if (text1.isEmpty() || text2.isEmpty()) return 0.0
+        if (text1 == text2) return 1.0
+
+        return calculateWeightedJacquard(text1, text2)
+    }
+
     private fun calculateWeightedJacquard(s1: String, s2: String): Double {
         val tokens1 = tokenizeWithWeights(s1)
         val tokens2 = tokenizeWithWeights(s2)

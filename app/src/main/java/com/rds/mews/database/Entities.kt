@@ -70,6 +70,14 @@ data class MessageEntity(
     @ColumnInfo(name = "media_urls") val mediaUrls: List<String> = emptyList()
 )
 
+data class MessageSummaryProjection(
+    @ColumnInfo(name = "id") val id: Long,
+    @ColumnInfo(name = "source_id") val sourceId: Long,
+    @ColumnInfo(name = "link") val link: String,
+    @ColumnInfo(name = "pub_time") val pubTime: Long,
+    @ColumnInfo(name = "clean_text") val cleanText: String
+)
+
 @Entity(
     tableName = "titles",
     indices = [
