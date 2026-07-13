@@ -649,7 +649,7 @@ object MewsRepository {
 
     suspend fun updateTitle(
         id: Long,
-        newTimeVal: Long,
+        newEventTime: Long,
         newTitle: String,
         summary: String,
         status: Int = 0,
@@ -659,8 +659,7 @@ object MewsRepository {
         val updatedEntity = existing.copy(
             title = newTitle,
             summary = summary,
-            eventTime = newTimeVal,
-            updateTime = System.currentTimeMillis(),
+            eventTime = newEventTime,
             status = status
         )
         titleDao.update(updatedEntity)
