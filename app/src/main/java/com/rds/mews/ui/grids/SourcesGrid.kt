@@ -1,6 +1,7 @@
 package com.rds.mews.ui.grids
 
 import android.content.Context
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -57,6 +59,7 @@ fun SourcesScreen(
 ) {
     val groupedTitles by viewModel.groupedSources.collectAsStateWithLifecycle()
     val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
+    val expandedCards by viewModel.expandedSourcesIds.collectAsStateWithLifecycle()
     val newSourcesPermitted by viewModel.newSourcesPermitted.collectAsStateWithLifecycle()
     val delSource by viewModel.delSource.collectAsStateWithLifecycle()
     val changedSource by viewModel.changedSource.collectAsStateWithLifecycle()
@@ -74,6 +77,7 @@ fun SourcesScreen(
         gridState = gridState,
         groupedItems = groupedTitles,
         groupStates = groupStates,
+        expandedCards = expandedCards,
         modifier = modifier,
         onSourceAdd = onAddSource,
         onSourceDelete = viewModel::deleteSource,
@@ -92,6 +96,7 @@ fun SourcesScreen(
         bottomSpacer = bottomSpacer,
         setSourceNameBuffer = viewModel::setSourceNameBuffer,
         setRssLinkBuffer = viewModel::setRssLinkBuffer,
+        onCardExpanded = viewModel::setCardExpanded,
         resetErrCount = viewModel::resetErrCount
     )
 }
@@ -102,6 +107,7 @@ fun SourcesGrid(
     gridState: LazyGridState,
     groupedItems: Map<SourceType, List<RSS>>,
     groupStates: List<SourcesGroupState>,
+    expandedCards: Set<Long>,
     modifier: Modifier,
     onSourceAdd: (String, String) -> Unit,
     onSourceDelete: (Long) -> Unit,
@@ -120,6 +126,7 @@ fun SourcesGrid(
     bottomSpacer: Dp,
     setSourceNameBuffer: (String) -> Unit,
     setRssLinkBuffer: (String) -> Unit,
+    onCardExpanded: (Long) -> Unit,
     resetErrCount: (Long) -> Unit
 ) {
     val handler = LocalUriHandler.current
@@ -233,6 +240,7 @@ fun SourcesGrid(
                                 stringResource(R.string.source_delete),
                                 { setDelSource(item) }),
                         )
+
                         SourcesCard(
                             rss = item,
                             buttons = buttons,
@@ -241,6 +249,8 @@ fun SourcesGrid(
                                 in listOf(0L, null) -> "-"
                                 else -> getFormattedTimeUnix(item.lastUpdated ?: 0L)
                             },
+                            isExpanded = item.id in expandedCards,
+                            onExpanded = { onCardExpanded(item.id) },
                             onResetErrors = { resetErrCount(item.id) }
                         )
                     }

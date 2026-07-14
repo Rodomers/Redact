@@ -8,7 +8,6 @@ import com.rds.mews.localcore.SourcesGroupState
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.localcore.RSS
 import com.rds.mews.localcore.SourceType
-import com.rds.mews.localcore.defineSourceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -36,6 +35,9 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
 
     private val _isLinkCorrect = MutableStateFlow(false)
     val isLinkCorrect: StateFlow<Boolean> = _isLinkCorrect
+
+    private val _expandedSourcesIds = MutableStateFlow<Set<Long>>(emptySet())
+    val expandedSourcesIds: StateFlow<Set<Long>> = _expandedSourcesIds
 
     val sources: StateFlow<List<RSS>> = repository.getSourcesWithAvatars()
         .stateIn(
@@ -89,6 +91,11 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
 
     fun setDelSource(value: RSS?) {
         _delSource.value = value
+    }
+
+    fun setCardExpanded(id: Long) {
+        if (_expandedSourcesIds.value.contains(id)) _expandedSourcesIds.value -= id
+        else _expandedSourcesIds.value += id
     }
 
     fun resetErrCount(sourceId: Long) {

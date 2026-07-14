@@ -3,7 +3,6 @@ package com.rds.mews.ui.custom_elements
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -34,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,9 +68,15 @@ fun SourcesCard(
     buttons: List<TextButtonInputs>,
     avatarUrl: String?,
     timeText: String,
+    isExpanded: Boolean,
+    onExpanded: () -> Unit,
     onResetErrors: (Long) -> Unit
 ) {
-    val menuTransitionState = remember { MutableTransitionState(false) }
+    val menuTransitionState = remember { MutableTransitionState(isExpanded) }
+    LaunchedEffect(isExpanded) {
+        menuTransitionState.targetState = isExpanded
+    }
+
     val scope = rememberCoroutineScope()
 
     val blurRadius by animateDpAsState(
@@ -116,13 +122,19 @@ fun SourcesCard(
                     var isImageLoaded by remember { mutableStateOf(false) }
                     var retryCount by remember(avatarUrl) { mutableIntStateOf(0) }
 
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
+                    val context = LocalContext.current
+                    val imageRequest = remember(avatarUrl, retryCount) {
+                        ImageRequest.Builder(context)
                             .data(avatarUrl)
                             .crossfade(true)
                             .placeholder(R.drawable.zhdun)
                             .error(R.drawable.zhdun)
-                            .build(),
+                            .memoryCacheKey("$avatarUrl-$retryCount")
+                            .build()
+                    }
+
+                    AsyncImage(
+                        model = imageRequest,
                         contentDescription = null,
                         colorFilter = if (!isImageLoaded)
                             ColorFilter.tint(MaterialTheme.colorScheme.onSecondaryContainer)
@@ -198,9 +210,7 @@ fun SourcesCard(
                 }
 
                 CustomIconButton(
-                    inputs = IconButtonInputs(Icons.Default.MoreVert, action = {
-                        menuTransitionState.targetState = !menuTransitionState.currentState
-                    }),
+                    inputs = IconButtonInputs(Icons.Default.MoreVert, action = onExpanded),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .size(64.dp)
@@ -226,7 +236,7 @@ fun SourcesCard(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) {
-                            menuTransitionState.targetState = false
+                            onExpanded()
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -269,7 +279,7 @@ fun SourcesCard(
                                         text = btn.text,
                                         action = {
                                             btn.action()
-                                            menuTransitionState.targetState = false
+                                            onExpanded()
                                         },
                                         toast = btn.toast
                                     ),

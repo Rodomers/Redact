@@ -27,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.localcore.isScheduleExactAlarm
 import com.rds.mews.repositories.MewsRepository
@@ -180,12 +181,12 @@ fun MainScreen(mainActivity: MainActivity) {
             }
         }
 
-//        val titles = MewsRepository.titles.collectAsStateWithLifecycle(emptyList())
-//        LaunchedEffect(titles.value.lastIndex) {
-//            val timemarks = "1783937136280, 1783937136250, 1783937136216, 1783937136203, 1783937136197, 1783937136194, 1783937136181, 1783937136151, 1783937136111, 1783937136073, 1783937122377, 1783937122372, 1783937122366, 1783937122361, 1783937122356, 1783937122344, 1783937122312, 1783937122281, 1783937122268, 1783937122249, 1783937098772, 1783937098745, 1783937098736, 1783937098733, 1783937098726, 1783937098719, 1783937098704, 1783937098666, 1783937098637, 1783937098631, 1783935783109, 1783935653221, 1783935653214".split(", ").map { it.toLong() }
-//            println("метки: ${timemarks.joinToString(", ") }, тайтлов: ${titles.value.size}")
-//            println("топиков в последнем обновлении: ${titles.value.filter { timemarks.contains(it.updateTime) }.size}")
-////            println("есть тэг другое: ${titles.value.find { title -> title.keywords.find { TextComparator.areSimilar(it.lowercase(), "другое", 0.8) } != null}?.title }")
+//        val titles by MewsRepository.titles.collectAsStateWithLifecycle(emptyList())
+//        LaunchedEffect(titles.lastIndex) {
+//            println("Темы в базе:")
+//            titles.forEachIndexed { index, title ->
+//                println("$index. ${title.title}\n${title.summary}\nKeywords: ${title.keywords}, time: ${title.eventTime}")
+//            }
 //        }
 
         Scaffold { paddingValues ->

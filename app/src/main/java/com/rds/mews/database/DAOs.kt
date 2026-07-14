@@ -87,7 +87,7 @@ interface MessageDao {
     WHERE m.is_duplicate = 0 
       AND m.pub_time > COALESCE(s.summarizing_last_sync, :userTimeMs)
     ORDER BY m.pub_time ASC
-""")
+    """)
     suspend fun getUniqueMessagesForSummarizing(userTimeMs: Long): List<MessageSummaryProjection>
 
 
