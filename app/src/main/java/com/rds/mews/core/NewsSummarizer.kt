@@ -325,7 +325,7 @@ class NewsSummarizer(private val llm: LLMClient) {
     )
 
     private val BATCH_CHAR_LIMIT = 165000
-    private val MAX_NEWS_LIMIT = 90
+    private val MAX_NEWS_LIMIT = 75
     private val SINGLE_NEWS_CHAR_LIMIT = 3000
     private val TAG = "NewsSummarizer"
 
@@ -846,7 +846,7 @@ class NewsSummarizer(private val llm: LLMClient) {
     }
 
     private fun mergeIntoGlobal(newTopics: List<Topics>, globalCache: MutableList<Topics>) {
-        val keywordMatches = 2
+        val keywordMatches = 3
         newTopics.forEach { candidate ->
             val existingIndex = globalCache.indexOfFirst { existing ->
                 var isKeywordMatch = false
@@ -920,6 +920,7 @@ class NewsSummarizer(private val llm: LLMClient) {
 
         rateLimiter.waitIfNeeded()
         val response = withTimeout(120000L) { llm.sendPrompt(prompt) }
+        Log.d(TAG, "LLM Raw Merge: $response")
         val (jsonArray, _) = llm.safeParseJsonArray(response)
 
         val mergedResults = mutableListOf<Topics>()
@@ -960,6 +961,8 @@ class NewsSummarizer(private val llm: LLMClient) {
                 "• ${grp.representative.cleanText.replace("\"", "'").replace("`", "").take(SINGLE_NEWS_CHAR_LIMIT)} (id - ${grp.representative.id})"
             }
 
+            // Если остаются мелкие разрозненные новости, объедини их в тему "Другое" (на языке $lang). СТРОГОЕ ПРАВИЛО: массив keywords для этой темы должен содержать строго одно слово: ["Другое"] (на языке $lang). Используй тему "Другое" исключительно для единичных, изолированных микроновостей, которые невозможно объединить с другими инфоповодами в батче. Флаг isBlitz установи в true только для этой темы.
+            // Если в списке '$banned' присутствует тег "Другое", эту тему не создавай.
             val prompt = """
                 Проанализируй новости и выдели ОТДЕЛЬНЫЕ новостные события.
                 ЛИМИТЫ (СТРОГО): Максимальное количество тем: $maxLimit. Если событий больше — выбери самые резонансные и значимые.
@@ -969,8 +972,14 @@ class NewsSummarizer(private val llm: LLMClient) {
                 ФИЛЬТРАЦИЯ (СТРОГО): Игнорируй: рекламу, розыгрыши призов, итоги конкурсов, спам, а также темы: '$banned'.
                 ИНСТРУКЦИИ ЗАГОЛОВКОВ: Пиши в стиле Smart Casual: живые, человеческие заголовки без канцелярита.
                 Первым тегом в массиве keywords всегда должна идти общая макрокатегория (Политика, Экономика, Технологии и т.д.), остальные 2-4 тега — специфика. 
-                Если остаются мелкие разрозненные новости, объедини их в одну тему с названием "Другое" (на языке $lang). Для этой темы обязательно укажи тег "Другое" (на языке $lang) первым и установи флаг isBlitz в значение true. Для всех обычных тем флаг isBlitz всегда должен быть false.
-                Если в списке '$banned' присутствует тег "Другое", эту тему не создавай.
+                
+                ИНСТРУКЦИЯ ДЛЯ КАТЕГОРИИ "ДРУГОЕ":
+                    Используй тему "Другое" (на языке $lang) исключительно для единичных, изолированных микроновостей, которые невозможно объединить в значимые сюжеты.
+                    СТРОГИЕ ПРАВИЛА ДЛЯ ЭТОЙ ТЕМЫ:
+                    1. Массив keywords: ["Другое"] (строго одно слово).
+                    2. Флаг isBlitz: true.
+                    3. Ограничение: включи в эту категорию НЕ БОЛЕЕ 5 наиболее значимых или интересных микроновостей из оставшихся. Остальные мелкие новости — игнорируй.
+                    4. Если в списке '${'$'}banned' есть "Другое", не создавай эту тему.
     
                 Верни JSON массив: [{"title": "Заголовок", "id": [101, 105], "keywords": ["тег1", "тег2"], "weight": 8, "isBlitz": false}].
                 weight - важность (1-10). keywords - 3-5 ключевых слов. isBlitz - boolean флаг (true только для сборных тем "Другое"). Язык: $lang.
@@ -986,6 +995,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 }
                 throw RuntimeException("Trigger split", e)
             }
+            Log.d(TAG, "LLM Raw Extract: $response")
 
             val (jsonArray, isBroken) = llm.safeParseJsonArray(response)
             val topics = mutableListOf<Topics>()
@@ -1021,8 +1031,18 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                     val mappedKeywords = keywordsList.map { it.lowercase() }
                     val isBlitz = obj.optBoolean("isBlitz", false) || mappedKeywords.contains("другое") || mappedKeywords.contains("other") || mappedKeywords.contains("blitz")
+                    val finalKeywords = if (isBlitz) mappedKeywords.take(1) else keywordsList
 
-                    topics.add(Topics(title, fullIdList, w, keywords = keywordsList, isBlitz = isBlitz))
+                    Log.d(TAG, "Parsed Topic: id=${fullIdList}, title='$title', keywords=$keywordsList, isBlitz=$isBlitz")
+                    topics.add(
+                        Topics(
+                            title,
+                            if (isBlitz) fullIdList.take(5) else fullIdList,
+                            w,
+                            keywords = finalKeywords,
+                            isBlitz = isBlitz
+                        )
+                    )
                 } catch (_: Exception) {
                     continue
                 }

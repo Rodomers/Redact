@@ -287,7 +287,6 @@ fun TitlesGrid(
             }
 
             if (item != -1) {
-                onToggleExpanded(expandedCardId)
                 scrollToItem(item)
             }
         }
