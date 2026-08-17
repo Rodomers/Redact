@@ -1,4 +1,4 @@
-package com.rds.mews.database
+package com.rds.mews.database.main
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
@@ -16,7 +16,7 @@ import com.rds.mews.localcore.defineSourceType
         TitleMessageMap::class,
         TitleRelatedMap::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -26,33 +26,47 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun titleDao(): TitleDao
 
-    suspend fun insertBatchAndUpdateSourceTime(messages: List<MessageEntity>, sourceId: Long, syncTime: Long) {
+    suspend fun insertBatchAndUpdateSourceTime(
+        messages: List<MessageEntity>,
+        sourceId: Long,
+        syncTime: Long
+    ): List<Long> {
+        val finalIds = MutableList(messages.size) { -1L }
+
         withTransaction {
             val msgDao = messageDao()
             val rowIds = msgDao.insertAll(messages)
 
+            val conflictingIndices = mutableListOf<Int>()
             val conflictingLinks = mutableListOf<String>()
-            val conflictMap = mutableMapOf<String, MessageEntity>()
 
             for (i in rowIds.indices) {
-                if (rowIds[i] == -1L) {
-                    val msg = messages[i]
-                    conflictingLinks.add(msg.link)
-                    conflictMap[msg.link] = msg
+                if (rowIds[i] != -1L) {
+                    finalIds[i] = rowIds[i]
+                } else {
+                    conflictingIndices.add(i)
+                    conflictingLinks.add(messages[i].link)
                 }
             }
 
             if (conflictingLinks.isNotEmpty()) {
                 val existingMessages = msgDao.getMessagesByLinks(conflictingLinks)
+                val existingMap = existingMessages.associateBy { it.link }
                 val toUpdate = mutableListOf<MessageEntity>()
 
-                for (existing in existingMessages) {
-                    val newMsg = conflictMap[existing.link]
-                    if (newMsg != null && existing.originalText != newMsg.originalText) {
-                        toUpdate.add(existing.copy(
-                            originalText = newMsg.originalText,
-                            cleanText = newMsg.cleanText
-                        ))
+                for (i in conflictingIndices) {
+                    val newMsg = messages[i]
+                    val existing = existingMap[newMsg.link]
+
+                    if (existing != null) {
+                        finalIds[i] = existing.id
+
+                        if (existing.originalText != newMsg.originalText) {
+                            toUpdate.add(existing.copy(
+                                originalText = newMsg.originalText,
+                                cleanText = newMsg.cleanText
+                            ))
+                        }
                     }
                 }
 
@@ -63,6 +77,8 @@ abstract class AppDatabase : RoomDatabase() {
 
             sourceDao().updateLastSyncTime(sourceId, syncTime)
         }
+
+        return finalIds
     }
 
     companion object {
@@ -200,6 +216,12 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `sources` ADD COLUMN `summarizing_last_sync` INTEGER DEFAULT NULL")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE 'titles' ADD COLUMN 'is_blitz' INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

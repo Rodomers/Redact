@@ -12,22 +12,23 @@ import com.rds.mews.ProxyAddressProvider
 import com.rds.mews.R
 import com.rds.mews.RSSHubAddressProvider
 import com.rds.mews.RssHubApiKeyProvider
-import com.rds.mews.core.NewsSummarizer
-import com.rds.mews.core.SourceResolver
-import com.rds.mews.database.AppDatabase
-import com.rds.mews.core.validateGeminiKey
-import com.rds.mews.database.MessageDao
-import com.rds.mews.database.MessageEntity
-import com.rds.mews.database.SourceDao
-import com.rds.mews.database.SourceEntity
-import com.rds.mews.database.TitleDao
-import com.rds.mews.database.TitleEntity
-import com.rds.mews.database.TitleMessageMap
+import com.rds.mews.core.summarizer.NewsSummarizer
+import com.rds.mews.core.parser.SourceResolver
+import com.rds.mews.database.main.AppDatabase
+import com.rds.mews.core.summarizer.validateGeminiKey
+import com.rds.mews.core.text.TextCleaner
+import com.rds.mews.database.main.MessageDao
+import com.rds.mews.database.main.MessageEntity
+import com.rds.mews.database.main.SourceDao
+import com.rds.mews.database.main.SourceEntity
+import com.rds.mews.database.main.TitleDao
+import com.rds.mews.database.main.TitleEntity
+import com.rds.mews.database.main.TitleMessageMap
 import com.rds.mews.localcore.*
 import com.rds.mews.settings_manager.AppSettings
 import com.rds.mews.settings_manager.SettingsManager
 import com.rds.mews.settings_manager.SummarizationErrorType
-import com.rds.mews.text_filters.TextSanitizer
+import com.rds.mews.core.text.TextSanitizer
 import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.workers.AlarmScheduler
 import kotlinx.coroutines.*
@@ -84,6 +85,8 @@ object MewsRepository {
     lateinit var sanitizeCopiedText: StateFlow<Boolean>
     lateinit var saveUnreadTitles: StateFlow<Boolean>
     lateinit var enableUpdateNotification: StateFlow<Boolean>
+
+    lateinit var modelBatchInfo: StateFlow<Set<ModelBatchConfig>>
 
     private val _context = MutableStateFlow<Context?>(null)
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
@@ -146,7 +149,7 @@ object MewsRepository {
 //                Log.d("ROOM_QUERY", "Выполнение: $sqlQuery | Параметры: $bindArgs")
 //            }, java.util.concurrent.Executors.newSingleThreadExecutor())
             .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4,
-                AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6)
+                AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7)
             .build()
         this.sourceDao = database.sourceDao()
         this.messageDao = database.messageDao()
@@ -217,6 +220,8 @@ object MewsRepository {
         titlesAlarmTimeMins = createSettingFlow({ it.titlesAlarmTimeMins }, 540)
         exactAlarmsAllowed = createSettingFlow({ it.alarmsAllowed }, false)
         notificationsGranted = createSettingFlow({ it.notificationsGranted }, false)
+
+        modelBatchInfo = createSettingFlow( { it.modelBatchInfo }, emptySet() )
 
         parserBatchSize = createSettingFlow({ it.parserBatchSize }, 50)
 
@@ -497,7 +502,7 @@ object MewsRepository {
             pubTime = messageTime,
             title = title,
             originalText = messageText,
-            cleanText = messageText,
+            cleanText = TextSanitizer.sanitize(TextCleaner.clean(messageText)),
             isDuplicate = false,
             isRead = false,
             factCheck = null,
@@ -511,8 +516,8 @@ object MewsRepository {
         messageDao.deleteBeforeTime(killTimeMs)
     }
 
-    suspend fun getMessages(ids: String): List<Message>? = withContext(Dispatchers.IO) {
-        val idList = ids.split(",").mapNotNull { it.trim().toLongOrNull() }
+    suspend fun getMessages(strIds: String = "", ids: List<Long>? = null): List<Message>? = withContext(Dispatchers.IO) {
+        val idList = ids ?: strIds.split(",").mapNotNull { it.trim().toLongOrNull() }
         if (idList.isEmpty()) return@withContext null
 
         val targetMsgs = messageDao.getMessagesByIds(idList)
@@ -571,8 +576,11 @@ object MewsRepository {
         return@withContext getTitlesUpdateTimeMarks().firstOrNull { currentTime - it >= windowMs }
     }
 
-    suspend fun getAllUsedMessageIds(windowMs: Long? = null): List<Long> = withContext(Dispatchers.IO) {
-        val time = if (windowMs == null) null else System.currentTimeMillis() - windowMs
+    suspend fun getAllUsedMessageIds(windowMs: Long? = null, targetMs: Long? = null): List<Long> = withContext(Dispatchers.IO) {
+        val time = when (windowMs) {
+            null -> targetMs
+            else -> System.currentTimeMillis() - windowMs
+        }
         return@withContext messageDao.getAllUsedMessages(time).distinct()
     }
 
@@ -591,6 +599,11 @@ object MewsRepository {
 
     suspend fun getCleanTextsInWindow(timeStart: Long, timeEnd: Long): List<String> = withContext(Dispatchers.IO) {
         messageDao.getCleanTextsInWindow(timeStart, timeEnd)
+    }
+
+    suspend fun getMessagesInWindow(timeStart: Long, timeEnd: Long): List<MessageEntity> = withContext(
+        Dispatchers.IO) {
+        messageDao.getMessagesInWindow(timeStart, timeEnd)
     }
 
     suspend fun getMessageByLink(link: String): Message? = withContext(Dispatchers.IO) {
@@ -625,7 +638,9 @@ object MewsRepository {
         summary: String,
         messageIds: List<Long>,
         status: TitleStatus = TitleStatus.DEFAULT,
-        keywords: List<String> = emptyList()
+        keywords: List<String> = emptyList(),
+        isBlitz: Boolean = false,
+        parentId: Long? = null
     ): Long = withContext(Dispatchers.IO) {
         val titleEntity = TitleEntity(
             title = newTitle,
@@ -636,7 +651,8 @@ object MewsRepository {
             isRead = false,
             isPinned = false,
             importanceWeight = 0,
-            keywords = keywords
+            keywords = keywords,
+            isBlitz = isBlitz
         )
         val titleId = titleDao.insert(titleEntity)
 
@@ -644,23 +660,36 @@ object MewsRepository {
             titleDao.insertTitleMessageMap(TitleMessageMap(titleId, msgId))
         }
 
+        if (parentId != null) {
+            try {
+                titleDao.insertRelatedMapSafe(titleId, parentId)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to insert title relation", e)
+            }
+        }
+
         titleId
     }
 
     suspend fun updateTitle(
         id: Long,
-        newEventTime: Long,
         newTitle: String,
         summary: String,
         status: Int = 0,
-        parentId: Long? = null
+        newEventTime: Long? = null,
+        parentId: Long? = null,
+        macroTag: String? = null,
+        isBlitz: Boolean = false,
+        newMessageIds: List<Long>? = null
     ) = withContext(Dispatchers.IO) {
         val existing = titleDao.getTitleById(id) ?: return@withContext
         val updatedEntity = existing.copy(
             title = newTitle,
             summary = summary,
-            eventTime = newEventTime,
-            status = status
+            eventTime = newEventTime ?: existing.eventTime,
+            status = status,
+            keywords = if (macroTag != null) (listOf(macroTag) + existing.keywords).distinctBy { it.lowercase() } else existing.keywords,
+            isBlitz = isBlitz
         )
         titleDao.update(updatedEntity)
 
@@ -669,6 +698,12 @@ object MewsRepository {
                 titleDao.insertRelatedMapSafe(id, parentId)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to insert title relation", e)
+            }
+        }
+
+        if (!newMessageIds.isNullOrEmpty()) {
+            newMessageIds.distinct().forEach { msgId ->
+                titleDao.insertTitleMessageMap(TitleMessageMap(id, msgId))
             }
         }
     }
@@ -785,6 +820,21 @@ object MewsRepository {
         externalScope.launch { settingsManager.clearLastError() }
     }
 
+    fun updateModelBatchConfig(config: ModelBatchConfig) {
+        externalScope.launch(Dispatchers.IO) {
+            settingsManager.updateModelBatchConfig(config)
+        }
+    }
+
+    fun modifyModelBatchConfig(
+        model: GeminiModelOption,
+        transform: (ModelBatchConfig) -> ModelBatchConfig
+    ) {
+        externalScope.launch(Dispatchers.IO) {
+            settingsManager.modifyModelBatchConfig(model, transform)
+        }
+    }
+
     fun cancelTitlesAutoUpdates(context: Context) {
         AlarmScheduler.cancel(context)
     }
@@ -858,7 +908,7 @@ object MewsRepository {
         messages: List<MessageEntity>,
         sourceId: Long,
         syncTime: Long
-    ) = withContext(Dispatchers.IO) {
+    ): List<Long> = withContext(Dispatchers.IO) {
         database.insertBatchAndUpdateSourceTime(messages, sourceId, syncTime)
     }
 

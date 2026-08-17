@@ -1,4 +1,4 @@
-package com.rds.mews.text_filters
+package com.rds.mews.core.text
 
 class DuplicateDetector {
     fun checkIsDuplicate(newText: String, windowTexts: List<String>, threshold: Double = 0.85): Boolean {
@@ -14,7 +14,7 @@ class DuplicateDetector {
                 continue
             }
 
-            if (TextComparator.areSimilar(newText, existingText, threshold)) {
+            if (TextComparator.areSimilar(newText, existingText, threshold.toFloat())) {
                 return true
             }
         }

@@ -11,11 +11,13 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun CustomSwitch(
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
     Switch(
         modifier = Modifier.height(40.dp),
         checked = checked,
+        enabled = enabled,
         onCheckedChange = onCheckedChange,
         colors = SwitchDefaults.colors(
             checkedThumbColor = MaterialTheme.colorScheme.background,

@@ -99,4 +99,31 @@ class SettingsManager(private val context: Context) {
     suspend fun clearLastError() {
         updateSettings { it.copy(lastError = null) }
     }
+
+    suspend fun updateModelBatchConfig(config: ModelBatchConfig) {
+        updateSettings { current ->
+            val updatedSet = current.modelBatchInfo
+                .filterNot { it.model == config.model }
+                .toSet() + config
+
+            current.copy(modelBatchInfo = updatedSet)
+        }
+    }
+
+    suspend fun modifyModelBatchConfig(
+        model: GeminiModelOption,
+        transform: (ModelBatchConfig) -> ModelBatchConfig
+    ) {
+        updateSettings { current ->
+            val existing = current.modelBatchInfo.find { it.model == model }
+                ?: ModelBatchConfig(model = model)
+
+            val updated = transform(existing)
+            val updatedSet = current.modelBatchInfo
+                .filterNot { it.model == model }
+                .toSet() + updated
+
+            current.copy(modelBatchInfo = updatedSet)
+        }
+    }
 }

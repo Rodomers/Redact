@@ -4,6 +4,7 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.rds.mews.core.MewsImageLoaderFactory
+import com.rds.mews.repositories.KeywordStatsRepository
 import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +16,7 @@ class MewsApplication: Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         MewsRepository.initialize(this, applicationScope)
+        KeywordStatsRepository.initialize(this, applicationScope)
     }
 
     override fun newImageLoader(): ImageLoader {

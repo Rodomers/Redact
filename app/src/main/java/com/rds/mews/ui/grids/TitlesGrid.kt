@@ -90,6 +90,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserI
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.UpdatingState
+import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.viewmodels.TitlesScrollEvent
 
 @Composable

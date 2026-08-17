@@ -1,8 +1,10 @@
-package com.rds.mews.core
+package com.rds.mews.core.parser
 
 import android.content.Context
 import android.net.ConnectivityManager
-import com.rds.mews.database.SourceEntity
+import com.rds.mews.core.SharedHttpClient
+import com.rds.mews.core.TelegramRssClient
+import com.rds.mews.database.main.SourceEntity
 import com.rds.mews.localcore.SourceType
 import com.rds.mews.repositories.MewsRepository
 import kotlinx.coroutines.delay
@@ -18,6 +20,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 class RssFetcher(
     enableProxy: Boolean = false
@@ -39,7 +42,7 @@ class RssFetcher(
         val errors = mutableListOf<String>()
 
         val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = java.util.TimeZone.getTimeZone("UTC")
+            timeZone = TimeZone.getTimeZone("UTC")
         }
 
         for (source in sourceList) {
@@ -191,7 +194,7 @@ class RssFetcher(
             val rssItems = parseRssItems(doc)
 
             val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-                timeZone = java.util.TimeZone.getTimeZone("UTC")
+                timeZone = TimeZone.getTimeZone("UTC")
             }
 
             return rssItems.mapNotNull { item ->

@@ -75,36 +75,36 @@ object SharedHttpClient {
                 }
             }
 
-            if (enableProxy) {
-                builder.proxySelector(object : ProxySelector() {
-                    override fun select(uri: URI?): List<Proxy> {
-                        return try {
-                            val parts = serverIp.split(":")
-                            val host = parts[0]
-                            val port = parts.getOrNull(1)?.toIntOrNull() ?: 80
-
-                            val resolvedIp = resolveOverDohRecursive(host, 0) ?: host
-
-                            val proxyAddress = InetSocketAddress(resolvedIp, port)
-                            listOf(Proxy(Proxy.Type.HTTP, proxyAddress))
-                        } catch (e: Exception) {
-                            Log.e("API_LOG", "Proxy selection failed: ${e.message}")
-                            listOf(Proxy.NO_PROXY)
-                        }
-                    }
-
-                    override fun connectFailed(uri: URI?, sa: SocketAddress?, ioe: IOException?) {
-                        Log.e("API_LOG", "Proxy connection failed: ${ioe?.message}")
-                    }
-                })
-
-                builder.proxyAuthenticator { _, response ->
-                    val credential = Credentials.basic("mews", rssHubKey)
-                    response.request.newBuilder()
-                        .header("Proxy-Authorization", credential)
-                        .build()
-                }
-            }
+//            if (enableProxy) {
+//                builder.proxySelector(object : ProxySelector() {
+//                    override fun select(uri: URI?): List<Proxy> {
+//                        return try {
+//                            val parts = serverIp.split(":")
+//                            val host = parts[0]
+//                            val port = parts.getOrNull(1)?.toIntOrNull() ?: 80
+//
+//                            val resolvedIp = resolveOverDohRecursive(host, 0) ?: host
+//
+//                            val proxyAddress = InetSocketAddress(resolvedIp, port)
+//                            listOf(Proxy(Proxy.Type.HTTP, proxyAddress))
+//                        } catch (e: Exception) {
+//                            Log.e("API_LOG", "Proxy selection failed: ${e.message}")
+//                            listOf(Proxy.NO_PROXY)
+//                        }
+//                    }
+//
+//                    override fun connectFailed(uri: URI?, sa: SocketAddress?, ioe: IOException?) {
+//                        Log.e("API_LOG", "Proxy connection failed: ${ioe?.message}")
+//                    }
+//                })
+//
+//                builder.proxyAuthenticator { _, response ->
+//                    val credential = Credentials.basic("mews", rssHubKey)
+//                    response.request.newBuilder()
+//                        .header("Proxy-Authorization", credential)
+//                        .build()
+//                }
+//            }
 
             okHttpClient = builder.build()
         }

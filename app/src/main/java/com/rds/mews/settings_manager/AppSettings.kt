@@ -9,6 +9,7 @@ import com.rds.mews.localcore.AutoUpdateFrequency
 import com.rds.mews.localcore.DarkTheme
 import com.rds.mews.localcore.GeminiModelOption
 import com.rds.mews.localcore.HeadersNum
+import com.rds.mews.localcore.ModelBatchConfig
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.TitlesKeeping
 import com.rds.mews.localcore.TitlesPeriod
@@ -89,7 +90,18 @@ data class AppSettings(
     val updatingProgress: Float = 0f,
     val lastTitlesUpdate: Long = 0L,
     val bannedNews: Set<String> = emptySet(),
-    val lastError: SavedError? = null
+    val lastError: SavedError? = null,
+
+    // Summarizer info
+    val modelBatchInfo: Set<ModelBatchConfig> = GeminiModelOption.entries.map { entry ->
+        ModelBatchConfig(
+            model = GeminiModelOption.fromKey(entry.name),
+            kSafeMessages = 1.0,
+            kSafeTokens = 1.0,
+            successMessagesCount = 0,
+            successTokensCount = 0
+        )
+    }.toSet()
 )
 
 object AppSettingsSerializer : Serializer<AppSettings> {

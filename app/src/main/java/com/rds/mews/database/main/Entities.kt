@@ -1,4 +1,4 @@
-package com.rds.mews.database
+package com.rds.mews.database.main
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
@@ -92,6 +92,7 @@ data class TitleEntity(
     @ColumnInfo(name = "update_time") val updateTime: Long,
     val status: Int,
     @ColumnInfo(name = "is_read") val isRead: Boolean,
+    @ColumnInfo(name = "is_blitz") val isBlitz: Boolean,
     @ColumnInfo(name = "is_pinned") val isPinned: Boolean,
     @ColumnInfo(name = "importance_weight") val importanceWeight: Int,
     val keywords: List<String>

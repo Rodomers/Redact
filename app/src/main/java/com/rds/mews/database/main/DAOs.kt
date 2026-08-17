@@ -1,10 +1,11 @@
-package com.rds.mews.database
+package com.rds.mews.database.main
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import kotlin.math.max
 import kotlin.math.min
@@ -113,7 +114,7 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    @Query("DELETE FROM messages WHERE pub_time < :timeMs")
+    @Query("DELETE FROM messages WHERE pub_time < :timeMs AND id NOT IN (SELECT message_id FROM title_message_map)")
     suspend fun deleteBeforeTime(timeMs: Long): Int
 
     @Query("SELECT MAX(pub_time) FROM messages WHERE source_id = :sourceId")
@@ -121,6 +122,9 @@ interface MessageDao {
 
     @Query("SELECT clean_text FROM messages WHERE pub_time BETWEEN :timeStart AND :timeEnd")
     suspend fun getCleanTextsInWindow(timeStart: Long, timeEnd: Long): List<String>
+
+    @Query("SELECT * FROM messages WHERE pub_time BETWEEN :timeStart AND :timeEnd")
+    suspend fun getMessagesInWindow(timeStart: Long, timeEnd: Long): List<MessageEntity>
 }
 
 @Dao

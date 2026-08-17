@@ -1,5 +1,6 @@
-package com.rds.mews.core
+package com.rds.mews.core.parser
 
+import com.rds.mews.core.SharedHttpClient
 import com.rds.mews.localcore.SourceType
 import com.rds.mews.localcore.defineSourceType
 import com.rds.mews.repositories.MewsRepository
@@ -8,6 +9,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
+import java.net.URLEncoder
 
 @Serializable
 data class MinifluxFeedCreationRequest(
@@ -59,7 +61,7 @@ class MinifluxClient(
             } else {
                 finalUrl.trimEnd('/').split("/").last().substringBefore("?")
             }
-            val encodedKey = java.net.URLEncoder.encode(MewsRepository.SERVER_KEY, "UTF-8").replace("+", "%20")
+            val encodedKey = URLEncoder.encode(MewsRepository.SERVER_KEY, "UTF-8").replace("+", "%20")
             finalUrl = "http://${MewsRepository.HUB_ADDRESS}/telegram/channel/${username.trim()}?key=$encodedKey"
         }
         return finalUrl
@@ -125,7 +127,7 @@ class MinifluxClient(
 
         if (response.status !in 200..299) return@withContext null
 
-        @kotlinx.serialization.Serializable
+        @Serializable
         data class MinifluxFeed(val id: Long, val feed_url: String)
         val feeds = SharedHttpClient.jsonParser.decodeFromString<List<MinifluxFeed>>(response.body)
 

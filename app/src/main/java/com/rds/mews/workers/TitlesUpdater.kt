@@ -1,9 +1,9 @@
 package com.rds.mews.workers
 
 import android.util.Log
-import com.rds.mews.core.LLMClient
-import com.rds.mews.core.NewsSummarizer
-import com.rds.mews.core.RssFetcher
+import com.rds.mews.core.summarizer.LLMClient
+import com.rds.mews.core.summarizer.NewsSummarizer
+import com.rds.mews.core.parser.RssFetcher
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.TitlesPeriod
 import com.rds.mews.localcore.UpdatingState
@@ -83,7 +83,8 @@ class TitlesUpdater() {
                             continueUpdate = false
                             MewsRepository.setUpdatingTitles(false)
                         },
-                        filterTopics = filterTopics
+                        filterTopics = filterTopics,
+                        adaptive = MewsRepository.titlesPeriod.first() == TitlesPeriod.ADAPTIVE
                     )
 
                     if (finalResult is SummarizationResult.Success) break

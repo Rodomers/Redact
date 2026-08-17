@@ -4,17 +4,23 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.rds.mews.core.MinifluxClient
-import com.rds.mews.core.MinifluxEntry
-import com.rds.mews.core.RssFetcher
+import com.rds.mews.core.parser.MinifluxClient
+import com.rds.mews.core.parser.MinifluxEntry
+import com.rds.mews.core.parser.RssFetcher
 import com.rds.mews.core.SharedHttpClient
-import com.rds.mews.database.MessageEntity
-import com.rds.mews.database.SourceEntity
+import com.rds.mews.database.main.MessageEntity
+import com.rds.mews.database.main.SourceEntity
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.settings_manager.SummarizationErrorType
-import com.rds.mews.text_filters.DuplicateDetector
-import com.rds.mews.text_filters.TextCleaner
+import com.rds.mews.core.text.DuplicateDetector
+import com.rds.mews.core.text.SnippetExtractor
+import com.rds.mews.core.text.TextCleaner
+import com.rds.mews.core.text.TextSanitizer
+import com.rds.mews.core.text.graph.KnowledgeGraphManager
+import com.rds.mews.core.text.stats.BurstDetector
+import com.rds.mews.database.keyword_stats.BurstClusterEntity
+import com.rds.mews.repositories.KeywordStatsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -82,6 +88,9 @@ class ParserWorker(
                 }
 
                 MewsRepository.messageTimeKill(864000L)
+                KnowledgeGraphManager.applyDailyDecay()
+                KeywordStatsRepository.clearOldKeywords()
+                KeywordStatsRepository.recalculateHistoricalStats()
             }
             Result.success()
         } catch (e: IOException) {
@@ -153,16 +162,41 @@ class ParserWorker(
 
         val windowStart = minTimeMs - (4 * 60 * 60 * 1000L)
         val windowEnd = maxTimeMs + (4 * 60 * 60 * 1000L)
-        val windowTexts = MewsRepository.getCleanTextsInWindow(windowStart, windowEnd)
+        val windowMessages = MewsRepository.getMessagesInWindow(windowStart, windowEnd)
 
         val entitiesToInsert = mutableListOf<MessageEntity>()
         val syncTimeMs = System.currentTimeMillis()
 
+        val batchWordCounts = mutableMapOf<String, Double>()
+        val wordToSourcesMap = mutableMapOf<String, MutableSet<Long>>()
+
+        var windowTokensCount = 0L
+        for (msg in windowMessages) {
+            val tokens = msg.cleanText.lowercase()
+                .split(Regex("[^\\p{L}\\p{N}_-]+"))
+                .filter { it.length > 1 }
+            windowTokensCount += tokens.size
+            for (token in tokens) {
+                wordToSourcesMap.getOrPut(token) { mutableSetOf() }.add(msg.sourceId)
+            }
+        }
+
         for (i in batch.indices) {
             val entry = batch[i]
             val pubTimeMs = pubTimes[i]
-            val cleanText = TextCleaner.clean(entry.content)
 
+            val cleanText = TextSanitizer.sanitize(TextCleaner.clean(entry.content))
+
+            val tokens = cleanText.lowercase()
+                .split(Regex("[^\\p{L}\\p{N}_-]+"))
+                .filter { it.length > 1 }
+
+            tokens.forEach { word ->
+                batchWordCounts[word] = (batchWordCounts[word] ?: 0.0) + 1.0
+                wordToSourcesMap.getOrPut(word) { mutableSetOf() }.add(source.id)
+            }
+
+            val windowTexts = windowMessages.map { it.cleanText }
             val isDuplicate = duplicateDetector.checkIsDuplicate(cleanText, windowTexts)
 
             entitiesToInsert.add(
@@ -180,8 +214,109 @@ class ParserWorker(
             )
         }
 
+        if (batchWordCounts.isNotEmpty()) {
+            KeywordStatsRepository.updateWordStats(batchWordCounts)
+        }
+
+        val batchTokensCount = batchWordCounts.values.sum().toLong()
+        val totalWindowWords = windowTokensCount + batchTokensCount
+        var savedMessageIds = emptyList<Long>()
+
         if (entitiesToInsert.isNotEmpty()) {
-            MewsRepository.insertBatchAndUpdateSourceTime(entitiesToInsert, source.id, syncTimeMs)
+            savedMessageIds = MewsRepository.insertBatchAndUpdateSourceTime(entitiesToInsert, source.id, syncTimeMs)
+        }
+
+        if (totalWindowWords > 0 && savedMessageIds.isNotEmpty()) {
+            val messageTokensMap = savedMessageIds.indices.associate { idx ->
+                val msgId = savedMessageIds[idx]
+                val tokens = entitiesToInsert[idx].cleanText.lowercase()
+                    .split(Regex("[^\\p{L}\\p{N}_-]+"))
+                    .filter { it.length > 1 }
+                    .toSet()
+                msgId to tokens
+            }
+
+            val windowData = batchWordCounts.map { (word, count) ->
+                val uniqueSourcesCount = wordToSourcesMap[word]?.size ?: 1
+                BurstDetector.WordWindowData(
+                    word = word,
+                    count = count.toInt(),
+                    uniqueDomainsCount = uniqueSourcesCount
+                )
+            }
+            val burstDetector = BurstDetector()
+            val burstResults = burstDetector.processWindow(
+                windowData = windowData,
+                totalWindowWords = totalWindowWords,
+                totalNews = batch.size.toDouble()
+            )
+            val activeBursts = burstResults.filter { it.isBurst }
+
+            if (activeBursts.isNotEmpty()) {
+                val activeBurstMap = activeBursts.associateBy { it.word }
+                val activeWords = activeBurstMap.keys.toMutableSet()
+
+                val wordToMsgIdsMap = activeWords.associateWith { word ->
+                    messageTokensMap.filterValues { tokens -> word in tokens }.keys.toList()
+                }
+
+                val savedBatchMessages = entitiesToInsert.zip(savedMessageIds).map { (entity, id) ->
+                    entity.copy(id = id)
+                }
+                val allMessages = windowMessages + savedBatchMessages
+
+                val unvisited = activeWords.toMutableSet()
+                while (unvisited.isNotEmpty()) {
+                    val startWord = unvisited.first()
+                    unvisited.remove(startWord)
+
+                    val currentClusterWords = mutableSetOf(startWord)
+                    val queue = ArrayDeque<String>()
+                    queue.add(startWord)
+
+                    while (queue.isNotEmpty()) {
+                        val word = queue.removeFirst()
+                        val wordMsgs = wordToMsgIdsMap[word] ?: emptyList()
+
+                        val neighborWords = unvisited.filter { otherWord ->
+                            val otherMsgs = wordToMsgIdsMap[otherWord] ?: emptyList()
+                            wordMsgs.any { it in otherMsgs }
+                        }
+
+                        for (neighbor in neighborWords) {
+                            currentClusterWords.add(neighbor)
+                            unvisited.remove(neighbor)
+                            queue.add(neighbor)
+                        }
+                    }
+
+                    val clusterMsgIds = currentClusterWords
+                        .flatMap { wordToMsgIdsMap[it] ?: emptyList() }
+                        .distinct()
+
+                    val clusterBursts = currentClusterWords.mapNotNull { activeBurstMap[it] }
+                    val peakZScore = clusterBursts.maxOfOrNull { it.zScore } ?: 0.0
+
+                    val clusterEntity = BurstClusterEntity(
+                        keywords = currentClusterWords.toList(),
+                        messageIds = clusterMsgIds,
+                        peakZScore = peakZScore,
+                        timestamp = syncTimeMs
+                    )
+
+                    KeywordStatsRepository.saveBurstCluster(clusterEntity)
+
+                    val clusterText = allMessages
+                        .filter { it.id in clusterMsgIds }.joinToString("\n") { it.cleanText }
+
+                    val snippet = SnippetExtractor.extractSnippet(
+                        MewsRepository.getAppContext(),
+                        clusterText
+                    )
+
+                    applicationContext.sendBurstNotification(snippet)
+                }
+            }
         }
     }
 

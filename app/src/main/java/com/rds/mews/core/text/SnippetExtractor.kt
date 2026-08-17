@@ -1,8 +1,6 @@
-package com.rds.mews.core
+package com.rds.mews.core.text
 
 import android.content.Context
-import com.rds.mews.text_filters.StopWordsManager
-import com.rds.mews.text_filters.TextSanitizer
 import java.text.BreakIterator
 import java.util.Locale
 

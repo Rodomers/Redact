@@ -1,4 +1,4 @@
-package com.rds.mews.text_filters
+package com.rds.mews.core.text
 
 import android.content.Context
 import android.util.Log
@@ -7,13 +7,46 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import java.util.regex.Pattern
-import kotlin.math.ceil
+import kotlin.collections.component1
+import kotlin.collections.component2
+import kotlin.collections.set
 
-/**
- * Менеджер для работы со стоп-словами и определения языка текста
- * методом пересечения (Intersection Method).
- */
+enum class LanguageGroup(val langCodes: List<String>) {
+    LATIN(
+        listOf(
+            "ca", "cs", "da", "nl", "en", "fi", "fr", "de",
+            "id", "ms", "it", "nb", "pl", "pt", "ro", "sk",
+            "es", "sv", "tr", "vi"
+        )
+    ),
+    CYRILLIC(
+        listOf(
+            "bg", "ru", "uk"
+        )
+    ),
+    CJK(
+        listOf(
+            "zh", "ja", "ko"
+        )
+    ),
+    OTHER(
+        listOf(
+            "ar",
+            "gu",
+            "he",
+            "hi",
+            "fa",
+            "el"
+        )
+    );
+
+    companion object {
+        fun findGroup(langCode: String): LanguageGroup? {
+            return entries.find { it.langCodes.contains(langCode) }
+        }
+    }
+}
+
 object StopWordsManager {
 
     private const val TAG = "StopWordsManager"
@@ -21,6 +54,8 @@ object StopWordsManager {
 
     private val stopWordsCache = ConcurrentHashMap<String, Set<String>>()
     private val languageMap = ConcurrentHashMap<String, String>()
+
+    private const val TOKENIZE_REGEX = "[^\\p{L}]+"
 
     @Volatile
     private var isInitialized = false
@@ -76,6 +111,24 @@ object StopWordsManager {
         return if (maxIntersectionCount > 0) bestLang else "en"
     }
 
+    fun fastLangDetect(text: String): LanguageGroup {
+        val count = mutableListOf(0, 0, 0, 0)
+        val groups = listOf(LanguageGroup.LATIN, LanguageGroup.CYRILLIC, LanguageGroup.CJK,
+            LanguageGroup.OTHER)
+        text.take(150).forEach { ch ->
+            if (ch.isLetter()) {
+                val code = ch.code
+                when (code) {
+                    in 0x0041..0x005A, in 0x0061..0x007A, in 0x00C0..0x024F -> count[0]++
+                    in 0x0400..0x04FF -> count[1]++
+                    in 0x4E00..0x9FFF, in 0x3040..0x30FF, in 0xAC00..0xD7AF -> count[2]++
+                    else -> count[3]++
+                }
+            }
+        }
+        return groups[count.indexOfLast{ it == count.max() }]
+    }
+
     fun getStopWords(context: Context, langCode: String): Set<String> {
         ensureLoaded(context)
         return stopWordsCache[langCode] ?: stopWordsCache["en"] ?: emptySet()
@@ -111,79 +164,7 @@ object StopWordsManager {
     private fun tokenize(text: String): List<String> {
         val sample = if (text.length > 1000) text.take(1000) else text
         return sample.lowercase(Locale.getDefault())
-            .split(Regex("[^\\p{L}]+"))
+            .split(Regex(TOKENIZE_REGEX))
             .filter { it.length > 1 }
-    }
-}
-
-/**
- * Утилита для очистки текста от Markdown, ссылок и мусора.
- */
-object TextSanitizer {
-
-    private val IMAGE_PATTERN = Pattern.compile("!\\[.*?\\]\\(.*?\\)")
-    private val LINK_TEXT_PATTERN = Pattern.compile("\\[(.*?)\\]\\(.*?\\)")
-    private val FORMATTING_CHARS = Pattern.compile("[*`_#]")
-    private val WHITESPACE_CLEANUP = Pattern.compile("\\s+")
-
-    private val URL_DETECTOR = Pattern.compile("(https?://|t\\.me/)\\S+")
-
-    /**
-     * Очищает текст и удаляет последнее предложение, если в нем есть ссылка.
-     */
-    fun sanitize(text: String, saveWhitespace: Boolean = false): String {
-        if (text.isBlank()) return ""
-
-        var clean = text
-        clean = IMAGE_PATTERN.matcher(clean).replaceAll("")
-        clean = LINK_TEXT_PATTERN.matcher(clean).replaceAll("$1")
-        clean = FORMATTING_CHARS.matcher(clean).replaceAll("")
-        if (!saveWhitespace) clean = WHITESPACE_CLEANUP.matcher(clean).replaceAll(" ").trim()
-
-        return cutFooterWithLink(clean)
-    }
-
-    private fun cutFooterWithLink(text: String): String {
-        val sentences = text.split(Regex("(?<=[.!?])\\s+")).toMutableList()
-        if (sentences.isEmpty()) return text
-
-        var hasChanges = false
-        while (sentences.isNotEmpty()) {
-            val last = sentences.last()
-            if (URL_DETECTOR.matcher(last).find()) {
-                sentences.removeAt(sentences.lastIndex)
-                hasChanges = true
-            } else {
-                break
-            }
-        }
-        return if (hasChanges) sentences.joinToString(" ") else text
-    }
-}
-
-object TokenEstimator {
-
-    fun estimate(context: Context, text: String): Int {
-        if (text.isEmpty()) return 0
-        val langCode = StopWordsManager.detectLanguage(context, text)
-
-        val charsPerToken = when (langCode) {
-            "zh", "ja", "ko", "vi" -> 1.0
-            "ru", "uk", "bg", "ar", "el", "he", "fa", "hi", "gu", "th" -> 2.5
-            else -> 4.0
-        }
-
-        val tokenCount = ceil(text.length / charsPerToken).toInt()
-        return tokenCount + 10
-    }
-
-    fun truncateToLimit(context: Context, text: String, maxTokens: Int): String {
-        val estimated = estimate(context, text)
-        if (estimated <= maxTokens) return text
-
-        val ratio = maxTokens.toDouble() / estimated.toDouble()
-        val newLength = (text.length * ratio * 0.9).toInt()
-
-        return text.take(newLength) + "..."
     }
 }

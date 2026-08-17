@@ -1,4 +1,4 @@
-package com.rds.mews.text_filters
+package com.rds.mews.core.text
 
 object TextCleaner {
     private val TELEGRAM_LINK_REGEX = Regex("""(?i)(https?://)?(t\.me|telegram\.me|telegram\.dog)/[a-zA-Z0-9_]+""")

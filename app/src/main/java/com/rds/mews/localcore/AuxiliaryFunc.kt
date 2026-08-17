@@ -116,36 +116,36 @@ fun linkTransform(link: String): String {
     return res
 }
 
-fun strTransform(original: String, separator: String): String {
-    val arr = original.split(", ")
-    val res = arr.map {it -> it.trim()}.distinct()
-
-    return res.joinToString(separator)
-}
-
-fun setRssUpdate(context: Context, sources: Boolean = false, intervalMin: Int = 30) {
-    val constraints = Constraints.Builder()
-        .setRequiredNetworkType(NetworkType.CONNECTED)
-        .build()
-
-    val inputData = workDataOf(RssUpdateWorker.KEY_SOURCES to sources)
-    val periodicWorkRequestBuilder = PeriodicWorkRequestBuilder<RssUpdateWorker>(
-        intervalMin.toLong(), TimeUnit.MINUTES
-    )
-        .setConstraints(constraints)
-        .setInputData(inputData)
-    if (sources) {
-        periodicWorkRequestBuilder.setInitialDelay(40, TimeUnit.SECONDS)
-    }
-
-    val workRequest = periodicWorkRequestBuilder.build()
-
-    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-        "rss-update-work",
-        ExistingPeriodicWorkPolicy.REPLACE,
-        workRequest
-    )
-}
+//fun strTransform(original: String, separator: String): String {
+//    val arr = original.split(", ")
+//    val res = arr.map {it -> it.trim()}.distinct()
+//
+//    return res.joinToString(separator)
+//}
+//
+//fun setRssUpdate(context: Context, sources: Boolean = false, intervalMin: Int = 30) {
+//    val constraints = Constraints.Builder()
+//        .setRequiredNetworkType(NetworkType.CONNECTED)
+//        .build()
+//
+//    val inputData = workDataOf(RssUpdateWorker.KEY_SOURCES to sources)
+//    val periodicWorkRequestBuilder = PeriodicWorkRequestBuilder<RssUpdateWorker>(
+//        intervalMin.toLong(), TimeUnit.MINUTES
+//    )
+//        .setConstraints(constraints)
+//        .setInputData(inputData)
+//    if (sources) {
+//        periodicWorkRequestBuilder.setInitialDelay(40, TimeUnit.SECONDS)
+//    }
+//
+//    val workRequest = periodicWorkRequestBuilder.build()
+//
+//    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+//        "rss-update-work",
+//        ExistingPeriodicWorkPolicy.REPLACE,
+//        workRequest
+//    )
+//}
 
 suspend fun cancelTitlesUpdate(context: Context) {
     withContext(Dispatchers.IO) {

@@ -856,36 +856,17 @@ fun SettingsGrid(
                     visible = groupStates.find { it.group == additionalChapterId }?.expanded ?: true
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-//                        val clearBtnInputs = TextButtonInputs(
-//                            text = stringResource(R.string.settings_db_clear_btn),
-//                            action = { functions.clearFeed() },
-//                            toast = stringResource(R.string.settings_db_cleared)
-//                        )
-
                         SettingsItem(
                             text = stringResource(R.string.settings_enable_proxy),
                             modifier = Modifier.padding(vertical = verticalArrangement)
                         ) {
                             CustomSwitch(
-                                checked = state.proxyEnabled,
-                                onCheckedChange = { functions.setProxyEnabled(it) }
+//                                checked = state.proxyEnabled,
+                                checked = false,
+                                onCheckedChange = { functions.setProxyEnabled(it) },
+                                enabled = false
                             )
                         }
-//                        SettingsItem(
-//                            text = stringResource(R.string.settings_db_clear),
-//                            modifier = Modifier.padding(vertical = verticalArrangement)
-//                        ) {
-//                            CustomTextButton(
-//                                inputs = clearBtnInputs,
-//                                modifier = Modifier
-//                                    .wrapContentSize()
-//                                    .widthIn(min = 150.dp, max = 250.dp),
-//                                shape = Shapes.large,
-//                                defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(
-//                                    alpha = 0.98f
-//                                )
-//                            )
-//                        }
                     }
                 }
             }

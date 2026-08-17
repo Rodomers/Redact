@@ -27,7 +27,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.localcore.isScheduleExactAlarm
 import com.rds.mews.repositories.MewsRepository
@@ -44,7 +43,6 @@ import com.rds.mews.viewmodels.SourcesViewModelFactory
 import com.rds.mews.viewmodels.TitlesScrollEvent
 import com.rds.mews.viewmodels.TitlesViewModel
 import com.rds.mews.viewmodels.TitlesViewModelFactory
-import kotlinx.coroutines.flow.first
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -183,10 +181,8 @@ fun MainScreen(mainActivity: MainActivity) {
 
 //        val titles by MewsRepository.titles.collectAsStateWithLifecycle(emptyList())
 //        LaunchedEffect(titles.lastIndex) {
-//            println("Темы в базе:")
-//            titles.forEachIndexed { index, title ->
-//                println("$index. ${title.title}\n${title.summary}\nKeywords: ${title.keywords}, time: ${title.eventTime}")
-//            }
+//            val statuses = titles.distinctBy { it.status }.map { it.status }
+//            println("Статусы: ${statuses.sortedBy { it }.joinToString(", ")}")
 //        }
 
         Scaffold { paddingValues ->

@@ -1,9 +1,6 @@
 package com.rds.mews.ui.custom_elements.titles_card
 
 import android.annotation.SuppressLint
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -15,6 +12,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -72,7 +70,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -81,7 +78,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
@@ -94,7 +90,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -105,8 +100,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
-import coil.size.Precision
 import com.rds.mews.R
+import com.rds.mews.core.text.SnippetExtractor
 import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.localcore.IconButtonInputs
 import com.rds.mews.localcore.SourceMessages
@@ -115,7 +110,7 @@ import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.localcore.MediaWithSource
-import com.rds.mews.text_filters.TextSanitizer
+import com.rds.mews.core.text.TextSanitizer
 import com.rds.mews.ui.custom_elements.AnimatedSegmentedControl
 import com.rds.mews.ui.custom_elements.CustomDropdown
 import com.rds.mews.ui.custom_elements.CustomIconButton
@@ -127,6 +122,15 @@ import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun TitlesCard(
@@ -261,9 +265,10 @@ private fun SnippetText(
     modifier: Modifier = Modifier,
     alpha: Float = 1f
 ) {
+    val context = LocalContext.current
     val cleanText = remember(text) {
-        text
-            .replace(Regex("\\[(.*?)\\]\\(.*?\\)"), "$1")
+        SnippetExtractor.extractSnippet(context, text)
+            .replace(Regex("\\[(.*?)]\\(.*?\\)"), "$1")
             .replace(Regex("[*_~#>`]"), "")
             .replace(Regex("\\s+"), " ")
             .trim()
@@ -280,15 +285,6 @@ private fun SnippetText(
         overflow = TextOverflow.Ellipsis,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-}
-
-private fun Context.findActivity(): Activity? {
-    var context = this
-    while (context is ContextWrapper) {
-        if (context is Activity) return context
-        context = context.baseContext
-    }
-    return null
 }
 
 @SuppressLint("LocalContextResourcesRead")
@@ -323,7 +319,7 @@ private fun HeroExpansionContent(
     val context = LocalContext.current
     val density = LocalDensity.current
     val verticalMarginDp = 50.dp
-    val horizontalMarginDp = 8.dp
+    val horizontalMarginDp = 10.dp
     val horizontalMarginPx = with(density) { horizontalMarginDp.toPx() }
     val verticalMarginPx = with(density) { verticalMarginDp.toPx() }
     val clampedProgress = progress.coerceIn(0f, 1f)
@@ -386,18 +382,31 @@ private fun HeroExpansionContent(
 
         Surface(
             modifier = Modifier
+                .width(targetWidthDp)
+                .height(with(density) { targetHeight.toDp() })
                 .graphicsLayer {
                     translationX = currentRect.left
                     translationY = currentRect.top
-                    shape = Shapes.large
+                    shape = object : Shape {
+                        override fun createOutline(
+                            size: Size,
+                            layoutDirection: LayoutDirection,
+                            density: Density
+                        ): Outline {
+                            val clipLeft = 0f
+                            val clipTop = 0f
+                            val clipRight = currentRect.width
+                            val clipBottom = currentRect.height
+                            return Outline.Rounded(
+                                RoundRect(
+                                    rect = Rect(clipLeft, clipTop, clipRight, clipBottom),
+                                    cornerRadius = CornerRadius(16.dp.toPx())
+                                )
+                            )
+                        }
+                    }
                     clip = true
                     compositingStrategy = CompositingStrategy.Offscreen
-                }
-                .layout { measurable, _ ->
-                    val currentW = currentRect.width.roundToInt()
-                    val currentH = currentRect.height.roundToInt()
-                    val placeable = measurable.measure(Constraints.fixed(currentW, currentH))
-                    layout(currentW, currentH) { placeable.place(0, 0) }
                 }
                 .clickable(
                     indication = null,
@@ -408,9 +417,11 @@ private fun HeroExpansionContent(
             color = containerColor,
             shadowElevation = 0.dp
         ) {
-            Box(modifier = Modifier
-                .width(targetWidthDp)
-                .fillMaxHeight()) {
+            Box(
+                modifier = Modifier
+                    .width(targetWidthDp)
+                    .fillMaxHeight()
+            ) {
                 ExpandedCardContent(
                     title = title,
                     titleSorting = titleSorting,
@@ -437,7 +448,8 @@ private fun HeroExpansionContent(
                     scrollState = scrollState,
                     onImageChanged = onImageChanged,
                     clickedImageIndex = clickedImageIndex,
-                    onImageClicked = onImageClicked
+                    onImageClicked = onImageClicked,
+                    collapsedBounds = collapsedBounds
                 )
             }
         }
@@ -449,7 +461,7 @@ private fun MeasureCardCompleteStructure(title: Title, isRead: Boolean, titleSor
     Column(modifier = Modifier
         .fillMaxWidth()
         .wrapContentHeight()) {
-        TitlesHeaderContent(title = title, titleSorting = titleSorting, noTime = false, isRead = isRead, onClicked = {}, animationProgress = 1f, expansionFraction = 1f)
+        TitlesHeaderContent(title = title, titleSorting = titleSorting, noTime = false, isRead = isRead, onClicked = {}, expansionFraction = 1f)
         Spacer(modifier = Modifier.height(8.dp))
         MarkdownText(
             markdown = title.summary.trim(),
@@ -494,8 +506,8 @@ private fun TitlesHeaderContent(
     isRead: Boolean,
     onClicked: () -> Unit,
     clickableEnabled: Boolean = true,
-    animationProgress: Float = 1f,
-    expansionFraction: Float = 0f
+    expansionFraction: Float = 0f,
+    originalNoTime: Boolean = false
 ) {
     val baseTitleWeight = if (isRead) 400 else 800
     val baseTimeWeight = if (isRead) 400 else 700
@@ -538,21 +550,20 @@ private fun TitlesHeaderContent(
 
         Column(modifier = Modifier.weight(1f)) {
             if (!noTime) {
-                val alpha = (animationProgress * 2f).coerceIn(0f, 1f)
+                val heightFactor = if (originalNoTime) expansionFraction else 1f
+                val timeAlpha = if (originalNoTime) (expansionFraction * 2f).coerceIn(0f, 1f) else 1f
+
                 Box(
                     modifier = Modifier
                         .layout { measurable, constraints ->
                             val placeable = measurable.measure(constraints)
-                            val height = (placeable.height * animationProgress).roundToInt()
-                            layout(placeable.width, height) {
-                                placeable.place(
-                                    0,
-                                    height - placeable.height
-                                )
+                            val targetHeight = (placeable.height * heightFactor).roundToInt()
+                            layout(placeable.width, targetHeight) {
+                                placeable.place(0, targetHeight - placeable.height)
                             }
                         }
-                        .alpha(alpha)
-                        .padding(bottom = 6.dp)
+                        .alpha(timeAlpha)
+                        .padding(bottom = (6 * heightFactor).dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -612,6 +623,74 @@ private fun PullToSwitchIndicator(text: String, progress: Float, modifier: Modif
     }
 }
 
+@Composable
+private fun AnimatedKeywordTag(
+    keyword: String,
+    index: Int,
+    isExpanded: Boolean,
+    maxVisibleYPx: Float,
+    onBanTheme: (String) -> Unit,
+    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback
+) {
+    val offsetX = remember { Animatable(200f) }
+    val alpha = remember { Animatable(0f) }
+    var isOffScreen by remember { mutableStateOf(false) }
+    var isMeasured by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isExpanded, isMeasured) {
+        if (isExpanded) {
+            if (isOffScreen) {
+                offsetX.snapTo(0f)
+                alpha.snapTo(1f)
+            } else {
+                kotlinx.coroutines.delay((index * 50L).milliseconds)
+                launch {
+                    offsetX.animateTo(
+                        targetValue = 0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessLow
+                        )
+                    )
+                }
+                launch {
+                    alpha.animateTo(1f, tween(150))
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .onGloballyPositioned { coordinates ->
+                if (!isMeasured) {
+                    val tagTopInWindow = coordinates.boundsInWindow().top
+                    if (tagTopInWindow > maxVisibleYPx) {
+                        isOffScreen = true
+                    }
+                    isMeasured = true
+                }
+            }
+            .graphicsLayer {
+                translationX = offsetX.value
+                this.alpha = alpha.value
+            }
+    ) {
+        CustomTextButton(
+            inputs = TextButtonInputs(
+                text = keyword,
+                action = {
+                    onBanTheme(keyword)
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                },
+                toast = stringResource(R.string.titles_card_banned)
+            ),
+            defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = Shapes.large
+        )
+    }
+}
+
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 private fun ExpandedCardContent(
@@ -639,6 +718,7 @@ private fun ExpandedCardContent(
     sanitizeCopiedText: Boolean,
     imagePagerState: PagerState,
     scrollState: ScrollState,
+    collapsedBounds: Rect,
     clickedImageIndex: Int?,
     onImageClicked: (Boolean) -> Unit
 ) {
@@ -663,8 +743,6 @@ private fun ExpandedCardContent(
     var hasTriggeredHaptic by remember { mutableStateOf(false) }
 
     LaunchedEffect(title.id, sources) {
-//        if (dynamicMediaUrls == null) {
-//        }
         onLoadMediaUrls()
     }
 
@@ -775,7 +853,6 @@ private fun ExpandedCardContent(
         TextButtonInputs(stringResource(R.string.mark_as_unread_btn_desc), onMarkAsUnread)
     )
 
-    val headerAnimProgress = if (originalNoTime) expansionProgress else 1f
     LaunchedEffect(pagerState.targetPage) { rememberPage(pagerState.targetPage) }
 
     Column(modifier = Modifier
@@ -809,22 +886,70 @@ private fun ExpandedCardContent(
                     }
                 }
         ) {
-            Column {
-                TitlesHeaderContent(title = title, titleSorting = titleSorting, noTime = false, isRead = isRead, onClicked = {}, clickableEnabled = false, animationProgress = headerAnimProgress, expansionFraction = expansionProgress)
-                if (showSnippet) {
-                    val snippetAlpha = (1f - expansionProgress).coerceIn(0f, 1f)
-                    SnippetText(
-                        text = title.summary,
-                        modifier = Modifier.layout { measurable, constraints ->
-                            val placeable = measurable.measure(constraints)
-                            val visibleHeight = (placeable.height * snippetAlpha).roundToInt()
-                            layout(placeable.width, visibleHeight) {
-                                val yOffset = (placeable.height * expansionProgress).roundToInt() * -1
-                                placeable.place(0, yOffset)
+            Surface(
+                shape = Shapes.large,
+                color = Color.Transparent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(Shapes.large)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onCollapse() }
+                    .drawBehind {
+                        if (!shouldAnimateHeader) drawRect(headerEndColor)
+                        else {
+                            drawRect(headerStartColor)
+                            if (expansionProgress > 0f) {
+                                drawRect(
+                                    color = headerEndColor,
+                                    topLeft = Offset.Zero,
+                                    size = Size(
+                                        width = size.width * expansionProgress,
+                                        height = size.height
+                                    )
+                                )
                             }
-                        },
-                        alpha = snippetAlpha * if (isRead) 0.6f else 1f
-                    )
+                        }
+                    }
+            ) {
+                var realBadgeHeightPx by remember { mutableFloatStateOf(0f) }
+
+                val snippetWidthDp = with(density) { collapsedBounds.width.toDp() }
+                val currentHeaderWidthDp = with(density) {
+                    (collapsedBounds.width + (targetWidth.toPx() - collapsedBounds.width) * expansionProgress).toDp()
+                }
+
+                Column {
+                    Box(modifier = Modifier.width(currentHeaderWidthDp)) {
+                        TitlesHeaderContent(
+                            title = title,
+                            titleSorting = titleSorting,
+                            noTime = false,
+                            isRead = isRead,
+                            onClicked = {},
+                            clickableEnabled = false,
+                            expansionFraction = expansionProgress,
+                            originalNoTime = originalNoTime
+                        )
+                    }
+
+                    val timeBadgeOffsetPx = if (originalNoTime) -realBadgeHeightPx * (1f - expansionProgress) else 0f
+
+                    if (showSnippet) {
+                        val snippetAlpha = (1f - expansionProgress * 2.5f).coerceIn(0f, 1f)
+                        if (snippetAlpha > 0f) {
+                            Box(modifier = Modifier.width(snippetWidthDp)) {
+                                SnippetText(
+                                    text = title.summary,
+                                    modifier = Modifier.graphicsLayer {
+                                        alpha = snippetAlpha * if (isRead) 0.6f else 1f
+                                        translationY = timeBadgeOffsetPx - (10.dp.toPx() * expansionProgress)
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -838,7 +963,7 @@ private fun ExpandedCardContent(
                 state = pagerState,
                 userScrollEnabled = sources?.isNotEmpty() ?: false,
                 verticalAlignment = Alignment.Top,
-                beyondViewportPageCount = 1,
+//                beyondViewportPageCount = 1,
                 modifier = Modifier
                     .requiredWidth(targetWidth)
                     .fillMaxHeight()
@@ -1028,27 +1153,25 @@ private fun ExpandedCardContent(
                                     }
                                 }
 
-                                if (title.keywords.isNotEmpty()) {
+                                if (title.keywords.isNotEmpty() && expansionProgress == 1f) {
                                     Spacer(modifier = Modifier.height(16.dp))
+                                    val maxVisibleYPx = with(density) {
+                                        (collapsedBounds.top + maxHeight.toPx())
+                                    }
+
                                     FlowRow(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        title.keywords.forEach { keyword ->
-                                            CustomTextButton(
-                                                inputs = TextButtonInputs(
-                                                    text = keyword,
-                                                    action = {
-                                                        onBanTheme(keyword)
-                                                        haptics.performHapticFeedback(
-                                                            HapticFeedbackType.LongPress
-                                                        )
-                                                    },
-                                                    toast = stringResource(R.string.titles_card_banned)
-                                                ),
-                                                defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                                shape = Shapes.large
+                                        title.keywords.forEachIndexed { index, keyword ->
+                                            AnimatedKeywordTag(
+                                                keyword = keyword,
+                                                index = index,
+                                                isExpanded = expansionProgress > 0.8f,
+                                                maxVisibleYPx = maxVisibleYPx,
+                                                onBanTheme = onBanTheme,
+                                                haptics = haptics
                                             )
                                         }
                                     }
