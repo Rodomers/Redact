@@ -61,6 +61,7 @@ import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun SourcesCard(
@@ -148,7 +149,7 @@ fun SourcesCard(
                             isImageLoaded = false
                             if (retryCount < 3) {
                                 scope.launch {
-                                    delay(2000L * (retryCount + 1))
+                                    delay((2000L * (retryCount + 1)).milliseconds)
                                     retryCount++
                                 }
                             }

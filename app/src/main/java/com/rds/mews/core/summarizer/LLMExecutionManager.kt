@@ -4,7 +4,6 @@ import com.rds.mews.localcore.GeminiModelOption
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.settings_manager.GeminiException
 import com.rds.mews.settings_manager.SummarizationErrorType
-import kotlin.math.max
 
 class LLMExecutionManager(
     private val llmClient: LLMClient,
@@ -46,13 +45,15 @@ class LLMExecutionManager(
                 val current = queue.removeFirst()
                 val batch = current.data
 
+                val kSafeTokens = batch.firstOrNull()?.let { textExtractor(it).length > 1000 } ?: false
+
                 try {
                     val prompt = promptBuilder(batch)
                     val response = llmClient.sendPrompt(prompt)
                     val parsedResult = responseParser(response, batch)
 
                     results.add(parsedResult)
-                    batchController.onBatchSuccess(currentModel, isProbe)
+                    batchController.onBatchSuccess(currentModel, isProbe, kSafeTokens)
 
                     val processedIds = batch.map(idExtractor).toSet()
                     remainingItems.removeAll { item -> idExtractor(item) in processedIds }
@@ -70,7 +71,7 @@ class LLMExecutionManager(
 
                     if (isFatal) {
                         if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) {
-                            batchController.onBatchFailure(currentModel, isProbe)
+                            batchController.onBatchFailure(currentModel, isProbe, kSafeTokens)
 
                             val switched = llmClient.switchToFallbackModel()
                             if (!switched) {
@@ -88,7 +89,7 @@ class LLMExecutionManager(
                             throw e
                         }
                     } else {
-                        batchController.onBatchFailure(currentModel, isProbe)
+                        batchController.onBatchFailure(currentModel, isProbe, kSafeTokens)
 
                         if (current.attemptsLeft > 1) {
                             if (batch.size > 1) {

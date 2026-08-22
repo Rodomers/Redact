@@ -1,69 +1,85 @@
 package com.rds.mews.ui.custom_elements
 
 import androidx.annotation.StringRes
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import com.rds.mews.R
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CornerBasedShape
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.rds.mews.R
 import com.rds.mews.ui.theme.Shapes
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
     data object Sources: TabScreen(titleResId = R.string.tabscreen_sources, Icons.Default.Favorite)
@@ -81,16 +97,26 @@ fun MyBottomBar(
     indicatorShape: CornerBasedShape = Shapes.large,
     backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.97f),
     indicatorColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+    onHoldProgressChanged: (progress: Float, centerOffset: Offset, isHolding: Boolean) -> Unit = { _, _, _ -> },
+    onBlitzTriggered: (centerOffset: Offset) -> Unit = {},
+    isBlitzActive: Boolean = false,
+    showBlitzTooltip: Boolean = false
 ) {
-    val tabs = listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings)
+    val tabs = remember { listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings) }
     val currentOnTabSelected by rememberUpdatedState(onTabSelected)
+    val currentOnHoldProgressChanged by rememberUpdatedState(onHoldProgressChanged)
+    val currentOnBlitzTriggered by rememberUpdatedState(onBlitzTriggered)
+    val currentSelectedTab by rememberUpdatedState(selectedTab)
 
     val selectedIndex = tabs.indexOf(selectedTab)
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
 
     var pressedIndex by remember { mutableIntStateOf(-1) }
-
     var totalWidthPx by remember { mutableFloatStateOf(1f) }
+
+    val buttonCenters = remember { mutableStateMapOf<Int, Offset>() }
+    val coroutineScope = rememberCoroutineScope()
 
     val containerHeight by animateDpAsState(
         targetValue = if (compact) 50.dp else 70.dp,
@@ -125,6 +151,29 @@ fun MyBottomBar(
     val indicatorWidth by animateDpAsState(targetIndicatorWidth, animationSpec = springSpec, label = "IndW")
     val indicatorOffset by animateDpAsState(targetIndicatorOffset, animationSpec = springSpec, label = "IndOff")
 
+    val tabStretch = remember { Animatable(0f) }
+    val tooltipReveal = remember { Animatable(0f) }
+
+    LaunchedEffect(showBlitzTooltip) {
+        if (showBlitzTooltip) {
+            tabStretch.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
+            launch {
+                tabStretch.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow))
+            }
+            launch {
+                tooltipReveal.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
+            }
+        } else {
+            launch {
+                tabStretch.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
+                tabStretch.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium))
+            }
+            launch {
+                tooltipReveal.animateTo(0f, tween(150, easing = FastOutSlowInEasing))
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -133,13 +182,40 @@ fun MyBottomBar(
             .height(containerHeight),
         contentAlignment = Alignment.Center
     ) {
+        val tooltipOffset = (-12).dp - (40.dp * tooltipReveal.value)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.72f)
+                .align(Alignment.BottomCenter)
+                .offset(y = tooltipOffset),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            TextTooltip(
+                text = stringResource(R.string.tabscreen_tooltip_blitz),
+                revealProgress = tooltipReveal.value,
+                backgroundColor = backgroundColor,
+                textColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+                shape = containerShape
+            )
+        }
+
+        val baseHeight = containerHeight * 0.72f
+        val animatedHeight = baseHeight + (tabStretch.value * 45).dp
+        val scaleXValue = 1f + (tabStretch.value * 0.04f)
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .padding(bottom = containerHeight * 0.14f)
+                .height(animatedHeight)
+                .graphicsLayer {
+                    scaleX = scaleXValue
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                }
                 .clip(containerShape)
                 .background(backgroundColor)
-                .align(Alignment.Center)
         )
 
         Box(
@@ -159,48 +235,100 @@ fun MyBottomBar(
                 .onSizeChanged { totalWidthPx = it.width.toFloat() }
                 .pointerInput(Unit) {
                     awaitEachGesture {
-                        val down = awaitFirstDown()
+                        val down = awaitFirstDown(requireUnconsumed = false)
                         val downIndex = getIndexForOffset(down.position.x)
+                        val targetTab = tabs.getOrNull(downIndex)
 
-                        pressedIndex = downIndex
+                        if (targetTab == TabScreen.Titles) {
+                            if (currentSelectedTab == TabScreen.Titles) {
+                                pressedIndex = downIndex
+                                val centerOffset = buttonCenters[downIndex] ?: Offset.Zero
+                                var isHolding = true
+                                var holdSuccess = false
+                                val startTime = System.currentTimeMillis()
 
-                        var lastSentIndex = downIndex
+                                val progressJob = coroutineScope.launch {
+                                    while (isHolding) {
+                                        val elapsed = System.currentTimeMillis() - startTime
+                                        val progress = (elapsed / 250f).coerceIn(0f, 1f)
 
-                        currentOnTabSelected(tabs[downIndex])
+                                        if (progress >= 1f && !holdSuccess) {
+                                            holdSuccess = true
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        }
 
-                        var change = down
-                        while (change.pressed) {
-                            val event = awaitPointerEvent()
-                            val currentChange = event.changes.firstOrNull() ?: break
-                            change = currentChange
+                                        currentOnHoldProgressChanged(progress, centerOffset, true)
+                                        delay(16.milliseconds)
+                                    }
+                                }
 
-                            val newIndex = getIndexForOffset(change.position.x)
+                                var pointer = down
+                                while (pointer.pressed) {
+                                    val event = awaitPointerEvent()
+                                    pointer = event.changes.firstOrNull() ?: break
+                                }
 
-                            if (pressedIndex != newIndex) {
-                                pressedIndex = newIndex
+                                val totalDuration = System.currentTimeMillis() - startTime
+                                isHolding = false
+                                progressJob.cancel()
+
+                                pressedIndex = -1
+                                currentOnHoldProgressChanged(0f, centerOffset, false)
+
+                                if (holdSuccess) {
+                                    currentOnBlitzTriggered(centerOffset)
+                                } else if (totalDuration < 200) {
+                                    currentOnTabSelected(TabScreen.Titles)
+                                }
+                            } else {
+                                pressedIndex = downIndex
+                                currentOnTabSelected(TabScreen.Titles)
+                                pressedIndex = -1
                             }
+                        } else if (targetTab != null) {
+                            pressedIndex = downIndex
+                            currentOnTabSelected(targetTab)
+                            var lastSentIndex = downIndex
 
-                            if (newIndex != lastSentIndex) {
-                                currentOnTabSelected(tabs[newIndex])
-                                lastSentIndex = newIndex
+                            var pointer = down
+                            while (pointer.pressed) {
+                                val event = awaitPointerEvent()
+                                pointer = event.changes.firstOrNull() ?: break
+                                val newIndex = getIndexForOffset(pointer.position.x)
+
+                                if (pressedIndex != newIndex) {
+                                    pressedIndex = newIndex
+                                }
+
+                                if (newIndex != lastSentIndex) {
+                                    currentOnTabSelected(tabs[newIndex])
+                                    lastSentIndex = newIndex
+                                }
                             }
+                            pressedIndex = -1
                         }
-
-                        pressedIndex = -1
                     }
                 },
             verticalAlignment = Alignment.CenterVertically
         ) {
             tabs.forEachIndexed { index, tab ->
+                val isBlitzTab = tab == TabScreen.Titles && isBlitzActive
+                val displayLabel = if (isBlitzTab) stringResource(R.string.tabscreen_blitz) else stringResource(id = tab.titleResId)
+                val displayIcon = if (isBlitzTab) Icons.Rounded.Alarm else tab.icon
+
                 BottomBarButton(
-                    icon = tab.icon,
-                    label = stringResource(id = tab.titleResId),
+                    icon = displayIcon,
+                    label = displayLabel,
                     isSelected = index == selectedIndex,
                     isPressed = index == pressedIndex,
                     compact = compact,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
+                        .onGloballyPositioned { coordinates ->
+                            val bounds = coordinates.boundsInRoot()
+                            buttonCenters[index] = bounds.center
+                        }
                         .onSizeChanged { size ->
                             val widthDp = with(density) { size.width.toDp() }
                             if (index < itemWidths.size) itemWidths[index] = widthDp

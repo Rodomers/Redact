@@ -45,7 +45,6 @@ class TitlesUpdater() {
             }
 
             val titlesNum = MewsRepository.titlesNum.first().num
-            val filterTopics = MewsRepository.filterTopics.first()
 
             val fetcher = RssFetcher()
 
@@ -60,11 +59,11 @@ class TitlesUpdater() {
             MewsRepository.setUpdatingProgress(0.1f)
 
             val lastRssTime = MewsRepository.lastRssUpdate.first()
-            if (System.currentTimeMillis() - lastRssTime > 900000L) {
+            if (System.currentTimeMillis() - lastRssTime > 30*3600*1000L) {
                 MewsRepository.setUpdatingState(UpdatingState.PARSING)
                 fetcher.fetchAndStoreAll()
+                MewsRepository.setLastRssUpdate(System.currentTimeMillis())
             }
-            MewsRepository.setLastRssUpdate(System.currentTimeMillis())
 
             currentCoroutineContext().ensureActive()
 
@@ -83,7 +82,6 @@ class TitlesUpdater() {
                             continueUpdate = false
                             MewsRepository.setUpdatingTitles(false)
                         },
-                        filterTopics = filterTopics,
                         adaptive = MewsRepository.titlesPeriod.first() == TitlesPeriod.ADAPTIVE
                     )
 

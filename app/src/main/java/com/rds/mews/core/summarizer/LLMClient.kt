@@ -191,11 +191,11 @@ class LLMClient(
     private suspend fun handle429Error(responseString: String, attempt: Int) {
         rateLimiter.penalize()
 
-        if (responseString.contains("Requests per day", ignoreCase = true) ||
-            responseString.contains("RequestsPerDay", ignoreCase = true) ||
-            responseString.contains("FreeTier", ignoreCase = true)) {
-            throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, "Daily quota exceeded")
-        }
+//        if (responseString.contains("Requests per day", ignoreCase = true) ||
+//            responseString.contains("RequestsPerDay", ignoreCase = true) ||
+//            responseString.contains("FreeTier", ignoreCase = true)) {
+//            throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, "Daily quota exceeded")
+//        }
 
         val waitTime = extractRetryTime(responseString)
 
@@ -208,7 +208,7 @@ class LLMClient(
             delay(calcDelay.milliseconds)
         }
 
-        if (attempt > MAX_RETRIES + 1) {
+        if (attempt > MAX_RETRIES) {
             throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, "Daily quota limit reached (empirical timeout)")
         }
     }

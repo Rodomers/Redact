@@ -16,6 +16,7 @@ import java.io.FileOutputStream
 data class SummarizerState(
     val timemark: Long = System.currentTimeMillis(),
     val targetTime: Long = System.currentTimeMillis(),
+    val attempt: Int = 0,
     val updatingState: UpdatingState = UpdatingState.DEFAULT,
     val remainingMessageIds: List<Long> = emptyList(),
     val victimMessages: List<Long> = emptyList(),

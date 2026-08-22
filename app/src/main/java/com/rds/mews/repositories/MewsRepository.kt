@@ -138,6 +138,7 @@ object MewsRepository {
 
     lateinit var sources: Flow<List<RSS>>
     lateinit var titles: Flow<List<Title>>
+    lateinit var blitzTitles: Flow<List<Title>>
 
     fun initialize(context: Context, externalScope: CoroutineScope) {
         if (isInitialized) return
@@ -268,7 +269,7 @@ object MewsRepository {
         titles = titleDao.getAllTitlesFlow()
             .map { entities ->
                 coroutineScope {
-                    entities.map { entity ->
+                    entities.filter { !it.isBlitz }.map { entity ->
                         async {
                             val sourcesList = titleDao.getSourcesForTitleFlow(entity.id).first()
                             val messagesList = titleDao.getMessagesForTitleFlow(entity.id).first()
@@ -301,6 +302,7 @@ object MewsRepository {
                                 updateTime = entity.updateTime,
                                 status = entity.status,
                                 isRead = entity.isRead,
+                                isPinned = entity.isPinned,
                                 sources = sourcesStr,
                                 ids = idsStr,
                                 keywords = entity.keywords,
@@ -309,6 +311,50 @@ object MewsRepository {
                                 relatedTitle = child?.title,
                                 relatedSnippet = "${TextSanitizer.sanitize(child?.summary ?: "").take(120)}...",
                                 storyDepth = depth,
+                                mediaUrls = mediaUrlsList
+                            )
+                        }
+                    }.awaitAll()
+                }
+            }
+            .flowOn(Dispatchers.Default)
+
+        blitzTitles = titleDao.getAllTitlesFlow()
+            .map { entities ->
+                coroutineScope {
+                    entities.filter { it.isBlitz }.map { entity ->
+                        async {
+                            val sourcesList = titleDao.getSourcesForTitleFlow(entity.id).first()
+                            val messagesList = titleDao.getMessagesForTitleFlow(entity.id).first()
+                            val sourcesStr = sourcesList.distinct().joinToString(", ") { it.customName ?: it.originalName }
+                            val idsStr = messagesList.joinToString(", ") { it.id.toString() }
+
+                            val mediaUrlsList = messagesList.flatMap { message ->
+                                message.mediaUrls.map { url ->
+                                    MediaWithSource(
+                                        mediaLink = url,
+                                        message = Message(
+                                            id = message.id,
+                                            time = message.pubTime,
+                                            link = message.link,
+                                            source = getSource(message.sourceId),
+                                            originalText = "",
+                                            cleanText = ""
+                                        )
+                                    ) }
+                            }.distinct()
+
+                            Title(
+                                id = entity.id,
+                                title = entity.title,
+                                summary = entity.summary,
+                                eventTime = entity.eventTime,
+                                updateTime = entity.updateTime,
+                                status = entity.status,
+                                isRead = entity.isRead,
+                                isPinned = entity.isPinned,
+                                sources = sourcesStr,
+                                ids = idsStr,
                                 mediaUrls = mediaUrlsList
                             )
                         }
@@ -473,6 +519,13 @@ object MewsRepository {
         val statusInt = if (read) 1 else 0
         externalScope.launch(Dispatchers.IO) {
             titleDao.updateReadStatus(id, statusInt)
+        }
+    }
+
+    fun markTitleAsPinned(id: Long, pinned: Boolean) {
+        val statusInt = if (pinned) 1 else 0
+        externalScope.launch(Dispatchers.IO) {
+            titleDao.updatePinnedStatus(id, statusInt)
         }
     }
 
@@ -656,8 +709,10 @@ object MewsRepository {
         )
         val titleId = titleDao.insert(titleEntity)
 
+        val existing = getMessages(ids = messageIds)?.map { it.id }?.distinct() ?: emptyList()
+
         messageIds.distinct().forEach { msgId ->
-            titleDao.insertTitleMessageMap(TitleMessageMap(titleId, msgId))
+            if (existing.contains(msgId)) { titleDao.insertTitleMessageMap(TitleMessageMap(titleId, msgId)) }
         }
 
         if (parentId != null) {
@@ -702,8 +757,10 @@ object MewsRepository {
         }
 
         if (!newMessageIds.isNullOrEmpty()) {
+            val existing = getMessages(ids = newMessageIds)?.map { it.id }?.distinct() ?: emptyList()
+
             newMessageIds.distinct().forEach { msgId ->
-                titleDao.insertTitleMessageMap(TitleMessageMap(id, msgId))
+                if (existing.contains(msgId)) { titleDao.insertTitleMessageMap(TitleMessageMap(id, msgId)) }
             }
         }
     }

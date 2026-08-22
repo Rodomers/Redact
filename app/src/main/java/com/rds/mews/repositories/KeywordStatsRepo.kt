@@ -61,7 +61,9 @@ object KeywordStatsRepository {
 
         val appContext = context.applicationContext
         this.externalScope = scope
-        this.database = Room.databaseBuilder(appContext, KeywordsDatabase::class.java, "KeywordsDB")
+        this.database = Room.databaseBuilder(appContext, KeywordsDatabase::class.java,
+            KeywordsDatabase.DATABASE_NAME)
+            .addMigrations(KeywordsDatabase.MIGRATION_1_2)
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .build()
         this.keywordStatsDao = database.keywordStatsDao()
@@ -211,6 +213,10 @@ object KeywordStatsRepository {
         return keywordStatsDao.getWordStat(word)
     }
 
+    suspend fun isKnownEntity(word: String): Boolean {
+        return entityDictionaryDao.getEntity(word) != null
+    }
+
     suspend fun countKeywords(): Long {
         return keywordStatsDao.countKeywords()
     }
@@ -218,6 +224,7 @@ object KeywordStatsRepository {
     suspend fun clearOldKeywords(days: Int = 7) {
         val timeMark = System.currentTimeMillis() - DAY_IN_MS * days
         keywordStatsDao.clearOldWords(timeMark.toLong())
+        knowledgeGraphDao.deleteDanglingEdges()
     }
 
     suspend fun getRelatedEntities(keyword: String, threshold: Double = 0.3): Set<String> {
@@ -239,6 +246,7 @@ object KeywordStatsRepository {
             val currentTime = System.currentTimeMillis()
             knowledgeGraphDao.applyRegularDecay(currentTime, decayFactor, cutoff)
             entityDictionaryDao.applyRegularDecay(currentTime, decayFactor, cutoff)
+            knowledgeGraphDao.deleteDanglingEdges()
         }
     }
 

@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -100,7 +101,8 @@ fun TitlesScreen(
     mainActivity: MainActivity,
     modifier: Modifier,
     scope: CoroutineScope,
-    bottomSpacer: Dp
+    bottomSpacer: Dp,
+    onOverscrollDetected: () -> Unit = {}
 ) {
     LaunchedEffect(Unit) {
         viewModel.scrollEvents.collect { event ->
@@ -183,13 +185,15 @@ fun TitlesScreen(
         changeGroupState = viewModel::changeGroupState,
         getDateFromUnix = viewModel::getDateFromUnix,
         markTitleAsRead = viewModel::markTitleAsRead,
+        markTitleAsPinned = viewModel::markTitleAsPinned,
         showGreeting = viewModel::showGreeting,
         lastTitlesUpdateExists = viewModel::lastTitlesUpdateExists,
         onSwitchStoryline = viewModel::switchStorylineAndScroll,
         loadDynamicMediaUrls = viewModel::loadDynamicMediaUrls,
         setCurrentTitleImage = viewModel::setCurrentTitleImage,
         setFullscreenView = viewModel::setFullscreenImageForTitle,
-        stopTitlesUpdate = viewModel::stopTitlesUpdate
+        stopTitlesUpdate = viewModel::stopTitlesUpdate,
+        onOverscrollDetected = onOverscrollDetected
     )
 }
 
@@ -230,13 +234,15 @@ fun TitlesGrid(
     changeGroupState: (TimeDate) -> Unit,
     getDateFromUnix: (Long) -> TimeDate,
     markTitleAsRead: (Long, Boolean) -> Unit,
+    markTitleAsPinned: (Long, Boolean) -> Unit,
     showGreeting: (Context) -> Unit,
     lastTitlesUpdateExists: () -> Boolean,
     onSwitchStoryline: (Long) -> Unit,
     loadDynamicMediaUrls: (Long) -> Unit,
     setCurrentTitleImage: (Long, Int) -> Unit,
-    setFullscreenView:(Long, Boolean) -> Unit,
-    stopTitlesUpdate: (Context) -> Unit
+    setFullscreenView: (Long, Boolean) -> Unit,
+    stopTitlesUpdate: (Context) -> Unit,
+    onOverscrollDetected: () -> Unit = {}
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
 
@@ -250,8 +256,9 @@ fun TitlesGrid(
     }
 
     var allowPullToRefresh by remember { mutableStateOf(false) }
+    var lastOverscrollTime by remember { mutableLongStateOf(0L) }
 
-    val connection = remember {
+    val connection = remember(onOverscrollDetected) {
         object : NestedScrollConnection {
             override fun onPostScroll(
                 consumed: Offset,
@@ -259,6 +266,14 @@ fun TitlesGrid(
                 source: NestedScrollSource
             ): Offset {
                 if (source == UserInput) {
+                    if (kotlin.math.abs(available.y) > 0.5f) {
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastOverscrollTime > 1500L) {
+                            lastOverscrollTime = currentTime
+                            onOverscrollDetected()
+                        }
+                    }
+
                     if (available.y > 0 && !allowPullToRefresh) {
                         return available
                     }
@@ -297,8 +312,7 @@ fun TitlesGrid(
         if (groupedItems.isEmpty() && !isRefreshing && lastTitlesUpdateExists()) {
             delay(300L)
             if (groupedItems.isEmpty()) toggleEmptyMess(true)
-        }
-        else toggleEmptyMess(false)
+        } else toggleEmptyMess(false)
     }
 
     LaunchedEffect(errState) {
@@ -327,16 +341,14 @@ fun TitlesGrid(
     }
 
     PullToRefreshBox(
-        modifier = modifier
-            .fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
         state = pullToRefreshState,
         indicator = {
             CustomPullToRefreshIndicator(
                 state = pullToRefreshState,
-                modifier = Modifier
-                    .align(Alignment.TopCenter),
+                modifier = Modifier.align(Alignment.TopCenter),
                 isRefreshing = isRefreshing,
                 statusText = context.getString(updatingState.stringId),
                 progress = updatingProgress,
@@ -367,8 +379,7 @@ fun TitlesGrid(
             if (showEmptyMess) {
                 item {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -392,8 +403,7 @@ fun TitlesGrid(
                                 text = stringResource(R.string.titles_update_text),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .padding(40.dp),
+                                modifier = Modifier.padding(40.dp),
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -426,7 +436,11 @@ fun TitlesGrid(
 
                     val statesItem = titlesCardStates.find { it.id == item.id }
                     val isExpanded = statesItem?.expanded ?: false
-                    val pagerState = rememberPagerState(initialPage = statesItem?.currentPage ?: 0, initialPageOffsetFraction = 0f, pageCount = {2})
+                    val pagerState = rememberPagerState(
+                        initialPage = statesItem?.currentPage ?: 0,
+                        initialPageOffsetFraction = 0f,
+                        pageCount = { 2 }
+                    )
                     val sources = statesItem?.sources
 
                     val isPartiallyObscured by remember {
@@ -450,17 +464,21 @@ fun TitlesGrid(
                                     time = item.eventTime,
                                     isFirst = isFirst,
                                     isLast = isLast,
-                                    isRead = item.isRead
+                                    isRead = item.isRead,
+                                    isPinned = item.isPinned
                                 )
                             }
 
                             Box(modifier = Modifier.weight(1f)) {
-                                val imagePagerState = rememberPagerState(initialPage = statesItem?.currentImage ?: 0, pageCount = { dynamicMediaUrls[item.id]?.size ?: 0})
+                                val imagePagerState = rememberPagerState(
+                                    initialPage = statesItem?.currentImage ?: 0,
+                                    pageCount = { dynamicMediaUrls[item.id]?.size ?: 0 }
+                                )
                                 val scrollState = rememberScrollState()
                                 val clickedImageIndex = if (statesItem?.fullscreenImage == true) statesItem.currentImage else null
 
                                 TitlesCard(
-                                    item,
+                                    title = item,
                                     modifier = Modifier.padding(vertical = verticalArrangement),
                                     isExpanded = isExpanded,
                                     pagerState = pagerState,
@@ -479,6 +497,9 @@ fun TitlesGrid(
                                     markAsUnread = {
                                         onToggleExpanded(item.id)
                                         markTitleAsRead(item.id, false)
+                                    },
+                                    markAsPinned = { isPinned ->
+                                        markTitleAsPinned(item.id, isPinned)
                                     },
                                     onSwitchStoryline = onSwitchStoryline,
                                     onLoadMediaUrls = { loadDynamicMediaUrls(item.id) },

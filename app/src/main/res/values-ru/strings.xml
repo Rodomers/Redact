@@ -4,7 +4,9 @@
 
     <string name="tabscreen_sources">Источники</string>
     <string name="tabscreen_titles">Заголовки</string>
+    <string name="tabscreen_blitz">Блиц</string>
     <string name="tabscreen_settings">Настройки</string>
+    <string name="tabscreen_tooltip_blitz">Удерживайте вкладку, чтобы перейти к коротким темам.</string>
 
     <string name="source_type_telegram">Telegram</string>
     <string name="source_type_rss">Сайты и RSS-ленты</string>
@@ -129,6 +131,8 @@
     <string name="share_btn_desc">Поделиться</string>
     <string name="ban_btn_desc">Заблокировать</string>
     <string name="mark_as_unread_btn_desc">Не прочитано</string>
+    <string name="pin_btn_desc">Закрепить</string>
+    <string name="unpin_btn_desc">Открепить</string>
     <string name="source_reset_errors">Сброс ошибок</string>
     <string name="titles_card_background">Предыстория</string>
     <string name="titles_card_continued">Продолжение сюжета</string>

@@ -15,6 +15,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -22,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
@@ -34,6 +36,8 @@ import com.rds.mews.ui.custom_elements.MainContentPager
 import com.rds.mews.ui.custom_elements.MyBottomBar
 import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.ui.theme.MewsTheme
+import com.rds.mews.viewmodels.BlitzViewModel
+import com.rds.mews.viewmodels.BlitzViewModelFactory
 import com.rds.mews.viewmodels.SettingsScrollEvent
 import com.rds.mews.viewmodels.SettingsViewModel
 import com.rds.mews.viewmodels.SettingsViewModelFactory
@@ -43,6 +47,7 @@ import com.rds.mews.viewmodels.SourcesViewModelFactory
 import com.rds.mews.viewmodels.TitlesScrollEvent
 import com.rds.mews.viewmodels.TitlesViewModel
 import com.rds.mews.viewmodels.TitlesViewModelFactory
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,6 +97,7 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(mainActivity: MainActivity) {
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory())
     val titlesViewModel: TitlesViewModel = viewModel(factory = TitlesViewModelFactory(LocalContext.current.applicationContext as Application))
+    val blitzViewModel: BlitzViewModel = viewModel(factory = BlitzViewModelFactory(LocalContext.current.applicationContext as Application))
     val sourcesViewModel: SourcesViewModel = viewModel(factory = SourcesViewModelFactory())
 
     val currentTheme by settingsViewModel.darkTheme.collectAsStateWithLifecycle()
@@ -102,11 +108,16 @@ fun MainScreen(mainActivity: MainActivity) {
         MewsRepository.setCurrentLanguage(currentLangResource)
     }
 
-
     MewsTheme(settingsTheme = currentTheme, appTheme = appTheme) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
+        val isBlitzActive by blitzViewModel.isBlitzActive.collectAsStateWithLifecycle()
         val scope = rememberCoroutineScope()
+
+        var holdProgress by remember { mutableFloatStateOf(0f) }
+        var isHolding by remember { mutableStateOf(false) }
+        var blitzCenterOffset by remember { mutableStateOf(Offset.Zero) }
+        var showBlitzTooltip by remember { mutableStateOf(false) }
 
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()
@@ -124,6 +135,13 @@ fun MainScreen(mainActivity: MainActivity) {
         )
 
         var isTabClick by remember { mutableStateOf(false) }
+
+        LaunchedEffect(showBlitzTooltip) {
+            if (showBlitzTooltip) {
+                delay(3500)
+                showBlitzTooltip = false
+            }
+        }
 
         LaunchedEffect(selectedTab) {
             val targetIndex = tabs.indexOf(selectedTab)
@@ -179,12 +197,6 @@ fun MainScreen(mainActivity: MainActivity) {
             }
         }
 
-//        val titles by MewsRepository.titles.collectAsStateWithLifecycle(emptyList())
-//        LaunchedEffect(titles.lastIndex) {
-//            val statuses = titles.distinctBy { it.status }.map { it.status }
-//            println("Статусы: ${statuses.sortedBy { it }.joinToString(", ")}")
-//        }
-
         Scaffold { paddingValues ->
             Box(modifier = Modifier.fillMaxSize()) {
 
@@ -195,12 +207,17 @@ fun MainScreen(mainActivity: MainActivity) {
                     compactTab = compactTab,
                     sourcesViewModel = sourcesViewModel,
                     titlesViewModel = titlesViewModel,
+                    blitzViewModel = blitzViewModel,
                     settingsViewModel = settingsViewModel,
                     sourcesGridState = sourcesGridState,
                     titlesGridState = titlesGridState,
                     settingsGridState = settingsGridState,
                     mainActivity = mainActivity,
-                    scope = scope
+                    scope = scope,
+                    holdProgress = holdProgress,
+                    isHolding = isHolding,
+                    blitzCenterOffset = blitzCenterOffset,
+                    isBlitzActive = isBlitzActive
                 )
 
                 MyBottomBar(
@@ -209,7 +226,14 @@ fun MainScreen(mainActivity: MainActivity) {
                         if (selectedTab == newTab) {
                             when (selectedTab) {
                                 TabScreen.Sources -> sourcesViewModel.scrollToTop()
-                                TabScreen.Titles -> titlesViewModel.scrollToTop()
+                                TabScreen.Titles -> {
+                                    if (isBlitzActive) {
+                                        blitzViewModel.scrollToTop()
+                                    } else {
+                                        titlesViewModel.scrollToTop()
+                                        showBlitzTooltip = true
+                                    }
+                                }
                                 TabScreen.Settings -> settingsViewModel.scrollToTop()
                             }
                         } else {
@@ -217,6 +241,17 @@ fun MainScreen(mainActivity: MainActivity) {
                         }
                     },
                     compact = compactTab,
+                    onHoldProgressChanged = { progress, centerOffset, holding ->
+                        holdProgress = progress
+                        blitzCenterOffset = centerOffset
+                        isHolding = holding
+                    },
+                    onBlitzTriggered = { centerOffset ->
+                        blitzCenterOffset = centerOffset
+                        blitzViewModel.toggleBlitzActive()
+                    },
+                    isBlitzActive = isBlitzActive,
+                    showBlitzTooltip = showBlitzTooltip,
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }

@@ -49,22 +49,6 @@ data class EntityDictionaryEntity(
 @Entity(
     tableName = "knowledge_graph",
     primaryKeys = ["nodeA", "nodeB"],
-    foreignKeys = [
-        ForeignKey(
-            entity = EntityDictionaryEntity::class,
-            parentColumns = ["entity_name"],
-            childColumns = ["nodeA"],
-            onDelete = ForeignKey.CASCADE,
-            onUpdate = ForeignKey.CASCADE
-        ),
-        ForeignKey(
-            entity = EntityDictionaryEntity::class,
-            parentColumns = ["entity_name"],
-            childColumns = ["nodeB"],
-            onDelete = ForeignKey.CASCADE,
-            onUpdate = ForeignKey.CASCADE
-        )
-    ],
     indices = [
         Index(value = ["nodeA"]),
         Index(value = ["nodeB"]),

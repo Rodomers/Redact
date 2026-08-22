@@ -71,7 +71,9 @@ fun CustomTextButton(
     transitionState: MutableTransitionState<Boolean>? = null,
     verticalPadding: Dp = 8.dp,
     horizontalPadding: Dp = 16.dp,
-    indication: Indication? = null
+    indication: Indication? = null,
+    blurIfDisabled: Boolean = true,
+    maxLines: Int = 2
 ) {
     val context = LocalContext.current
 
@@ -110,7 +112,7 @@ fun CustomTextButton(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-                alpha = if (enabled) 1f else 0.5f
+                alpha = if (enabled || !blurIfDisabled) 1f else 0.5f
             }
             .clip(shape)
             .drawBehind {
@@ -141,11 +143,10 @@ fun CustomTextButton(
         Text(
             text = inputs.text,
             modifier = textModifier,
-            color = contentColor,
             fontSize = fontSize,
             fontWeight = fontWeight,
             textAlign = textAlign,
-            maxLines = 2
+            maxLines = maxLines
         )
     }
 }

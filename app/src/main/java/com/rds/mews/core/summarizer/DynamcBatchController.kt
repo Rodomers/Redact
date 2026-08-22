@@ -1,6 +1,5 @@
 package com.rds.mews.core.summarizer
 
-import android.content.Context
 import com.rds.mews.core.text.TokenEstimator
 import com.rds.mews.localcore.GeminiModelOption
 import com.rds.mews.localcore.ModelBatchConfig
@@ -8,16 +7,14 @@ import com.rds.mews.repositories.MewsRepository
 import kotlin.math.max
 import kotlin.math.sqrt
 
-class BatchController(
-    private val context: Context
-) {
+class BatchController {
     private var consecutiveFailures: Int = 0
     private var successfulBatchesCount: Int = 0
 
     companion object {
-        private const val TARGET_TOKENS = 15000
-        private const val REFERENCE_NEWS_CHAR_LENGTH = 600
-        private const val MAX_NEWS_COUNT = 80
+        private const val TARGET_TOKENS = 150000
+        private const val REFERENCE_NEWS_CHAR_LENGTH = 1000
+        private const val MAX_NEWS_COUNT = 150
         private const val MAX_K = 1.5
         private const val MIN_K = 0.5
     }
@@ -93,31 +90,41 @@ class BatchController(
         return batches
     }
 
-    fun onBatchSuccess(model: GeminiModelOption, isProbe: Boolean) {
+    fun onBatchSuccess(model: GeminiModelOption, isProbe: Boolean, kSafeTokens: Boolean) {
+        val additional = if (isProbe) 0.15 else 0.02
+
         consecutiveFailures = 0
-        if (!isProbe) {
-            successfulBatchesCount++
-            MewsRepository.modifyModelBatchConfig(model) { currentConfig ->
-                val updatedTokensSafety = (currentConfig.kSafeTokens + 0.02).coerceAtMost(MAX_K)
-                val updatedMessagesSafety = (currentConfig.kSafeMessages + 0.02).coerceAtMost(MAX_K)
-                currentConfig.copy(
-                    kSafeTokens = updatedTokensSafety,
-                    kSafeMessages = updatedMessagesSafety,
-                    successTokensCount = currentConfig.successTokensCount + 1,
-                    successMessagesCount = currentConfig.successMessagesCount + 1
-                )
-            }
+        successfulBatchesCount++
+        MewsRepository.modifyModelBatchConfig(model) { currentConfig ->
+            var updatedTokensSafety = currentConfig.kSafeTokens
+            var updatedMessagesSafety = currentConfig.kSafeMessages
+            if (!kSafeTokens) {
+                updatedMessagesSafety += additional
+            } else updatedTokensSafety += additional
+            currentConfig.copy(
+                kSafeTokens = updatedTokensSafety.coerceAtMost(MAX_K),
+                kSafeMessages = updatedMessagesSafety.coerceAtMost(MAX_K),
+                successTokensCount = currentConfig.successTokensCount + 1,
+                successMessagesCount = currentConfig.successMessagesCount + 1
+            )
         }
     }
 
-    fun onBatchFailure(model: GeminiModelOption, isProbe: Boolean, savedRatio: Double = 0.0) {
+    fun onBatchFailure(model: GeminiModelOption, isProbe: Boolean, kSafeTokens: Boolean, savedRatio: Double = 0.0) {
         if (isProbe) return
 
         consecutiveFailures++
         if (consecutiveFailures >= 2) {
             MewsRepository.modifyModelBatchConfig(model) { currentConfig ->
-                val targetDecreaseTokens = if (savedRatio in MIN_K..1.0) savedRatio else currentConfig.kSafeTokens * 0.7
-                val targetDecreaseMessages = if (savedRatio in MIN_K..1.0) savedRatio else currentConfig.kSafeMessages * 0.7
+                var targetDecreaseMessages: Double = currentConfig.kSafeMessages
+                var targetDecreaseTokens: Double = currentConfig.kSafeTokens
+                val multiplier = if (savedRatio in MIN_K..1.0) savedRatio else 0.7
+
+                if (!kSafeTokens) {
+                    targetDecreaseMessages *= multiplier
+                } else {
+                    targetDecreaseTokens *= multiplier
+                }
 
                 val updatedTokensSafety = targetDecreaseTokens.coerceAtLeast(MIN_K)
                 val updatedMessagesSafety = targetDecreaseMessages.coerceAtLeast(MIN_K)

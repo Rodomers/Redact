@@ -149,6 +149,7 @@ fun TitlesCard(
     backgroundColor: Color = MaterialTheme.colorScheme.secondaryContainer,
     expandable: Boolean = true,
     markAsUnread: () -> Unit,
+    markAsPinned: (Boolean) -> Unit,
     dynamicMediaUrls: List<MediaWithSource>? = null,
     onLoadMediaUrls: () -> Unit = {},
     onImageChanged: (Int) -> Unit,
@@ -240,6 +241,7 @@ fun TitlesCard(
                 onReady = { isPopupReady = true },
                 onBanTheme = onBanTheme,
                 onMarkAsUnread = markAsUnread,
+                onMarkAsPinned = markAsPinned,
                 onImageChanged = onImageChanged,
                 pagerState = pagerState,
                 rememberPage = rememberPage,
@@ -301,6 +303,7 @@ private fun HeroExpansionContent(
     onReady: () -> Unit,
     onBanTheme: (String) -> Unit,
     onMarkAsUnread: () -> Unit,
+    onMarkAsPinned: (Boolean) -> Unit,
     pagerState: PagerState,
     rememberPage: (Int) -> Unit,
     originalNoTime: Boolean,
@@ -430,6 +433,7 @@ private fun HeroExpansionContent(
                     onSwitchStoryline = onSwitchStoryline,
                     onBanTheme = onBanTheme,
                     onMarkAsUnread = onMarkAsUnread,
+                    onMarkAsPinned = onMarkAsPinned,
                     pagerState = pagerState,
                     rememberPage = rememberPage,
                     onCollapse = onDismissRequest,
@@ -510,24 +514,13 @@ private fun TitlesHeaderContent(
     originalNoTime: Boolean = false
 ) {
     val baseTitleWeight = if (isRead) 400 else 800
-    val baseTimeWeight = if (isRead) 400 else 700
     val expandedTitleWeight = 800
-    val expandedTimeWeight = 700
     val currentBaseTitleWeight by animateIntAsState(targetValue = baseTitleWeight, label = "titleWeight")
-    val currentBaseTimeWeight by animateIntAsState(targetValue = baseTimeWeight, label = "timeWeight")
     val finalTitleWeight = currentBaseTitleWeight + ((expandedTitleWeight - currentBaseTitleWeight) * expansionFraction).roundToInt()
-    val finalTimeWeight = currentBaseTimeWeight + ((expandedTimeWeight - currentBaseTimeWeight) * expansionFraction).roundToInt()
 
     val baseAlpha = if (isRead) 0.6f else 1.0f
     val currentBaseAlpha by animateFloatAsState(targetValue = baseAlpha, label = "contentAlpha")
     val finalAlpha = currentBaseAlpha + ((1.0f - currentBaseAlpha) * expansionFraction)
-
-    val baseDotSize = if (isRead) 0.dp else 8.dp
-    val currentDotSize by animateDpAsState(targetValue = baseDotSize, label = "dotSize")
-    val baseDotAlpha = if (isRead) 0f else 1f
-    val currentDotAlpha by animateFloatAsState(targetValue = baseDotAlpha, label = "dotAlpha")
-    val baseSpacerWidth = if (isRead) 0.dp else 6.dp
-    val currentSpacerWidth by animateDpAsState(targetValue = baseSpacerWidth, label = "spacerWidth")
 
     Row(
         modifier = modifier
@@ -565,29 +558,11 @@ private fun TitlesHeaderContent(
                         .alpha(timeAlpha)
                         .padding(bottom = (6 * heightFactor).dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surface, Shapes.large)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(currentDotSize)
-                                .alpha(currentDotAlpha)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSecondaryContainer)
-                        )
-                        Spacer(modifier = Modifier.width(currentSpacerWidth))
-                        Text(
-                            text = getFormattedTimeUnix(title.eventTime),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = finalAlpha),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight(finalTimeWeight),
-                            textAlign = TextAlign.Left
-                        )
-                    }
+                    StatusTimeBadge(
+                        eventTime = title.eventTime,
+                        isRead = isRead,
+                        isPinned = title.isPinned
+                    )
                 }
             }
             Text(
@@ -701,6 +676,7 @@ private fun ExpandedCardContent(
     onSwitchStoryline: (Long) -> Unit,
     onBanTheme: (String) -> Unit,
     onMarkAsUnread: () -> Unit,
+    onMarkAsPinned: (Boolean) -> Unit,
     pagerState: PagerState,
     rememberPage: (Int) -> Unit,
     onCollapse: () -> Unit,
@@ -848,8 +824,10 @@ private fun ExpandedCardContent(
         }
         context.startActivity(Intent.createChooser(sendIntent, null))
     }
+    val isPinned = title.isPinned
     val buttons = listOf(
         TextButtonInputs(stringResource(R.string.share_btn_desc), ::shareText),
+        TextButtonInputs(stringResource(if (!isPinned) R.string.pin_btn_desc else R.string.unpin_btn_desc), { onMarkAsPinned(!isPinned) }),
         TextButtonInputs(stringResource(R.string.mark_as_unread_btn_desc), onMarkAsUnread)
     )
 

@@ -4,8 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
-import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import kotlin.math.max
 import kotlin.math.min
@@ -76,10 +76,26 @@ interface MessageDao {
     suspend fun getAllUniqueMessagesOneShot(): List<MessageSummaryProjection>
 
     @Query("SELECT * FROM messages WHERE id IN (:ids)")
-    suspend fun getMessagesByIds(ids: List<Long>): List<MessageEntity>
+    suspend fun getMessagesByIdsInternal(ids: List<Long>): List<MessageEntity>
+
+    @Transaction
+    suspend fun getMessagesByIds(ids: List<Long>): List<MessageEntity> {
+        if (ids.isEmpty()) return emptyList()
+        return ids.chunked(500).flatMap { chunk ->
+            getMessagesByIdsInternal(chunk)
+        }
+    }
 
     @Query("SELECT * FROM messages WHERE link IN (:links)")
-    suspend fun getMessagesByLinks(links: List<String>): List<MessageEntity>
+    suspend fun getMessagesByLinksInternal(links: List<String>): List<MessageEntity>
+
+    @Transaction
+    suspend fun getMessagesByLinks(links: List<String>): List<MessageEntity> {
+        if (links.isEmpty()) return emptyList()
+        return links.chunked(500).flatMap { chunk ->
+            getMessagesByLinksInternal(chunk)
+        }
+    }
 
     @Query("""
     SELECT m.id, m.source_id, m.link, m.pub_time, m.clean_text 
@@ -106,10 +122,26 @@ interface MessageDao {
     suspend fun insert(message: MessageEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAll(messages: List<MessageEntity>): List<Long>
+    suspend fun insertAllInternal(messages: List<MessageEntity>): List<Long>
+
+    @Transaction
+    suspend fun insertAll(messages: List<MessageEntity>): List<Long> {
+        if (messages.isEmpty()) return emptyList()
+        return messages.chunked(100).flatMap { chunk ->
+            insertAllInternal(chunk)
+        }
+    }
 
     @Update
-    suspend fun updateAll(messages: List<MessageEntity>)
+    suspend fun updateAllInternal(messages: List<MessageEntity>)
+
+    @Transaction
+    suspend fun updateAll(messages: List<MessageEntity>) {
+        if (messages.isEmpty()) return
+        messages.chunked(100).forEach { chunk ->
+            updateAllInternal(chunk)
+        }
+    }
 
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -203,6 +235,9 @@ interface TitleDao {
     @Query("UPDATE titles SET is_read = :isRead WHERE id = :id")
     suspend fun updateReadStatus(id: Long, isRead: Int)
 
+    @Query("UPDATE titles SET is_pinned = :isPinned WHERE id = :id")
+    suspend fun updatePinnedStatus(id: Long, isPinned: Int)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(title: TitleEntity): Long
 
@@ -218,7 +253,7 @@ interface TitleDao {
     @Query("DELETE FROM titles WHERE update_time < :timeMs")
     suspend fun deleteBeforeUpdateTime(timeMs: Long): Int
 
-    @Query("DELETE FROM titles WHERE update_time < :timeMs AND is_read = 1")
+    @Query("DELETE FROM titles WHERE update_time < :timeMs AND is_read = 1 AND is_pinned = 0")
     suspend fun deleteReadItemsBeforeUpdateTime(timeMs: Long): Int
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)

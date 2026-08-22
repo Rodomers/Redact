@@ -6,6 +6,7 @@ import com.rds.mews.database.keyword_stats.TermAliasEntity
 import com.rds.mews.repositories.KeywordStatsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.sqrt
 
 private data class TermCluster(
@@ -13,6 +14,46 @@ private data class TermCluster(
     val aliases: MutableSet<String> = mutableSetOf(),
     val topicIndices: MutableSet<Int> = mutableSetOf()
 )
+
+object GraphCache {
+    private val edgeCache = ConcurrentHashMap<Pair<String, String>, Double>()
+
+    private class OptionalAlias(val value: TermAliasEntity?)
+    private val aliasCache = ConcurrentHashMap<String, OptionalAlias>()
+
+    private val relatedEntitiesCache = ConcurrentHashMap<String, Set<String>>()
+
+    suspend fun getRelatedEntities(keyword: String, threshold: Double = 0.3): Set<String> {
+        val key = keyword.lowercase()
+        return relatedEntitiesCache.getOrPut(key) {
+            KeywordStatsRepository.getRelatedEntities(key, threshold)
+        }
+    }
+
+    suspend fun getEdgeWeight(nodeA: String, nodeB: String): Double {
+        val a = nodeA.lowercase()
+        val b = nodeB.lowercase()
+        val key = if (a < b) Pair(a, b) else Pair(b, a)
+        return edgeCache.getOrPut(key) {
+            KeywordStatsRepository.getEdgeWeight(a, b)
+        }
+    }
+
+    suspend fun findAlias(term: String): TermAliasEntity? {
+        val key = term.lowercase()
+        return aliasCache.getOrPut(key) {
+            OptionalAlias(KeywordStatsRepository.findAlias(key))
+        }.value
+    }
+
+    fun clear() {
+        edgeCache.clear()
+        aliasCache.clear()
+        relatedEntitiesCache.clear()
+    }
+
+
+}
 
 object KnowledgeGraphManager {
     private const val DEFAULT_DECAY_FACTOR = 0.98
@@ -153,30 +194,48 @@ object KnowledgeGraphManager {
         }
 
 
-        val wordCounts = clusters.associate { it.canonicalWord to it.topicIndices.size.toDouble() }
-        repository.updateWordStats(wordCounts)
+        val validClusters = mutableListOf<TermCluster>()
+        val wordCounts = mutableMapOf<String, Double>()
+        val entityClusters = mutableSetOf<String>()
+
+        for (cluster in clusters) {
+            val canonical = cluster.canonicalWord
+            val dbAlias = repository.findAlias(canonical)
+
+            val isKnownEntity = repository.isKnownEntity(canonical)
+            val hasValidAlias = dbAlias != null
+
+            if (isKnownEntity || hasValidAlias || cluster.topicIndices.size > 1) {
+                validClusters.add(cluster)
+
+                if (isKnownEntity) {
+                    entityClusters.add(canonical)
+                } else {
+                    wordCounts[canonical] = cluster.topicIndices.size.toDouble()
+                }
+            }
+        }
+
+        if (wordCounts.isNotEmpty()) {
+            repository.updateWordStats(wordCounts)
+        }
 
         val aliasEntitiesToUpsert = mutableListOf<TermAliasEntity>()
-        for (cluster in clusters) {
+        for (cluster in validClusters) {
+            val isEntity = entityClusters.contains(cluster.canonicalWord)
             for (alias in cluster.aliases) {
                 aliasEntitiesToUpsert.add(
                     TermAliasEntity(
                         alias = alias.lowercase(),
-                        entityTarget = null,
-                        keywordTarget = cluster.canonicalWord
+                        entityTarget = if (isEntity) cluster.canonicalWord else null,
+                        keywordTarget = if (isEntity) null else cluster.canonicalWord
                     )
                 )
             }
         }
         repository.upsertAliases(aliasEntitiesToUpsert)
 
-
         val canonicalTopicSets = List(topicEntitySets.size) { mutableSetOf<String>() }
-        for (cluster in clusters) {
-            for (topicIdx in cluster.topicIndices) {
-                canonicalTopicSets[topicIdx].add(cluster.canonicalWord)
-            }
-        }
 
         val pairCoOccurrence = mutableMapOf<Pair<String, String>, Int>()
         val singleTermFrequency = mutableMapOf<String, Int>()

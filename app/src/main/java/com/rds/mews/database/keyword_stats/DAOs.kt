@@ -23,7 +23,15 @@ interface KeywordStatsDao {
     suspend fun upsertWord(stat: KeywordStatEntity)
 
     @Upsert
-    suspend fun upsertWords(stats: List<KeywordStatEntity>)
+    suspend fun upsertWordsInternal(stats: List<KeywordStatEntity>)
+
+    @Transaction
+    suspend fun upsertWords(stats: List<KeywordStatEntity>) {
+        if (stats.isEmpty()) return
+        stats.chunked(100).forEach { chunk ->
+            upsertWordsInternal(chunk)
+        }
+    }
 
     @Query("UPDATE keyword_stats SET last_seen = :lastSeenMs WHERE word = :word")
     suspend fun setLastSeen(word: String, lastSeenMs: Long)
@@ -62,7 +70,15 @@ interface EntityDictionaryDao {
     suspend fun upsertEntity(entity: EntityDictionaryEntity)
 
     @Upsert
-    suspend fun upsertEntities(entities: List<EntityDictionaryEntity>)
+    suspend fun upsertEntitiesInternal(entities: List<EntityDictionaryEntity>)
+
+    @Transaction
+    suspend fun upsertEntities(entities: List<EntityDictionaryEntity>) {
+        if (entities.isEmpty()) return
+        entities.chunked(100).forEach { chunk ->
+            upsertEntitiesInternal(chunk)
+        }
+    }
 
     @Query("UPDATE entity_dictionary SET last_seen = :lastSeenMs WHERE entity_name = :entityName")
     suspend fun setLastSeen(entityName: String, lastSeenMs: Long)
@@ -101,6 +117,7 @@ interface EntityDictionaryDao {
     @Query("DELETE FROM entity_dictionary WHERE frequency < :cutoff AND last_seen < :timemark")
     suspend fun deleteWeakEntities(timemark: Long, cutoff: Double = 0.1)
 }
+
 @Dao
 interface KnowledgeGraphDao {
     @Query("SELECT * FROM knowledge_graph WHERE nodeA = :nodeA AND nodeB = :nodeB")
@@ -127,7 +144,15 @@ interface KnowledgeGraphDao {
     suspend fun upsertRawEdge(edge: KnowledgeGraphEntity)
 
     @Upsert
-    suspend fun upsertRawEdges(edges: List<KnowledgeGraphEntity>)
+    suspend fun upsertRawEdgesInternal(edges: List<KnowledgeGraphEntity>)
+
+    @Transaction
+    suspend fun upsertRawEdges(edges: List<KnowledgeGraphEntity>) {
+        if (edges.isEmpty()) return
+        edges.chunked(100).forEach { chunk ->
+            upsertRawEdgesInternal(chunk)
+        }
+    }
 
     @Transaction
     suspend fun upsertEdge(edge: KnowledgeGraphEntity) {
@@ -174,10 +199,25 @@ interface KnowledgeGraphDao {
     suspend fun updateEdge(entity: KnowledgeGraphEntity)
 
     @Update
-    suspend fun updateEdges(entities: List<KnowledgeGraphEntity>)
+    suspend fun updateEdgesInternal(entities: List<KnowledgeGraphEntity>)
+
+    @Transaction
+    suspend fun updateEdges(entities: List<KnowledgeGraphEntity>) {
+        if (entities.isEmpty()) return
+        entities.chunked(100).forEach { chunk ->
+            updateEdgesInternal(chunk)
+        }
+    }
 
     @Query("DELETE FROM knowledge_graph WHERE (nodeA = :nodeA AND nodeB = :nodeB) OR (nodeB = :nodeA AND nodeA = :nodeB)")
     suspend fun delEdge(nodeA: String, nodeB: String): Int
+
+    @Query("""
+        DELETE FROM knowledge_graph 
+        WHERE nodeA NOT IN (SELECT entity_name FROM entity_dictionary UNION SELECT word FROM keyword_stats) 
+           OR nodeB NOT IN (SELECT entity_name FROM entity_dictionary UNION SELECT word FROM keyword_stats)
+    """)
+    suspend fun deleteDanglingEdges()
 }
 
 @Dao
@@ -205,7 +245,15 @@ interface TermAliasDao {
     suspend fun upsertAlias(alias: TermAliasEntity)
 
     @Upsert
-    suspend fun upsertAliases(aliases: List<TermAliasEntity>)
+    suspend fun upsertAliasesInternal(aliases: List<TermAliasEntity>)
+
+    @Transaction
+    suspend fun upsertAliases(aliases: List<TermAliasEntity>) {
+        if (aliases.isEmpty()) return
+        aliases.chunked(100).forEach { chunk ->
+            upsertAliasesInternal(chunk)
+        }
+    }
 
     @Query("DELETE FROM term_aliases WHERE alias = :alias")
     suspend fun deleteAlias(alias: String): Int
@@ -226,7 +274,15 @@ interface BurstClusterDao {
     suspend fun upsertCluster(cluster: BurstClusterEntity)
 
     @Upsert
-    suspend fun upsertClusters(clusters: List<BurstClusterEntity>)
+    suspend fun upsertClustersInternal(clusters: List<BurstClusterEntity>)
+
+    @Transaction
+    suspend fun upsertClusters(clusters: List<BurstClusterEntity>) {
+        if (clusters.isEmpty()) return
+        clusters.chunked(100).forEach { chunk ->
+            upsertClustersInternal(chunk)
+        }
+    }
 
     @Query("DELETE FROM burst_clusters WHERE timestamp < :cutoffTimestamp")
     suspend fun deleteOldClusters(cutoffTimestamp: Long)

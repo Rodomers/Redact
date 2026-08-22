@@ -6,7 +6,9 @@
     <string name="title_activity_main" translatable="false">MainActivity</string>
     <string name="tabscreen_sources">Sources</string>
     <string name="tabscreen_titles">Titles</string>
+    <string name="tabscreen_blitz">Blitz</string>
     <string name="tabscreen_settings">Settings</string>
+    <string name="tabscreen_tooltip_blitz">Hold the tab to view blitz topics.</string>
 
     <string name="source_type_telegram">Telegram</string>
     <string name="source_type_rss">Sites and RSS-feeds</string>
@@ -127,6 +129,8 @@
     <string name="share_btn_desc">Share"</string>
     <string name="ban_btn_desc">Block</string>
     <string name="mark_as_unread_btn_desc">Unread</string>
+    <string name="pin_btn_desc">Pin</string>
+    <string name="unpin_btn_desc">Unpin</string>
     <string name="source_reset_errors">Reset errors</string>
     <string name="titles_card_background">Background</string>
     <string name="titles_card_continued">To be continued…</string>

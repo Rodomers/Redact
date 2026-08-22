@@ -1,6 +1,8 @@
 package com.rds.mews.core.text
 
-import com.rds.mews.repositories.KeywordStatsRepository
+import com.rds.mews.core.text.graph.GraphCache
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 
 object TextComparator {
@@ -24,6 +26,7 @@ object TextComparator {
         val lang1 = StopWordsManager.fastLangDetect(text1)
         val lang2 = StopWordsManager.fastLangDetect(text2)
         if (lang1 != lang2) return 0f
+        if (text1.length > 500 || text2.length > 500) return calculateDice(text1, text2)
 
         return when (lang1) {
             LanguageGroup.CYRILLIC -> calculateDice(text1, text2)
@@ -108,15 +111,15 @@ object TextComparator {
     private suspend fun calculateSemanticBonus(
         tokens1: Set<String>,
         tokens2: Set<String>
-    ): Float {
-        if (tokens1.isEmpty() || tokens2.isEmpty()) return 0f
+    ): Float = withContext(Dispatchers.Default) {
+        if (tokens1.isEmpty() || tokens2.isEmpty()) return@withContext 0f
 
         val canonicalMap1 = tokens1.associateWith { token ->
-            val alias = KeywordStatsRepository.findAlias(token)
+            val alias = GraphCache.findAlias(token)
             alias?.keywordTarget ?: alias?.entityTarget ?: token
         }
         val canonicalMap2 = tokens2.associateWith { token ->
-            val alias = KeywordStatsRepository.findAlias(token)
+            val alias = GraphCache.findAlias(token)
             alias?.keywordTarget ?: alias?.entityTarget ?: token
         }
 
@@ -133,7 +136,7 @@ object TextComparator {
                 val pairWeight = if (c1 == c2) {
                     1.0
                 } else {
-                    KeywordStatsRepository.getEdgeWeight(c1, c2)
+                    GraphCache.getEdgeWeight(c1, c2)
                 }
 
                 if (pairWeight > maxPairWeight) {
@@ -149,7 +152,7 @@ object TextComparator {
         }
 
         val minSize = minOf(tokens1.size, tokens2.size)
-        return if (minSize > 0) (totalWeight / minSize).toFloat().coerceIn(0f, 1f) else 0f
+        return@withContext if (minSize > 0) (totalWeight / minSize).toFloat().coerceIn(0f, 1f) else 0f
     }
 
     fun tokenize(text: String): Set<String> {
@@ -157,7 +160,7 @@ object TextComparator {
 
         return TOKENIZE_REGEX
             .findAll(text.lowercase())
-            .map { it.value }
+            .map { it.value.lowercase().trim() }
             .filter { it.length > 1 }
             .toSet()
     }
