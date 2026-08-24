@@ -112,6 +112,7 @@ fun MainScreen(mainActivity: MainActivity) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
         val isBlitzActive by blitzViewModel.isBlitzActive.collectAsStateWithLifecycle()
+        val isOnline by MewsRepository.isOnline.collectAsStateWithLifecycle()
         val scope = rememberCoroutineScope()
 
         var holdProgress by remember { mutableFloatStateOf(0f) }
@@ -251,6 +252,7 @@ fun MainScreen(mainActivity: MainActivity) {
                         blitzViewModel.toggleBlitzActive()
                     },
                     isBlitzActive = isBlitzActive,
+                    isOnline = isOnline,
                     showBlitzTooltip = showBlitzTooltip,
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )

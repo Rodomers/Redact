@@ -49,6 +49,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -77,15 +78,25 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.rds.mews.R
 import com.rds.mews.ui.theme.Shapes
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
     data object Sources: TabScreen(titleResId = R.string.tabscreen_sources, Icons.Default.Favorite)
     data object Titles: TabScreen(titleResId = R.string.tabscreen_titles, Icons.Rounded.Menu)
     data object Settings: TabScreen(titleResId = R.string.tabscreen_settings, Icons.Default.Settings)
 }
+
+private data class TooltipMessage(
+    @StringRes val textRes: Int,
+    val durationMs: Long = 3000L
+)
 
 @Composable
 fun MyBottomBar(
@@ -100,8 +111,13 @@ fun MyBottomBar(
     onHoldProgressChanged: (progress: Float, centerOffset: Offset, isHolding: Boolean) -> Unit = { _, _, _ -> },
     onBlitzTriggered: (centerOffset: Offset) -> Unit = {},
     isBlitzActive: Boolean = false,
-    showBlitzTooltip: Boolean = false
+    showBlitzTooltip: Boolean = false,
+    isOnline: Boolean? = null
 ) {
+    val tooltipChannel = remember { Channel<TooltipMessage>(Channel.UNLIMITED) }
+    var currentTooltipTextId by remember { mutableIntStateOf(0) }
+    var previousIsOnline by remember { mutableStateOf<Boolean?>(null) }
+
     val tabs = remember { listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings) }
     val currentOnTabSelected by rememberUpdatedState(onTabSelected)
     val currentOnHoldProgressChanged by rememberUpdatedState(onHoldProgressChanged)
@@ -154,23 +170,70 @@ fun MyBottomBar(
     val tabStretch = remember { Animatable(0f) }
     val tooltipReveal = remember { Animatable(0f) }
 
+    val showTooltip: suspend CoroutineScope.() -> Unit = {
+        tabStretch.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
+        launch {
+            tabStretch.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow))
+        }
+        launch {
+            tooltipReveal.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
+        }
+    }
+
+    val hideTooltip: suspend CoroutineScope.() -> Unit = {
+        launch {
+            tabStretch.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
+            tabStretch.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium))
+        }
+        launch {
+            tooltipReveal.animateTo(0f, tween(150, easing = FastOutSlowInEasing))
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        for (message in tooltipChannel) {
+            currentTooltipTextId = message.textRes
+            showTooltip()
+            delay(message.durationMs.milliseconds)
+            hideTooltip()
+            delay(200.milliseconds)
+        }
+    }
+
+    LaunchedEffect(isOnline) {
+        if (isOnline == null) return@LaunchedEffect
+        val previous = previousIsOnline
+        previousIsOnline = isOnline
+
+        when (isOnline) {
+            false -> {
+                tooltipChannel.send(
+                    TooltipMessage(
+                        textRes = R.string.tooltip_no_network,
+                        durationMs = 5000L
+                    )
+                )
+            }
+            true -> {
+                if (previous == null) return@LaunchedEffect
+                tooltipChannel.send(
+                    TooltipMessage(
+                        textRes = R.string.tooltip_network_restored,
+                        durationMs = 2000L
+                    )
+                )
+            }
+        }
+    }
+
     LaunchedEffect(showBlitzTooltip) {
         if (showBlitzTooltip) {
-            tabStretch.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
-            launch {
-                tabStretch.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow))
-            }
-            launch {
-                tooltipReveal.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
-            }
-        } else {
-            launch {
-                tabStretch.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
-                tabStretch.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium))
-            }
-            launch {
-                tooltipReveal.animateTo(0f, tween(150, easing = FastOutSlowInEasing))
-            }
+            tooltipChannel.send(
+                TooltipMessage(
+                    textRes = R.string.tabscreen_tooltip_blitz,
+                    durationMs = 3000L
+                )
+            )
         }
     }
 
@@ -190,14 +253,16 @@ fun MyBottomBar(
                 .offset(y = tooltipOffset),
             contentAlignment = Alignment.BottomCenter
         ) {
-            TextTooltip(
-                text = stringResource(R.string.tabscreen_tooltip_blitz),
-                revealProgress = tooltipReveal.value,
-                backgroundColor = backgroundColor,
-                textColor = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth(),
-                shape = containerShape
-            )
+            if (currentTooltipTextId != 0) {
+                TextTooltip(
+                    text = stringResource(currentTooltipTextId),
+                    revealProgress = tooltipReveal.value,
+                    backgroundColor = backgroundColor,
+                    textColor = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = containerShape
+                )
+            }
         }
 
         val baseHeight = containerHeight * 0.72f

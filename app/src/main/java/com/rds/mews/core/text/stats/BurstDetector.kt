@@ -8,7 +8,7 @@ class BurstDetector {
         private const val MIN_WINDOW_TOKENS = 1000
         private const val BURST_Z_THRESHOLD = 3.1
         private const val BURST_IDF_MULTIPLIER = 1.5f
-        private const val COLD_START_FREQ_THRESHOLD = 0.005
+        private const val COLD_START_ABSOLUTE_THRESHOLD = 4.0
         private const val EPSILON = 1e-6
         private val repository = KeywordStatsRepository
     }
@@ -55,20 +55,19 @@ class BurstDetector {
         }
 
         val results = mutableListOf<BurstResult>()
-        val denominator = (totalWindowWords + repository.countKeywords()).toDouble()
-
         for (item in windowData) {
             val baseIdf = repository.getSmoothedIdf(item.word, totalNews)
-            val relFreq = (item.count + 1.0) / denominator
+
             val sourceFactor = calculateSourceDiversification(item.uniqueDomainsCount)
-            val adjustedFreq = relFreq * sourceFactor
+
+            val adjustedFreq = item.count.toDouble() * sourceFactor
 
             val stat = repository.getWordStat(item.word)
             val isBurst: Boolean
             val zScore: Double
 
             if (stat == null || stat.historicalMean == 0.0) {
-                isBurst = adjustedFreq >= COLD_START_FREQ_THRESHOLD
+                isBurst = adjustedFreq >= COLD_START_ABSOLUTE_THRESHOLD
                 zScore = if (isBurst) BURST_Z_THRESHOLD else 0.0
             } else {
                 val stdDev = sqrt(stat.historicalVar + EPSILON)

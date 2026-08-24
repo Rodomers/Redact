@@ -12,6 +12,7 @@ import com.rds.mews.ProxyAddressProvider
 import com.rds.mews.R
 import com.rds.mews.RSSHubAddressProvider
 import com.rds.mews.RssHubApiKeyProvider
+import com.rds.mews.core.NetworkMonitor
 import com.rds.mews.core.summarizer.NewsSummarizer
 import com.rds.mews.core.parser.SourceResolver
 import com.rds.mews.database.main.AppDatabase
@@ -39,6 +40,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 object MewsRepository {
+    private lateinit var networkMonitor: NetworkMonitor
+
     private lateinit var database: AppDatabase
     private lateinit var sourceDao: SourceDao
     private lateinit var messageDao: MessageDao
@@ -87,6 +90,8 @@ object MewsRepository {
     lateinit var enableUpdateNotification: StateFlow<Boolean>
 
     lateinit var modelBatchInfo: StateFlow<Set<ModelBatchConfig>>
+
+    lateinit var isOnline: StateFlow<Boolean?>
 
     private val _context = MutableStateFlow<Context?>(null)
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
@@ -157,6 +162,7 @@ object MewsRepository {
         this.titleDao = database.titleDao()
 
         this.settingsManager = SettingsManager(appContext)
+        this.networkMonitor = NetworkMonitor(appContext)
         this.externalScope = externalScope
 
         this.DEFAULT_GEMINI_API_KEY = GeminiApiKeyProvider().getKey()
@@ -228,6 +234,13 @@ object MewsRepository {
 
         val defaultLang = getStringResource(R.string.current_language)
         currentLanguage = createSettingFlow({ it.currentLanguage }, defaultLang)
+
+        isOnline = networkMonitor.isOnline
+            .stateIn(
+                scope = MewsRepository.externalScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = null
+            )
 
         lastError = settingsFlow.map { settings ->
             val saved = settings.lastError

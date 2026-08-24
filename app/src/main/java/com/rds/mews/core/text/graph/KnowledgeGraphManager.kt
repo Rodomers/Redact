@@ -220,22 +220,29 @@ object KnowledgeGraphManager {
             repository.updateWordStats(wordCounts)
         }
 
+        val canonicalTopicSets = List(topicEntitySets.size) { mutableSetOf<String>() }
         val aliasEntitiesToUpsert = mutableListOf<TermAliasEntity>()
         for (cluster in validClusters) {
-            val isEntity = entityClusters.contains(cluster.canonicalWord)
+            val canonicalWord = cluster.canonicalWord
+
+            val isEntity = entityClusters.contains(canonicalWord)
             for (alias in cluster.aliases) {
                 aliasEntitiesToUpsert.add(
                     TermAliasEntity(
                         alias = alias.lowercase(),
-                        entityTarget = if (isEntity) cluster.canonicalWord else null,
-                        keywordTarget = if (isEntity) null else cluster.canonicalWord
+                        entityTarget = if (isEntity) canonicalWord else null,
+                        keywordTarget = if (isEntity) null else canonicalWord
                     )
                 )
             }
+
+            for (topicIndex in cluster.topicIndices) {
+                if (topicIndex in canonicalTopicSets.indices) {
+                    canonicalTopicSets[topicIndex].add(canonicalWord)
+                }
+            }
         }
         repository.upsertAliases(aliasEntitiesToUpsert)
-
-        val canonicalTopicSets = List(topicEntitySets.size) { mutableSetOf<String>() }
 
         val pairCoOccurrence = mutableMapOf<Pair<String, String>, Int>()
         val singleTermFrequency = mutableMapOf<String, Int>()

@@ -14,7 +14,7 @@ class BatchController {
     companion object {
         private const val TARGET_TOKENS = 150000
         private const val REFERENCE_NEWS_CHAR_LENGTH = 1000
-        private const val MAX_NEWS_COUNT = 150
+        private const val MAX_NEWS_COUNT = 60
         private const val MAX_K = 1.5
         private const val MIN_K = 0.5
     }

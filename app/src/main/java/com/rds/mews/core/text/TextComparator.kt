@@ -161,7 +161,7 @@ object TextComparator {
         return TOKENIZE_REGEX
             .findAll(text.lowercase())
             .map { it.value.lowercase().trim() }
-            .filter { it.length > 1 }
+            .filter { it.length > 2 }
             .toSet()
     }
 

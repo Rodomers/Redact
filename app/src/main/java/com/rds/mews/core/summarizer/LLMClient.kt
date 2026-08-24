@@ -112,6 +112,8 @@ class LLMClient(
                 val responseString = response.body
                 val responseStatus = response.status
 
+//                println("RawResponse: $responseString")
+
                 if (responseStatus != 200) {
                     when (responseStatus) {
                         429 -> {

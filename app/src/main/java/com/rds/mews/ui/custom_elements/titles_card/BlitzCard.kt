@@ -1,6 +1,7 @@
 package com.rds.mews.ui.custom_elements.titles_card
 
 import android.annotation.SuppressLint
+import androidx.compose.ui.graphics.Color
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
@@ -87,6 +88,13 @@ import com.rds.mews.ui.custom_elements.CustomIconButton
 import com.rds.mews.ui.custom_elements.CustomTextButton
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.Dp
+
+private data class IconParams(
+    val defaultIconColor: Color,
+    val transitionIconColor: Color,
+    val iconSize: Dp
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @SuppressLint("ConfigurationScreenWidthHeight")
@@ -121,6 +129,12 @@ fun BlitzCard(
     val isRead = title.isRead
 
     val maxHeightLimit = (config.screenHeightDp * 0.45f).dp
+
+    val iconParams = IconParams(
+        MaterialTheme.colorScheme.surface,
+        MaterialTheme.colorScheme.secondaryContainer,
+        32.dp
+    )
 
     LaunchedEffect(title.id) {
         onLoadMediaUrls()
@@ -274,7 +288,8 @@ fun BlitzCard(
                         if (it.isLowerCase()) it.titlecase(
                             LocalLocale.current.platformLocale
                         ) else it.toString()
-                    }
+                    },
+                    modifier = Modifier.heightIn(min = iconParams.iconSize)
                 )
 
                 CustomIconButton(
@@ -286,13 +301,13 @@ fun BlitzCard(
                         }
                     ),
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(iconParams.iconSize)
                         .onGloballyPositioned { coordinates ->
                             buttonBounds = coordinates.boundsInWindow().roundToIntRect()
                         },
                     iconModifier = Modifier.size(16.dp),
-                    defaultBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                    transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    defaultBackgroundColor = iconParams.defaultIconColor,
+                    transitionBackgroundColor = iconParams.transitionIconColor,
                     transitionState = dropdownTransitionState,
                     shape = Shapes.large
                 )
@@ -307,7 +322,7 @@ fun BlitzCard(
                     density = density,
                     onDismissRequest = { dropdownTransitionState.targetState = false },
                     arrowPosition = ArrowPosition.BottomRight,
-                    backgroundColor = MaterialTheme.colorScheme.secondaryContainer
+                    backgroundColor = iconParams.defaultIconColor
                 )
             }
         }
@@ -325,7 +340,6 @@ fun BlitzCardSourceExpansionOverlay(
     onTogglePin: (Boolean) -> Unit = {},
     onShare: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    sanitizeCopiedText: Boolean = false,
     dynamicMediaUrls: List<MediaWithSource>? = null,
     imagePagerState: PagerState,
     clickedImageIndex: Int?,
@@ -347,6 +361,12 @@ fun BlitzCardSourceExpansionOverlay(
     var measuredContentHeight by remember { mutableStateOf<Float?>(null) }
 
     val expansionAnim = remember { Animatable(0f) }
+
+    val iconParams = IconParams(
+        MaterialTheme.colorScheme.surface,
+        MaterialTheme.colorScheme.secondaryContainer,
+        32.dp
+    )
 
     val handleDismiss = {
         scope.launch {
@@ -396,6 +416,7 @@ fun BlitzCardSourceExpansionOverlay(
                     }
             ) {
                 BlitzCardExpandedContent(
+                    iconParams = iconParams,
                     title = title,
                     dateString = dateString,
                     sources = sources,
@@ -458,6 +479,7 @@ fun BlitzCardSourceExpansionOverlay(
                     .fillMaxHeight()
             ) {
                 BlitzCardExpandedContent(
+                    iconParams = iconParams,
                     title = title,
                     dateString = dateString,
                     sources = sources,
@@ -479,6 +501,7 @@ fun BlitzCardSourceExpansionOverlay(
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun BlitzCardExpandedContent(
+    iconParams: IconParams,
     title: Title,
     dateString: String,
     sources: List<SourceMessages>?,
@@ -646,7 +669,8 @@ private fun BlitzCardExpandedContent(
                             if (it.isLowerCase()) it.titlecase(
                                 LocalLocale.current.platformLocale
                             ) else it.toString()
-                        }
+                        },
+                        modifier = Modifier.heightIn(min = iconParams.iconSize)
                     )
 
                     CustomIconButton(
@@ -658,13 +682,13 @@ private fun BlitzCardExpandedContent(
                             }
                         ),
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(iconParams.iconSize)
                             .onGloballyPositioned { coordinates ->
                                 buttonBounds = coordinates.boundsInWindow().roundToIntRect()
                             },
                         iconModifier = Modifier.size(16.dp),
-                        defaultBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                        transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        defaultBackgroundColor = iconParams.defaultIconColor,
+                        transitionBackgroundColor = iconParams.transitionIconColor,
                         transitionState = dropdownTransitionState,
                         shape = Shapes.large
                     )
@@ -679,7 +703,7 @@ private fun BlitzCardExpandedContent(
                         density = density,
                         onDismissRequest = { dropdownTransitionState.targetState = false },
                         arrowPosition = ArrowPosition.BottomRight,
-                        backgroundColor = MaterialTheme.colorScheme.secondaryContainer
+                        backgroundColor = iconParams.defaultIconColor
                     )
                 }
             }

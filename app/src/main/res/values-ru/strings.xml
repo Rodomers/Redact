@@ -7,6 +7,8 @@
     <string name="tabscreen_blitz">Блиц</string>
     <string name="tabscreen_settings">Настройки</string>
     <string name="tabscreen_tooltip_blitz">Удерживайте вкладку, чтобы перейти к коротким темам.</string>
+    <string name="tooltip_no_network">Нет подключения к интернету.</string>
+    <string name="tooltip_network_restored">Интернет-подключение восстановлено.</string>
 
     <string name="source_type_telegram">Telegram</string>
     <string name="source_type_rss">Сайты и RSS-ленты</string>
