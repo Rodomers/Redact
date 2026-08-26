@@ -71,7 +71,8 @@ fun SourcesCard(
     timeText: String,
     isExpanded: Boolean,
     onExpanded: () -> Unit,
-    onResetErrors: (Long) -> Unit
+    onResetErrors: (Long) -> Unit,
+    setInBurst: (Boolean) -> Unit
 ) {
     val menuTransitionState = remember { MutableTransitionState(isExpanded) }
     LaunchedEffect(isExpanded) {
@@ -89,8 +90,17 @@ fun SourcesCard(
     val primaryColor = MaterialTheme.colorScheme.secondaryContainer
     val resetErrText = stringResource(R.string.source_reset_errors)
 
-    val currentButtons = remember(buttons, hasErrors) {
+    val doNotTrackText = stringResource(R.string.source_do_not_track)
+    val trackText = stringResource(R.string.source_track)
+
+    val currentButtons = remember(buttons, hasErrors, rss.inBurst) {
         val list = buttons.toMutableList()
+        list.add(
+            TextButtonInputs(
+                if (rss.inBurst) doNotTrackText else trackText,
+                { setInBurst(!rss.inBurst) }
+            )
+        )
         if (hasErrors) {
             list.add(
                 TextButtonInputs(
@@ -130,7 +140,7 @@ fun SourcesCard(
                             .crossfade(true)
                             .placeholder(R.drawable.zhdun)
                             .error(R.drawable.zhdun)
-                            .memoryCacheKey("$avatarUrl-$retryCount")
+//                            .memoryCacheKey("$avatarUrl-$retryCount")
                             .build()
                     }
 
@@ -243,6 +253,8 @@ fun SourcesCard(
                 ) {
                     Column(
                         modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 16.dp)
                             .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)

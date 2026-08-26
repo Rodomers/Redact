@@ -47,9 +47,9 @@ fun Context.sendSuccessNotification() {
     }
 }
 
-fun Context.sendBurstNotification(snippet: String) {
+fun Context.sendBurstNotification(snippet: String, burstId: Long = System.currentTimeMillis()) {
     val channelId = "burst_notification_channel"
-    val notificationId = 2
+    val notificationId = (burstId % 1000000).toInt()
 
     val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     val channel = NotificationChannel(
@@ -72,8 +72,9 @@ fun Context.sendBurstNotification(snippet: String) {
         .setSmallIcon(R.drawable.ic_launcher_monochrome)
         .setContentTitle(getString(R.string.burst_notification_title))
         .setContentText(snippet)
-        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
         .setContentIntent(pendingIntent)
+        .setGroup("burst_notification_group")
         .setAutoCancel(true)
         .build()
 

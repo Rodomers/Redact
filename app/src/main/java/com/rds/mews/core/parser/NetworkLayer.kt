@@ -255,24 +255,22 @@ object SourceResolver {
             val doc = Jsoup.parse(response.body, url)
 
             if (type == SourceType.TELEGRAM) {
+                val tgOg = doc.selectFirst("meta[property=\"og:image\"], meta[name=\"twitter:image\"]")?.attr("abs:content")
+                if (!tgOg.isNullOrBlank()) return@withContext tgOg
+
                 val imgElement = doc.selectFirst("img.tgme_page_photo_image")
-                return@withContext imgElement?.attr("src")?.takeIf { it.isNotBlank() }
+                return@withContext imgElement?.attr("abs:src")?.takeIf { it.isNotBlank() }
             } else {
-                val appleIcon = doc.selectFirst("link[rel=apple-touch-icon]")
-                val appleUrl = appleIcon?.attr("abs:href")
-                if (!appleUrl.isNullOrBlank()) return@withContext appleUrl
+                val appleIcon = doc.select("link[rel*=\"apple-touch-icon\"]").lastOrNull()?.attr("abs:href")
+                if (!appleIcon.isNullOrBlank()) return@withContext appleIcon
 
-                val shortcutIcon = doc.selectFirst("link[rel=\"shortcut icon\"]")
-                val shortcutUrl = shortcutIcon?.attr("abs:href")
-                if (!shortcutUrl.isNullOrBlank()) return@withContext shortcutUrl
+                val icon = doc.select("link[rel*=\"icon\"]").lastOrNull()?.attr("abs:href")
+                if (!icon.isNullOrBlank()) return@withContext icon
 
-                val icon = doc.selectFirst("link[rel=icon]")
-                val iconUrl = icon?.attr("abs:href")
-                if (!iconUrl.isNullOrBlank()) return@withContext iconUrl
-
-                val ogImage = doc.selectFirst("meta[property=\"og:image\"]")
-                val ogUrl = ogImage?.attr("abs:content")
-                if (!ogUrl.isNullOrBlank()) return@withContext ogUrl
+                val uri = java.net.URI(url)
+                val host = uri.host ?: return@withContext null
+                val scheme = uri.scheme ?: "https"
+                return@withContext "$scheme://$host/favicon.ico"
             }
         } catch (_: Exception) {
         }

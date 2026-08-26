@@ -1130,7 +1130,7 @@ private fun ExpandedCardContent(
                                     }
                                 }
 
-                                if (title.keywords.isNotEmpty() && expansionProgress == 1f) {
+                                if (title.keywords.isNotEmpty()) {
                                     Spacer(modifier = Modifier.height(16.dp))
                                     val maxVisibleYPx = with(density) {
                                         (collapsedBounds.top + maxHeight.toPx())
@@ -1145,7 +1145,7 @@ private fun ExpandedCardContent(
                                             AnimatedKeywordTag(
                                                 keyword = keyword,
                                                 index = index,
-                                                isExpanded = expansionProgress > 0.8f,
+                                                isExpanded = expansionProgress > 0.5f,
                                                 maxVisibleYPx = maxVisibleYPx,
                                                 onBanTheme = onBanTheme,
                                                 haptics = haptics

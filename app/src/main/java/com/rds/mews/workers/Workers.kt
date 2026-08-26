@@ -130,9 +130,11 @@ class ParserWorker(
             val currentBatchSize = MewsRepository.parserBatchSize.value
             var newBatchSize = currentBatchSize
 
+            val allowedSources = MewsRepository.getBurstSources().map { it.id }
+
             entries.chunked(currentBatchSize).forEach { batch ->
                 val executionTime = measureTimeMillis {
-                    processBatch(source, batch)
+                    processBatch(source, batch, allowedSources)
                 }
 
                 if (executionTime > 3000) {
@@ -154,8 +156,11 @@ class ParserWorker(
 
     private suspend fun processBatch(
         source: SourceEntity,
-        batch: List<MinifluxEntry>
+        batch: List<MinifluxEntry>,
+        burstAllowedSources: List<Long>
     ) {
+        val inBurst = source.inBurst
+
         val pubTimes = batch.map { parseDate(it.published_at) ?: System.currentTimeMillis() }
         val minTimeMs = pubTimes.minOrNull() ?: System.currentTimeMillis()
         val maxTimeMs = pubTimes.maxOrNull() ?: System.currentTimeMillis()
@@ -172,6 +177,8 @@ class ParserWorker(
 
         var windowTokensCount = 0L
         for (msg in windowMessages) {
+            if (msg.sourceId !in burstAllowedSources) continue
+
             val tokens = msg.cleanText.lowercase()
                 .split(Regex("[^\\p{L}\\p{N}_-]+"))
                 .filter { it.length > 1 }
@@ -180,6 +187,8 @@ class ParserWorker(
                 wordToSourcesMap.getOrPut(token) { mutableSetOf() }.add(msg.sourceId)
             }
         }
+
+        val windowTexts = windowMessages.map { it.cleanText }
 
         for (i in batch.indices) {
             val entry = batch[i]
@@ -191,12 +200,13 @@ class ParserWorker(
                 .split(Regex("[^\\p{L}\\p{N}_-]+"))
                 .filter { it.length > 1 }
 
-            tokens.forEach { word ->
-                batchWordCounts[word] = (batchWordCounts[word] ?: 0.0) + 1.0
-                wordToSourcesMap.getOrPut(word) { mutableSetOf() }.add(source.id)
+            if (inBurst) {
+                tokens.forEach { word ->
+                    batchWordCounts[word] = (batchWordCounts[word] ?: 0.0) + 1.0
+                    wordToSourcesMap.getOrPut(word) { mutableSetOf() }.add(source.id)
+                }
             }
 
-            val windowTexts = windowMessages.map { it.cleanText }
             val isDuplicate = duplicateDetector.checkIsDuplicate(cleanText, windowTexts)
 
             entitiesToInsert.add(
@@ -226,7 +236,7 @@ class ParserWorker(
             savedMessageIds = MewsRepository.insertBatchAndUpdateSourceTime(entitiesToInsert, source.id, syncTimeMs)
         }
 
-        if (totalWindowWords > 0 && savedMessageIds.isNotEmpty()) {
+        if (totalWindowWords > 0 && savedMessageIds.isNotEmpty() && batchWordCounts.isNotEmpty()) {
             val messageTokensMap = savedMessageIds.indices.associate { idx ->
                 val msgId = savedMessageIds[idx]
                 val tokens = entitiesToInsert[idx].cleanText.lowercase()

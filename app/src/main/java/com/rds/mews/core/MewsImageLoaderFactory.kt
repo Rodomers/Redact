@@ -17,8 +17,8 @@ class MewsImageLoaderFactory(private val context: Context) : ImageLoaderFactory 
             enableProxy = enableProxy
         ).okHttpClient.newBuilder()
             .dispatcher(okhttp3.Dispatcher().apply {
-                maxRequests = 64
-                maxRequestsPerHost = 10
+                maxRequests = 128
+                maxRequestsPerHost = 32
             })
             .addNetworkInterceptor { chain ->
                 val response = chain.proceed(chain.request())
@@ -29,6 +29,10 @@ class MewsImageLoaderFactory(private val context: Context) : ImageLoaderFactory 
             .build()
 
         return ImageLoader.Builder(context)
+            .components {
+                add(coil.decode.SvgDecoder.Factory())
+                add(coil.decode.GifDecoder.Factory())
+            }
             .okHttpClient(httpClient)
             .memoryCache {
                 MemoryCache.Builder(context)

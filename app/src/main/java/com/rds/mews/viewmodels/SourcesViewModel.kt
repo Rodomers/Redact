@@ -124,6 +124,10 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
         }
     }
 
+    fun setInBurst(id: Long, value: Boolean) {
+        repository.setSourceInBurst(id, value)
+    }
+
     fun changeGroupState(group: SourceType) {
         val currentMap = _groupStates.value.toMutableMap()
         currentMap[group] = !(currentMap[group] ?: true)

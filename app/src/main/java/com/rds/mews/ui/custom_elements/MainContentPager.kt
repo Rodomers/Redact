@@ -128,7 +128,7 @@ fun MainContentPager(
                             )
                         }
 
-                        if (effectiveProgress > 0f) {
+                        if (isHolding && effectiveProgress > 0f) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()

@@ -24,6 +24,8 @@
     <string name="optimization_sheet_conf">Разрешить</string>
     <string name="no_sources">Нет источников :(</string>
     <string name="link">Ссылка</string>
+    <string name="source_track">Отслеживать</string>
+    <string name="source_do_not_track">Не отслеживать</string>
 
     <string name="titles_update_text">Потяните вниз,\nчтобы обновить</string>
     <string name="today">сегодня</string>
@@ -109,6 +111,11 @@
         <item quantity="few">%d дня</item>
         <item quantity="many">%d дней</item>
     </plurals>
+    <plurals name="err_text_unprocessed_items">
+        <item quantity="one">Обнаружен %d черновик. Список новостей неполный.\nОбновить?</item>
+        <item quantity="few">Обнаружены %d черновика. Список новостей неполный.\nОбновить?</item>
+        <item quantity="many">Обнаружено %d черновиков. Список новостей неполный.\nОбновить?</item>
+    </plurals>
 
     <string name="adaptive">Адаптивная</string>
 
@@ -193,7 +200,6 @@
     <string name="err_text_no_network">Нет связи с сервером. Проверьте своё подключение к интернету (и текущий IP).</string>
     <string name="err_btn_no_network">Ок</string>
     <string name="err_header_unprocessed_items">Скрытые элементы</string>
-    <string name="err_text_unprocessed_items">Обнаружены черновые записи. Список неполный.\nОбновить?</string>
     <string name="err_btn_unprocessed_items">Обновить</string>
     <string name="err_header_api_key">Ошибка ключа</string>
     <string name="err_text_api_key">Ваш API ключ Gemini недействителен или отозван. Проверьте настройки.</string>

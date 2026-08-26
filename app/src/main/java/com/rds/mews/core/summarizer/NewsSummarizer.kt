@@ -12,12 +12,16 @@ import com.rds.mews.core.text.TextComparator
 import com.rds.mews.core.text.TextSanitizer
 import com.rds.mews.core.text.graph.GraphCache
 import com.rds.mews.core.text.graph.KnowledgeGraphManager
+import com.rds.mews.database.keyword_stats.BurstClusterEntity
 import com.rds.mews.localcore.TitleStatus
 import com.rds.mews.repositories.KeywordStatsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.max
@@ -182,6 +186,29 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                 val activeClusters = try {
                     KeywordStatsRepository.getBurstClusters()
+                        .sortedByDescending { it.peakZScore }
+                        .fold(mutableListOf<BurstClusterEntity>()) { acc, candidate ->
+                            val matchIndex = acc.indexOfFirst { existing ->
+                                areKeywordListsSimilar(
+                                    words1 = existing.keywords,
+                                    words2 = candidate.keywords,
+                                    wordSimilarityThreshold = 0.8f,
+                                    clusterMatchRate = 0.8
+                                )
+                            }
+
+                            if (matchIndex != -1) {
+                                val existing = acc[matchIndex]
+                                acc[matchIndex] = existing.copy(
+                                    keywords = (existing.keywords + candidate.keywords).distinct(),
+                                    messageIds = (existing.messageIds + candidate.messageIds).distinct(),
+                                    peakZScore = maxOf(existing.peakZScore, candidate.peakZScore)
+                                )
+                            } else {
+                                acc.add(candidate)
+                            }
+                            acc
+                        }
                 } catch (_: Exception) { emptyList() }
 
                 Log.i(TAG, "[STAGE: EXTRACTION] Start execution manager for ${rawMessages.size} messages. Active Burst clusters: ${activeClusters.size}")
@@ -265,79 +292,88 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                 val blitzTopics = extractedTopics.filter { it.isBlitz }
                 val nonBlitzTopics = extractedTopics.filter { !it.isBlitz }
+                val filterTopics = MewsRepository.filterTopics.first()
 
                 Log.d(TAG, "[FILTERING] Non-blitz count: ${nonBlitzTopics.size}, Blitz count: ${blitzTopics.size}")
 
-                val blitzMerged = mutableListOf<Topics>()
-                withContext(Dispatchers.Default) { mergeIntoGlobal(blitzTopics, blitzMerged) }
-                Log.d(TAG, "[FILTERING] Blitz after algorithmic merge: ${blitzMerged.size}")
-
-                val filterTopics = MewsRepository.filterTopics.first()
-                val mergedTopics = if (filterTopics && nonBlitzTopics.isNotEmpty()) {
-                    try {
-                        Log.d(TAG, "[FILTERING] Starting LLM smart merge...")
-                        var result: List<Topics> = smartMergeTopics(nonBlitzTopics, currentLanguage, bannedWords, maxTopics)
-                        var attempts = 0
-                        while (attempts < MAX_SUMMARIZATION_ATTEMTS && result.size > maxTopics * 2) {
-                            attempts++
-                            result = smartMergeTopics(result, currentLanguage, bannedWords, maxTopics)
-                        }
-                        Log.d(TAG, "[FILTERING] LLM smart merge finished. Result size: ${result.size}. Applying final algorithmic merge.")
-                        val finalReg = mutableListOf<Topics>()
-                        withContext(Dispatchers.Default) { mergeIntoGlobal(result, finalReg) }
-                        Log.d(TAG, "[FILTERING] Final merged non-blitz topics size: ${finalReg.size}")
-                        finalReg
-                    } catch (e: Exception) {
-                        Log.w(TAG, "[FILTERING] Smart merge failed, falling back to algorithmic merge", e)
-                        val fallbackMerge = mutableListOf<Topics>()
-                        withContext(Dispatchers.Default) {
-                            mergeIntoGlobal(
-                                nonBlitzTopics,
-                                fallbackMerge
-                            )
-                        }
-                        fallbackMerge
+                coroutineScope {
+                    val blitzDeferred = async(Dispatchers.Default) {
+                        val blitzMergedLocal = mutableListOf<Topics>()
+                        mergeIntoGlobal(blitzTopics, blitzMergedLocal)
+                        blitzMergedLocal
                     }
-                } else {
-                    Log.d(TAG, "[FILTERING] Filter disabled or no non-blitz topics. Applying algorithmic merge directly.")
-                    val fallbackMerge = mutableListOf<Topics>()
-                    withContext(Dispatchers.Default) { mergeIntoGlobal(nonBlitzTopics, fallbackMerge) }
-                    fallbackMerge
+
+                    val mergedTopicsDeferred = async(Dispatchers.Default) {
+                        if (filterTopics && nonBlitzTopics.isNotEmpty()) {
+                            try {
+                                Log.d(TAG, "[FILTERING] Starting LLM smart merge...")
+                                var result: List<Topics> = smartMergeTopics(nonBlitzTopics, currentLanguage, bannedWords, maxTopics)
+                                var attempts = 0
+                                while (attempts < MAX_SUMMARIZATION_ATTEMTS && result.size > maxTopics * 2) {
+                                    attempts++
+                                    result = smartMergeTopics(result, currentLanguage, bannedWords, maxTopics)
+                                }
+                                Log.d(TAG, "[FILTERING] LLM smart merge finished. Result size: ${result.size}. Applying final algorithmic merge.")
+                                val finalReg = mutableListOf<Topics>()
+                                mergeIntoGlobal(result, finalReg)
+                                Log.d(TAG, "[FILTERING] Final merged non-blitz topics size: ${finalReg.size}")
+                                finalReg
+                            } catch (e: Exception) {
+                                Log.w(TAG, "[FILTERING] Smart merge failed, falling back to algorithmic merge", e)
+                                val fallbackMerge = mutableListOf<Topics>()
+                                mergeIntoGlobal(nonBlitzTopics, fallbackMerge)
+                                fallbackMerge
+                            }
+                        } else {
+                            Log.d(TAG, "[FILTERING] Filter disabled or no non-blitz topics. Applying algorithmic merge directly.")
+                            val fallbackMerge = mutableListOf<Topics>()
+                            mergeIntoGlobal(nonBlitzTopics, fallbackMerge)
+                            fallbackMerge
+                        }
+                    }
+
+                    val blitzMerged = blitzDeferred.await()
+                    Log.d(TAG, "[FILTERING] Blitz after algorithmic merge: ${blitzMerged.size}")
+
+                    val mergedTopics = mergedTopicsDeferred.await()
+
+                    val finalTopics = mergedTopics.sortedByDescending { it.weight }.take((maxTopics * 1.5).toInt())
+                    val primaryTopics = finalTopics.take(maxTopics)
+                    val blitzRaw = blitzMerged.sortedByDescending { it.weight }.take(maxTopics)
+
+                    Log.i(TAG, "[STAGE: SAVING DRAFTS] Selected ${primaryTopics.size} primary topics and ${blitzRaw.size} blitz topics. Updating Knowledge Graph and saving to DB...")
+
+                    launch(Dispatchers.Default) {
+                        try {
+                            KnowledgeGraphManager.processTopicsAndBuildGraph(finalTopics.map { it.keywords.toSet() })
+                            GraphCache.clear()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Process graph failed: ${e.cause}, ${e.message}")
+                            throw e
+                        }
+                    }
+
+                    val primaryTopicsWithIdsDeferred = primaryTopics.map { async { saveTopicToDb(it, extractionTime) } }
+                    val blitzRawWithIdsDeferred = blitzRaw.map { async { saveTopicToDb(it, extractionTime) } }
+
+                    val primaryTopicsWithIds = primaryTopicsWithIdsDeferred.awaitAll()
+                    val blitzRawWithIds = blitzRawWithIdsDeferred.awaitAll()
+
+                    val primaryRawDto = primaryTopicsWithIds.map { it.toRawTopicDto() }
+                    val blitzRawDto = blitzRawWithIds.map { it.toRawTopicDto() }
+
+                    MewsRepository.setSourceSummarizingSyncTime()
+
+                    stateManager.updateState { it.copy(
+                        updatingState = UpdatingState.SUMMARIZING,
+                        stagedRawTopics = emptyList(),
+                        primaryTopics = primaryRawDto,
+                        reserveTopics = finalTopics.map { topic -> topic.toRawTopicDto() }.filter { element -> !primaryRawDto.contains(element) },
+                        blitzTopics = blitzRawDto
+                    )
+                    }
+                    baseProgress = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress }
                 }
-
-                val finalTopics = mergedTopics.sortedByDescending { it.weight }.take((maxTopics * 1.5).toInt())
-                val primaryTopics = finalTopics.take(maxTopics)
-                val blitzRaw = blitzMerged.sortedByDescending { it.weight }.take(maxTopics)
-
-                Log.i(TAG, "[STAGE: SAVING DRAFTS] Selected ${primaryTopics.size} primary topics and ${blitzRaw.size} blitz topics. Updating Knowledge Graph and saving to DB...")
-
-                try {
-                    KnowledgeGraphManager.processTopicsAndBuildGraph(finalTopics.map { it.keywords.toSet() })
-                } catch (e: Exception) {
-                    Log.e(TAG, "Process graph failed: ${e.cause}, ${e.message}")
-                    return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR, e.cause)
-                }
-
-
-                GraphCache.clear()
-
-                val primaryTopicsWithIds = primaryTopics.map { saveTopicToDb(it, extractionTime) }
-                val blitzRawWithIds = blitzRaw.map { saveTopicToDb(it, extractionTime) }
-
-                val primaryRawDto = primaryTopicsWithIds.map { it.toRawTopicDto() }
-                val blitzRawDto = blitzRawWithIds.map { it.toRawTopicDto() }
-
-                MewsRepository.setSourceSummarizingSyncTime()
-
-                stateManager.updateState { it.copy(
-                    updatingState = UpdatingState.SUMMARIZING,
-                    stagedRawTopics = emptyList(),
-                    primaryTopics = primaryRawDto,
-                    reserveTopics = finalTopics.map { topic -> topic.toRawTopicDto() }.filter { element -> !primaryRawDto.contains(element) },
-                    blitzTopics = blitzRawDto
-                )
-                }
-                baseProgress = try { MewsRepository.updatingProgress.first() } catch(_: Exception) { baseProgress }
             }
 
             val summarizationState = stateManager.readState() ?: return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
@@ -455,6 +491,10 @@ class NewsSummarizer(private val llm: LLMClient) {
                     dbRemaining.forEach { MewsRepository.deleteTitleById(it.id) }
                     Log.w(TAG, "Deleted ${dbRemaining.size} failed topics from DB.")
                 }
+                if (failedTopics.isNotEmpty()) {
+                    MewsRepository.setFailedTitles(failedTopics.size)
+                }
+                MewsRepository.setLastTitlesUpdate(summarizationState.timemark)
                 safeReadyFunc(readyFunc)
                 return if (currentAttempt < MAX_SUMMARIZATION_ATTEMTS) SummarizationResult.Failure(SummarizationErrorType.SUMMARIZE_TOPICS_FAILED)
                 else SummarizationResult.Success
@@ -495,6 +535,22 @@ class NewsSummarizer(private val llm: LLMClient) {
         )
         Log.d(TAG, "[DB DRAFT] Saved draft topic '${t.title}' [ID: $generatedId, isBlitz: ${t.isBlitz}, weight: ${t.weight}]")
         return t.copy(id = generatedId)
+    }
+
+    private fun areKeywordListsSimilar(
+        words1: List<String>,
+        words2: List<String>,
+        wordSimilarityThreshold: Float = 0.8f,
+        clusterMatchRate: Double = 0.8
+    ): Boolean {
+        if (words1.isEmpty() || words2.isEmpty()) return false
+        val minSize = minOf(words1.size, words2.size)
+
+        val matches = words1.count { w1 ->
+            words2.any { w2 -> TextComparator.areSimilar(w1, w2, wordSimilarityThreshold) }
+        }
+
+        return (matches.toDouble() / minSize) >= clusterMatchRate
     }
 
     suspend fun compareTopics(

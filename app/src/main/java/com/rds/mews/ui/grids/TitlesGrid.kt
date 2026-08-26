@@ -88,10 +88,12 @@ import kotlin.collections.component2
 import kotlin.collections.iterator
 import com.rds.mews.ui.theme.Shapes
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
+import androidx.compose.ui.res.pluralStringResource
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.UpdatingState
 import com.rds.mews.repositories.MewsRepository
+import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.viewmodels.TitlesScrollEvent
 
 @Composable
@@ -150,6 +152,7 @@ fun TitlesScreen(
     val dynamicMediaUrls by viewModel.dynamicMediaUrls.collectAsStateWithLifecycle()
     val titleSorting by viewModel.titleSorting.collectAsStateWithLifecycle()
     val copyPlainText by viewModel.copyPlainText.collectAsStateWithLifecycle()
+    val failedTitles by viewModel.failedTitles.collectAsStateWithLifecycle()
 
     TitlesGrid(
         lazyGridState = lazyGridState,
@@ -179,6 +182,7 @@ fun TitlesScreen(
         bottomSpacer = bottomSpacer,
         titleSorting = titleSorting,
         dynamicMediaUrls = dynamicMediaUrls,
+        failedTitles = failedTitles,
         onBanTheme = viewModel::onBanTheme,
         scrollToItem = viewModel::scrollToItem,
         changeSourceState = viewModel::changeTitleSourceState,
@@ -226,6 +230,7 @@ fun TitlesGrid(
     showSnippets: Boolean,
     copyPlainText: Boolean,
     titleSorting: TitleSorting,
+    failedTitles: Int,
     bottomSpacer: Dp,
     dynamicMediaUrls: Map<Long, List<MediaWithSource>>,
     onBanTheme: (String) -> Unit,
@@ -325,7 +330,8 @@ fun TitlesGrid(
 
         CustomErrorBottomSheet(
             title = stringResource(resources[0]),
-            text = stringResource(resources[1]),
+            text = if (errState.type != SummarizationErrorType.UNPROCESSED_ITEMS) stringResource(resources[1])
+            else pluralStringResource(resources[1], failedTitles, failedTitles),
             confBtnText = stringResource(resources[2]),
             cancelBtnText = stringResource(R.string.cancel),
             onDismissRequest = onClearErr,

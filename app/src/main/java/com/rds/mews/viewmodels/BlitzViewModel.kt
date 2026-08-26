@@ -60,6 +60,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.collections.filter
 import kotlin.collections.map
+import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
 
 class BlitzViewModel(
@@ -149,6 +150,8 @@ class BlitzViewModel(
 
     private val _dynamicMediaUrls = MutableStateFlow<Map<Long, List<MediaWithSource>>>(emptyMap())
     val dynamicMediaUrls: StateFlow<Map<Long, List<MediaWithSource>>> = _dynamicMediaUrls.asStateFlow()
+
+    val failedTitles: StateFlow<Int> = repository.failedTitles
 
     val sanitizeCopiedText: StateFlow<Boolean> = repository.sanitizeCopiedText
 
@@ -360,6 +363,19 @@ class BlitzViewModel(
                 Pair(titles, greetings)
             }.collect { (titleListFromDb, greetingList) ->
                 val actualTitles = titleListFromDb.filter { it.status == TitleStatus.DEFAULT.statusId }
+                val hasHiddenItems = actualTitles.size != titleListFromDb.size
+
+                val currentErr = _errState.value
+
+                if (hasHiddenItems) {
+                    if (currentErr == null) {
+                        repository.saveLastError(SummarizationResult.Failure(SummarizationErrorType.UNPROCESSED_ITEMS))
+                    }
+                } else {
+                    if (currentErr?.type == SummarizationErrorType.UNPROCESSED_ITEMS) {
+                        repository.clearError()
+                    }
+                }
 
                 val combinedTitles = greetingList + actualTitles
                 _titles.value = combinedTitles

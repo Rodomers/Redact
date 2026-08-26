@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +76,7 @@ import com.rds.mews.localcore.TitlesGroupState
 import com.rds.mews.localcore.UpdatingState
 import com.rds.mews.localcore.mapResultToUiResources
 import com.rds.mews.repositories.MewsRepository
+import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
@@ -155,6 +157,7 @@ fun BlitzScreen(
     val dynamicMediaUrls by viewModel.dynamicMediaUrls.collectAsStateWithLifecycle()
     val titlesCardStates by viewModel.titleCardStates.collectAsStateWithLifecycle()
     val sanitizeCopiedText by viewModel.sanitizeCopiedText.collectAsStateWithLifecycle()
+    val failedTitles by viewModel.failedTitles.collectAsStateWithLifecycle()
 
     BlitzGrid(
         lazyStaggeredGridState = lazyStaggeredGridState,
@@ -175,6 +178,7 @@ fun BlitzScreen(
         onClearErr = viewModel::clearErr,
         onErrAction = viewModel::handleErrorAction,
         lastTitlesUpdate = lastTitlesUpdate,
+        failedTitles = failedTitles,
         scope = scope,
         bottomSpacer = bottomSpacer,
         dynamicMediaUrls = dynamicMediaUrls,
@@ -212,6 +216,7 @@ fun BlitzGrid(
     onClearErr: () -> Unit,
     onErrAction: (ClipboardManager, MainActivity) -> Unit,
     lastTitlesUpdate: Long,
+    failedTitles: Int,
     scope: CoroutineScope,
     bottomSpacer: Dp = 0.dp,
     dynamicMediaUrls: Map<Long, List<MediaWithSource>>,
@@ -268,7 +273,8 @@ fun BlitzGrid(
 
         CustomErrorBottomSheet(
             title = stringResource(resources[0]),
-            text = stringResource(resources[1]),
+            text = if (errState.type != SummarizationErrorType.UNPROCESSED_ITEMS) stringResource(resources[1])
+            else pluralStringResource(resources[1], failedTitles, failedTitles),
             confBtnText = stringResource(resources[2]),
             cancelBtnText = stringResource(R.string.cancel),
             onDismissRequest = onClearErr,

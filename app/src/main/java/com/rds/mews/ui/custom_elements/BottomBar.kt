@@ -1,5 +1,6 @@
 package com.rds.mews.ui.custom_elements
 
+import android.annotation.SuppressLint
 import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -98,6 +99,7 @@ private data class TooltipMessage(
     val durationMs: Long = 3000L
 )
 
+@SuppressLint("UseOfNonLambdaOffsetOverload")
 @Composable
 fun MyBottomBar(
     selectedTab: TabScreen,

@@ -21,6 +21,9 @@ interface SourceDao {
     @Query("SELECT * FROM sources WHERE feed_url = :feedUrl")
     suspend fun getSourceByUrl(feedUrl: String): SourceEntity?
 
+    @Query("SELECT * FROM sources WHERE in_burst = :value")
+    suspend fun getBurstSources(value: Boolean = true): List<SourceEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(source: SourceEntity): Long
 
@@ -38,6 +41,9 @@ interface SourceDao {
 
     @Query("UPDATE sources SET err_count = 0")
     suspend fun resetAllErrorCounts()
+
+    @Query("UPDATE sources SET in_burst = :value WHERE id = :id")
+    suspend fun setInBurst(id: Long, value: Boolean)
 
     @Query("UPDATE sources SET last_sync_time = :syncTime WHERE id = :sourceId")
     suspend fun updateLastSyncTime(sourceId: Long, syncTime: Long)

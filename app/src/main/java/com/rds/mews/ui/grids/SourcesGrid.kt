@@ -97,7 +97,8 @@ fun SourcesScreen(
         setSourceNameBuffer = viewModel::setSourceNameBuffer,
         setRssLinkBuffer = viewModel::setRssLinkBuffer,
         onCardExpanded = viewModel::setCardExpanded,
-        resetErrCount = viewModel::resetErrCount
+        resetErrCount = viewModel::resetErrCount,
+        setInBurst = viewModel::setInBurst
     )
 }
 
@@ -127,7 +128,8 @@ fun SourcesGrid(
     setSourceNameBuffer: (String) -> Unit,
     setRssLinkBuffer: (String) -> Unit,
     onCardExpanded: (Long) -> Unit,
-    resetErrCount: (Long) -> Unit
+    resetErrCount: (Long) -> Unit,
+    setInBurst: (Long, Boolean) -> Unit
 ) {
     val handler = LocalUriHandler.current
 
@@ -238,7 +240,7 @@ fun SourcesGrid(
                             }),
                             TextButtonInputs(
                                 stringResource(R.string.source_delete),
-                                { setDelSource(item) }),
+                                { setDelSource(item) })
                         )
 
                         SourcesCard(
@@ -251,7 +253,8 @@ fun SourcesGrid(
                             },
                             isExpanded = item.id in expandedCards,
                             onExpanded = { onCardExpanded(item.id) },
-                            onResetErrors = { resetErrCount(item.id) }
+                            onResetErrors = { resetErrCount(item.id) },
+                            setInBurst = { setInBurst(item.id, it) }
                         )
                     }
                 }

@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.room.withTransaction
+import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.rds.mews.localcore.defineSourceType
 
@@ -16,7 +17,7 @@ import com.rds.mews.localcore.defineSourceType
         TitleMessageMap::class,
         TitleRelatedMap::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -222,6 +223,12 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE 'titles' ADD COLUMN 'is_blitz' INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE 'sources' ADD COLUMN 'in_burst' INTEGER NOT NULL DEFAULT 1")
             }
         }
     }

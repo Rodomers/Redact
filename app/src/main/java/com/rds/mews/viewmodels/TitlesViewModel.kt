@@ -58,6 +58,7 @@ import com.rds.mews.localcore.cancelTitlesUpdate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import kotlin.math.abs
 
 class TitlesViewModel(
     private val application: Application,
@@ -123,6 +124,8 @@ class TitlesViewModel(
 
     private val _errState = MutableStateFlow<SummarizationResult.Failure?>(null)
     val errState = _errState.asStateFlow()
+
+    val failedTitles: StateFlow<Int> = repository.failedTitles
 
     val groupedTitles = combine(
         titles,

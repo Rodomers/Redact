@@ -258,7 +258,7 @@ fun mapResultToUiResources(result: SummarizationResult): IntList {
                     intListOf(R.string.err_header_no_network, R.string.err_text_no_network, R.string.err_btn_no_network)
 
                 SummarizationErrorType.UNPROCESSED_ITEMS ->
-                    intListOf(R.string.err_header_unprocessed_items, R.string.err_text_unprocessed_items, R.string.err_btn_unprocessed_items)
+                    intListOf(R.string.err_header_unprocessed_items, R.plurals.err_text_unprocessed_items, R.string.err_btn_unprocessed_items)
 
                 SummarizationErrorType.API_KEY_INVALID ->
                     intListOf(R.string.err_header_api_key, R.string.err_text_api_key, R.string.err_btn_api_key)

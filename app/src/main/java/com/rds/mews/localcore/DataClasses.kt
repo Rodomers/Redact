@@ -23,6 +23,7 @@ data class RSS(
     var feedUrl: String,
     var websiteUrl: String,
     val sourceType: SourceType,
+    val inBurst: Boolean,
     val errCount: Int,
     val lastUpdated: Long?,
     val avatarUrl: String?

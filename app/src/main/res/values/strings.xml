@@ -26,6 +26,8 @@
     <string name="optimization_sheet_conf">Allow</string>
     <string name="no_sources">No sources :(</string>
     <string name="link">Link</string>
+    <string name="source_track">Track</string>
+    <string name="source_do_not_track">Do not track</string>
 
     <string name="titles_update_text">Pull down to update</string>
     <string name="today">today</string>
@@ -107,6 +109,10 @@
         <item quantity="one">%d day</item>
         <item quantity="other">%d days</item>
     </plurals>
+    <plurals name="err_text_unprocessed_items">
+        <item quantity="one">%d draft entry detected. The list is incomplete.\nUpdate?</item>
+        <item quantity="other">%d draft entries detected. The list is incomplete.\nUpdate?</item>
+    </plurals>
 
     <string name="adaptive">Adaptive</string>
 
@@ -187,7 +193,6 @@
     <string name="err_text_no_network">No connection to server. Check your internet (and your current IP).</string>
     <string name="err_btn_no_network">OK</string>
     <string name="err_header_unprocessed_items">Hidden Items</string>
-    <string name="err_text_unprocessed_items">Draft entries detected. The list is incomplete.\nUpdate?</string>
     <string name="err_btn_unprocessed_items">Update</string>
     <string name="err_header_api_key">Key Error</string>
     <string name="err_text_api_key">Your Gemini API key is invalid or revoked. Check your settings.</string>

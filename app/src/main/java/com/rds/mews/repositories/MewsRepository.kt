@@ -38,6 +38,7 @@ import java.util.Calendar
 import java.util.Date
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlin.time.Duration.Companion.milliseconds
 
 object MewsRepository {
     private lateinit var networkMonitor: NetworkMonitor
@@ -155,7 +156,8 @@ object MewsRepository {
 //                Log.d("ROOM_QUERY", "Выполнение: $sqlQuery | Параметры: $bindArgs")
 //            }, java.util.concurrent.Executors.newSingleThreadExecutor())
             .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4,
-                AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7)
+                AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7,
+                AppDatabase.MIGRATION_7_8)
             .build()
         this.sourceDao = database.sourceDao()
         this.messageDao = database.messageDao()
@@ -272,6 +274,7 @@ object MewsRepository {
                         feedUrl = it.feedUrl,
                         websiteUrl = formatWebsiteUrl(it.websiteUrl),
                         sourceType = SourceType.fromId(it.sourceType),
+                        inBurst = it.inBurst,
                         errCount = it.errCount,
                         lastUpdated = it.lastSyncTime,
                         avatarUrl = null
@@ -405,6 +408,9 @@ object MewsRepository {
     private val _stoppedManually = MutableStateFlow(false)
     var stoppedManually: StateFlow<Boolean> = _stoppedManually.asStateFlow()
 
+    private val _failedTitles = MutableStateFlow(0)
+    val failedTitles: StateFlow<Int> = _failedTitles.asStateFlow()
+
     suspend fun checkGeminiApiKey(key: String): Boolean {
         return validateGeminiKey(key, PROXY_ADDRESS, SERVER_KEY, proxyEnabled.value)
     }
@@ -446,12 +452,30 @@ object MewsRepository {
             SourceType.fromId(source.sourceType),
             errCount = source.errCount,
             lastUpdated = source.lastSyncTime,
-            avatarUrl = null
+            avatarUrl = null,
+            inBurst = source.inBurst
         ) else null
     }
 
+    suspend fun getBurstSources(inBurst: Boolean = true): List<RSS> = withContext(Dispatchers.IO) {
+        sourceDao.getBurstSources(inBurst).map { source ->
+            RSS(
+                id = source.id,
+                currentName = source.customName ?: source.originalName,
+                originalName = source.originalName,
+                feedUrl = source.feedUrl,
+                websiteUrl = source.websiteUrl,
+                sourceType = SourceType.fromId(source.sourceType),
+                inBurst = source.inBurst,
+                errCount = source.errCount,
+                lastUpdated = source.lastSyncTime,
+                avatarUrl = null
+            )
+        }
+    }
+
     fun getSourcesWithAvatars(): Flow<List<RSS>> = channelFlow {
-        val semaphore = Semaphore(3)
+        val semaphore = Semaphore(15)
 
         sourceDao.getAllSourcesFlow()
             .combine(resolvedAvatars) { entities, avatars ->
@@ -466,7 +490,8 @@ object MewsRepository {
                         sourceType = SourceType.fromId(entity.sourceType),
                         errCount = entity.errCount,
                         lastUpdated = entity.lastSyncTime,
-                        avatarUrl = fetchedAvatar
+                        avatarUrl = fetchedAvatar,
+                        inBurst = entity.inBurst
                     )
                 }
             }
@@ -483,7 +508,7 @@ object MewsRepository {
                                 if (avatar != null) {
                                     resolvedAvatars.update { it + (item.id to avatar) }
                                 }
-                                delay(100L)
+                                delay(100L.milliseconds)
                             }
                         }
                     }
@@ -508,6 +533,12 @@ object MewsRepository {
         externalScope.launch(Dispatchers.IO) {
             if (sourceId == null) sourceDao.updateAllSummarizingSyncToLastSync()
             else sourceDao.updateSummarizingSyncToLastSync(sourceId)
+        }
+    }
+
+    fun setSourceInBurst(sourceId: Long, value: Boolean) {
+        externalScope.launch(Dispatchers.IO) {
+            sourceDao.setInBurst(sourceId, value)
         }
     }
 
@@ -888,6 +919,10 @@ object MewsRepository {
 
     fun clearError() {
         externalScope.launch { settingsManager.clearLastError() }
+    }
+
+    fun setFailedTitles(count: Int) {
+        _failedTitles.value = count
     }
 
     fun updateModelBatchConfig(config: ModelBatchConfig) {
