@@ -38,7 +38,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.Alarm
-import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -247,7 +246,8 @@ fun MyBottomBar(
             .height(containerHeight),
         contentAlignment = Alignment.Center
     ) {
-        val tooltipOffset = (-12).dp - (40.dp * tooltipReveal.value)
+        val a = if (compact) -12 else -32
+        val tooltipOffset = a.dp - (40.dp * tooltipReveal.value)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -417,7 +417,7 @@ fun BottomBarButton(
 ) {
     val contentColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
-        else MaterialTheme.colorScheme.onSurfaceVariant,
+        else MaterialTheme.colorScheme.onSurface,
         animationSpec = tween(300),
         label = "ContentColor"
     )

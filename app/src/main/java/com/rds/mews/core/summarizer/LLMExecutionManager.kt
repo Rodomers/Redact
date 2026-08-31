@@ -15,6 +15,7 @@ class LLMExecutionManager(
         items: List<T>,
         idExtractor: (T) -> Any,
         textExtractor: (T) -> String,
+        batchMode: BatchMode,
         promptBuilder: suspend (List<T>) -> String,
         responseParser: suspend (String, List<T>) -> R,
         onBatchSuccess: (suspend (processedBatch: List<T>, remainingItems: List<T>, result: R) -> Unit)? = null,
@@ -33,7 +34,8 @@ class LLMExecutionManager(
                 items = remainingItems,
                 model = currentModel,
                 isProbeFlag = isProbe,
-                textExtractor = textExtractor
+                textExtractor = textExtractor,
+                batchMode = batchMode
             )
 
             if (batches.isEmpty()) break
@@ -53,7 +55,7 @@ class LLMExecutionManager(
                     val parsedResult = responseParser(response, batch)
 
                     results.add(parsedResult)
-                    batchController.onBatchSuccess(currentModel, isProbe, kSafeTokens)
+                    batchController.onBatchSuccess(currentModel, isProbe, batchMode, kSafeTokens)
 
                     val processedIds = batch.map(idExtractor).toSet()
                     remainingItems.removeAll { item -> idExtractor(item) in processedIds }
@@ -71,7 +73,7 @@ class LLMExecutionManager(
 
                     if (isFatal) {
                         if (e.errorType == SummarizationErrorType.QUOTA_EXCEEDED) {
-                            batchController.onBatchFailure(currentModel, isProbe, kSafeTokens)
+                            batchController.onBatchFailure(currentModel, isProbe, batchMode, kSafeTokens)
 
                             val switched = llmClient.switchToFallbackModel()
                             if (!switched) {
@@ -89,7 +91,7 @@ class LLMExecutionManager(
                             throw e
                         }
                     } else {
-                        batchController.onBatchFailure(currentModel, isProbe, kSafeTokens)
+                        batchController.onBatchFailure(currentModel, isProbe, batchMode, kSafeTokens)
 
                         if (current.attemptsLeft > 1) {
                             if (batch.size > 1) {

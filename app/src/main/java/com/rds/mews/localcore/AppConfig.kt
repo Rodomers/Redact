@@ -151,6 +151,8 @@ data class ModelBatchConfig(
     val model: GeminiModelOption,
     val kSafeMessages: Double = 1.0,
     val kSafeTokens: Double = 1.0,
+    val kSafeTopics: Double = 1.0,
+    val kSafeBlitz: Double = 1.0,
     val successMessagesCount: Int = 0,
     val successTokensCount: Int = 0
 )

@@ -95,12 +95,6 @@ fun SourcesCard(
 
     val currentButtons = remember(buttons, hasErrors, rss.inBurst) {
         val list = buttons.toMutableList()
-        list.add(
-            TextButtonInputs(
-                if (rss.inBurst) doNotTrackText else trackText,
-                { setInBurst(!rss.inBurst) }
-            )
-        )
         if (hasErrors) {
             list.add(
                 TextButtonInputs(
@@ -111,6 +105,12 @@ fun SourcesCard(
                 )
             )
         }
+        list.add(
+            TextButtonInputs(
+                if (rss.inBurst) doNotTrackText else trackText,
+                { setInBurst(!rss.inBurst) }
+            )
+        )
         list
     }
 

@@ -64,7 +64,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         val requiresUpdateHeader: Boolean
     )
 
-    private val MATCH_RATE = 0.5f
+    private val MATCH_RATE = 0.6f
     private val MAX_SUMMARIZATION_ATTEMTS = 3
     private val SINGLE_NEWS_CHAR_LIMIT = 3000
     private val TAG = "NewsSummarizer"
@@ -223,6 +223,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     items = rawMessages,
                     idExtractor = { it.id },
                     textExtractor = { it.cleanText },
+                    batchMode = BatchMode.RAW_ITEMS,
                     promptBuilder = { batch ->
                         val batchTokens = batch.flatMap { TextComparator.tokenize(it.cleanText) }.toSet()
                         val relevantClusters = activeClusters.filter { cluster ->
@@ -435,6 +436,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     items = normalPayloads,
                     idExtractor = { it.topic.id },
                     textExtractor = { it.contentPayload },
+                    batchMode = BatchMode.BASE_TOPICS,
                     promptBuilder = { batch -> PromptFactory.buildSummaryPrompt(batch, currentLanguage, bannedWords, isBlitz = false) },
                     responseParser = { response, batch -> ResponseParser.parseSummaryResponse(response, batch, llm) },
                     onBatchSuccess = { batch, _, results ->
@@ -456,6 +458,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     items = limitedBlitzPayloads,
                     idExtractor = { it.topic.id },
                     textExtractor = { it.contentPayload },
+                    batchMode = BatchMode.BLITZ_TOPICS,
                     promptBuilder = { batch -> PromptFactory.buildSummaryPrompt(batch, currentLanguage, bannedWords, isBlitz = true) },
                     responseParser = { response, batch -> ResponseParser.parseSummaryResponse(response, batch, llm) },
                     onBatchSuccess = { batch, _, results ->
@@ -619,8 +622,8 @@ class NewsSummarizer(private val llm: LLMClient) {
             ).toDouble()
         } else 0.0
 
-        val totalWeight = if (hasSummary) 6.0 else 3.0
-        return (keywordScore + titlesThreshold * 2.0 + summaryThreshold * 3.0) / totalWeight
+        val totalWeight = if (hasSummary) 7.0 else 3.0
+        return (keywordScore + titlesThreshold * 2.0 + summaryThreshold * 4.0) / totalWeight
     }
 
     private suspend fun buildPayloads(
@@ -841,6 +844,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             items = topics,
             idExtractor = { it.id },
             textExtractor = { it.title + " " + it.keywords.joinToString(" ") },
+            batchMode = BatchMode.RAW_ITEMS,
             promptBuilder = { batch ->
                 val indexedInput = batch.mapIndexed { index, t ->
                     JSONObject().apply {
