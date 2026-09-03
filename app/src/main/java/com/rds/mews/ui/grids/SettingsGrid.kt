@@ -92,6 +92,7 @@ fun SettingsScreen(
     val showDates by viewModel.showDates.collectAsStateWithLifecycle()
     val compactTab by viewModel.compactTabBar.collectAsStateWithLifecycle()
     val appTheme by viewModel.appTheme.collectAsStateWithLifecycle()
+    val saveOnCancel by viewModel.saveOnCancel.collectAsStateWithLifecycle()
     val filterTopics by viewModel.filterTopics.collectAsStateWithLifecycle()
     val titlesSorting by viewModel.titlesSorting.collectAsStateWithLifecycle()
     val titlesNum by viewModel.titlesNum.collectAsStateWithLifecycle()
@@ -125,6 +126,7 @@ fun SettingsScreen(
         compactTab = compactTab,
         darkTheme = darkTheme,
         appTheme = appTheme,
+        saveOnCancel = saveOnCancel,
         filterTopics = filterTopics,
         titlesSorting = titlesSorting,
         headersNum = titlesNum,
@@ -176,6 +178,7 @@ fun SettingsScreen(
             setTitlesKeeping = viewModel::setTitlesKeeping,
             setTitlesPeriod = viewModel::setTitlesPeriod,
             setRssUpdateInterval = viewModel::setRssUpdateInterval,
+            setSaveOnCancel = viewModel::setSaveOnCancel,
             setFilterTopics = viewModel::setFilterTopics,
             setBannedNews = viewModel::setBannedNews,
             delBannedNews = viewModel::delBannedNews,
@@ -683,6 +686,15 @@ fun SettingsGrid(
                             CustomSwitch(
                                 checked = state.enableUpdateNotifications,
                                 onCheckedChange = { functions.setUpdateNotifications(it) }
+                            )
+                        }
+                        SettingsItem(
+                            text = stringResource(R.string.settings_save_on_cancel),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        ) {
+                            CustomSwitch(
+                                checked = state.saveOnCancel,
+                                onCheckedChange = { functions.setSaveOnCancel(it) }
                             )
                         }
                         SettingsItem(

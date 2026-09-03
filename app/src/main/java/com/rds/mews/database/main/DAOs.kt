@@ -244,6 +244,9 @@ interface TitleDao {
     @Query("UPDATE titles SET is_pinned = :isPinned WHERE id = :id")
     suspend fun updatePinnedStatus(id: Long, isPinned: Int)
 
+    @Query("INSERT OR IGNORE INTO title_related_map (title_id_1, title_id_2) VALUES (:childId, :parentId)")
+    suspend fun linkTopics(childId: Long, parentId: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(title: TitleEntity): Long
 

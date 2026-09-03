@@ -77,6 +77,7 @@ object MewsRepository {
     lateinit var lastRssUpdate: StateFlow<Long>
     lateinit var proxyEnabled: StateFlow<Boolean>
     lateinit var compactTabBar: StateFlow<Boolean>
+    lateinit var saveOnCancel: StateFlow<Boolean>
     lateinit var filterTopics: StateFlow<Boolean>
     lateinit var innerTimestamps: StateFlow<Boolean>
     lateinit var showSnippets: StateFlow<Boolean>
@@ -222,6 +223,7 @@ object MewsRepository {
         lastRssUpdate = createSettingFlow({ it.lastRssUpdate }, 0L)
         proxyEnabled = createSettingFlow({ it.enableProxy }, false)
         compactTabBar = createSettingFlow({ it.compactTabBar }, false)
+        saveOnCancel = createSettingFlow({ it.saveOnCancel }, false)
         filterTopics = createSettingFlow({ it.filterTopics }, false)
         innerTimestamps = createSettingFlow({ it.innerTimestamps }, false)
         showSnippets = createSettingFlow({ it.showSnippets }, false)
@@ -549,9 +551,7 @@ object MewsRepository {
     fun manuallyLinkTopics(childId: Long, parentId: Long) {
         externalScope.launch(Dispatchers.IO) {
             try {
-                database.openHelper.writableDatabase.execSQL(
-                    "INSERT OR IGNORE INTO title_related_map (title_id_1, title_id_2) VALUES ($childId, $parentId)"
-                )
+                titleDao.linkTopics(childId, parentId)
                 Log.d("Mews", "Успешно связали новость $childId с родителем $parentId")
             } catch (e: Exception) {
                 Log.e("Mews", "Ошибка при связывании", e)
@@ -885,6 +885,7 @@ object MewsRepository {
     }
 
     fun setCompactTab(newValue: Boolean) = updateSetting { it.copy(compactTabBar = newValue) }
+    fun setSaveOnCancel(newValue: Boolean) = updateSetting { it.copy(saveOnCancel = newValue) }
     fun setFilterTopics(newValue: Boolean) = updateSetting { it.copy(filterTopics = newValue) }
     fun setInnerTimestamps(newValue: Boolean) = updateSetting { it.copy(innerTimestamps = newValue) }
     fun setShowSnippets(newValue: Boolean) = updateSetting { it.copy(showSnippets = newValue) }

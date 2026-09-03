@@ -65,6 +65,7 @@ data class AppSettings(
     val enableProxy: Boolean = false,
 
     // Updates
+    val saveOnCancel: Boolean = false,
     val titlesAutoUpdate: Boolean = false,
     val titlesAutoUpdateFrequency: AutoUpdateFrequency = AutoUpdateFrequency.FREQ_24,
     val titlesAlarmTimeMins: Int = 540,

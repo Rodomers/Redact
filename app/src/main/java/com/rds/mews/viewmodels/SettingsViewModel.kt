@@ -12,6 +12,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -83,6 +84,9 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     val rssUpdateInterval: StateFlow<Int> = repository.rssUpdateInterval
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 15)
+
+    val saveOnCancel: StateFlow<Boolean> = repository.saveOnCancel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val filterTopics: StateFlow<Boolean> = repository.filterTopics
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -191,6 +195,8 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
             repository.setRssUpdateInterval(context, value)
         }
     }
+
+    fun setSaveOnCancel(value: Boolean) = viewModelScope.launch { repository.setSaveOnCancel(value) }
 
     fun setFilterTopics(value: Boolean) = viewModelScope.launch { repository.setFilterTopics(value) }
 

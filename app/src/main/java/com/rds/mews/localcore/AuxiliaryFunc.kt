@@ -148,6 +148,8 @@ fun linkTransform(link: String): String {
 //}
 
 suspend fun cancelTitlesUpdate(context: Context) {
+    MewsRepository.setStoppedManually(true)
+
     withContext(Dispatchers.IO) {
         val workManager = WorkManager.getInstance(context)
         val info = workManager.getWorkInfosByTag("titles_update_work").get().find { it.state == WorkInfo.State.RUNNING }
@@ -163,11 +165,9 @@ suspend fun cancelTitlesUpdate(context: Context) {
 
     try {
         context.startService(intent)
-        MewsRepository.setStoppedManually(true)
     } catch (e: Exception) {
         Log.e("SERVICE_CANCEL", "Запрещен запуск сервиса из фона. Принудительная остановка через stopService.", e)
         context.stopService(intent)
-        MewsRepository.setStoppedManually(true)
     }
 }
 
