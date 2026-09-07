@@ -16,7 +16,6 @@ import com.rds.mews.database.keyword_stats.TermAliasDao
 import com.rds.mews.database.keyword_stats.TermAliasEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.ln

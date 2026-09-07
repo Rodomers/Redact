@@ -57,7 +57,7 @@ object GraphCache {
 
 object KnowledgeGraphManager {
     private const val DEFAULT_DECAY_FACTOR = 0.98
-    private const val DEFAULT_CUTOFF_THRESHOLD = 0.05
+    private const val DEFAULT_CUTOFF_THRESHOLD = 0.5
     private const val DEFAULT_EXPANSION_THRESHOLD = 0.3
     private val repository = KeywordStatsRepository
 

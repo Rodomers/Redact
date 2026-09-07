@@ -6,6 +6,11 @@ import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 
 object TextComparator {
+    private data class Alias(
+        val word: String,
+        val multiplier: Double = 1.0
+    )
+
     private val TOKENIZE_REGEX = Regex("""[\p{L}\p{Nd}]+""")
 
     fun areSimilar(text1: String, text2: String, threshold: Float): Boolean {
@@ -116,11 +121,23 @@ object TextComparator {
 
         val canonicalMap1 = tokens1.associateWith { token ->
             val alias = GraphCache.findAlias(token)
-            alias?.keywordTarget ?: alias?.entityTarget ?: token
+            val keyword = alias?.keywordTarget
+            val entity = alias?.entityTarget
+            when (keyword) {
+                null -> if (entity != null) Alias(entity, 1.5) else Alias(token)
+                else -> Alias(keyword)
+            }
+//            alias?.keywordTarget ?: alias?.entityTarget ?: token
         }
         val canonicalMap2 = tokens2.associateWith { token ->
             val alias = GraphCache.findAlias(token)
-            alias?.keywordTarget ?: alias?.entityTarget ?: token
+            val keyword = alias?.keywordTarget
+            val entity = alias?.entityTarget
+            when (keyword) {
+                null -> if (entity != null) Alias(entity, 1.5) else Alias(token)
+                else -> Alias(keyword)
+            }
+//            alias?.keywordTarget ?: alias?.entityTarget ?: token
         }
 
         var totalWeight = 0.0
@@ -136,7 +153,7 @@ object TextComparator {
                 val pairWeight = if (c1 == c2) {
                     1.0
                 } else {
-                    GraphCache.getEdgeWeight(c1, c2)
+                    GraphCache.getEdgeWeight(c1.word, c2.word) * maxOf(c1.multiplier, c2.multiplier)
                 }
 
                 if (pairWeight > maxPairWeight) {

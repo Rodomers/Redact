@@ -551,7 +551,7 @@ object MewsRepository {
     fun manuallyLinkTopics(childId: Long, parentId: Long) {
         externalScope.launch(Dispatchers.IO) {
             try {
-                titleDao.linkTopics(childId, parentId)
+                titleDao.insertRelatedMapSafe(childId, parentId)
                 Log.d("Mews", "Успешно связали новость $childId с родителем $parentId")
             } catch (e: Exception) {
                 Log.e("Mews", "Ошибка при связывании", e)
@@ -833,6 +833,10 @@ object MewsRepository {
 
     suspend fun deleteTitleById(id: Long) = withContext(Dispatchers.IO) {
         titleDao.deleteById(id)
+    }
+
+    suspend fun deleteTitlesWithStatus(status: TitleStatus)  = withContext(Dispatchers.IO) {
+        titleDao.deleteWithStatus(status.statusId)
     }
 
     suspend fun getRssName(link: String): String? {

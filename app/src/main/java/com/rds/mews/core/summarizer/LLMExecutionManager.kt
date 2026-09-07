@@ -52,7 +52,7 @@ class LLMExecutionManager(
                 try {
                     val prompt = promptBuilder(batch)
                     val response = llmClient.sendPrompt(prompt)
-//                    println("LLM Response:\n$response")
+                    println("LLM Response:\n$response")
                     val parsedResult = responseParser(response, batch)
 
                     results.add(parsedResult)

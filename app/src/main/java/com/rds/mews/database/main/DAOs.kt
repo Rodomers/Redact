@@ -256,6 +256,9 @@ interface TitleDao {
     @Query("DELETE FROM titles WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("DELETE FROM titles WHERE status = :status")
+    suspend fun deleteWithStatus(status: Int)
+
     @Query("DELETE FROM titles WHERE event_time < :timeMs")
     suspend fun deleteBeforeTime(timeMs: Long): Int
 

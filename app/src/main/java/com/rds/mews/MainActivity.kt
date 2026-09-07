@@ -29,6 +29,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rds.mews.core.summarizer.LLMClient
+import com.rds.mews.core.summarizer.NewsSummarizer
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.localcore.isScheduleExactAlarm
 import com.rds.mews.repositories.MewsRepository
@@ -197,6 +199,18 @@ fun MainScreen(mainActivity: MainActivity) {
                 }
             }
         }
+//        val titles by MewsRepository.titles.collectAsStateWithLifecycle(emptyList())
+//        LaunchedEffect(Unit, titles.size) {
+//            if (titles.isEmpty()) return@LaunchedEffect
+//            val t1 = titles.findLast { it.title.contains("Развитие спутниковой группировки") }
+//            val t2 = titles.find { it.title.contains("Развитие спутникового интернета на поездах") }
+//            val t3 = titles.findLast { it.title.contains("Дипломатический конфликт из-за ареста судна") }
+//            val t4 = titles.find { it.title.contains("В Норвегии арестовано российское научное судно") }
+//
+//            val summarizer = NewsSummarizer(LLMClient())
+//            summarizer.compareTopics(t1!!.title, t1.keywords, t2!!.title, t2.keywords, t1.summary, t2.summary)
+//            summarizer.compareTopics(t3!!.title, t3.keywords, t4!!.title, t4.keywords, t3.summary, t4.summary)
+//        }
 
         Scaffold { paddingValues ->
             Box(modifier = Modifier.fillMaxSize()) {
