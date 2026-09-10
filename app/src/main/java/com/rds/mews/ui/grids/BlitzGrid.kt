@@ -72,7 +72,6 @@ import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.TimeDate
 import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.TitleCardStates
-import com.rds.mews.localcore.TitlesGroupState
 import com.rds.mews.localcore.UpdatingState
 import com.rds.mews.localcore.mapResultToUiResources
 import com.rds.mews.repositories.MewsRepository
@@ -85,6 +84,7 @@ import com.rds.mews.ui.custom_elements.titles_card.BlitzCardSourceExpansionOverl
 import com.rds.mews.ui.custom_elements.titles_card.RootViewOverlay
 import com.rds.mews.ui.theme.Shapes
 import com.rds.mews.viewmodels.BlitzViewModel
+import com.rds.mews.viewmodels.TitleUiItem
 import com.rds.mews.viewmodels.TitlesScrollEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -200,7 +200,7 @@ fun BlitzScreen(
 fun BlitzGrid(
     lazyStaggeredGridState: LazyStaggeredGridState,
     mainActivity: MainActivity,
-    groupedItems: Map<TimeDate, List<Title>>,
+    groupedItems: Map<Long?, List<TitleUiItem>>,
     modifier: Modifier = Modifier,
     isRefreshing: Boolean,
     updatingState: UpdatingState,
@@ -366,16 +366,27 @@ fun BlitzGrid(
                     }
                 }
 
-                groupedItems.forEach { (date, titlesForDate) ->
-                    val dateString = try {
-                        if (date.number != null) context.getString(date.date, date.number)
-                        else context.getString(date.date)
-                    } catch (e: Exception) { "" }
+                groupedItems.entries.forEachIndexed { index, (updateTime, groupItems) ->
+                    if (index > 0) {
+                        item(
+                            key = "spacer_$updateTime",
+                            span = StaggeredGridItemSpan.FullLine
+                        ) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
 
                     items(
-                        items = titlesForDate,
-                        key = { title -> title.id }
-                    ) { title ->
+                        items = groupItems,
+                        key = { item -> item.title.id }
+                    ) { item ->
+                        val title = item.title
+
+                        val dateString = try {
+                            if (item.eventDate.number != null) context.getString(item.eventDate.date, item.eventDate.number)
+                            else context.getString(item.eventDate.date)
+                        } catch (e: Exception) { "" }
+
                         val isCardExpanded = expandedCardData?.title?.id == title.id
                         val statesItem = titlesCardStates.find { it.id == title.id }
                         val sources = statesItem?.sources

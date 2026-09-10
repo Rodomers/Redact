@@ -129,6 +129,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
@@ -830,6 +831,21 @@ private fun ExpandedCardContent(
         TextButtonInputs(stringResource(R.string.mark_as_unread_btn_desc), onMarkAsUnread)
     )
 
+    val nudgeOffset = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        if (sources?.isNotEmpty() == true) {
+            delay(500.milliseconds)
+            nudgeOffset.animateTo(
+                targetValue = if (pagerState.targetPage == 0) -36f else 36f,
+                animationSpec = tween(durationMillis = 200)
+            )
+            nudgeOffset.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
+            )
+        }
+    }
     LaunchedEffect(pagerState.targetPage) { rememberPage(pagerState.targetPage) }
 
     Column(modifier = Modifier
@@ -944,7 +960,10 @@ private fun ExpandedCardContent(
                 modifier = Modifier
                     .requiredWidth(targetWidth)
                     .fillMaxHeight()
-                    .graphicsLayer { alpha = contentAlpha }
+                    .graphicsLayer {
+                        alpha = contentAlpha
+                        translationX = nudgeOffset.value
+                    }
             ) { page ->
                 when (page) {
                     0 -> {

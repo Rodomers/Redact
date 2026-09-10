@@ -63,6 +63,11 @@ import kotlin.collections.map
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
 
+data class TitleUiItem(
+    val title: Title,
+    val eventDate: TimeDate
+)
+
 class BlitzViewModel(
     private val application: Application,
     private val repository: MewsRepository
@@ -127,9 +132,14 @@ class BlitzViewModel(
 
         val finalFiltered = if (greetings.isNotEmpty()) greetings else filteredActuals
 
-        finalFiltered.groupBy { title ->
-            getDateFromUnix(title.eventTime, today).copy(time = "00:00")
-        }
+        finalFiltered
+            .map { title ->
+                TitleUiItem(
+                    title = title,
+                    eventDate = getDateFromUnix(title.eventTime, today)
+                )
+            }
+            .groupBy { it.title.updateTime }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
