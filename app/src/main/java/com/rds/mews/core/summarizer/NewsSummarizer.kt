@@ -10,6 +10,7 @@ import com.rds.mews.settings_manager.GeminiException
 import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.core.text.TextComparator
 import com.rds.mews.core.text.TextSanitizer
+import com.rds.mews.core.text.TokenEstimator
 import com.rds.mews.core.text.graph.GraphCache
 import com.rds.mews.core.text.graph.KnowledgeGraphManager
 import com.rds.mews.database.keyword_stats.BurstClusterEntity
@@ -28,6 +29,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 
 class NewsSummarizer(private val llm: LLMClient) {
@@ -60,6 +64,11 @@ class NewsSummarizer(private val llm: LLMClient) {
         val payload: SummaryPayload
     )
 
+    data class ParsedSummaryBatch(
+        val results: List<SummaryResult>,
+        val noUpdateTopicIds: Set<Long> = emptySet()
+    )
+
     data class SummaryPayload(
         val topic: Topics,
         val messages: List<Message>,
@@ -67,14 +76,22 @@ class NewsSummarizer(private val llm: LLMClient) {
         val requiresUpdateHeader: Boolean
     )
 
-    private val MATCH_RATE = 0.45f
-    private val MAX_SUMMARIZATION_ATTEMTS = 3
-    private val SINGLE_NEWS_CHAR_LIMIT = 3000
-    private val TAG = "NewsSummarizer"
+    companion object {
+        private const val MATCH_RATE = 0.5f
+        private const val TOPIC_TOKEN_LIMIT = 3000
+        private const val TOPIC_MAX_MESSAGES_LIMIT = 15
+        private const val SIGNAL_SIMILARITY_THRESHOLD = 0.8f
+
+        private const val MAX_SUMMARIZATION_ATTEMPTS = 3
+        private const val SINGLE_NEWS_CHAR_LIMIT = 3000
+        private const val TAG = "NewsSummarizer"
+    }
 
     private var totalItemsToProcess = 0
-    private var processedItemsCount = 0
+    private val processedItemsCount = AtomicInteger(0)
     private var baseProgress = 0f
+
+    private val hasBlockedContent = AtomicBoolean(false)
 
     private val appContext = MewsRepository.getAppContext()
     private val stateManager = SummarizerStateManager(appContext)
@@ -95,6 +112,7 @@ class NewsSummarizer(private val llm: LLMClient) {
     ): SummarizationResult {
         Log.i(TAG, "=== START PIPELINE ===")
         MewsRepository.setStoppedManually(false)
+        hasBlockedContent.set(false)
         val currentLanguage = try {
             MewsRepository.currentLanguage.first() ?: "english"
         } catch (_: Exception) { "english" }
@@ -207,7 +225,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 MewsRepository.setUpdatingState(UpdatingState.EXTRACTING)
                 stateManager.updateState { it.copy(updatingState = UpdatingState.EXTRACTING) }
                 totalItemsToProcess = rawMessages.size
-                processedItemsCount = 0
+                processedItemsCount.set(0)
                 val availableSpace = 0.4f
 
                 executionManager.execute<Message, List<Topics>>(
@@ -252,8 +270,8 @@ class NewsSummarizer(private val llm: LLMClient) {
                                 stagedRawTopics = state.stagedRawTopics + rawTopicsList
                             )
                         }
-                        processedItemsCount += batch.size
-                        MewsRepository.setUpdatingProgress(baseProgress + ((processedItemsCount.toFloat() / totalItemsToProcess) * availableSpace))
+                        val currentCount = processedItemsCount.addAndGet(batch.size)
+                        MewsRepository.setUpdatingProgress(baseProgress + ((currentCount.toFloat() / totalItemsToProcess) * availableSpace))
                     },
                     onBatchFailure = { batch, _ ->
                         val failedIds = batch.map { it.id }
@@ -263,8 +281,8 @@ class NewsSummarizer(private val llm: LLMClient) {
                 )
             }
 
-            val currentState = stateManager.readState() ?: return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
-            if (isFiltering || currentState.stagedRawTopics.isNotEmpty()) {
+            val filteringState = stateManager.readState() ?: return SummarizationResult.Failure(SummarizationErrorType.UNKNOWN_ERROR)
+            if (isFiltering || filteringState.stagedRawTopics.isNotEmpty()) {
                 val extractionTime = when (val stateMark = stateManager.readState()?.timemark) {
                     null -> {
                         val currTime = System.currentTimeMillis()
@@ -298,34 +316,34 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                 coroutineScope {
                     val blitzDeferred = async(Dispatchers.Default) {
-                        val preMergedBlitz = fastKeywordPreMerge(blitzTopics)
-                        mergeInTimeWindows(preMergedBlitz, messageTimeMap)
+                        mergeInTimeWindows(blitzTopics, messageTimeMap)
                     }
 
                     val mergedTopicsDeferred = async(Dispatchers.Default) {
-                        val preMergedNonBlitz = fastKeywordPreMerge(nonBlitzTopics)
-                        Log.d(TAG, "[FILTERING] Fast keyword pre-merge reduced non-blitz from ${nonBlitzTopics.size} to ${preMergedNonBlitz.size}")
-
-                        if (filterTopics && preMergedNonBlitz.isNotEmpty()) {
+                        if (filterTopics && nonBlitzTopics.isNotEmpty()) {
                             try {
-                                Log.d(TAG, "[FILTERING] Starting LLM smart merge on pre-merged topics...")
-                                var result: List<Topics> = smartMergeTopics(preMergedNonBlitz, currentLanguage, bannedWords, maxTopics)
+                                Log.d(TAG, "[FILTERING] Starting LLM smart merge on raw non-blitz topics...")
+                                var result: List<Topics> = smartMergeTopics(nonBlitzTopics, currentLanguage, bannedWords, maxTopics)
                                 var attempts = 0
-                                while (attempts < MAX_SUMMARIZATION_ATTEMTS && result.size > maxTopics * 2) {
+                                while (attempts < MAX_SUMMARIZATION_ATTEMPTS && result.size > maxTopics * 2) {
                                     attempts++
                                     result = smartMergeTopics(result, currentLanguage, bannedWords, maxTopics)
                                 }
                                 Log.d(TAG, "[FILTERING] LLM smart merge finished. Result size: ${result.size}. Applying final time-window algorithmic merge.")
-                                val finalReg = mergeInTimeWindows(result, messageTimeMap)
+                                val finalReg = mergeInTimeWindows(
+                                    topics = result,
+                                    messageTimeMap = messageTimeMap,
+                                    enableCrossWindowMerge = false
+                                )
                                 Log.d(TAG, "[FILTERING] Final merged non-blitz topics size: ${finalReg.size}")
                                 finalReg
                             } catch (e: Exception) {
                                 Log.w(TAG, "[FILTERING] Smart merge failed, falling back to time-window algorithmic merge", e)
-                                mergeInTimeWindows(preMergedNonBlitz, messageTimeMap)
+                                mergeInTimeWindows(nonBlitzTopics, messageTimeMap)
                             }
                         } else {
                             Log.d(TAG, "[FILTERING] Filter disabled or no non-blitz topics. Applying time-window algorithmic merge directly.")
-                            mergeInTimeWindows(preMergedNonBlitz, messageTimeMap)
+                            mergeInTimeWindows(nonBlitzTopics, messageTimeMap)
                         }
                     }
 
@@ -334,22 +352,22 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                     val mergedTopics = mergedTopicsDeferred.await()
 
-                    val normalizedFinalTopics = normalizeWeights(mergedTopics.sortedByDescending { it.ids?.size ?: 0 })
-                    val normalizedBlitzMerged = normalizeWeights(blitzMerged.sortedByDescending { it.ids?.size ?: 0 })
+                    val normalizedFinalTopics = calculateCompositeScores(mergedTopics)
+                    val normalizedBlitzMerged = calculateCompositeScores(blitzMerged)
 
-                    val finalTopics = normalizedFinalTopics.take((maxTopics * 1.5).toInt())
-                    val primaryTopics = finalTopics.take(maxTopics)
+                    val primaryTopics = normalizedFinalTopics.take(maxTopics)
+                    val reserveTopics = normalizedFinalTopics.drop(maxTopics).take((maxTopics * 0.5).roundToInt())
                     val blitzRaw = normalizedBlitzMerged.take(maxTopics)
 
-                    Log.i(TAG, "[STAGE: SAVING DRAFTS] Selected ${primaryTopics.size} primary topics and ${blitzRaw.size} blitz topics. Updating Knowledge Graph and saving to DB...")
+                    val allSelectedTopics = primaryTopics + reserveTopics
+                    Log.i(TAG, "[STAGE: SAVING DRAFTS] Selected ${primaryTopics.size} primary, ${reserveTopics.size} reserve and ${blitzRaw.size} blitz topics. Updating Knowledge Graph and saving to DB...")
 
                     launch(Dispatchers.Default) {
                         try {
-                            KnowledgeGraphManager.processTopicsAndBuildGraph(finalTopics.map { it.keywords.toSet() })
+                            KnowledgeGraphManager.processTopicsAndBuildGraph(allSelectedTopics.map { it.keywords.toSet() })
                             GraphCache.clear()
                         } catch (e: Exception) {
-                            Log.e(TAG, "Process graph failed: ${e.cause}, ${e.message}")
-                            throw e
+                            Log.e(TAG, "Process graph failed: ${e.cause}, ${e.message}", e)
                         }
                     }
 
@@ -368,7 +386,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                         updatingState = UpdatingState.SUMMARIZING,
                         stagedRawTopics = emptyList(),
                         primaryTopics = primaryRawDto,
-                        reserveTopics = finalTopics.map { topic -> topic.toRawTopicDto() }.filter { element -> !primaryRawDto.contains(element) },
+                        reserveTopics = reserveTopics.map { topic -> topic.toRawTopicDto() },
                         blitzTopics = blitzRawDto
                     )
                     }
@@ -380,9 +398,13 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             val dbTopics = MewsRepository.getTitlesWithStatus(TitleStatus.PROCESSING.statusId)
 
-            val normalTopics = (summarizationState.primaryTopics.map { it.toTopics() } + dbTopics.filter { !it.isBlitz }).distinctBy { it.title }
-            val blitzTopics = (summarizationState.blitzTopics.map { it.toTopics() } + dbTopics.filter { it.isBlitz }).distinctBy { it.title }
-            val currentTopics = normalTopics.map { it.id } + blitzTopics.map { it.id }
+            val allTopics = (summarizationState.primaryTopics.map { it.toTopics() } +
+                    summarizationState.blitzTopics.map { it.toTopics() } +
+                    dbTopics).distinctBy { if (it.id != 0L) it.id else it.title }
+
+            val normalTopics = allTopics.filter { !it.isBlitz }
+            val blitzTopics = allTopics.filter { it.isBlitz }
+            val currentTopics = allTopics.map { it.id }
 
             Log.i(TAG, "[STAGE: SUMMARIZATION PREP] Resuming. Primary to process: ${normalTopics.size}, Blitz to process: ${blitzTopics.size}")
 
@@ -406,55 +428,68 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             Log.d(TAG, "[SUMMARIZATION PREP] Prehistory entries loaded: ${preHistory.size}")
 
-            val processedTopicsSignatures = mutableListOf<Pair<String, List<String>>>()
-            preHistory.forEach { processedTopicsSignatures.add(it.title to it.keywords) }
+            val processedTopicsSignatures = Collections.synchronizedList(mutableListOf<Pair<String, List<String>>>())
 
             totalItemsToProcess = normalTopics.size + blitzTopics.size
-            processedItemsCount = 0
+            processedItemsCount.set(0)
             val availableProgressSpace = 0.95f - baseProgress
 
-            val allRequiredMessageIds =
-                (normalTopics.flatMap { it.ids ?: emptyList() } + blitzTopics.flatMap {
-                    it.ids ?: emptyList()
-                }).distinct()
+            val reserveMessageIds = summarizationState.reserveTopics.flatMap { it.ids }
+            val allRequiredMessageIds = (normalTopics.flatMap { it.ids ?: emptyList() } +
+                    blitzTopics.flatMap { it.ids ?: emptyList() } +
+                    reserveMessageIds).distinct()
             val rawMessagesList =
                 if (allRequiredMessageIds.isNotEmpty()) MewsRepository.getMessages(ids = allRequiredMessageIds)
                     ?: emptyList() else emptyList()
 
-            Log.d(TAG, "[SUMMARIZATION PREP] Fetched ${rawMessagesList.size} raw messages from DB for payloads.")
+            Log.d(TAG, "[SUMMARIZATION PREP] Fetched ${rawMessagesList.size} raw messages from DB for payloads (including ${reserveMessageIds.size} reserve message IDs).")
 
             val normalPayloads = buildPayloads(normalTopics, processedTopicsSignatures, rawMessagesList, preHistory)
-
             val deduplicatedBlitz = blitzTopics.map { deduplicateBlitzTopicMessages(it, rawMessagesList) }
             val blitzPayloads = buildPayloads(deduplicatedBlitz, processedTopicsSignatures, rawMessagesList, preHistory)
 
             Log.i(TAG, "[STAGE: SUMMARIZATION EXECUTION] Normal payloads: ${normalPayloads.size}, Blitz payloads: ${blitzPayloads.size}")
 
-            val failedTopics = mutableListOf<Topics>()
+            val failedTopics = Collections.synchronizedList(mutableListOf<Topics>())
+            val successfulNormalIds = Collections.synchronizedSet(mutableSetOf<Long>())
 
             coroutineScope {
-                val parentLinkingJobs = mutableListOf<Job>()
+                val parentLinkingJobs = Collections.synchronizedList(mutableListOf<Job>())
 
                 if (normalPayloads.isNotEmpty()) {
-                    executionManager.execute<SummaryPayload, List<SummaryResult>>(
+                    executionManager.execute<SummaryPayload, ParsedSummaryBatch>(
                         items = normalPayloads,
                         idExtractor = { it.topic.id },
                         textExtractor = { it.contentPayload },
                         batchMode = BatchMode.BASE_TOPICS,
                         promptBuilder = { batch -> PromptFactory.buildSummaryPrompt(batch, currentLanguage, bannedWords, isBlitz = false) },
-                        responseParser = { response, batch -> ResponseParser.parseSummaryResponse(response, batch, llm) },
-                        onBatchSuccess = { batch, _, results ->
-                            Log.d(TAG, "[SUMMARIZATION] Normal batch success. Generated ${results.size} summaries.")
+                        responseParser = { response, batch ->
+                            ResponseParser.parseSummaryResponse(response, batch, llm) {
+                                hasBlockedContent.set(true)
+                            }
+                        },
+                        onBatchSuccess = { batch, _, batchResult ->
+                            val results = batchResult.results
+                            val noUpdateIds = batchResult.noUpdateTopicIds
+                            Log.d(TAG, "[SUMMARIZATION] Normal batch success. Generated ${results.size} summaries, ${noUpdateIds.size} NO_UPDATE.")
                             val jobs = processSummaryResults(this, results, preHistory, processedTopicsSignatures, summarizationState.timemark)
                             parentLinkingJobs.addAll(jobs)
                             val finishedIds = results.map { it.payload.topic.id }.toSet()
+                            successfulNormalIds.addAll(finishedIds)
+
+                            val resolvedIds = finishedIds + noUpdateIds
+                            val omittedTopics = batch.map { it.topic }.filter { it.id !in resolvedIds }
+                            if (omittedTopics.isNotEmpty()) {
+                                Log.w(TAG, "[SUMMARIZATION] Model omitted ${omittedTopics.size} topics from response. Adding to failed list for retry.")
+                                failedTopics.addAll(omittedTopics)
+                            }
                             stateManager.updateState {
                                 it.copy(
-                                    primaryTopics = it.primaryTopics.filter { topic -> topic.id !in finishedIds }
+                                    primaryTopics = it.primaryTopics.filter { topic -> topic.id !in resolvedIds }
                                 )
                             }
-                            processedItemsCount += batch.size
-                            MewsRepository.setUpdatingProgress(baseProgress + ((processedItemsCount.toFloat() / totalItemsToProcess) * availableProgressSpace))
+                            val currentCount = processedItemsCount.addAndGet(batch.size)
+                            MewsRepository.setUpdatingProgress(baseProgress + ((currentCount.toFloat() / totalItemsToProcess) * availableProgressSpace))
                         },
                         onBatchFailure = { batch, _ ->
                             Log.w(TAG, "[SUMMARIZATION] Normal batch failed (Final). ${batch.size} topics moved to failed list.")
@@ -464,25 +499,38 @@ class NewsSummarizer(private val llm: LLMClient) {
                 }
 
                 if (blitzPayloads.isNotEmpty()) {
-                    executionManager.execute<SummaryPayload, List<SummaryResult>>(
+                    executionManager.execute<SummaryPayload, ParsedSummaryBatch>(
                         items = blitzPayloads,
                         idExtractor = { it.topic.id },
                         textExtractor = { it.contentPayload },
                         batchMode = BatchMode.BLITZ_TOPICS,
                         promptBuilder = { batch -> PromptFactory.buildSummaryPrompt(batch, currentLanguage, bannedWords, isBlitz = true) },
-                        responseParser = { response, batch -> ResponseParser.parseSummaryResponse(response, batch, llm) },
-                        onBatchSuccess = { batch, _, results ->
-                            Log.d(TAG, "[SUMMARIZATION] Blitz batch success. Generated ${results.size} summaries.")
+                        responseParser = { response, batch ->
+                            ResponseParser.parseSummaryResponse(response, batch, llm) {
+                                hasBlockedContent.set(true)
+                            }
+                        },
+                        onBatchSuccess = { batch, _, batchResult ->
+                            val results = batchResult.results
+                            val noUpdateIds = batchResult.noUpdateTopicIds
+                            Log.d(TAG, "[SUMMARIZATION] Blitz batch success. Generated ${results.size} summaries, ${noUpdateIds.size} NO_UPDATE.")
                             val jobs = processSummaryResults(this, results, preHistory, processedTopicsSignatures, summarizationState.timemark)
                             parentLinkingJobs.addAll(jobs)
                             val finishedIds = results.map { it.payload.topic.id }.toSet()
+
+                            val resolvedIds = finishedIds + noUpdateIds
+                            val omittedBlitz = batch.map { it.topic }.filter { it.id !in resolvedIds }
+                            if (omittedBlitz.isNotEmpty()) {
+                                Log.w(TAG, "[SUMMARIZATION] Model omitted ${omittedBlitz.size} blitz topics. Adding to failed list for retry.")
+                                failedTopics.addAll(omittedBlitz)
+                            }
                             stateManager.updateState {
                                 it.copy(
-                                    blitzTopics = it.blitzTopics.filter { topic -> topic.id !in finishedIds }
+                                    blitzTopics = it.blitzTopics.filter { topic -> topic.id !in resolvedIds }
                                 )
                             }
-                            processedItemsCount += batch.size
-                            MewsRepository.setUpdatingProgress(baseProgress + ((processedItemsCount.toFloat() / totalItemsToProcess) * availableProgressSpace))
+                            val currentCount = processedItemsCount.addAndGet(batch.size)
+                            MewsRepository.setUpdatingProgress(baseProgress + ((currentCount.toFloat() / totalItemsToProcess) * availableProgressSpace))
                         },
                         onBatchFailure = { batch, _ ->
                             Log.w(TAG, "[SUMMARIZATION] Blitz batch failed (Final). ${batch.size} topics moved to failed list.")
@@ -491,8 +539,51 @@ class NewsSummarizer(private val llm: LLMClient) {
                     )
                 }
 
+                val missingSlots = maxTopics - successfulNormalIds.size
+                val reserveDtoList = stateManager.readState()?.reserveTopics ?: emptyList()
+
+                if (missingSlots > 0 && reserveDtoList.isNotEmpty()) {
+                    val neededCount = kotlin.math.ceil(missingSlots * 1.5).toInt().coerceAtMost(reserveDtoList.size)
+                    val candidateReserve = reserveDtoList.take(neededCount).map { it.toTopics() }
+                    Log.i(TAG, "[RESERVE ORCHESTRATION] Requesting $neededCount topics from reserve to compensate $missingSlots missing slots.")
+
+                    val reserveWithIds = candidateReserve.map { saveTopicToDb(it, summarizationState.timemark) }
+                    val reservePayloads = buildPayloads(reserveWithIds, processedTopicsSignatures, rawMessagesList, preHistory)
+
+                    if (reservePayloads.isNotEmpty()) {
+                        executionManager.execute<SummaryPayload, ParsedSummaryBatch>(
+                            items = reservePayloads,
+                            idExtractor = { it.topic.id },
+                            textExtractor = { it.contentPayload },
+                            batchMode = BatchMode.BASE_TOPICS,
+                            promptBuilder = { batch -> PromptFactory.buildSummaryPrompt(batch, currentLanguage, bannedWords, isBlitz = false) },
+                            responseParser = { response, batch ->
+                                ResponseParser.parseSummaryResponse(response, batch, llm) {
+                                    hasBlockedContent.set(true)
+                                }
+                            },
+                            onBatchSuccess = { batch, _, batchResult ->
+                                val availableSlots = maxTopics - successfulNormalIds.size
+                                val validResults = batchResult.results.take(availableSlots.coerceAtLeast(0))
+                                val jobs = processSummaryResults(this, validResults, preHistory, processedTopicsSignatures, summarizationState.timemark)
+                                parentLinkingJobs.addAll(jobs)
+
+                                val finishedIds = validResults.map { it.payload.topic.id }.toSet()
+                                successfulNormalIds.addAll(finishedIds)
+
+                                val unusedDraftIds = batch.map { it.topic.id }.filter { it !in finishedIds }
+                                unusedDraftIds.forEach { MewsRepository.deleteTitleById(it) }
+                            },
+                            onBatchFailure = { batch, _ ->
+                                batch.forEach { MewsRepository.deleteTitleById(it.topic.id) }
+                            }
+                        )
+                    }
+                    stateManager.updateState { it.copy(reserveTopics = emptyList()) }
+                }
+
                 if (parentLinkingJobs.isNotEmpty()) {
-                    Log.i(TAG, "Awaiting completion of ${parentLinkingJobs.size} parent linking tasks...")
+                    Log.i(TAG, "Awaiting completion of ${parentLinkingJobs.size} parent linking and DB update tasks...")
                     parentLinkingJobs.joinAll()
                 }
             }
@@ -512,7 +603,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     attempt = currentAttempt + 1
                 )
                 }
-                if (currentAttempt >= MAX_SUMMARIZATION_ATTEMTS) {
+                if (currentAttempt >= MAX_SUMMARIZATION_ATTEMPTS) {
                     stateManager.clearState()
                     dbRemaining.forEach { MewsRepository.deleteTitleById(it.id) }
                     Log.w(TAG, "Deleted ${dbRemaining.size} failed topics from DB.")
@@ -522,7 +613,13 @@ class NewsSummarizer(private val llm: LLMClient) {
                 }
                 MewsRepository.setLastTitlesUpdate(summarizationState.timemark)
                 safeReadyFunc(readyFunc)
-                return if (currentAttempt < MAX_SUMMARIZATION_ATTEMTS) SummarizationResult.Failure(SummarizationErrorType.SUMMARIZE_TOPICS_FAILED)
+
+                val errorType = if (hasBlockedContent.get()) {
+                    SummarizationErrorType.CONTENT_BLOCKED
+                } else {
+                    SummarizationErrorType.SUMMARIZE_TOPICS_FAILED
+                }
+                return if (currentAttempt < MAX_SUMMARIZATION_ATTEMPTS) SummarizationResult.Failure(errorType)
                 else SummarizationResult.Success
             }
 
@@ -656,7 +753,6 @@ class NewsSummarizer(private val llm: LLMClient) {
         } else 0.0
 
         val totalWeight = if (hasSummary) 7.0 else 4.0
-//        Log.i(TAG, "Theme title: $otherTitle, keyword: $keywordScore, titles: $titlesThreshold, summary: $summaryThreshold, total: ${(keywordScore * 2.0 + titlesThreshold * 2.0 + summaryThreshold * 3.0) / totalWeight}")
         return (keywordScore * 2.0 + titlesThreshold * 2.0 + summaryThreshold * 3.0) / totalWeight
     }
 
@@ -678,7 +774,25 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             if (isDuplicate) {
                 Log.d(TAG, "[PAYLOAD BUILDER] Dropped topic [${topic.id}] '${topic.title}' as DUPLICATE.")
-                processedItemsCount++
+
+                val existingInDb = try { MewsRepository.getTitleById(topic.id) } catch (_: Exception) { null }
+                val isAlreadyWritten = existingInDb != null &&
+                        existingInDb.summary.isNotBlank() &&
+                        existingInDb.status == TitleStatus.DEFAULT.statusId
+
+                if (!isAlreadyWritten) {
+                    MewsRepository.deleteTitleById(topic.id)
+                } else {
+                    Log.d(TAG, "[PAYLOAD BUILDER] Topic [${topic.id}] already has summary in DB, preserving record.")
+                }
+
+                stateManager.updateState { s ->
+                    s.copy(
+                        primaryTopics = s.primaryTopics.filter { it.id != topic.id },
+                        blitzTopics = s.blitzTopics.filter { it.id != topic.id }
+                    )
+                }
+                processedItemsCount.incrementAndGet()
                 return@mapNotNull null
             }
 
@@ -689,11 +803,54 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             if (fetchedMessages.isEmpty()) {
                 Log.w(TAG, "[PAYLOAD BUILDER] Dropped topic [${topic.id}] '${topic.title}': No messages found in DB payload pool.")
+                MewsRepository.deleteTitleById(topic.id)
+                stateManager.updateState { s ->
+                    s.copy(
+                        primaryTopics = s.primaryTopics.filter { it.id != topic.id },
+                        blitzTopics = s.blitzTopics.filter { it.id != topic.id }
+                    )
+                }
                 return@mapNotNull null
             }
 
-            val uniqueMessages = deduplicateForSummaryPayload(fetchedMessages)
-            var contentPayload = uniqueMessages.joinToString("\n") { "— ${it.cleanText.take(SINGLE_NEWS_CHAR_LIMIT)}" }
+            val sortedMessages = fetchedMessages.sortedByDescending { it.cleanText.length }
+            val uniqueMessages = mutableListOf<Message>()
+
+            for (candidate in sortedMessages) {
+                val candClean = TextSanitizer.sanitize(candidate.cleanText)
+                val candLen = candClean.length
+                val isSimilar = uniqueMessages.any { existing ->
+                    val existClean = TextSanitizer.sanitize(existing.cleanText)
+                    val existLen = existClean.length
+                    val maxLen = maxOf(candLen, existLen)
+                    if (maxLen == 0) return@any true
+                    val diffRatio = kotlin.math.abs(candLen - existLen).toFloat() / maxLen
+                    if (diffRatio <= 0.20f) {
+                        TextComparator.areSimilar(candClean, existClean, 0.8f)
+                    } else {
+                        false
+                    }
+                }
+                if (!isSimilar) {
+                    uniqueMessages.add(candidate)
+                }
+            }
+
+            val payloadMessages = mutableListOf<Message>()
+            var accumulatedTokens = 0
+
+            for (msg in uniqueMessages) {
+                if (payloadMessages.size >= TOPIC_MAX_MESSAGES_LIMIT) break
+                val estimatedTokens = TokenEstimator.estimate(msg.cleanText)
+                if (accumulatedTokens + estimatedTokens > TOPIC_TOKEN_LIMIT && payloadMessages.isNotEmpty()) {
+                    break
+                }
+                payloadMessages.add(msg)
+                accumulatedTokens += estimatedTokens
+            }
+
+            val finalPayloadMessages = if (payloadMessages.isEmpty()) uniqueMessages.take(1) else payloadMessages
+            var contentPayload = finalPayloadMessages.joinToString("\n") { "— ${it.cleanText.take(SINGLE_NEWS_CHAR_LIMIT)}" }
             var requiresUpdate = false
 
             if (!topic.isBlitz) {
@@ -708,7 +865,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 }
             }
 
-            SummaryPayload(topic, uniqueMessages, contentPayload, requiresUpdate)
+            SummaryPayload(topic, finalPayloadMessages, contentPayload, requiresUpdate)
         }
     }
 
@@ -727,15 +884,15 @@ class NewsSummarizer(private val llm: LLMClient) {
             val macroTag = item.macroTag
             val (topic, suitableMessages, _) = item.payload
 
-            if (summary.isBlank() || summary == "REJECTED" || summary.length <= 15) {
-                Log.d(TAG, "[RESULT PROCESSOR] Dropped summary for topic [${topic.id}] '${topic.title}'. Reason: REJECTED, blank or length <= 15.")
+            if (summary.isBlank() || summary.length <= 15) {
+                Log.d(TAG, "[RESULT PROCESSOR] Dropped summary for topic [${topic.id}] '${topic.title}'. Reason: blank or length <= 15.")
                 continue
             }
 
             var bestMatchId: Long? = null
             val newTimeVal = suitableMessages.minOfOrNull { it.time } ?: extractionTime
 
-            scope.launch {
+            val updateJob = scope.launch {
                 MewsRepository.updateTitle(
                     id = topic.id,
                     newEventTime = newTimeVal,
@@ -745,6 +902,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     summary = summary
                 )
             }
+            jobs.add(updateJob)
             Log.i(TAG, "[RESULT PROCESSOR] Topic [${topic.id}] created new independent DB entry (isBlitz: ${topic.isBlitz}).")
 
             signatures.add(Pair(newTitle, topic.keywords))
@@ -768,16 +926,6 @@ class NewsSummarizer(private val llm: LLMClient) {
         }
 
         return jobs
-    }
-
-    private fun deduplicateForSummaryPayload(messages: List<Message>): List<Message> {
-        val unique = mutableListOf<Message>()
-        messages.forEach { msg ->
-            val cleanMsg = TextSanitizer.sanitize(msg.cleanText)
-            val exists = unique.any { TextComparator.areSimilar(TextSanitizer.sanitize(it.cleanText), cleanMsg, 0.85f) }
-            if (!exists) unique.add(msg)
-        }
-        return unique
     }
 
     private fun deduplicateBlitzTopicMessages(
@@ -832,54 +980,11 @@ class NewsSummarizer(private val llm: LLMClient) {
         return topic.copy(ids = finalIds)
     }
 
-    private fun fastKeywordPreMerge(topics: List<Topics>): List<Topics> {
-        if (topics.size <= 1) return topics
-        val result = mutableListOf<Topics>()
-
-        for (candidate in topics) {
-            val matchIndex = result.indexOfFirst { existing ->
-                if (existing.isBlitz != candidate.isBlitz) return@indexOfFirst false
-                if (existing.keywords.isEmpty() || candidate.keywords.isEmpty()) return@indexOfFirst false
-
-                var matches = 0
-                for (ck in candidate.keywords) {
-                    for (ek in existing.keywords) {
-                        if (ck.equals(ek, ignoreCase = true) || TextComparator.areSimilar(ck.lowercase(), ek.lowercase(), 0.75f)) {
-                            matches++
-                            break
-                        }
-                    }
-                }
-
-                val minSize = minOf(candidate.keywords.size, existing.keywords.size)
-                matches >= 2 && minSize > 0 && ((matches.toDouble() / minSize) >= MATCH_RATE)
-            }
-
-            if (matchIndex != -1) {
-                val existing = result[matchIndex]
-                val combinedIds = (existing.ids.orEmpty() + candidate.ids.orEmpty()).distinct()
-                val combinedKeywords = mutableListOf<String>()
-                (existing.keywords + candidate.keywords).forEach { word ->
-                    if (combinedKeywords.none { TextComparator.areSimilar(it, word, 0.85f) }) {
-                        combinedKeywords.add(word)
-                    }
-                }
-                result[matchIndex] = existing.copy(
-                    ids = combinedIds,
-                    weight = combinedIds.size,
-                    keywords = combinedKeywords
-                )
-            } else {
-                result.add(candidate.copy(weight = candidate.ids?.size ?: 1))
-            }
-        }
-        return result
-    }
-
     private suspend fun mergeInTimeWindows(
         topics: List<Topics>,
         messageTimeMap: Map<Long, Long>,
-        windowMs: Long = 4 * 3600_000L
+        windowMs: Long = 4 * 3600_000L,
+        enableCrossWindowMerge: Boolean = true
     ): List<Topics> {
         if (topics.size <= 1) return topics
 
@@ -901,21 +1006,43 @@ class NewsSummarizer(private val llm: LLMClient) {
             windowMerged.addAll(localMerged)
         }
 
+        if (!enableCrossWindowMerge) {
+            Log.d(TAG, "[MERGE WINDOWS] Cross-window merge disabled. Retained ${windowMerged.size} topics across ${partitioned.size} time windows.")
+            return windowMerged
+        }
+
         val finalMerged = mutableListOf<Topics>()
         mergeIntoGlobal(windowMerged, finalMerged)
         return finalMerged
     }
 
-    private fun normalizeWeights(topics: List<Topics>): List<Topics> {
+    private suspend fun calculateCompositeScores(topics: List<Topics>): List<Topics> {
         if (topics.isEmpty()) return emptyList()
-        val maxCount = topics.maxOfOrNull { it.ids?.size ?: 0 } ?: 0
-        if (maxCount == 0) return topics.map { it.copy(weight = 0) }
+        val burstClusters = try {
+            KeywordStatsRepository.getBurstClusters()
+        } catch (_: Exception) { emptyList() }
+
+        val ln15 = kotlin.math.ln(15.0)
 
         return topics.map { topic ->
-            val count = topic.ids?.size ?: 0
-            val normalized = ((count.toDouble() / maxCount) * 10.0).roundToInt().coerceIn(0, 10)
-            topic.copy(weight = normalized)
-        }
+            val wLlm = topic.weight.coerceIn(1, 10).toDouble()
+            val n = (topic.ids?.size ?: 1).coerceAtLeast(1).toDouble()
+            val sVol = kotlin.math.min(10.0, 1.0 + 9.0 * (kotlin.math.ln(n) / ln15).coerceAtLeast(0.0))
+
+            val peakZ = burstClusters
+                .filter { cluster ->
+                    cluster.keywords.any { ck ->
+                        topic.keywords.any { tk -> TextComparator.areSimilar(ck, tk, 0.8f) }
+                    }
+                }
+                .maxOfOrNull { it.peakZScore } ?: 0.0
+
+            val sBurst = kotlin.math.min(10.0, kotlin.math.max(0.0, peakZ) * 2.0)
+            val finalScore = (wLlm * 0.35) + (sVol * 0.45) + (sBurst * 0.20)
+            val roundedWeight = finalScore.roundToInt().coerceIn(1, 10)
+            topic.copy(weight = roundedWeight) to finalScore
+        }.sortedByDescending { it.second }
+            .map { it.first }
     }
 
     private suspend fun mergeIntoGlobal(newTopics: List<Topics>, globalCache: MutableList<Topics>) {
@@ -1095,6 +1222,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 1. Флаг isBlitz: true.
                 2. Максимальное количество: $maxLimit микроновстей.
                 3. Каждая микроновость - отдельная тема. Запрещено объединять микротемы в кластеры, если они не связаны между собой.
+                4. Обязательно укажи минимум 3 точных ключевых слова для каждой новости.
                 
                 ИЗВЛЕЧЕНИЕ СУЩНОСТЕЙ (NER): Для каждой темы извлеки все ключевые сущности, упомянутые в тексте. Строго распредели их по 6 макрокатегориям: 'persons' (люди, должности), 'locations' (география), 'organizations' (компании, партии), 'events' (события, конфликты), 'products_tech' (товами, технологии, крипта), 'laws_regulations' (законы, договоры).
     
@@ -1103,7 +1231,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                   {
                     "title": "Заголовок", 
                     "id": [101, 105], 
-                    "keywords": ["тег1", "тег2"], 
+                    "keywords": ["тег1", "тег2", "тег3"], 
                     "weight": 8, 
                     "isBlitz": false,
                     "entities": {
@@ -1125,7 +1253,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         fun buildSummaryPrompt(batch: List<SummaryPayload>, lang: String, banned: String, isBlitz: Boolean): String {
             val jsonInput = JSONArray(batch.map { item ->
                 JSONObject().apply {
-                    put("id", item.topic.ids?.firstOrNull() ?: 0L)
+                    put("id", item.topic.id)
                     put("title", item.topic.title)
                     put("news_content", item.contentPayload)
                     if (!isBlitz) put("requires_update_header", item.requiresUpdateHeader)
@@ -1136,9 +1264,12 @@ class NewsSummarizer(private val llm: LLMClient) {
                 """
                 Ты — аналитик. Твоя цель — написать краткий дайджест микроновостей. Форматируй ответ как маркированный список (1-2 предложения на событие с кратким подзаголовком).
                 1. ДОСТОВЕРНОСТЬ: Строй обзор исключительно на фактах из поля news_content. Запрещено генерировать несуществующие данные.
-                2. УМНАЯ ФИЛЬТРАЦИЯ: Если спам/запрет ('$banned') — вырезай. REJECTED только если не осталось смысла вообще.
+                2. УМНАЯ ФИЛЬТРАЦИЯ: Если спам/запрет ('$banned') — вырезай. Если нарушена безопасность — верни "text": "REJECTED". Если новость уже описана без изменений — верни "text": "NO_UPDATE".
                 3. ЯЗЫК: $lang. Точность дат, сумм, прямая речь в кавычках.
-                4. Объединение в комплексы СТРОГО ЗАПРЕЩЕНО. Одна новость - один объект.
+                4. СТРОГОЕ СООТВЕТСТВИЕ 1-К-1 (КРИТИЧЕСКИ ВАЖНО):
+                   - В ответе ДОЛЖНО БЫТЬ РОВНО ${batch.size} JSON-объектов — СТРОГО ПО ОДНОМУ ОБЪЕКТУ НА КАЖДЫЙ ВХОДНОЙ ID!
+                   - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО создавать несколько объектов с одинаковым ID. Если по одному ID передано несколько микроновостей, оформи их единым маркированным списком внутри поля "text" этого же объекта.
+                   - Запрещено пропускать переданные ID.
                 ФОРМАТ (СТРОГО JSON):
                 [{"id": <id>, "title": "<Заголовок>", "text": "<текст>"}]
                 Ввод: $jsonInput
@@ -1154,9 +1285,10 @@ class NewsSummarizer(private val llm: LLMClient) {
                 2. СТИЛЬ: Smart Casual, связный нарратив, строгая объективность. Ключевые цитаты сохраняй прямой речью в кавычках («»).
                 3. ДОСТОВЕРНОСТЬ: Строй текст исключительно на news_content. Внешние знания допустимы только для кратких пояснений терминов.
                 4. ТОЧНОСТЬ ДАННЫХ: Даты, суммы, имена и статистика — строго без округлений и обобщений.
-                5. УМНАЯ ФИЛЬТРАЦИЯ: Игнорируй ('$banned'). Если полезной информации после очистки не осталось — верни "text": "REJECTED".
+                5. УМНАЯ ФИЛЬТРАЦИЯ: Игнорируй ('$banned'). Если материал нарушает политики безопасности или не содержит полезной информации — верни "text": "REJECTED". Если в материале нет никакой новой фактуры по сравнению с 'ПРЕДЫДУЩИЙ КОНТЕКСТ СЮЖЕТА' — верни "text": "NO_UPDATE".
                 6. МАКРОКАТЕГОРИЯ: 1 верхнеуровневая категория (Политика, Экономика, Технологии и т.д.).
                 7. ЗАГОЛОВОК: Не общий, достаточно точно отражающий событие.
+                8. ПОЛНОТА ОТВЕТА (СТРОГО): В ответе ДОЛЖНО БЫТЬ РОВНО ${batch.size} объектов — по одному объекту на каждый входной id. Запрещено пропускать темы или объединять разные id в один объект.
                 
                 ЯЗЫК: $lang.
                 ФОРМАТ (СТРОГО JSON):
@@ -1195,7 +1327,7 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                     val mappedKeywords = keywordsList.map { it.lowercase() }
                     val isBlitz = obj.optBoolean("isBlitz", false) || mappedKeywords.contains("другое") || mappedKeywords.contains("other") || mappedKeywords.contains("blitz")
-                    val finalKeywords = if (isBlitz) mappedKeywords.take(1) else keywordsList
+                    val finalKeywords = keywordsList
 
                     if (obj.has("entities")) {
                         val entitiesObj = obj.getJSONObject("entities")
@@ -1258,9 +1390,16 @@ class NewsSummarizer(private val llm: LLMClient) {
             return topics
         }
 
-        fun parseSummaryResponse(response: String, batch: List<SummaryPayload>, llmParser: LLMClient): List<SummaryResult> {
+        suspend fun parseSummaryResponse(
+            response: String,
+            batch: List<SummaryPayload>,
+            llmParser: LLMClient,
+            onContentBlocked: (() -> Unit)? = null
+        ): ParsedSummaryBatch {
             val (jsonArray, _) = llmParser.safeParseJsonArray(response)
             val results = mutableListOf<SummaryResult>()
+            val noUpdateTopicIds = mutableSetOf<Long>()
+            val processedTopicIds = mutableSetOf<Long>()
 
             for (i in 0 until jsonArray.length()) {
                 try {
@@ -1270,23 +1409,52 @@ class NewsSummarizer(private val llm: LLMClient) {
                     val newTitle = obj.optString("title").takeIf { it.isNotBlank() } ?: ""
                     val macroTag = obj.optString("macro_tag").takeIf { it.isNotBlank() }
 
-                    val original = batch.find { it.topic.ids?.contains(id) == true }
+                    val original = batch.find { it.topic.id == id }
+                        ?: batch.find { it.topic.ids?.contains(id) == true }
+                        ?: batch.find { TextComparator.areSimilar(it.topic.title, newTitle, 0.7f) }
 
-                    if (original != null && summary.trim() != "REJECTED" && summary.trim().length > 15) {
+                    if (original != null && processedTopicIds.contains(original.topic.id)) {
+                        Log.w("ResponseParser", "[PARSER SUMMARY] Duplicate object for topic [${original.topic.id}] skipped (split protection).")
+                        continue
+                    }
+
+                    val cleanSummary = summary.trim().uppercase()
+                    val isRejected = TextComparator.areSimilar(cleanSummary, "REJECTED", SIGNAL_SIMILARITY_THRESHOLD)
+                    val isNoUpdate = TextComparator.areSimilar(cleanSummary, "NO_UPDATE", SIGNAL_SIMILARITY_THRESHOLD)
+
+                    if (isRejected) {
+                        Log.w("ResponseParser", "[PARSER SUMMARY] Topic [${original?.topic?.id ?: id}] content was REJECTED by model.")
+                        onContentBlocked?.invoke()
+                        original?.let { processedTopicIds.add(it.topic.id) }
+                        continue
+                    }
+
+                    if (isNoUpdate) {
+                        Log.i("ResponseParser", "[PARSER SUMMARY] Topic [${original?.topic?.id ?: id}] marked as NO_UPDATE by model.")
+                        if (original != null) {
+                            MewsRepository.deleteTitleById(original.topic.id)
+                            processedTopicIds.add(original.topic.id)
+                            noUpdateTopicIds.add(original.topic.id)
+                        }
+                        continue
+                    }
+
+                    if (original != null && summary.trim().length > 15) {
                         results.add(SummaryResult(
-                            id = id,
+                            id = original.topic.id,
                             summary = summary,
                             title = newTitle.ifBlank { original.topic.title },
                             macroTag = macroTag,
                             payload = original
                         ))
+                        processedTopicIds.add(original.topic.id)
                     }
                 } catch (e: Exception) {
                     Log.w("ResponseParser", "[PARSER SUMMARY] Error mapping summary JSON result", e)
                 }
             }
-            Log.d("ResponseParser", "[PARSER SUMMARY] Parsed ${results.size} summary results out of ${batch.size} payloads.")
-            return results
+            Log.d("ResponseParser", "[PARSER SUMMARY] Parsed ${results.size} summary results, ${noUpdateTopicIds.size} NO_UPDATE out of ${batch.size} payloads.")
+            return ParsedSummaryBatch(results = results, noUpdateTopicIds = noUpdateTopicIds)
         }
     }
 }

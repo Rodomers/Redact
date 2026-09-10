@@ -208,8 +208,8 @@
     <string name="err_header_quota">В С Ё</string>
     <string name="err_text_quota">Исчерпан дневной лимит использования Gemini API. Попробуйте завтра или смените ключ.</string>
     <string name="err_btn_quota">Ок</string>
-    <string name="err_header_blocked">Цензура</string>
-    <string name="err_text_blocked">Нейросеть отказалась обрабатывать эту тему из соображений безопасности.</string>
+    <string name="err_header_blocked">CENSORED</string>
+    <string name="err_text_blocked">Нейросеть отказалась обрабатывать одну из тем по соображениям безопасности.\nМожете попробовать другую модель.</string>
     <string name="err_btn_blocked">Ясно</string>
 
     <string name="date_01">%d января</string>
