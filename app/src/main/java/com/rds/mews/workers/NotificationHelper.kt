@@ -55,8 +55,11 @@ fun Context.sendBurstNotification(snippet: String, burstId: Long = System.curren
     val channel = NotificationChannel(
         channelId,
         getString(R.string.burst_notification_name),
-        NotificationManager.IMPORTANCE_DEFAULT
-    )
+        NotificationManager.IMPORTANCE_LOW
+    ).apply {
+        setSound(null, null)
+        enableVibration(false)
+    }
     manager.createNotificationChannel(channel)
 
     val intent = Intent(this, MainActivity::class.java).apply {
@@ -72,6 +75,9 @@ fun Context.sendBurstNotification(snippet: String, burstId: Long = System.curren
         .setSmallIcon(R.drawable.ic_launcher_monochrome)
         .setContentTitle(getString(R.string.burst_notification_title))
         .setContentText(snippet)
+        .setStyle(
+            NotificationCompat.BigTextStyle().bigText(snippet)
+        )
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setContentIntent(pendingIntent)
         .setGroup("burst_notification_group")

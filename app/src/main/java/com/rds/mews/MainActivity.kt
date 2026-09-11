@@ -121,6 +121,7 @@ fun MainScreen(mainActivity: MainActivity) {
         var isHolding by remember { mutableStateOf(false) }
         var blitzCenterOffset by remember { mutableStateOf(Offset.Zero) }
         var showBlitzTooltip by remember { mutableStateOf(false) }
+        val showSummaryTooltip by MewsRepository.showSummaryTooltip.collectAsStateWithLifecycle()
 
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()
@@ -268,7 +269,8 @@ fun MainScreen(mainActivity: MainActivity) {
                     isBlitzActive = isBlitzActive,
                     isOnline = isOnline,
                     showBlitzTooltip = showBlitzTooltip,
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    showSummaryTooltip = showSummaryTooltip
                 )
             }
         }

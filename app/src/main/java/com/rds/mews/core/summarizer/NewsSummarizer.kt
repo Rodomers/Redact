@@ -73,13 +73,20 @@ class NewsSummarizer(private val llm: LLMClient) {
         val topic: Topics,
         val messages: List<Message>,
         val contentPayload: String,
-        val requiresUpdateHeader: Boolean
+        val requiresUpdateHeader: Boolean,
+        val allMessagesTime: Long? = null
+    )
+
+    private data class PreparedMessage(
+        val message: Message,
+        val sanitizedText: String,
+        val estimatedTokens: Int
     )
 
     companion object {
         private const val MATCH_RATE = 0.5f
-        private const val TOPIC_TOKEN_LIMIT = 3000
-        private const val TOPIC_MAX_MESSAGES_LIMIT = 15
+        private const val TOPIC_TOKEN_LIMIT = 6000
+        private const val TOPIC_MAX_MESSAGES_LIMIT = 30
         private const val SIGNAL_SIMILARITY_THRESHOLD = 0.8f
 
         private const val MAX_SUMMARIZATION_ATTEMPTS = 3
@@ -445,8 +452,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             Log.d(TAG, "[SUMMARIZATION PREP] Fetched ${rawMessagesList.size} raw messages from DB for payloads (including ${reserveMessageIds.size} reserve message IDs).")
 
             val normalPayloads = buildPayloads(normalTopics, processedTopicsSignatures, rawMessagesList, preHistory)
-            val deduplicatedBlitz = blitzTopics.map { deduplicateBlitzTopicMessages(it, rawMessagesList) }
-            val blitzPayloads = buildPayloads(deduplicatedBlitz, processedTopicsSignatures, rawMessagesList, preHistory)
+            val blitzPayloads = buildPayloads(blitzTopics, processedTopicsSignatures, rawMessagesList, preHistory)
 
             Log.i(TAG, "[STAGE: SUMMARIZATION EXECUTION] Normal payloads: ${normalPayloads.size}, Blitz payloads: ${blitzPayloads.size}")
 
@@ -584,6 +590,7 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                 if (parentLinkingJobs.isNotEmpty()) {
                     Log.i(TAG, "Awaiting completion of ${parentLinkingJobs.size} parent linking and DB update tasks...")
+                    MewsRepository.setShowSummaryTooltip(true)
                     parentLinkingJobs.joinAll()
                 }
             }
@@ -624,6 +631,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             }
 
             MewsRepository.setLastTitlesUpdate(summarizationState.timemark)
+            MewsRepository.setShowSummaryTooltip(false)
             Log.i(TAG, "=== PIPELINE FINISHED SUCCESSFULLY ===")
 
             KeywordStatsRepository.deleteClusters(summarizationState.timemark)
@@ -760,113 +768,169 @@ class NewsSummarizer(private val llm: LLMClient) {
         topics: List<Topics>,
         processedTopicsSignatures: List<Pair<String, List<String>>>,
         rawMessagesList: List<Message>,
-        preHistory: List<TitleEntity>
-    ): List<SummaryPayload> {
-        return topics.mapNotNull { topic ->
-            val isDuplicate = processedTopicsSignatures.any { (procTitle, procKeywords) ->
-                compareTopics(
-                    topicTitle = topic.title,
-                    topicKeywords = topic.keywords,
-                    otherTitle = procTitle,
-                    otherKeywords = procKeywords
-                ) >= MATCH_RATE
+        preHistory: List<TitleEntity>,
+        maxTokens: Int = TOPIC_TOKEN_LIMIT,
+        charLimit: Int = SINGLE_NEWS_CHAR_LIMIT
+    ): List<SummaryPayload> = coroutineScope {
+        topics.map { topic ->
+            async(Dispatchers.Default) {
+                buildSingleTopicPayload(topic, processedTopicsSignatures, rawMessagesList, preHistory, maxTokens, charLimit)
             }
+        }.awaitAll().filterNotNull()
+    }
 
-            if (isDuplicate) {
-                Log.d(TAG, "[PAYLOAD BUILDER] Dropped topic [${topic.id}] '${topic.title}' as DUPLICATE.")
-
-                val existingInDb = try { MewsRepository.getTitleById(topic.id) } catch (_: Exception) { null }
-                val isAlreadyWritten = existingInDb != null &&
-                        existingInDb.summary.isNotBlank() &&
-                        existingInDb.status == TitleStatus.DEFAULT.statusId
-
-                if (!isAlreadyWritten) {
-                    MewsRepository.deleteTitleById(topic.id)
-                } else {
-                    Log.d(TAG, "[PAYLOAD BUILDER] Topic [${topic.id}] already has summary in DB, preserving record.")
-                }
-
-                stateManager.updateState { s ->
-                    s.copy(
-                        primaryTopics = s.primaryTopics.filter { it.id != topic.id },
-                        blitzTopics = s.blitzTopics.filter { it.id != topic.id }
-                    )
-                }
-                processedItemsCount.incrementAndGet()
-                return@mapNotNull null
-            }
-
-            val messageIds = topic.ids ?: emptyList()
-            val fetchedMessages = if (messageIds.isNotEmpty()) {
-                rawMessagesList.filter { it.id in messageIds }
-            } else emptyList()
-
-            if (fetchedMessages.isEmpty()) {
-                Log.w(TAG, "[PAYLOAD BUILDER] Dropped topic [${topic.id}] '${topic.title}': No messages found in DB payload pool.")
-                MewsRepository.deleteTitleById(topic.id)
-                stateManager.updateState { s ->
-                    s.copy(
-                        primaryTopics = s.primaryTopics.filter { it.id != topic.id },
-                        blitzTopics = s.blitzTopics.filter { it.id != topic.id }
-                    )
-                }
-                return@mapNotNull null
-            }
-
-            val sortedMessages = fetchedMessages.sortedByDescending { it.cleanText.length }
-            val uniqueMessages = mutableListOf<Message>()
-
-            for (candidate in sortedMessages) {
-                val candClean = TextSanitizer.sanitize(candidate.cleanText)
-                val candLen = candClean.length
-                val isSimilar = uniqueMessages.any { existing ->
-                    val existClean = TextSanitizer.sanitize(existing.cleanText)
-                    val existLen = existClean.length
-                    val maxLen = maxOf(candLen, existLen)
-                    if (maxLen == 0) return@any true
-                    val diffRatio = kotlin.math.abs(candLen - existLen).toFloat() / maxLen
-                    if (diffRatio <= 0.20f) {
-                        TextComparator.areSimilar(candClean, existClean, 0.8f)
-                    } else {
-                        false
-                    }
-                }
-                if (!isSimilar) {
-                    uniqueMessages.add(candidate)
-                }
-            }
-
-            val payloadMessages = mutableListOf<Message>()
-            var accumulatedTokens = 0
-
-            for (msg in uniqueMessages) {
-                if (payloadMessages.size >= TOPIC_MAX_MESSAGES_LIMIT) break
-                val estimatedTokens = TokenEstimator.estimate(msg.cleanText)
-                if (accumulatedTokens + estimatedTokens > TOPIC_TOKEN_LIMIT && payloadMessages.isNotEmpty()) {
-                    break
-                }
-                payloadMessages.add(msg)
-                accumulatedTokens += estimatedTokens
-            }
-
-            val finalPayloadMessages = if (payloadMessages.isEmpty()) uniqueMessages.take(1) else payloadMessages
-            var contentPayload = finalPayloadMessages.joinToString("\n") { "— ${it.cleanText.take(SINGLE_NEWS_CHAR_LIMIT)}" }
-            var requiresUpdate = false
-
-            if (!topic.isBlitz) {
-                val bestMatchId = findBestMatch(topic, null, preHistory)
-                if (bestMatchId != null) {
-                    val matchedItem = preHistory.find { it.id == bestMatchId }
-                    if (matchedItem != null) {
-                        requiresUpdate = !matchedItem.isRead
-                        contentPayload = "ПРЕДЫДУЩИЙ КОНТЕКСТ СЮЖЕТА:\n${matchedItem.summary}\n\n$contentPayload"
-                        Log.d(TAG, "[PAYLOAD BUILDER] Topic [${topic.id}] '${topic.title}' matched ancestor [$bestMatchId]. Requires update: $requiresUpdate")
-                    }
-                }
-            }
-
-            SummaryPayload(topic, finalPayloadMessages, contentPayload, requiresUpdate)
+    private suspend fun buildSingleTopicPayload(
+        topic: Topics,
+        processedTopicsSignatures: List<Pair<String, List<String>>>,
+        rawMessagesList: List<Message>,
+        preHistory: List<TitleEntity>,
+        maxTokens: Int,
+        charLimit: Int
+    ): SummaryPayload? {
+        val isDuplicate = processedTopicsSignatures.any { (procTitle, procKeywords) ->
+            compareTopics(
+                topicTitle = topic.title,
+                topicKeywords = topic.keywords,
+                otherTitle = procTitle,
+                otherKeywords = procKeywords
+            ) >= MATCH_RATE
         }
+
+        if (isDuplicate) {
+            Log.d(TAG, "[PAYLOAD BUILDER] Dropped topic [${topic.id}] '${topic.title}' as DUPLICATE.")
+
+            val existingInDb = try { MewsRepository.getTitleById(topic.id) } catch (_: Exception) { null }
+            val isAlreadyWritten = existingInDb != null &&
+                    existingInDb.summary.isNotBlank() &&
+                    existingInDb.status == TitleStatus.DEFAULT.statusId
+
+            if (!isAlreadyWritten) {
+                MewsRepository.deleteTitleById(topic.id)
+            } else {
+                Log.d(TAG, "[PAYLOAD BUILDER] Topic [${topic.id}] already has summary in DB, preserving record.")
+            }
+
+            stateManager.updateState { s ->
+                s.copy(
+                    primaryTopics = s.primaryTopics.filter { it.id != topic.id },
+                    blitzTopics = s.blitzTopics.filter { it.id != topic.id }
+                )
+            }
+            processedItemsCount.incrementAndGet()
+            return null
+        }
+
+        val messageIds = topic.ids ?: emptyList()
+        val fetchedMessages = if (messageIds.isNotEmpty()) {
+            rawMessagesList.filter { it.id in messageIds }
+        } else emptyList()
+        val allMessagesTime = fetchedMessages.minOfOrNull { it.time }
+
+        if (fetchedMessages.isEmpty()) {
+            Log.w(TAG, "[PAYLOAD BUILDER] Dropped topic [${topic.id}] '${topic.title}': No messages found in DB payload pool.")
+            MewsRepository.deleteTitleById(topic.id)
+            stateManager.updateState { s ->
+                s.copy(
+                    primaryTopics = s.primaryTopics.filter { it.id != topic.id },
+                    blitzTopics = s.blitzTopics.filter { it.id != topic.id }
+                )
+            }
+            return null
+        }
+
+        val finalPayloadMessages = filterTopicMessages(
+            messages = fetchedMessages,
+            maxMessages = if (topic.isBlitz) 5 else TOPIC_MAX_MESSAGES_LIMIT,
+            maxTokens = maxTokens,
+            charLimit = charLimit
+        )
+
+        var contentPayload = finalPayloadMessages.joinToString("\n") { "— ${it.cleanText}" }
+        var requiresUpdate = false
+
+        if (!topic.isBlitz) {
+            val bestMatchId = findBestMatch(topic, null, preHistory)
+            if (bestMatchId != null) {
+                val matchedItem = preHistory.find { it.id == bestMatchId }
+                if (matchedItem != null) {
+                    requiresUpdate = !matchedItem.isRead
+                    contentPayload = "ПРЕДЫДУЩИЙ КОНТЕКСТ СЮЖЕТА:\n${matchedItem.summary}\n\n$contentPayload"
+                    Log.d(TAG, "[PAYLOAD BUILDER] Topic [${topic.id}] '${topic.title}' matched ancestor [$bestMatchId]. Requires update: $requiresUpdate")
+                }
+            }
+        }
+
+        return SummaryPayload(topic, finalPayloadMessages, contentPayload, requiresUpdate, allMessagesTime = allMessagesTime)
+    }
+
+    private fun filterTopicMessages(
+        messages: List<Message>,
+        maxMessages: Int,
+        maxTokens: Int,
+        charLimit: Int
+    ): List<Message> {
+        if (messages.isEmpty()) return emptyList()
+        if (messages.size == 1) {
+            val truncated = messages[0].cleanText.take(charLimit)
+            return listOf(messages[0].copy(cleanText = truncated))
+        }
+
+        val prepared = messages
+            .filter { it.cleanText.length >= 60 }
+            .ifEmpty { messages }
+            .sortedByDescending { it.cleanText.length }
+            .map { msg ->
+                val truncated = msg.cleanText.take(charLimit)
+                PreparedMessage(
+                    message = msg.copy(cleanText = truncated),
+                    sanitizedText = TextSanitizer.sanitize(truncated),
+                    estimatedTokens = TokenEstimator.estimate(truncated)
+                )
+            }
+            .toMutableList()
+
+        var threshold = 0.85f
+        val minThreshold = 0.45f
+        val step = 0.05f
+
+        while ((prepared.size > maxMessages || prepared.sumOf { it.estimatedTokens } > maxTokens) &&
+            prepared.size > 2 &&
+            threshold >= minThreshold
+        ) {
+            var i = 0
+            while (i < prepared.size) {
+                var j = i + 1
+                while (j < prepared.size) {
+                    if (prepared.size <= 2) break
+                    val isSimilar = TextComparator.areSimilar(
+                        prepared[i].sanitizedText,
+                        prepared[j].sanitizedText,
+                        threshold
+                    )
+                    if (isSimilar) {
+                        prepared.removeAt(j)
+                    } else {
+                        j++
+                    }
+                }
+                i++
+            }
+            threshold -= step
+        }
+
+        val result = mutableListOf<Message>()
+        var accumulatedTokens = 0
+
+        for (item in prepared) {
+            if (result.size >= maxMessages) break
+            if (accumulatedTokens + item.estimatedTokens > maxTokens && result.isNotEmpty()) {
+                break
+            }
+            result.add(item.message)
+            accumulatedTokens += item.estimatedTokens
+        }
+
+        return if (result.isEmpty()) listOf(prepared.first().message) else result
     }
 
     private fun processSummaryResults(
@@ -890,7 +954,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             }
 
             var bestMatchId: Long? = null
-            val newTimeVal = suitableMessages.minOfOrNull { it.time } ?: extractionTime
+            val newTimeVal = item.payload.allMessagesTime ?: suitableMessages.minOfOrNull { it.time } ?: extractionTime
 
             val updateJob = scope.launch {
                 MewsRepository.updateTitle(
@@ -1254,7 +1318,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             val jsonInput = JSONArray(batch.map { item ->
                 JSONObject().apply {
                     put("id", item.topic.id)
-                    put("title", item.topic.title)
+//                    put("title", item.topic.title)
                     put("news_content", item.contentPayload)
                     if (!isBlitz) put("requires_update_header", item.requiresUpdateHeader)
                 }
@@ -1276,11 +1340,11 @@ class NewsSummarizer(private val llm: LLMClient) {
                 """.trimIndent()
             } else {
                 """
-                Ты — профессиональный журналист-аналитик. Твоя задача — формировать сбалансированные новостные заметки средней длины, избегая как кратких выжимок, так и раздутых лонгридов.
+                Ты — профессиональный журналист-аналитик. Твоя задача — формировать сбалансированные новостные заметки, избегая как слишком кратких выжимок, так и раздутых лонгридов. Объём текста должен быть пропорционален объёму входящей информации.
                 
                 ИНСТРУКЦИИ:
                 1. СТРУКТУРА И ОБЪЕМ:
-                   - Если requires_update_header = false: пиши связный материал из 2–4 абзацев (Лид с ключевым событием -> Детализация фактов и цитат -> Последствия/контекст из источника). Не схлопывай насыщенные фактами новости в 1–2 предложения. Если исходный текст очень короткий — ограничься 1 емким абзацем без воды.
+                   - Если requires_update_header = false: пиши связный материал из нескольких абзацев. Не схлопывай насыщенные фактами новости в 1–2 предложения. Если исходный текст очень короткий — не раздувай его.
                    - Если requires_update_header = true: пиши ТОЛЬКО дополнение (1–2 абзаца свежих фактов). Начни строго с "**Обновление:** " (или аналога на $lang).
                 2. СТИЛЬ: Smart Casual, связный нарратив, строгая объективность. Ключевые цитаты сохраняй прямой речью в кавычках («»).
                 3. ДОСТОВЕРНОСТЬ: Строй текст исключительно на news_content. Внешние знания допустимы только для кратких пояснений терминов.
@@ -1327,7 +1391,6 @@ class NewsSummarizer(private val llm: LLMClient) {
 
                     val mappedKeywords = keywordsList.map { it.lowercase() }
                     val isBlitz = obj.optBoolean("isBlitz", false) || mappedKeywords.contains("другое") || mappedKeywords.contains("other") || mappedKeywords.contains("blitz")
-                    val finalKeywords = keywordsList
 
                     if (obj.has("entities")) {
                         val entitiesObj = obj.getJSONObject("entities")
@@ -1356,7 +1419,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                             }
                         }
 
-                        finalKeywords.forEach { kw ->
+                        keywordsList.forEach { kw ->
                             val existsInOriginalText = batch.filter { it.id in fullIdList }.any {
                                 it.cleanText.lowercase().contains(kw.lowercase())
                             }
@@ -1366,7 +1429,8 @@ class NewsSummarizer(private val llm: LLMClient) {
                         }
                     }
 
-                    topics.add(Topics(title, fullIdList, w, keywords = finalKeywords, isBlitz = isBlitz))
+                    topics.add(Topics(title, fullIdList, w,
+                        keywords = keywordsList, isBlitz = isBlitz))
                 } catch (_: Exception) {}
             }
 

@@ -11,6 +11,7 @@
     <string name="tabscreen_tooltip_blitz">Hold the tab to view blitz topics.</string>
     <string name="tooltip_no_network">No network connection.</string>
     <string name="tooltip_network_restored">Network connection restored.</string>
+    <string name="summary_tooltip">Algorithmic topic linking has begun. Internet connection will no longer be needed.</string>
 
     <string name="source_type_telegram">Telegram</string>
     <string name="source_type_rss">Sites and RSS-feeds</string>

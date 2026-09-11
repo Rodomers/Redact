@@ -117,6 +117,9 @@ object MewsRepository {
     private val _updatingProgress = MutableStateFlow(0f)
     val updatingProgress = _updatingProgress.asStateFlow()
 
+    private val _showSummaryTooltip = MutableStateFlow(false)
+    val showSummaryTooltip = _showSummaryTooltip.asStateFlow()
+
     const val CURRENT_THEME = "current_theme"
     const val IS_MONET = "is_monet"
     const val TITLES_NUM = "titles_num"
@@ -919,6 +922,10 @@ object MewsRepository {
     fun setStoppedManually(value: Boolean) {
         _stoppedManually.value = value
         _updatingProgress.value = 0f
+    }
+
+    fun setShowSummaryTooltip(value: Boolean) {
+        _showSummaryTooltip.value = value
     }
 
     fun saveLastError(failure: SummarizationResult.Failure) {

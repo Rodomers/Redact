@@ -113,7 +113,8 @@ fun MyBottomBar(
     onBlitzTriggered: (centerOffset: Offset) -> Unit = {},
     isBlitzActive: Boolean = false,
     showBlitzTooltip: Boolean = false,
-    isOnline: Boolean? = null
+    isOnline: Boolean? = null,
+    showSummaryTooltip: Boolean = false
 ) {
     val tooltipChannel = remember { Channel<TooltipMessage>(Channel.UNLIMITED) }
     var currentTooltipTextId by remember { mutableIntStateOf(0) }
@@ -225,6 +226,16 @@ fun MyBottomBar(
                 )
             }
         }
+    }
+
+    LaunchedEffect(showSummaryTooltip) {
+        if (!showSummaryTooltip) return@LaunchedEffect
+        tooltipChannel.send(
+            TooltipMessage(
+                textRes = R.string.summary_tooltip,
+                durationMs = 5000L
+            )
+        )
     }
 
     LaunchedEffect(showBlitzTooltip) {

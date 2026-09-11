@@ -20,15 +20,20 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
@@ -89,6 +94,8 @@ import com.rds.mews.ui.custom_elements.CustomTextButton
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
+import dev.jeziellago.compose.markdowntext.MarkdownText
 
 private data class IconParams(
     val defaultIconColor: Color,
@@ -183,12 +190,15 @@ fun BlitzCard(
                 .fillMaxWidth()
                 .padding(10.dp)
         ) {
-            Text(
-                text = title.summary.ifBlank { title.title },
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isRead) 0.65f else 1.0f),
-                fontWeight = if (isRead) FontWeight.Medium else FontWeight.Bold,
-                overflow = TextOverflow.Ellipsis,
+            MarkdownText(
+                markdown = title.summary.ifBlank { title.title },
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = if (isRead) FontWeight.Medium else FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface.copy(
+                        alpha = if (isRead) 0.65f else 1.0f
+                    )
+                ),
+                truncateOnTextOverflow = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -301,7 +311,8 @@ fun BlitzCard(
                         }
                     ),
                     modifier = Modifier
-                        .size(iconParams.iconSize)
+                        .requiredSize(iconParams.iconSize)
+                        .aspectRatio(1f)
                         .onGloballyPositioned { coordinates ->
                             buttonBounds = coordinates.boundsInWindow().roundToIntRect()
                         },
@@ -566,14 +577,25 @@ private fun BlitzCardExpandedContent(
                     )
                     .padding(10.dp)
             ) {
-                Text(
-                    text = title.summary.ifBlank { title.title },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isRead) 0.65f else 1.0f),
-                    fontWeight = if (isRead) FontWeight.Medium else FontWeight.Bold,
-                    overflow = TextOverflow.Ellipsis,
+                MarkdownText(
+                    markdown = title.summary.ifBlank { title.title },
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = if (isRead) FontWeight.Medium else FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(
+                            alpha = if (isRead) 0.65f else 1.0f
+                        )
+                    ),
+                    truncateOnTextOverflow = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+//                Text(
+//                    text = title.summary.ifBlank { title.title },
+//                    style = MaterialTheme.typography.titleMedium,
+//                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isRead) 0.65f else 1.0f),
+//                    fontWeight = if (isRead) FontWeight.Medium else FontWeight.Bold,
+//                    overflow = TextOverflow.Ellipsis,
+//                    modifier = Modifier.fillMaxWidth()
+//                )
 
                 val validMedia = dynamicMediaUrls?.filter { it.mediaLink.isNotBlank() } ?: emptyList()
                 if (validMedia.isNotEmpty()) {

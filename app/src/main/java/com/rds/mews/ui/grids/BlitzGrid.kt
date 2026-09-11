@@ -92,6 +92,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.time.Duration.Companion.milliseconds
 
 private data class ExpandedCardData(
     val title: Title,
@@ -255,7 +256,7 @@ fun BlitzGrid(
 
     LaunchedEffect(groupedItems.isEmpty(), isRefreshing) {
         if (groupedItems.isEmpty() && !isRefreshing && lastTitlesUpdateExists()) {
-            delay(300L)
+            delay(300L.milliseconds)
             if (groupedItems.isEmpty()) toggleEmptyMess(true)
         } else toggleEmptyMess(false)
     }
