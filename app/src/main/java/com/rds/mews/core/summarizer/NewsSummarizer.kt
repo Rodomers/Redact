@@ -42,7 +42,8 @@ class NewsSummarizer(private val llm: LLMClient) {
         val id: Long = 0,
         val status: Int = 0,
         val keywords: List<String> = emptyList(),
-        val isBlitz: Boolean = false
+        val isBlitz: Boolean = false,
+        val fromBurst: Boolean = false
     )
 
     fun Topics.toRawTopicDto(): RawTopicDto {
@@ -146,7 +147,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         Log.i(TAG, "State: ${currentState.updatingState}, isExtracting: $isExtracting, remainingIds: ${currentState.remainingMessageIds.size}, victims: ${currentState.victimMessages.size}")
 
         try {
-            val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '") } catch (_: Exception) { "" }
+            val bannedWords = try { MewsRepository.bannedNewsFlow.value.joinToString("'; '").lowercase() } catch (_: Exception) { "" }
             var remainingIds = currentState.remainingMessageIds
 
             if (isExtracting && remainingIds.isEmpty() && currentState.victimMessages.isNotEmpty()) {
@@ -267,7 +268,10 @@ class NewsSummarizer(private val llm: LLMClient) {
                     responseParser = { response, batch -> ResponseParser.parseExtractionResponse(response, batch) },
                     onBatchSuccess = { batch, remaining, parsedTopics ->
                         val remainingIdsList = remaining.map { it.id }
-                        val rawTopicsList = parsedTopics.map { it.toRawTopicDto() }
+                        val filtered = parsedTopics.filter { topic ->
+                            !topic.keywords.any { bannedWords.contains(it) }
+                        }
+                        val rawTopicsList = filtered.map { it.toRawTopicDto() }
 
                         Log.d(TAG, "[EXTRACTION] Batch Success: Extracted ${parsedTopics.size} topics. Remaining queue: ${remainingIdsList.size}")
 
@@ -307,7 +311,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 MewsRepository.setUpdatingState(UpdatingState.FILTERING)
                 stateManager.updateState { it.copy(updatingState = UpdatingState.FILTERING) }
 
-                val normalizedTopics = extractedTopics.map { it.copy(weight = maxOf(it.weight, it.ids?.size ?: 1)) }
+                val normalizedTopics = extractedTopics.map { it.copy(weight = it.weight) }
                 val blitzTopics = normalizedTopics.filter { it.isBlitz }
                 val nonBlitzTopics = normalizedTopics.filter { !it.isBlitz }
                 val filterTopics = MewsRepository.filterTopics.first()
@@ -470,7 +474,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                         batchMode = BatchMode.BASE_TOPICS,
                         promptBuilder = { batch -> PromptFactory.buildSummaryPrompt(batch, currentLanguage, bannedWords, isBlitz = false) },
                         responseParser = { response, batch ->
-                            ResponseParser.parseSummaryResponse(response, batch, llm) {
+                            ResponseParser.parseSummaryResponse(response, batch, llm, bannedWords) {
                                 hasBlockedContent.set(true)
                             }
                         },
@@ -512,7 +516,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                         batchMode = BatchMode.BLITZ_TOPICS,
                         promptBuilder = { batch -> PromptFactory.buildSummaryPrompt(batch, currentLanguage, bannedWords, isBlitz = true) },
                         responseParser = { response, batch ->
-                            ResponseParser.parseSummaryResponse(response, batch, llm) {
+                            ResponseParser.parseSummaryResponse(response, batch, llm, bannedWords) {
                                 hasBlockedContent.set(true)
                             }
                         },
@@ -564,7 +568,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                             batchMode = BatchMode.BASE_TOPICS,
                             promptBuilder = { batch -> PromptFactory.buildSummaryPrompt(batch, currentLanguage, bannedWords, isBlitz = false) },
                             responseParser = { response, batch ->
-                                ResponseParser.parseSummaryResponse(response, batch, llm) {
+                                ResponseParser.parseSummaryResponse(response, batch, llm, bannedWords) {
                                     hasBlockedContent.set(true)
                                 }
                             },
@@ -699,6 +703,9 @@ class NewsSummarizer(private val llm: LLMClient) {
         topicTitle: String, topicKeywords: List<String>, otherTitle: String, otherKeywords: List<String>,
         topicText: String? = null, otherText: String? = null
     ): Double {
+        if (topicKeywords.isEmpty() || otherKeywords.isEmpty()) return 0.0
+        if (topicTitle.isEmpty() || otherTitle.isEmpty()) return 0.0
+
         val expandedTopicKeywords = topicKeywords.toMutableSet()
         for (kw in topicKeywords) expandedTopicKeywords += GraphCache.getRelatedEntities(kw)
 
@@ -724,7 +731,17 @@ class NewsSummarizer(private val llm: LLMClient) {
         if (titlesThreshold >= 0.85) return 1.0
 
         var kwMatches = 0
+        var baseKwMatches = 0
 
+        for (tk in topicKeywords) {
+            for (hk in otherKeywords) {
+                if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.7f)) {
+                    baseKwMatches++
+                    break
+                }
+            }
+        }
+        if (baseKwMatches / minOf(topicKeywords.size, otherKeywords.size) < 0.3) return 0.0
         for (tk in expandedTopicKeywords) {
             for (hk in expandedOtherKeywords) {
                 if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.7f)) {
@@ -760,8 +777,8 @@ class NewsSummarizer(private val llm: LLMClient) {
             ).toDouble()
         } else 0.0
 
-        val totalWeight = if (hasSummary) 7.0 else 4.0
-        return (keywordScore * 2.0 + titlesThreshold * 2.0 + summaryThreshold * 3.0) / totalWeight
+        val totalWeight = if (hasSummary) 6.0 else 3.0
+        return (keywordScore * 1.0 + titlesThreshold * 2.0 + summaryThreshold * 3.0) / totalWeight
     }
 
     private suspend fun buildPayloads(
@@ -981,7 +998,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     val parentTopic = preHistory.find { it.id == bestMatchId }
 
                     if (parentTopic != null) {
-                        MewsRepository.manuallyLinkTopics(topic.id, parentTopic.id)
+                        MewsRepository.linkTopics(topic.id, parentTopic.id)
                         Log.i(TAG, "[RESULT PROCESSOR] Topic [${topic.id}] created new DB entry with ancestor link to [$bestMatchId].")
                     }
                 }
@@ -1128,12 +1145,14 @@ class NewsSummarizer(private val llm: LLMClient) {
                 (existing.keywords + candidate.keywords).forEach { word ->
                     if (combinedKeywords.none { TextComparator.areSimilar(it, word, 0.85f) }) combinedKeywords.add(word)
                 }
+                val fromBurst = existing.fromBurst || candidate.fromBurst
 
                 globalCache[existingIndex] = existing.copy(
                     ids = combinedIds,
                     weight = combinedIds.size,
                     keywords = combinedKeywords,
-                    isBlitz = existing.isBlitz
+                    isBlitz = existing.isBlitz,
+                    fromBurst = fromBurst
                 )
             } else {
                 globalCache.add(candidate.copy(weight = candidate.ids?.size ?: 1))
@@ -1161,6 +1180,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                         put("t", t.title)
                         put("kw", t.keywords.joinToString(", "))
                         put("w", maxOf(t.weight, t.ids?.size ?: 1))
+                        put("ob", t.fromBurst)
                     }
                 }
                 val jsonInput = JSONArray(indexedInput).toString()
@@ -1170,16 +1190,18 @@ class NewsSummarizer(private val llm: LLMClient) {
                 
                 ПРАВИЛА:
                 1. СЛИЯНИЕ ДУБЛИКАТОВ: Объединяй индексы в "src" (src: [ix1, ix2]) ТОЛЬКО если новости описывают один и тот же конкретный инцидент или прямое развитие одной ситуации.
-                2. СТРОГИЙ ЗАПРЕТ ДАЙДЖЕСТОВ: Категорически ЗАПРЕЩЕНО объединять независимые события по общей тематике, сфере (IT, экономика, происшествия) или городу. Никаких сборных тем («Новости дня», «События в регионе», «Сводка происшествий»). Каждое независимое событие — строго отдельный объект.
+                2. СТРОГИЙ ЗАПРЕТ ДАЙДЖЕСТОВ: Категорически ЗАПРЕЩЕНО объединять независимые события по общей тематике, сфере или городу. Никаких сборных тем («Новости дня», «События в регионе», «Сводка происшествий»). Каждое независимое событие — строго отдельный объект.
                 3. ОТБОР И ФИЛЬТРАЦИЯ (НЕ БОЛЕЕ $targetLimit ТЕМ):
                    - Оставляй только важные, резонансные события. Мелкий инфошум, бытовые единичные случаи и спам просто ВЫБРАСЫВАЙ (не включай в ответ).
                    - Если независимых событий больше $targetLimit, отдавай предпочтение темам с наибольшим весом (w) и просто ОТБРАСЫВАЙ менее важные.
                    - Запрещено сжимать или объединять независимые события между собой ради попадания в лимит.
+                   - Разрешено пересчитывать вес тем внутри пакета.
+                   - Темы с флагом ob считай приоритетными. Их вес в выводе умножай на 1.3, но максимум 10.
                 4. ОДИНОЧНЫЕ СОБЫТИЯ: Если важное событие не имеет дубликатов в списке — возвращай его отдельным объектом: "src": [ix].
                 5. ЗАПРЕЩЕННЫЕ ТЕМЫ: Если новость относится к запрещенным темам ('$banned') — удали её и не включай в итоговый список.
                 6. СТИЛЬ: Заголовки в стиле Smart Casual, точно отражающие суть конкретного инцидента.
                 
-                Ввод: [{"ix": 0, "t": "...", "kw": "...", "w": 5}]
+                Ввод: [{"ix": 0, "t": "...", "kw": "...", "w": 5, "ob": "..."}]
                 Формат ответа (СТРОГО JSON массив):
                 [{"title": "Заголовок конкретного события", "src": [0, 2], "weight": 9}]
                 
@@ -1270,36 +1292,43 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             return """
                 Проанализируй новости и выдели ОТДЕЛЬНЫЕ новостные события.
-                Максимальное количество выделяемых тем: $maxLimit. Если событий больше — выбери самые резонансные и значимые.
+                Максимальное количество тем: $maxLimit. Если событий больше — оставь самые резонансные и значимые.
                 
-                ИНЖЕКЦИЯ ПРИОРИТЕТОВ: В текущем наборе присутствуют признаки следующих критически важных развивающихся событий:
+                ИНЖЕКЦИЯ ПРИОРИТЕТОВ:
                 $burstKeywords
-                Если находишь новости, относящиеся к этим приоритетным сюжетам, ОБЯЗАТЕЛЬНО выделяй их в отдельные темы, даже если они кажутся незначительными.
+                События, относящиеся к приоритетным сюжетам выше, выделяй ОБЯЗАТЕЛЬНО. Для них указывай флаг fromBurst = true, для остальных - fromBurst = false.
                 
-                Группируй новости по Сюжетным Линиям:
-                1. Цепочка событий (ОСТАВЛЯТЬ ВМЕСТЕ): Например, событие + реакция + последствия = ОДНА тема.
-                2. Сюжетная кластеризация: Объединяй события в одну тему только при наличии прямой причинно-следственной связи.
-                ФИЛЬТРАЦИЯ (СТРОГО): Игнорируй рекламу, розыгрыши, а также темы: '$banned'.
+                ПРАВИЛА КЛАСТЕРИЗАЦИИ И АТОМАРНОСТИ:
+                1. 1 ТЕМА = 1 ИНЦИДЕНТ: Категорически ЗАПРЕЩЕНО создавать дайджесты и зонтичные темы («Политика», «События на фронте», «Заявления властей», «Новости IT»). Каждое событие, удар, заявление или закон — отдельная тема.
+                2. СЮЖЕТНАЯ СВЯЗЬ: Объединяй новости в одну тему (несколько id в массиве) ТОЛЬКО при наличии прямой причинно-следственной связи (инцидент + реакция + официальное последствие). Если связи нет — это разные темы.
                 
-                ИНСТРУКЦИЯ ДЛЯ КАТЕГОРИИ "ДРУГОЕ":
-                Используй тему "Другое" (на языке $lang) исключительно для единичных, изолированных микроновостей.
-                1. Флаг isBlitz: true.
-                2. Максимальное количество: $maxLimit микроновстей.
-                3. Каждая микроновость - отдельная тема. Запрещено объединять микротемы в кластеры, если они не связаны между собой.
-                4. Обязательно укажи минимум 3 точных ключевых слова для каждой новости.
+                ФИЛЬТРАЦИЯ ИНФОШУМА (ВЫБРАСЫВАЙ БЕЗЖАЛОСТНО):
+                - Полностью игнорируй спам, розыгрыши, рекламу и запрещенные темы: '$banned'.
+                - ИГНОРИРУЙ бытовой лайфстайл, псевдонауку («ученые выяснили...», советы врачей, бруксизм, диеты), курьезы, гороскопы и бытовые ДТП/криминал без резонанса. Не включай их ни в основные темы, ни в блиц — просто удаляй.
                 
-                ИЗВЛЕЧЕНИЕ СУЩНОСТЕЙ (NER): Для каждой темы извлеки все ключевые сущности, упомянутые в тексте. Строго распредели их по 6 макрокатегориям: 'persons' (люди, должности), 'locations' (география), 'organizations' (компании, партии), 'events' (события, конфликты), 'products_tech' (товами, технологии, крипта), 'laws_regulations' (законы, договоры).
-    
-                Верни JSON массив (СТРОГО):
+                РАСПРЕДЕЛЕНИЕ ПО ТИПАМ (isBlitz) И ВЕСУ (weight):
+                - weight (1-10): Оценивай реальную общественную значимость.
+                  * 8–10: Международные события, войны, крупные законы, теракты, макроэкономика.
+                  * 5–7: Заметные региональные/отраслевые события, крупные релизы, значимые кадровые перестановки.
+                  * 1–4: Локальные точечные происшествия, небольшие апдейты.
+                - isBlitz (true/false):
+                  * false: Полноценное резонансное событие, по которому есть или ожидается развитие сюжета (weight от 5 до 10).
+                  * true: Только короткие, изолированные, но общественно ВАЖНЫЕ факты (точечное назначение, сухой отчет, разовый локальный закон), не требующие длинной статьи.
+                
+                ИЗВЛЕЧЕНИЕ СУЩНОСТЕЙ (NER):
+                Для каждой темы извлеки сущности по 6 категориям: 'persons', 'locations', 'organizations', 'events', 'products_tech', 'laws_regulations'.
+                
+                ФОРМАТ ОТВЕТА (СТРОГО JSON):
                 [
                   {
-                    "title": "Заголовок", 
+                    "title": "Точный заголовок конкретного события", 
                     "id": [101, 105], 
                     "keywords": ["тег1", "тег2", "тег3"], 
                     "weight": 8, 
                     "isBlitz": false,
+                    "fromBurst": false,
                     "entities": {
-                       "persons": [{"entity": "Имя", "context": "фрагмент текста с упоминанием"}],
+                       "persons": [{"entity": "Имя", "context": "фрагмент текста"}],
                        "locations": [],
                        "organizations": [],
                        "events": [],
@@ -1318,7 +1347,6 @@ class NewsSummarizer(private val llm: LLMClient) {
             val jsonInput = JSONArray(batch.map { item ->
                 JSONObject().apply {
                     put("id", item.topic.id)
-//                    put("title", item.topic.title)
                     put("news_content", item.contentPayload)
                     if (!isBlitz) put("requires_update_header", item.requiresUpdateHeader)
                 }
@@ -1326,33 +1354,37 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             return if (isBlitz) {
                 """
-                Ты — аналитик. Твоя цель — написать краткий дайджест микроновостей. Форматируй ответ как маркированный список (1-2 предложения на событие с кратким подзаголовком).
-                1. ДОСТОВЕРНОСТЬ: Строй обзор исключительно на фактах из поля news_content. Запрещено генерировать несуществующие данные.
+                Ты — аналитик. Твоя цель — написать краткий дайджест микроновостей. Каждая тема - 1-2 предложения.
+                1. ДОСТОВЕРНОСТЬ: Строй обзор исключительно на фактах из поля news_content. Запрещено генерировать несуществующие данные.
                 2. УМНАЯ ФИЛЬТРАЦИЯ: Если спам/запрет ('$banned') — вырезай. Если нарушена безопасность — верни "text": "REJECTED". Если новость уже описана без изменений — верни "text": "NO_UPDATE".
                 3. ЯЗЫК: $lang. Точность дат, сумм, прямая речь в кавычках.
                 4. СТРОГОЕ СООТВЕТСТВИЕ 1-К-1 (КРИТИЧЕСКИ ВАЖНО):
                    - В ответе ДОЛЖНО БЫТЬ РОВНО ${batch.size} JSON-объектов — СТРОГО ПО ОДНОМУ ОБЪЕКТУ НА КАЖДЫЙ ВХОДНОЙ ID!
                    - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО создавать несколько объектов с одинаковым ID. Если по одному ID передано несколько микроновостей, оформи их единым маркированным списком внутри поля "text" этого же объекта.
                    - Запрещено пропускать переданные ID.
+                5.ФОРМАТИРОВАНИЕ: Разрешено использовать markdown, но маркированные списки ЗАПРЕЩЕНЫ.
                 ФОРМАТ (СТРОГО JSON):
                 [{"id": <id>, "title": "<Заголовок>", "text": "<текст>"}]
                 Ввод: $jsonInput
                 """.trimIndent()
-            } else {
-                """
-                Ты — профессиональный журналист-аналитик. Твоя задача — формировать сбалансированные новостные заметки, избегая как слишком кратких выжимок, так и раздутых лонгридов. Объём текста должен быть пропорционален объёму входящей информации.
+                    } else {
+                        """
+                Ты — профессиональный журналист-аналитик ведущего новостного издания. Твоя задача — формировать качественные, фактурные и глубокие новостные материалы.
                 
                 ИНСТРУКЦИИ:
-                1. СТРУКТУРА И ОБЪЕМ:
-                   - Если requires_update_header = false: пиши связный материал из нескольких абзацев. Не схлопывай насыщенные фактами новости в 1–2 предложения. Если исходный текст очень короткий — не раздувай его.
-                   - Если requires_update_header = true: пиши ТОЛЬКО дополнение (1–2 абзаца свежих фактов). Начни строго с "**Обновление:** " (или аналога на $lang).
-                2. СТИЛЬ: Smart Casual, связный нарратив, строгая объективность. Ключевые цитаты сохраняй прямой речью в кавычках («»).
-                3. ДОСТОВЕРНОСТЬ: Строй текст исключительно на news_content. Внешние знания допустимы только для кратких пояснений терминов.
+                1. СТРУКТУРА И ОБЪЕМ (МАСШТАБИРУЮТСЯ ПО ОБЪЕМУ ФАКТУРЫ):
+                   - Не сжимай насыщенный фактами материал в 1–2 куцых предложения. Не выбрасывай цифры, таймлайны и аргументы ради экономии места.
+                   - Если фактуры немного (1 новость): пиши 1–2 емких, плотных абзаца без пустой воды.
+                   - Если фактуры достаточно: пиши разбор из 2–3 абзацев (суть события -> ключевые детали и контекст -> последствия/реакции).
+                   - Если информации много (крупный сюжет, цепочка сообщений, контекст сюжета): пиши полноценный лонгрид (от 3–4 абзацев и более), подробно раскрывая предысторию, хронологию и позиции сторон.
+                   - Если requires_update_header = true: пиши ТОЛЬКО дополнение (свежие факты, отсутствующие в предыстории).
+                2. СТИЛЬ: Smart Casual, связный глубокий нарратив, строгая объективность. Ключевые цитаты сохраняй прямой речью в кавычках («»).
+                3. ДОСТОВЕРНОСТЬ: Строй текст исключительно на news_content.
                 4. ТОЧНОСТЬ ДАННЫХ: Даты, суммы, имена и статистика — строго без округлений и обобщений.
-                5. УМНАЯ ФИЛЬТРАЦИЯ: Игнорируй ('$banned'). Если материал нарушает политики безопасности или не содержит полезной информации — верни "text": "REJECTED". Если в материале нет никакой новой фактуры по сравнению с 'ПРЕДЫДУЩИЙ КОНТЕКСТ СЮЖЕТА' — верни "text": "NO_UPDATE".
+                5. УМНАЯ ФИЛЬТРАЦИЯ: Игнорируй ('$banned'). Если материал нарушает политики безопасности — верни "text": "REJECTED". Если в материале нет никакой новой фактуры по сравнению с 'ПРЕДЫДУЩИЙ КОНТЕКСТ СЮЖЕТА' — верни "text": "NO_UPDATE".
                 6. МАКРОКАТЕГОРИЯ: 1 верхнеуровневая категория (Политика, Экономика, Технологии и т.д.).
-                7. ЗАГОЛОВОК: Не общий, достаточно точно отражающий событие.
-                8. ПОЛНОТА ОТВЕТА (СТРОГО): В ответе ДОЛЖНО БЫТЬ РОВНО ${batch.size} объектов — по одному объекту на каждый входной id. Запрещено пропускать темы или объединять разные id в один объект.
+                7. ЗАГОЛОВОК: Конкретный, отражающий суть события, без кликбейта.
+                8. ПОЛНОТА ОТВЕТА (СТРОГО): В ответе ДОЛЖНО БЫТЬ РОВНО ${batch.size} объектов — по одному на каждый входной id.
                 
                 ЯЗЫК: $lang.
                 ФОРМАТ (СТРОГО JSON):
@@ -1388,6 +1420,8 @@ class NewsSummarizer(private val llm: LLMClient) {
                             keywordsList.add(keywordsJson.getString(k))
                         }
                     }
+
+                    val fromBurst = obj.optBoolean("fromBurst", false)
 
                     val mappedKeywords = keywordsList.map { it.lowercase() }
                     val isBlitz = obj.optBoolean("isBlitz", false) || mappedKeywords.contains("другое") || mappedKeywords.contains("other") || mappedKeywords.contains("blitz")
@@ -1430,7 +1464,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                     }
 
                     topics.add(Topics(title, fullIdList, w,
-                        keywords = keywordsList, isBlitz = isBlitz))
+                        keywords = keywordsList, isBlitz = isBlitz, fromBurst = fromBurst))
                 } catch (_: Exception) {}
             }
 
@@ -1458,6 +1492,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             response: String,
             batch: List<SummaryPayload>,
             llmParser: LLMClient,
+            bannedWords: String,
             onContentBlocked: (() -> Unit)? = null
         ): ParsedSummaryBatch {
             val (jsonArray, _) = llmParser.safeParseJsonArray(response)
@@ -1503,7 +1538,9 @@ class NewsSummarizer(private val llm: LLMClient) {
                         continue
                     }
 
-                    if (original != null && summary.trim().length > 15) {
+                    if (original != null && summary.trim().length > 15 && !bannedWords.contains(macroTag ?: " null ")) {
+                        if (macroTag != null) MewsRepository.addTheme(macroTag)
+
                         results.add(SummaryResult(
                             id = original.topic.id,
                             summary = summary,

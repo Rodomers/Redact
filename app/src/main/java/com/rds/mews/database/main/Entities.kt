@@ -38,7 +38,8 @@ data class SourceEntity(
     @ColumnInfo(name = "last_err_msg") val lastErrMsg: String? = null,
     @ColumnInfo(name = "in_burst") val inBurst: Boolean = true,
     @ColumnInfo(name = "etag_hash") val etagHash: String? = null,
-    @ColumnInfo(name = "summarizing_last_sync") val summarizingLastSync: Long? = null
+    @ColumnInfo(name = "summarizing_last_sync") val summarizingLastSync: Long? = null,
+    @ColumnInfo(name = "show_media") val showMedia: Boolean = true
 )
 
 @Entity(
@@ -151,4 +152,12 @@ data class TitleMessageMap(
 data class TitleRelatedMap(
     @ColumnInfo(name = "title_id_1") val titleId1: Long,
     @ColumnInfo(name = "title_id_2") val titleId2: Long
+)
+
+@Entity(tableName = "themes")
+data class ThemeEntity(
+    @PrimaryKey
+    @ColumnInfo(name = "theme") val theme: String,
+    @ColumnInfo(name = "times_seen") val timesSeen: Long,
+    @ColumnInfo(name = "place") val place: Int
 )

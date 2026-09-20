@@ -134,6 +134,10 @@ class SourcesViewModel(private val repository: MewsRepository): ViewModel() {
         _groupStates.value = currentMap
     }
 
+    fun setShowMedia(id: Long, value: Boolean) {
+        repository.setShowSourceMedia(id, value)
+    }
+
     private var resolveJob: Job? = null
 
     fun setRssLinkBuffer(value: String) {

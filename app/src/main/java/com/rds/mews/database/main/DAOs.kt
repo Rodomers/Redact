@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import kotlin.math.max
 import kotlin.math.min
@@ -44,6 +45,9 @@ interface SourceDao {
 
     @Query("UPDATE sources SET in_burst = :value WHERE id = :id")
     suspend fun setInBurst(id: Long, value: Boolean)
+
+    @Query("UPDATE sources SET show_media = :value WHERE id = :id")
+    suspend fun setShowMedia(id: Long, value: Boolean)
 
     @Query("UPDATE sources SET last_sync_time = :syncTime WHERE id = :sourceId")
     suspend fun updateLastSyncTime(sourceId: Long, syncTime: Long)
@@ -201,6 +205,26 @@ interface TitleDao {
     suspend fun getChildTitle (currentId: Long): TitleEntity?
 
     @Query("""
+                WITH RECURSIVE descendants(id) AS (
+                    SELECT title_id_1 
+                    FROM title_related_map 
+                    WHERE title_id_2 = :titleId
+                    
+                    UNION ALL
+                    
+                    SELECT r.title_id_1 
+                    FROM title_related_map r
+                    INNER JOIN descendants d ON r.title_id_2 = d.id
+                )
+                SELECT t.* 
+                FROM titles t
+                INNER JOIN descendants d ON t.id = d.id
+                ORDER BY t.event_time DESC 
+                LIMIT 1
+            """)
+    suspend fun getLatestChild(titleId: Long): TitleEntity?
+
+    @Query("""
         SELECT m.* FROM messages m 
         INNER JOIN title_message_map map ON m.id = map.message_id 
         WHERE map.title_id = :titleId
@@ -281,4 +305,27 @@ interface TitleDao {
             insertTitleRelatedMap(TitleRelatedMap(firstId, secondId))
         }
     }
+}
+@Dao
+interface ThemesDao {
+    @Query("SELECT * FROM themes ORDER BY times_seen DESC")
+    fun getAllThemesFlow(): Flow<List<ThemeEntity>>
+
+    @Query("SELECT * FROM themes WHERE theme = :theme")
+    suspend fun getTheme(theme: String): ThemeEntity?
+
+    @Upsert
+    suspend fun upsertTheme(theme: ThemeEntity)
+
+    @Query("UPDATE themes SET times_seen = times_seen + :additionalTimes WHERE theme = :theme")
+    suspend fun addTimesSeen(theme: String, additionalTimes: Long)
+
+    @Query("UPDATE themes SET place = :newPlace WHERE theme = :theme")
+    suspend fun setPlace(theme: String, newPlace: Int)
+
+    @Query("DELETE FROM themes WHERE theme = :theme")
+    suspend fun deleteTheme(theme: String)
+
+    @Query("SELECT MAX(place) FROM themes")
+    suspend fun getMaxPlace(): Int?
 }

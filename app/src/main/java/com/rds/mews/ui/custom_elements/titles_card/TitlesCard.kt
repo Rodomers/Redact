@@ -165,6 +165,8 @@ fun TitlesCard(
     val expansionAnim = remember { Animatable(if (isExpanded) 1f else 0f) }
     val isRead = title.isRead
 
+    val dynamicMediaUrls = dynamicMediaUrls?.filter { it.message?.source?.showMedia ?: false }
+
     LaunchedEffect(isExpanded, expansionAnim.value == 0f) {
         if (!isExpanded && expansionAnim.value == 0f) {
             isPopupReady = false
@@ -1006,7 +1008,7 @@ private fun ExpandedCardContent(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
-                                            text = stringResource(R.string.titles_card_background),
+                                            text = stringResource(R.string.titles_card_continued),
                                             style = MaterialTheme.typography.labelLarge,
                                             color = MaterialTheme.colorScheme.onSecondaryContainer
                                         )
@@ -1181,7 +1183,7 @@ private fun ExpandedCardContent(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
-                                            text = stringResource(R.string.titles_card_continued),
+                                            text = stringResource(R.string.titles_card_background),
                                             style = MaterialTheme.typography.labelLarge,
                                             color = MaterialTheme.colorScheme.onSecondaryContainer
                                         )

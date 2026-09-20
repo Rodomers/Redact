@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rds.mews.core.summarizer.LLMClient
 import com.rds.mews.core.summarizer.NewsSummarizer
+import com.rds.mews.localcore.TooltipOptions
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.localcore.isScheduleExactAlarm
 import com.rds.mews.repositories.MewsRepository
@@ -120,8 +122,8 @@ fun MainScreen(mainActivity: MainActivity) {
         var holdProgress by remember { mutableFloatStateOf(0f) }
         var isHolding by remember { mutableStateOf(false) }
         var blitzCenterOffset by remember { mutableStateOf(Offset.Zero) }
-        var showBlitzTooltip by remember { mutableStateOf(false) }
-        val showSummaryTooltip by MewsRepository.showSummaryTooltip.collectAsStateWithLifecycle()
+
+        val tooltipState by MewsRepository.tooltipState.collectAsStateWithLifecycle()
 
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()
@@ -139,13 +141,6 @@ fun MainScreen(mainActivity: MainActivity) {
         )
 
         var isTabClick by remember { mutableStateOf(false) }
-
-        LaunchedEffect(showBlitzTooltip) {
-            if (showBlitzTooltip) {
-                delay(3500)
-                showBlitzTooltip = false
-            }
-        }
 
         LaunchedEffect(selectedTab) {
             val targetIndex = tabs.indexOf(selectedTab)
@@ -247,7 +242,8 @@ fun MainScreen(mainActivity: MainActivity) {
                                         blitzViewModel.scrollToTop()
                                     } else {
                                         titlesViewModel.scrollToTop()
-                                        showBlitzTooltip = true
+                                        MewsRepository.setTooltipState(TooltipOptions.BLITZ_TOOLTIP)
+//                                        showBlitzTooltip = true
                                     }
                                 }
                                 TabScreen.Settings -> settingsViewModel.scrollToTop()
@@ -268,9 +264,9 @@ fun MainScreen(mainActivity: MainActivity) {
                     },
                     isBlitzActive = isBlitzActive,
                     isOnline = isOnline,
-                    showBlitzTooltip = showBlitzTooltip,
                     modifier = Modifier.align(Alignment.BottomCenter),
-                    showSummaryTooltip = showSummaryTooltip
+                    tooltipOption = tooltipState,
+                    setDefaultTooltip = { MewsRepository.setTooltipState(TooltipOptions.DEFAULT) }
                 )
             }
         }

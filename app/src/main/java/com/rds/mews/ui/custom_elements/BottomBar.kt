@@ -77,6 +77,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.rds.mews.R
+import com.rds.mews.localcore.TooltipOptions
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -114,7 +115,9 @@ fun MyBottomBar(
     isBlitzActive: Boolean = false,
     showBlitzTooltip: Boolean = false,
     isOnline: Boolean? = null,
-    showSummaryTooltip: Boolean = false
+    showSummaryTooltip: Boolean = false,
+    tooltipOption: TooltipOptions,
+    setDefaultTooltip: () -> Unit
 ) {
     val tooltipChannel = remember { Channel<TooltipMessage>(Channel.UNLIMITED) }
     var currentTooltipTextId by remember { mutableIntStateOf(0) }
@@ -202,50 +205,36 @@ fun MyBottomBar(
         }
     }
 
-    LaunchedEffect(isOnline) {
-        if (isOnline == null) return@LaunchedEffect
-        val previous = previousIsOnline
-        previousIsOnline = isOnline
-
-        when (isOnline) {
-            false -> {
-                tooltipChannel.send(
-                    TooltipMessage(
-                        textRes = R.string.tooltip_no_network,
-                        durationMs = 5000L
-                    )
+    LaunchedEffect(tooltipOption) {
+        when (tooltipOption) {
+            TooltipOptions.IS_ONLINE -> tooltipChannel.send(
+                TooltipMessage(
+                    textRes = R.string.tooltip_network_restored,
+                    durationMs = tooltipOption.duration
                 )
-            }
-            true -> {
-                if (previous == null) return@LaunchedEffect
-                tooltipChannel.send(
-                    TooltipMessage(
-                        textRes = R.string.tooltip_network_restored,
-                        durationMs = 2000L
-                    )
-                )
-            }
-        }
-    }
-
-    LaunchedEffect(showSummaryTooltip) {
-        if (!showSummaryTooltip) return@LaunchedEffect
-        tooltipChannel.send(
-            TooltipMessage(
-                textRes = R.string.summary_tooltip,
-                durationMs = 5000L
             )
-        )
-    }
 
-    LaunchedEffect(showBlitzTooltip) {
-        if (showBlitzTooltip) {
-            tooltipChannel.send(
+            TooltipOptions.IS_OFFLINE -> tooltipChannel.send(
+                TooltipMessage(
+                    textRes = R.string.tooltip_no_network,
+                    durationMs = tooltipOption.duration
+                )
+            )
+
+            TooltipOptions.SUMMARY_TOOLTIP -> tooltipChannel.send(
+                TooltipMessage(
+                    textRes = R.string.summary_tooltip,
+                    durationMs = tooltipOption.duration
+                )
+            )
+
+            TooltipOptions.BLITZ_TOOLTIP -> tooltipChannel.send(
                 TooltipMessage(
                     textRes = R.string.tabscreen_tooltip_blitz,
-                    durationMs = 3000L
+                    durationMs = tooltipOption.duration
                 )
             )
+            else -> return@LaunchedEffect
         }
     }
 

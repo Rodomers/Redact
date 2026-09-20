@@ -71,7 +71,6 @@ import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.TitleCardStates
 import com.rds.mews.localcore.TitlesGroupState
 import com.rds.mews.localcore.mapResultToUiResources
-import com.rds.mews.localcore.updatingStateInterpreter
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
@@ -92,7 +91,6 @@ import androidx.compose.ui.res.pluralStringResource
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.UpdatingState
-import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.viewmodels.TitlesScrollEvent
 

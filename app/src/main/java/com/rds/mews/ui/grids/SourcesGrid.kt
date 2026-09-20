@@ -1,12 +1,12 @@
 package com.rds.mews.ui.grids
 
 import android.content.Context
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -44,7 +46,9 @@ import com.rds.mews.ui.custom_elements.SourcesCard
 import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.EditSourceBottomSheet
 import com.rds.mews.ui.custom_elements.SourcesAddCard
+import com.rds.mews.ui.custom_elements.SourcesCardExpansionOverlay
 import com.rds.mews.ui.custom_elements.customHeader
+import com.rds.mews.ui.custom_elements.titles_card.RootViewOverlay
 import com.rds.mews.viewmodels.SourcesViewModel
 import kotlinx.coroutines.launch
 
@@ -98,7 +102,8 @@ fun SourcesScreen(
         setRssLinkBuffer = viewModel::setRssLinkBuffer,
         onCardExpanded = viewModel::setCardExpanded,
         resetErrCount = viewModel::resetErrCount,
-        setInBurst = viewModel::setInBurst
+        setInBurst = viewModel::setInBurst,
+        setShowMedia = viewModel::setShowMedia
     )
 }
 
@@ -129,7 +134,8 @@ fun SourcesGrid(
     setRssLinkBuffer: (String) -> Unit,
     onCardExpanded: (Long) -> Unit,
     resetErrCount: (Long) -> Unit,
-    setInBurst: (Long, Boolean) -> Unit
+    setInBurst: (Long, Boolean) -> Unit,
+    setShowMedia: (Long, Boolean) -> Unit
 ) {
     val handler = LocalUriHandler.current
 
@@ -154,7 +160,7 @@ fun SourcesGrid(
                 setShowAddDialog(false)
                 setSourceNameBuffer("")
                 setRssLinkBuffer("")
-                               },
+            },
             sheetState = bottomSheetState,
             scope = scope
         )
@@ -188,91 +194,125 @@ fun SourcesGrid(
                 try {
                     handler.openUri(changedSource.websiteUrl)
                 } catch (_: Exception) {}
-                          },
+            },
             onDismissRequest = {
                 setChangeSource(null)
                 setSourceNameBuffer("")
-                               },
+            },
             sheetState = bottomSheetState,
             scope = scope
         )
     }
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 10.dp),
-        contentPadding = WindowInsets.statusBars.asPaddingValues(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        state = gridState
-    ) {
-        if (groupedItems.isEmpty()) {
-            customHeader(
-                textId = R.string.no_sources,
-                expandable = false
-            )
-        }
+    var expandedBounds by remember { mutableStateOf<Rect?>(null) }
+    var selectedRssId by remember { mutableStateOf<Long?>(null) }
 
-        groupedItems.toSortedMap().forEach { (source, itemsForSource) ->
-            val isExpanded = groupStates.find { it.group == source }?.expanded ?: false
+    val selectedRss = remember(groupedItems, selectedRssId) {
+        if (selectedRssId == null) null
+        else groupedItems.values.flatten().find { it.id == selectedRssId }
+    }
 
-            customHeader(
-                textId = sourcesTypeInterpreter(source),
-                isExpanded = isExpanded,
-                onHeaderClick = { changeGroupState(source) },
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp)
+                .then(
+                    if (selectedRssId != null && expandedBounds != null) {
+                        Modifier.blur(radius = 16.dp)
+                    } else Modifier
+                ),
+            contentPadding = WindowInsets.statusBars.asPaddingValues(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            state = gridState
+        ) {
+            if (groupedItems.isEmpty()) {
+                customHeader(
+                    textId = R.string.no_sources,
+                    expandable = false
+                )
+            }
 
-            items(
-                items = itemsForSource,
-                key = { it.id }
-            ) { item ->
-                ExpandableContainer(
-                    visible = isExpanded
-                ) {
-                    Box(modifier = Modifier.padding(bottom = verticalArrangement * 2)) {
-                        val buttons = listOf(
-                            TextButtonInputs(stringResource(R.string.source_change), {
-                                setChangeSource(
-                                    item
-                                )
-                            }),
-                            TextButtonInputs(
-                                stringResource(R.string.source_delete),
-                                { setDelSource(item) })
-                        )
+            groupedItems.toSortedMap().forEach { (source, itemsForSource) ->
+                val isExpanded = groupStates.find { it.group == source }?.expanded ?: false
 
-                        SourcesCard(
-                            rss = item,
-                            buttons = buttons,
-                            avatarUrl = item.avatarUrl,
-                            timeText = when (item.lastUpdated) {
-                                in listOf(0L, null) -> "-"
-                                else -> getFormattedTimeUnix(item.lastUpdated ?: 0L)
-                            },
-                            isExpanded = item.id in expandedCards,
-                            onExpanded = { onCardExpanded(item.id) },
-                            onResetErrors = { resetErrCount(item.id) },
-                            setInBurst = { setInBurst(item.id, it) }
-                        )
+                customHeader(
+                    textId = sourcesTypeInterpreter(source),
+                    isExpanded = isExpanded,
+                    onHeaderClick = { changeGroupState(source) },
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+
+                items(
+                    items = itemsForSource,
+                    key = { it.id }
+                ) { item ->
+                    ExpandableContainer(
+                        visible = isExpanded
+                    ) {
+                        Box(modifier = Modifier.padding(bottom = verticalArrangement * 2)) {
+                            SourcesCard(
+                                rss = item,
+                                avatarUrl = item.avatarUrl,
+                                timeText = when (item.lastUpdated) {
+                                    in listOf(0L, null) -> "-"
+                                    else -> getFormattedTimeUnix(item.lastUpdated ?: 0L)
+                                },
+                                isExpanded = selectedRssId == item.id,
+                                onClick = { bounds ->
+                                    expandedBounds = bounds
+                                    selectedRssId = item.id
+                                }
+                            )
+                        }
                     }
                 }
             }
-        }
 
+            if (newSourcesPermitted) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                item {
+                    SourcesAddCard({ setShowAddDialog(true) }, transitionState = showAddDialog)
+                }
+            }
 
-        if (newSourcesPermitted) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            item {
-                SourcesAddCard({ setShowAddDialog(true) }, transitionState = showAddDialog)
+                Spacer(modifier = Modifier.height(bottomSpacer + verticalArrangement))
             }
         }
 
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Spacer(modifier = Modifier.height(bottomSpacer + verticalArrangement))
+        if (selectedRss != null && expandedBounds != null) {
+            val buttons = listOf(
+                TextButtonInputs(stringResource(R.string.source_change), {
+                    setChangeSource(selectedRss)
+                }),
+                TextButtonInputs(stringResource(R.string.source_delete), {
+                    setDelSource(selectedRss)
+                })
+            )
+
+            RootViewOverlay {
+                SourcesCardExpansionOverlay(
+                    rss = selectedRss,
+                    buttons = buttons,
+                    avatarUrl = selectedRss.avatarUrl,
+                    timeText = when (selectedRss.lastUpdated) {
+                        in listOf(0L, null) -> "-"
+                        else -> getFormattedTimeUnix(selectedRss.lastUpdated ?: 0L)
+                    },
+                    collapsedBounds = expandedBounds!!,
+                    onDismissRequest = {
+                        selectedRssId = null
+                        expandedBounds = null
+                    },
+                    onResetErrors = resetErrCount,
+                    setInBurst = { inBurst -> setInBurst(selectedRss.id, inBurst) },
+                    setShowMedia = { showMedia -> setShowMedia(selectedRss.id, showMedia) }
+                )
+            }
         }
     }
 }

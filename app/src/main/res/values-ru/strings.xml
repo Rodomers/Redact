@@ -27,6 +27,8 @@
     <string name="link">Ссылка</string>
     <string name="source_track">Отслеживать</string>
     <string name="source_do_not_track">Не отслеживать</string>
+    <string name="source_show_media">Использовать медиа</string>
+    <string name="source_do_not_show_media">Не использовать медиа</string>
 
     <string name="titles_update_text">Потяните вниз,\nчтобы обновить</string>
     <string name="today">сегодня</string>

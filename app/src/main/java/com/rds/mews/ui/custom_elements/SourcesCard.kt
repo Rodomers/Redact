@@ -1,20 +1,14 @@
 package com.rds.mews.ui.custom_elements
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -24,11 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,20 +32,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.rds.mews.R
-import com.rds.mews.localcore.IconButtonInputs
 import com.rds.mews.localcore.RSS
 import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.ui.theme.Shapes
@@ -66,247 +61,256 @@ import kotlin.time.Duration.Companion.milliseconds
 @Composable
 fun SourcesCard(
     rss: RSS,
+    avatarUrl: String?,
+    timeText: String,
+    onClick: (Rect) -> Unit,
+    modifier: Modifier = Modifier,
+    isExpanded: Boolean = false,
+    onExpanded: (() -> Unit)? = null
+) {
+    var cardBounds by remember { mutableStateOf<Rect?>(null) }
+    val primaryColor = MaterialTheme.colorScheme.secondaryContainer
+    val hasErrors = rss.errCount >= 3
+    val menuColor = Color(0xFF2B2D30)
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .onGloballyPositioned { coordinates ->
+                cardBounds = coordinates.boundsInWindow()
+            }
+            .alpha(if (isExpanded) 0f else 1f)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {
+                    cardBounds?.let { bounds ->
+                        onClick(bounds)
+                        onExpanded?.invoke()
+                    }
+                }
+            ),
+        shape = Shapes.large,
+        color = primaryColor,
+        shadowElevation = 0.dp
+    ) {
+        SourcesCardContent(
+            rss = rss,
+            avatarUrl = avatarUrl,
+            timeText = timeText,
+            hasErrors = hasErrors,
+            menuColor = menuColor
+        )
+    }
+}
+
+@Composable
+fun SourcesCardContent(
+    rss: RSS,
+    avatarUrl: String?,
+    timeText: String,
+    hasErrors: Boolean,
+    menuColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val scope = rememberCoroutineScope()
+    var showZhdun by remember(avatarUrl) { mutableStateOf(false) }
+
+    LaunchedEffect(avatarUrl) {
+        delay(200.milliseconds)
+        showZhdun = true
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+    ) {
+        if (avatarUrl != null) {
+            var isImageLoaded by remember(avatarUrl) { mutableStateOf(false) }
+            var retryCount by remember(avatarUrl) { mutableIntStateOf(0) }
+            val context = LocalContext.current
+            val imageRequest = remember(avatarUrl, retryCount) {
+                ImageRequest.Builder(context)
+                    .data(avatarUrl)
+                    .crossfade(false)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .build()
+            }
+
+            if (!isImageLoaded && showZhdun) {
+                Image(
+                    painter = painterResource(R.drawable.zhdun),
+                    contentDescription = null,
+                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSecondaryContainer),
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .scale(0.7f)
+                )
+            }
+
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+                onSuccess = { isImageLoaded = true },
+                onError = {
+                    isImageLoaded = false
+                    if (retryCount < 3) {
+                        scope.launch {
+                            delay((2000L * (retryCount + 1)).milliseconds)
+                            retryCount++
+                        }
+                    }
+                }
+            )
+        } else {
+            Image(
+                painter = painterResource(R.drawable.zhdun),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSecondaryContainer),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scale(0.7f)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .background(menuColor.copy(alpha = 0.85f), CircleShape)
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = rss.currentName ?: rss.originalName,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(12.dp)
+                .background(menuColor.copy(alpha = 0.85f), CircleShape)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = timeText,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(
+                        color = if (hasErrors) Color.Red else Color.Green,
+                        shape = CircleShape
+                    )
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SourcesCardExpansionOverlay(
+    rss: RSS,
     buttons: List<TextButtonInputs>,
     avatarUrl: String?,
     timeText: String,
-    isExpanded: Boolean,
-    onExpanded: () -> Unit,
+    collapsedBounds: Rect,
+    onDismissRequest: () -> Unit,
     onResetErrors: (Long) -> Unit,
-    setInBurst: (Boolean) -> Unit
+    setInBurst: (Boolean) -> Unit,
+    setShowMedia: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val menuTransitionState = remember { MutableTransitionState(isExpanded) }
-    LaunchedEffect(isExpanded) {
-        menuTransitionState.targetState = isExpanded
-    }
-
-    val scope = rememberCoroutineScope()
-
-    val blurRadius by animateDpAsState(
-        targetValue = if (menuTransitionState.targetState) 16.dp else 0.dp,
-        label = "blurAnimation"
-    )
-
+    val density = LocalDensity.current
     val hasErrors = rss.errCount >= 3
-    val primaryColor = MaterialTheme.colorScheme.secondaryContainer
     val resetErrText = stringResource(R.string.source_reset_errors)
-
     val doNotTrackText = stringResource(R.string.source_do_not_track)
     val trackText = stringResource(R.string.source_track)
+    val showMedia = stringResource(R.string.source_show_media)
+    val doNotShowMedia = stringResource(R.string.source_do_not_show_media)
 
-    val currentButtons = remember(buttons, hasErrors, rss.inBurst) {
-        val list = buttons.toMutableList()
+    val imageSideDp = with(density) { collapsedBounds.width.toDp() }
+    val actionsMaxHeight = imageSideDp * (3f / 4f)
+
+    val currentButtons = remember(buttons, hasErrors, rss.inBurst, rss.showMedia) {
+        val list = mutableListOf<TextButtonInputs>()
         if (hasErrors) {
             list.add(
                 TextButtonInputs(
                     text = resetErrText,
-                    action = {
-                        onResetErrors(rss.id)
-                    }
+                    action = { onResetErrors(rss.id) }
                 )
             )
         }
+        list.addAll(buttons)
         list.add(
             TextButtonInputs(
-                if (rss.inBurst) doNotTrackText else trackText,
-                { setInBurst(!rss.inBurst) }
+                text = if (rss.inBurst) doNotTrackText else trackText,
+                action = { setInBurst(!rss.inBurst) }
+            )
+        )
+        list.add(
+            TextButtonInputs(
+                text = if (rss.showMedia) doNotShowMedia else showMedia,
+                action = { setShowMedia(!rss.showMedia) }
             )
         )
         list
     }
 
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f),
-        shape = Shapes.large,
-        color = primaryColor,
-        shadowElevation = 0.dp
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-
-            Box(
+    DetachableOverlayCard(
+        collapsedBounds = collapsedBounds,
+        onDismissRequest = onDismissRequest,
+        actionsMaxHeight = actionsMaxHeight,
+        modifier = modifier,
+        mainContent = {
+            SourcesCardContent(
+                rss = rss,
+                avatarUrl = avatarUrl,
+                timeText = timeText,
+                hasErrors = hasErrors,
+                menuColor = Color(0xFF2B2D30)
+            )
+        },
+        actionsContent = {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
-                    .fillMaxSize()
-                    .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
+                    .fillMaxWidth()
+                    .padding(12.dp)
             ) {
-                if (avatarUrl != null) {
-                    var isImageLoaded by remember { mutableStateOf(false) }
-                    var retryCount by remember(avatarUrl) { mutableIntStateOf(0) }
-
-                    val context = LocalContext.current
-                    val imageRequest = remember(avatarUrl, retryCount) {
-                        ImageRequest.Builder(context)
-                            .data(avatarUrl)
-                            .crossfade(true)
-                            .placeholder(R.drawable.zhdun)
-                            .error(R.drawable.zhdun)
-//                            .memoryCacheKey("$avatarUrl-$retryCount")
-                            .build()
-                    }
-
-                    AsyncImage(
-                        model = imageRequest,
-                        contentDescription = null,
-                        colorFilter = if (!isImageLoaded)
-                            ColorFilter.tint(MaterialTheme.colorScheme.onSecondaryContainer)
-                        else null,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .scale(if (isImageLoaded) 1f else 0.7f),
-                        onSuccess = { isImageLoaded = true },
-                        onError = {
-                            isImageLoaded = false
-                            if (retryCount < 3) {
-                                scope.launch {
-                                    delay((2000L * (retryCount + 1)).milliseconds)
-                                    retryCount++
-                                }
-                            }
-                        },
-                        onLoading = { isImageLoaded = false }
+                currentButtons.forEach { btn ->
+                    CustomTextButton(
+                        inputs = TextButtonInputs(
+                            text = btn.text,
+                            action = {
+                                btn.action()
+                                onDismissRequest()
+                            },
+                            toast = btn.toast
+                        ),
+                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = Shapes.large
                     )
-                } else {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(R.drawable.zhdun)
-                            .crossfade(true)
-                            .build(),
-                        colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSecondaryContainer),
-                        contentDescription = null,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .scale(0.7f)
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(12.dp)
-                        .background(Color(0xFF2B2D30).copy(alpha = 0.85f), CircleShape)
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = rss.currentName ?: rss.originalName,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(12.dp)
-                        .background(Color(0xFF2B2D30).copy(alpha = 0.85f), CircleShape)
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = timeText,
-                        color = Color.White,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(
-                                color = if (hasErrors) Color.Red else Color.Green,
-                                shape = CircleShape
-                            )
-                    )
-                }
-
-                CustomIconButton(
-                    inputs = IconButtonInputs(Icons.Default.MoreVert, action = onExpanded),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(64.dp)
-                        .padding(12.dp),
-                    transitionState = menuTransitionState,
-                    defaultBackgroundColor = Color(0xFF2B2D30).copy(alpha = 0.85f),
-                    defaultContentColor = Color.White,
-                    shape = CircleShape
-                )
-            }
-
-            AnimatedVisibility(
-                visible = menuTransitionState.targetState,
-                enter = fadeIn(animationSpec = tween(durationMillis = 300)),
-                exit = fadeOut(animationSpec = tween(durationMillis = 300)),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(primaryColor.copy(alpha = 0.8f))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            onExpanded()
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 16.dp)
-                            .verticalScroll(rememberScrollState()),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        currentButtons.forEachIndexed { index, btn ->
-                            AnimatedVisibility(
-                                visible = menuTransitionState.targetState,
-                                enter = fadeIn(
-                                    animationSpec = tween(
-                                        durationMillis = 300,
-                                        delayMillis = index * 50
-                                    )
-                                ) + slideInVertically(
-                                    animationSpec = tween(
-                                        durationMillis = 300,
-                                        delayMillis = index * 50
-                                    ),
-                                    initialOffsetY = { 50 }
-                                ),
-                                exit = fadeOut(
-                                    animationSpec = tween(
-                                        durationMillis = 200,
-                                        delayMillis = (currentButtons.size - 1 - index) * 30
-                                    )
-                                ) + slideOutVertically(
-                                    animationSpec = tween(
-                                        durationMillis = 200,
-                                        delayMillis = (currentButtons.size - 1 - index) * 30
-                                    ),
-                                    targetOffsetY = { 50 }
-                                )
-                            ) {
-                                CustomTextButton(
-                                    inputs = TextButtonInputs(
-                                        text = btn.text,
-                                        action = {
-                                            btn.action()
-                                            onExpanded()
-                                        },
-                                        toast = btn.toast
-                                    ),
-                                    defaultBackgroundColor = Color(0xFF2B2D30),
-                                    defaultContentColor = Color.White,
-                                    shape = CircleShape
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
-    }
+    )
 }
 
 @Composable
@@ -314,7 +318,7 @@ fun SourcesAddCard(
     action: () -> Unit,
     transitionState: Boolean? = null
 ) {
-    val buttonTransitionState = remember { MutableTransitionState(transitionState == true) }
+    val buttonTransitionState = remember { androidx.compose.animation.core.MutableTransitionState(transitionState == true) }
     buttonTransitionState.targetState = transitionState == true
 
     val primaryColor = MaterialTheme.colorScheme.secondaryContainer

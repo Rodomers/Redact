@@ -211,3 +211,17 @@ enum class UpdatingState(val stringId: Int, val id: Int) {
         }
     }
 }
+@Serializable
+enum class TooltipOptions(val id: Int, val duration: Long) {
+    DEFAULT(0, 0),
+    IS_OFFLINE(1, 5000),
+    IS_ONLINE(2, 2000),
+    SUMMARY_TOOLTIP(3, 5000),
+    BLITZ_TOOLTIP(4, 3000);
+
+    companion object {
+        fun fromId(key: Int): TooltipOptions {
+            return entries.find { it.id == key } ?: DEFAULT
+        }
+    }
+}

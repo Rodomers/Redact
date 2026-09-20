@@ -26,7 +26,8 @@ data class RSS(
     val inBurst: Boolean,
     val errCount: Int,
     val lastUpdated: Long?,
-    val avatarUrl: String?
+    val avatarUrl: String?,
+    val showMedia: Boolean
 )
 data class Title(
     var id: Long,

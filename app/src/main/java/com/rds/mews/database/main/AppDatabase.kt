@@ -14,10 +14,11 @@ import com.rds.mews.localcore.defineSourceType
         SourceEntity::class,
         MessageEntity::class,
         TitleEntity::class,
+        ThemeEntity::class,
         TitleMessageMap::class,
         TitleRelatedMap::class
     ],
-    version = 8,
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -26,6 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun sourceDao(): SourceDao
     abstract fun messageDao(): MessageDao
     abstract fun titleDao(): TitleDao
+    abstract fun themesDao(): ThemesDao
 
     suspend fun insertBatchAndUpdateSourceTime(
         messages: List<MessageEntity>,
@@ -229,6 +231,25 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE 'sources' ADD COLUMN 'in_burst' INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE 'sources' ADD COLUMN 'show_media' INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `themes` (
+                                `theme` TEXT NOT NULL, 
+                                `times_seen` INTEGER NOT NULL, 
+                                `place` INTEGER NOT NULL, 
+                                PRIMARY KEY(`theme`)
+                            )
+                        """.trimIndent())
             }
         }
     }

@@ -1,9 +1,11 @@
 package com.rds.mews.core.text
 
 import com.rds.mews.core.text.graph.GraphCache
+import com.rds.mews.repositories.KeywordStatsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
+import kotlin.math.min
 
 object TextComparator {
     private data class Alias(
@@ -22,6 +24,28 @@ object TextComparator {
         }
 
         return countThreshold(text1, text2) >= threshold
+    }
+
+    suspend fun compareKeywords(keywords1: List<String>, keywords2: List<String>): Double {
+        if (keywords1.isEmpty() || keywords2.isEmpty()) return 0.0
+        val enhanced1 = keywords1.flatMap { word ->
+            (KeywordStatsRepository.getStringAliases(word) + KeywordStatsRepository.getStringAliases(keyword = word)).distinct()
+        }
+        val enhanced2 = keywords2.flatMap { word ->
+            (KeywordStatsRepository.getStringAliases(word) + KeywordStatsRepository.getStringAliases(keyword = word)).distinct()
+        }
+
+        var kwMatches = 0
+        for (tk in enhanced1) {
+            for (hk in enhanced2) {
+                if (tk == hk || areSimilar(tk.lowercase(), hk.lowercase(), 0.7f)) {
+                    kwMatches++
+                    break
+                }
+            }
+        }
+
+        return kwMatches / min(keywords1.size, keywords2.size).toDouble()
     }
 
     fun countThreshold(text1: String, text2: String): Float {

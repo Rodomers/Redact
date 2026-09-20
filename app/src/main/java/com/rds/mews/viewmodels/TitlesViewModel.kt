@@ -389,11 +389,11 @@ class TitlesViewModel(
                 mediaLink = media.mediaLink.substringBefore("?"),
                 message = media.message
             )
+            // !cleanUrl.contains("telesco.pe") && !cleanUrl.contains("cdn-telegram.org")
         }.filter { media ->
             val cleanUrl = media.mediaLink.lowercase()
             !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") &&
-                    !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv") &&
-                    !cleanUrl.contains("telesco.pe") && !cleanUrl.contains("cdn-telegram.org")
+                    !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
         }.distinctBy { it.mediaLink }
 
         if (telegramLinks.isEmpty()) {

@@ -30,13 +30,17 @@ import com.rds.mews.settings_manager.AppSettings
 import com.rds.mews.settings_manager.SettingsManager
 import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.core.text.TextSanitizer
+import com.rds.mews.database.main.ThemeEntity
+import com.rds.mews.database.main.ThemesDao
 import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.workers.AlarmScheduler
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
 import java.util.Calendar
 import java.util.Date
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -47,6 +51,7 @@ object MewsRepository {
     private lateinit var sourceDao: SourceDao
     private lateinit var messageDao: MessageDao
     private lateinit var titleDao: TitleDao
+    private lateinit var themesDao: ThemesDao
 
     @SuppressLint("StaticFieldLeak")
     private lateinit var settingsManager: SettingsManager
@@ -94,6 +99,7 @@ object MewsRepository {
     lateinit var modelBatchInfo: StateFlow<Set<ModelBatchConfig>>
 
     lateinit var isOnline: StateFlow<Boolean?>
+    private var _previousIsOnline: Boolean? = null
 
     private val _context = MutableStateFlow<Context?>(null)
     private val _selectedTab = MutableStateFlow<TabScreen>(TabScreen.Sources)
@@ -119,6 +125,9 @@ object MewsRepository {
 
     private val _showSummaryTooltip = MutableStateFlow(false)
     val showSummaryTooltip = _showSummaryTooltip.asStateFlow()
+
+    private val _tooltipState = MutableStateFlow(TooltipOptions.DEFAULT)
+    val tooltipState = _tooltipState.asStateFlow()
 
     const val CURRENT_THEME = "current_theme"
     const val IS_MONET = "is_monet"
@@ -150,6 +159,8 @@ object MewsRepository {
     lateinit var titles: Flow<List<Title>>
     lateinit var blitzTitles: Flow<List<Title>>
 
+    lateinit var themes: Flow<List<ThemeEntity>>
+
     fun initialize(context: Context, externalScope: CoroutineScope) {
         if (isInitialized) return
         val appContext = context.applicationContext
@@ -161,11 +172,12 @@ object MewsRepository {
 //            }, java.util.concurrent.Executors.newSingleThreadExecutor())
             .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4,
                 AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7,
-                AppDatabase.MIGRATION_7_8)
+                AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10)
             .build()
         this.sourceDao = database.sourceDao()
         this.messageDao = database.messageDao()
         this.titleDao = database.titleDao()
+        this.themesDao = database.themesDao()
 
         this.settingsManager = SettingsManager(appContext)
         this.networkMonitor = NetworkMonitor(appContext)
@@ -249,6 +261,23 @@ object MewsRepository {
                 initialValue = null
             )
 
+        isOnline.onEach { state ->
+            when (state) {
+                true -> if (_previousIsOnline != null) setTooltipState(TooltipOptions.IS_ONLINE)
+                false -> setTooltipState(TooltipOptions.IS_OFFLINE)
+                null -> {}
+            }
+            _previousIsOnline = isOnline.value
+        }.launchIn(MewsRepository.externalScope)
+
+        showSummaryTooltip.onEach { state ->
+            when (state) {
+                true -> setTooltipState(TooltipOptions.SUMMARY_TOOLTIP)
+                else -> if (_tooltipState.value == TooltipOptions.SUMMARY_TOOLTIP) setTooltipState(
+                    TooltipOptions.DEFAULT)
+            }
+        }.launchIn(MewsRepository.externalScope)
+
         lastError = settingsFlow.map { settings ->
             val saved = settings.lastError
             if (saved != null) {
@@ -282,7 +311,8 @@ object MewsRepository {
                         inBurst = it.inBurst,
                         errCount = it.errCount,
                         lastUpdated = it.lastSyncTime,
-                        avatarUrl = null
+                        avatarUrl = null,
+                        showMedia = it.showMedia
                     ) }
             }
             .flowOn(Dispatchers.IO)
@@ -384,6 +414,8 @@ object MewsRepository {
             }
             .flowOn(Dispatchers.Default)
 
+        themes = themesDao.getAllThemesFlow().flowOn(Dispatchers.IO)
+
         isInitialized = true
     }
 
@@ -458,7 +490,8 @@ object MewsRepository {
             errCount = source.errCount,
             lastUpdated = source.lastSyncTime,
             avatarUrl = null,
-            inBurst = source.inBurst
+            inBurst = source.inBurst,
+            showMedia = source.showMedia
         ) else null
     }
 
@@ -474,7 +507,8 @@ object MewsRepository {
                 inBurst = source.inBurst,
                 errCount = source.errCount,
                 lastUpdated = source.lastSyncTime,
-                avatarUrl = null
+                avatarUrl = null,
+                showMedia = source.showMedia
             )
         }
     }
@@ -496,7 +530,8 @@ object MewsRepository {
                         errCount = entity.errCount,
                         lastUpdated = entity.lastSyncTime,
                         avatarUrl = fetchedAvatar,
-                        inBurst = entity.inBurst
+                        inBurst = entity.inBurst,
+                        showMedia = entity.showMedia
                     )
                 }
             }
@@ -547,15 +582,22 @@ object MewsRepository {
         }
     }
 
+    fun setShowSourceMedia(sourceId: Long, value: Boolean) {
+        externalScope.launch(Dispatchers.IO) {
+            sourceDao.setShowMedia(sourceId, value)
+        }
+    }
+
     fun startTitlesUpdate(context: Context) {
         setTitlesUpdate(context)
     }
 
-    fun manuallyLinkTopics(childId: Long, parentId: Long) {
+    fun linkTopics(childId: Long, parentId: Long) {
         externalScope.launch(Dispatchers.IO) {
             try {
-                titleDao.insertRelatedMapSafe(childId, parentId)
-                Log.d("Mews", "Успешно связали новость $childId с родителем $parentId")
+                val linkId = titleDao.getLatestChild(parentId)?.id ?: parentId
+                if (titleDao.getChildTitle(linkId) == null) titleDao.insertRelatedMapSafe(childId, linkId)
+                Log.d("Mews", "Успешно связали новость $childId с родителем $linkId")
             } catch (e: Exception) {
                 Log.e("Mews", "Ошибка при связывании", e)
             }
@@ -928,6 +970,14 @@ object MewsRepository {
         _showSummaryTooltip.value = value
     }
 
+    @Synchronized
+    fun setTooltipState(value: TooltipOptions) {
+        externalScope.launch(Dispatchers.Default) {
+            _tooltipState.first { it == TooltipOptions.DEFAULT }
+            _tooltipState.value = value
+        }
+    }
+
     fun saveLastError(failure: SummarizationResult.Failure) {
         if (failure.type == SummarizationErrorType.JOB_CANCELLED && _stoppedManually.value) _stoppedManually.value = false
         else externalScope.launch { settingsManager.saveLastError(failure) }
@@ -1044,6 +1094,50 @@ object MewsRepository {
     fun resetAllSourceErrors() {
         externalScope.launch(Dispatchers.IO) {
             sourceDao.resetAllErrorCounts()
+        }
+    }
+
+    fun upsertTheme(theme: ThemeEntity) {
+        externalScope.launch(Dispatchers.IO) {
+            themesDao.upsertTheme(theme)
+        }
+    }
+
+    fun addThemeTimesSeen(theme: String, additionalTimes: Long) {
+        externalScope.launch(Dispatchers.IO) {
+            themesDao.addTimesSeen(theme, additionalTimes)
+        }
+    }
+
+    private val themeMutex = Mutex()
+
+    suspend fun addTheme(theme: String) = themeMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val existing = themesDao.getTheme(theme)
+            if (existing == null) {
+                val nextPlace = (themesDao.getMaxPlace() ?: 0) + 1
+                themesDao.upsertTheme(
+                    ThemeEntity(
+                        theme = theme,
+                        place = nextPlace,
+                        timesSeen = 1
+                    )
+                )
+            } else {
+                themesDao.addTimesSeen(theme, 1)
+            }
+        }
+    }
+
+    fun setThemePlace(theme: String, newPlace: Int) {
+        externalScope.launch(Dispatchers.IO) {
+            themesDao.setPlace(theme, newPlace)
+        }
+    }
+
+    fun deleteTheme(theme: String) {
+        externalScope.launch(Dispatchers.IO) {
+            themesDao.deleteTheme(theme)
         }
     }
 

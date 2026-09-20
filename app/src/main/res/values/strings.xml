@@ -29,6 +29,8 @@
     <string name="link">Link</string>
     <string name="source_track">Track</string>
     <string name="source_do_not_track">Do not track</string>
+    <string name="source_show_media">Show media</string>
+    <string name="source_do_not_show_media">Do not show media</string>
 
     <string name="titles_update_text">Pull down to update</string>
     <string name="today">today</string>

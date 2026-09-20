@@ -5,6 +5,7 @@ import com.rds.mews.database.keyword_stats.KeywordStatsDao
 import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.rds.mews.core.text.TextComparator
 import com.rds.mews.database.keyword_stats.BurstClusterDao
 import com.rds.mews.database.keyword_stats.BurstClusterEntity
 import com.rds.mews.database.keyword_stats.EntityDictionaryDao
@@ -16,9 +17,13 @@ import com.rds.mews.database.keyword_stats.TermAliasDao
 import com.rds.mews.database.keyword_stats.TermAliasEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.ln
+import kotlin.math.max
 import kotlin.math.pow
 
 enum class EntityCategories(val category: String) {
@@ -45,6 +50,8 @@ object KeywordStatsRepository {
     private lateinit var burstClusterDao: BurstClusterDao
     private lateinit var termAliasDao: TermAliasDao
 
+    private lateinit var burstClusters: Flow<List<BurstClusterEntity>>
+
 //    lateinit var keywordStats: Flow<List<KeywordStatEntity>>
 //    lateinit var entities: Flow<List<EntityDictionaryEntity>>
 //    lateinit var knowledgeGraph: Flow<List<KnowledgeGraphEntity>>
@@ -70,6 +77,8 @@ object KeywordStatsRepository {
         this.knowledgeGraphDao = database.knowledgeGraphDao()
         this.termAliasDao = database.termAliasDao()
         this.burstClusterDao = database.burstClusterDao()
+
+        this.burstClusters = burstClusterDao.getAllClusters().flowOn(Dispatchers.IO)
 
 //        keywordStats = keywordStatsDao.getEntities()
 //            .flowOn(Dispatchers.IO)
@@ -289,6 +298,20 @@ object KeywordStatsRepository {
 
     fun saveBurstCluster(cluster: BurstClusterEntity) {
         externalScope.launch(Dispatchers.IO) {
+            val found = burstClusters.first().findLast { TextComparator.compareKeywords(cluster.keywords, it.keywords) >= 0.8 }
+            when (found) {
+                null -> burstClusterDao.upsertCluster(cluster)
+                else -> {
+                    burstClusterDao.upsertCluster(
+                        found.copy(
+                            keywords = (found.keywords + cluster.keywords).distinct(),
+                            messageIds = (found.messageIds + cluster.messageIds).distinct(),
+                            peakZScore = max(found.peakZScore, cluster.peakZScore),
+                            timestamp = cluster.timestamp
+                        )
+                    )
+                }
+            }
             burstClusterDao.upsertCluster(cluster)
         }
     }
