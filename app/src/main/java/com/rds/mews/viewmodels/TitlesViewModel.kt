@@ -346,6 +346,10 @@ class TitlesViewModel(
         }
     }
 
+    fun setShowMedia(id: Long, value: Boolean) {
+        repository.setShowSourceMedia(id, value)
+    }
+
     fun changeTitleSourceState(id: Long, source: String) {
         _titleCardStates.update { currentSet ->
             currentSet.map {

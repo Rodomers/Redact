@@ -129,6 +129,9 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import com.rds.mews.ui.custom_elements.image_viewer.DynamicPagerIndicator
+import com.rds.mews.ui.custom_elements.image_viewer.FullScreenImageViewer
+import com.rds.mews.ui.custom_elements.image_viewer.RootViewOverlay
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -158,6 +161,7 @@ fun TitlesCard(
     scrollState: ScrollState,
     clickedImageIndex: Int?,
     onImageClicked: (Boolean) -> Unit,
+    setShowMedia: (Long, Boolean) -> Unit,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
@@ -257,7 +261,8 @@ fun TitlesCard(
                 imagePagerState = imagePagerState,
                 scrollState = scrollState,
                 clickedImageIndex = clickedImageIndex,
-                onImageClicked = onImageClicked
+                onImageClicked = onImageClicked,
+                setShowMedia = setShowMedia
             )
         }
     }
@@ -319,6 +324,7 @@ private fun HeroExpansionContent(
     imagePagerState: PagerState,
     scrollState: ScrollState,
     clickedImageIndex: Int?,
+    setShowMedia: (Long, Boolean) -> Unit,
     onImageClicked: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
@@ -455,7 +461,8 @@ private fun HeroExpansionContent(
                     onImageChanged = onImageChanged,
                     clickedImageIndex = clickedImageIndex,
                     onImageClicked = onImageClicked,
-                    collapsedBounds = collapsedBounds
+                    collapsedBounds = collapsedBounds,
+                    setShowMedia = setShowMedia
                 )
             }
         }
@@ -607,9 +614,10 @@ private fun AnimatedKeywordTag(
     isExpanded: Boolean,
     maxVisibleYPx: Float,
     onBanTheme: (String) -> Unit,
-    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback
+    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
+    shouldAnimate: Boolean = true
 ) {
-    val offsetX = remember { Animatable(200f) }
+    val offsetX = remember { Animatable(if (shouldAnimate) 200f else 0f) }
     val alpha = remember { Animatable(0f) }
     var isOffScreen by remember { mutableStateOf(false) }
     var isMeasured by remember { mutableStateOf(false) }
@@ -620,7 +628,7 @@ private fun AnimatedKeywordTag(
                 offsetX.snapTo(0f)
                 alpha.snapTo(1f)
             } else {
-                kotlinx.coroutines.delay((index * 50L).milliseconds)
+                delay((index * 50L).milliseconds)
                 launch {
                     offsetX.animateTo(
                         targetValue = 0f,
@@ -698,6 +706,7 @@ private fun ExpandedCardContent(
     scrollState: ScrollState,
     collapsedBounds: Rect,
     clickedImageIndex: Int?,
+    setShowMedia: (Long, Boolean) -> Unit,
     onImageClicked: (Boolean) -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -709,6 +718,8 @@ private fun ExpandedCardContent(
     val haptics = LocalHapticFeedback.current
 
     val imageBoundsMap = remember { mutableMapOf<Int, Rect>() }
+
+    val shouldAnimate = remember { !isRead }
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
@@ -836,7 +847,7 @@ private fun ExpandedCardContent(
     val nudgeOffset = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
-        if (sources?.isNotEmpty() == true) {
+        if (shouldAnimate &&sources?.isNotEmpty() == true) {
             delay(500.milliseconds)
             nudgeOffset.animateTo(
                 targetValue = if (pagerState.targetPage == 0) -36f else 36f,
@@ -1146,7 +1157,8 @@ private fun ExpandedCardContent(
                                                 coroutineScope.launch {
                                                     imagePagerState.scrollToPage(page)
                                                 }
-                                            }
+                                            },
+                                            setShowImages = setShowMedia
                                         )
                                     }
                                 }
@@ -1169,7 +1181,8 @@ private fun ExpandedCardContent(
                                                 isExpanded = expansionProgress > 0.5f,
                                                 maxVisibleYPx = maxVisibleYPx,
                                                 onBanTheme = onBanTheme,
-                                                haptics = haptics
+                                                haptics = haptics,
+                                                shouldAnimate = shouldAnimate
                                             )
                                         }
                                     }

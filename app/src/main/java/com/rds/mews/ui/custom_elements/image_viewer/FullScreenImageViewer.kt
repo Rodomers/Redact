@@ -1,4 +1,4 @@
-package com.rds.mews.ui.custom_elements.titles_card
+package com.rds.mews.ui.custom_elements.image_viewer
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -33,15 +34,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
@@ -58,6 +63,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
@@ -65,9 +71,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.roundToIntRect
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -76,9 +85,14 @@ import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
+import com.rds.mews.R
+import com.rds.mews.localcore.ArrowPosition
+import com.rds.mews.localcore.IconButtonInputs
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.getFormattedTimeUnix
+import com.rds.mews.ui.custom_elements.CustomDropdown
+import com.rds.mews.ui.custom_elements.CustomIconButton
 import com.rds.mews.ui.custom_elements.CustomTextButton
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.launch
@@ -93,11 +107,13 @@ fun FullScreenImageViewer(
     dynamicMediaUrls: List<MediaWithSource>,
     imageBoundsMap: Map<Int, Rect>,
     onClose: () -> Unit,
-    onPageChanged: (Int) -> Unit
+    onPageChanged: (Int) -> Unit,
+    setShowImages: (Long, Boolean) -> Unit
 ) {
     val density = LocalDensity.current
     val config = LocalConfiguration.current
     val handler = LocalUriHandler.current
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     RootViewOverlay {
@@ -106,6 +122,44 @@ fun FullScreenImageViewer(
         var isClosing by remember { mutableStateOf(false) }
         val swipeDismissY = remember { Animatable(0f) }
         var isUiVisible by remember { mutableStateOf(true) }
+
+        val dropdownTransitionState = remember { MutableTransitionState(false) }
+        var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
+
+        val sourceMediaOverrides = remember { mutableStateMapOf<Long, Boolean>() }
+        val currentMedia = dynamicMediaUrls.getOrNull(fullScreenPagerState.currentPage)
+        val currentSource = currentMedia?.message?.source
+        val isMediaShown = if (currentSource != null) {
+            sourceMediaOverrides[currentSource.id] ?: (currentSource.showMedia)
+        } else false
+
+        val dropdownButtons = listOf(
+            TextButtonInputs(
+                text = stringResource(R.string.download),
+                action = {
+                    dropdownTransitionState.targetState = false
+                    coroutineScope.launch {
+                        saveImageToGallery(context, imageUrl = dynamicMediaUrls[fullScreenPagerState.currentPage].mediaLink)
+                    }
+                },
+                toast = stringResource(R.string.saving_to_gallery)
+            ),
+            TextButtonInputs(
+                text = if (isMediaShown) {
+                    stringResource(R.string.source_do_not_show_media)
+                } else {
+                    stringResource(R.string.source_show_media)
+                },
+                action = {
+                    dropdownTransitionState.targetState = false
+                    if (currentSource != null) {
+                        val newShowMedia = !isMediaShown
+                        sourceMediaOverrides[currentSource.id] = newShowMedia
+                        setShowImages(currentSource.id, newShowMedia)
+                    }
+                }
+            )
+        )
 
         LaunchedEffect(Unit) {
             transitionAnim.animateTo(
@@ -343,19 +397,47 @@ fun FullScreenImageViewer(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val currentMedia = dynamicMediaUrls[fullScreenPagerState.currentPage]
-                    val specificSource = currentMedia.message?.source?.currentName ?: currentMedia.message?.source?.originalName ?: "null"
-                    val specificTime = currentMedia.message?.time ?: 0L
-                    val link = currentMedia.message?.link
+                    val specificSource = currentMedia?.message?.source?.currentName ?: currentMedia?.message?.source?.originalName ?: "null"
+                    val specificTime = currentMedia?.message?.time ?: 0L
+                    val link = currentMedia?.message?.link
 
-                    CustomTextButton(
-                        inputs = TextButtonInputs(
-                            text = "$specificSource • ${getFormattedTimeUnix(specificTime)}",
-                            action = { link?.let { handler.openUri(it) } }
-                        ),
-                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = Shapes.large
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CustomTextButton(
+                            inputs = TextButtonInputs(
+                                text = "$specificSource • ${getFormattedTimeUnix(specificTime)}",
+                                action = { link?.let { handler.openUri(it) } }
+                            ),
+                            defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = Shapes.large,
+                            modifier = Modifier.padding(horizontal = 48.dp)
+                        )
+
+                        CustomIconButton(
+                            inputs = IconButtonInputs(
+                                icon = Icons.Default.MoreVert,
+                                action = {
+                                    dropdownTransitionState.targetState =
+                                        !dropdownTransitionState.currentState
+                                }
+                            ),
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .size(36.dp)
+                                .onGloballyPositioned { coordinates ->
+                                    buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                                },
+                            iconModifier = Modifier.size(18.dp),
+                            defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                            transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            transitionState = dropdownTransitionState,
+                            shape = Shapes.large
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -364,6 +446,19 @@ fun FullScreenImageViewer(
                         pageCount = dynamicMediaUrls.size
                     )
                 }
+            }
+
+            if (dropdownTransitionState.currentState || dropdownTransitionState.targetState) {
+                CustomDropdown(
+                    transitionState = dropdownTransitionState,
+                    buttons = dropdownButtons,
+                    inputBounds = buttonBounds,
+                    config = config,
+                    density = density,
+                    arrowPosition = ArrowPosition.BottomRight,
+                    onDismissRequest = { dropdownTransitionState.targetState = false },
+                    backgroundColor = MaterialTheme.colorScheme.secondaryContainer
+                )
             }
         }
     }

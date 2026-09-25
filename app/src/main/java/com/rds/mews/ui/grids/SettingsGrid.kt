@@ -116,6 +116,7 @@ fun SettingsScreen(
     val copyPlainText by viewModel.copyPlainText.collectAsStateWithLifecycle()
     val keepUnreadTitles by viewModel.keepUnreadTitles.collectAsStateWithLifecycle()
     val updateNotifications by viewModel.enableUpdateNotifications.collectAsStateWithLifecycle()
+    val doNotBlockSources by viewModel.doNotBlockSources.collectAsStateWithLifecycle()
 
     val state = SettingsUiState(
         autoUpdateScreenOpened = autoupdateScreenOpened,
@@ -135,6 +136,7 @@ fun SettingsScreen(
         titlesPeriod = titlesPeriod,
         titlesKeeping = titlesKeeping,
         rssUpdateInterval = rssUpdateInterval,
+        doNotBlockSources = doNotBlockSources,
         innerTime = innerTime,
         showSnippets = showSnippets,
         titlesAlarmUpdate = titlesAlarmUpdate,
@@ -169,6 +171,7 @@ fun SettingsScreen(
             setCompactTab = viewModel::setCompactTab,
             setAppTheme = viewModel::setAppTheme,
             setDarkTheme = viewModel::setDarkTheme,
+            setDoNotBlockSources = viewModel::setDoNotBlockSources,
             setShowDates = viewModel::setShowDates,
             setExpandSources = viewModel::setExpandSources,
             setInnerTime = viewModel::setInnerTime,
@@ -230,6 +233,7 @@ fun SettingsGrid(
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
     val appearanceChapterId by remember { mutableIntStateOf(R.string.settings_chapter_appearance) }
+    val sourcesChapterId by remember { mutableIntStateOf(R.string.settings_chapter_sources) }
     val titlesChapterId by remember { mutableIntStateOf(R.string.settings_chapter_titles) }
     val llmChapterId by remember { mutableIntStateOf(R.string.settings_chapter_llm) }
     val additionalChapterId by remember { mutableIntStateOf(R.string.settings_chapter_additional) }
@@ -282,9 +286,10 @@ fun SettingsGrid(
 
     LaunchedEffect(Unit) {
         functions.addGroupState(appearanceChapterId, true)
+        functions.addGroupState(sourcesChapterId, true)
         functions.addGroupState(titlesChapterId, true)
         functions.addGroupState(llmChapterId, true)
-        functions.addGroupState(additionalChapterId, true)
+        functions.addGroupState(additionalChapterId, false)
     }
 
     LaunchedEffect(state.alarmMins) {
@@ -662,6 +667,30 @@ fun SettingsGrid(
                                 density = density,
                                 cornerShape = Shapes.large,
                                 initialSelectedIndex = state.darkThemes.indexOfFirst(state.darkTheme::equals)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+            }
+
+            customHeader(
+                textId = sourcesChapterId,
+                isExpanded = groupStates.find { it.group == sourcesChapterId }?.expanded ?: true,
+                onHeaderClick = { functions.changeGroupState(sourcesChapterId) }
+            )
+            item {
+                ExpandableContainer(
+                    visible = groupStates.find { it.group == sourcesChapterId }?.expanded ?: true
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        SettingsItem(
+                            text = stringResource(R.string.settings_do_not_block_sources),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        ) {
+                            CustomSwitch(
+                                checked = state.doNotBlockSources,
+                                onCheckedChange = { functions.setDoNotBlockSources(it) }
                             )
                         }
                         Spacer(modifier = Modifier.height(16.dp))

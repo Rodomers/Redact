@@ -29,8 +29,6 @@
     <string name="link">Link</string>
     <string name="source_track">Track</string>
     <string name="source_do_not_track">Do not track</string>
-    <string name="source_show_media">Show media</string>
-    <string name="source_do_not_show_media">Do not show media</string>
 
     <string name="titles_update_text">Pull down to update</string>
     <string name="today">today</string>
@@ -41,6 +39,7 @@
     <string name="settings_chapter_titles">Titles</string>
     <string name="settings_chapter_llm">LLM</string>
     <string name="settings_chapter_additional">Additional</string>
+    <string name="settings_chapter_sources">Sources</string>
     <string name="settings_system_theme">System</string>
     <string name="settings_light_theme">Light</string>
     <string name="settings_dark_theme">Dark</string>
@@ -52,6 +51,7 @@
     <string name="settings_compact_tab">Compact tab</string>
     <string name="settings_endure_time">Inner timestamps</string>
     <string name="settings_show_snippets">Show snippets</string>
+    <string name="settings_do_not_block_sources">Do not block sources</string>
     <string name="settings_expand_sources">Expand sources</string>
     <string name="settings_save_on_cancel">Save on cancel</string>
     <string name="settings_filter_topics">LLM-based topics filter</string>
@@ -156,6 +156,11 @@
     <string name="summarizing">Summarizing…</string>
     <string name="restart_updating">Restart</string>
     <string name="update_cancelled">Update cancelled.</string>
+
+    <string name="download">Download</string>
+    <string name="saving_to_gallery">Saving image to gallery…</string>
+    <string name="source_show_media">Show media</string>
+    <string name="source_do_not_show_media">Do not show media</string>
 
     <string name="err_header_success">Success</string>
     <string name="err_text_success">We have no idea why you are seeing this. The update was actually successful.</string>

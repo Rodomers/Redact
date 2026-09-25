@@ -63,6 +63,7 @@ data class AppSettings(
     val userApiKey: String = "",
     val llmModel: GeminiModelOption = GeminiModelOption.FLASH_LITE_LATEST,
     val enableProxy: Boolean = false,
+    val doNotBlockSources: Boolean = false,
 
     // Updates
     val saveOnCancel: Boolean = false,

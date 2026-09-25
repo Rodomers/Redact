@@ -48,7 +48,7 @@ import com.rds.mews.ui.custom_elements.EditSourceBottomSheet
 import com.rds.mews.ui.custom_elements.SourcesAddCard
 import com.rds.mews.ui.custom_elements.SourcesCardExpansionOverlay
 import com.rds.mews.ui.custom_elements.customHeader
-import com.rds.mews.ui.custom_elements.titles_card.RootViewOverlay
+import com.rds.mews.ui.custom_elements.image_viewer.RootViewOverlay
 import com.rds.mews.viewmodels.SourcesViewModel
 import kotlinx.coroutines.launch
 
@@ -305,8 +305,8 @@ fun SourcesGrid(
                     },
                     collapsedBounds = expandedBounds!!,
                     onDismissRequest = {
-                        selectedRssId = null
                         expandedBounds = null
+                        selectedRssId = null
                     },
                     onResetErrors = resetErrCount,
                     setInBurst = { inBurst -> setInBurst(selectedRss.id, inBurst) },

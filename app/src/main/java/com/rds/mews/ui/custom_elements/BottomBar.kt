@@ -49,7 +49,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -80,13 +79,10 @@ import com.rds.mews.R
 import com.rds.mews.localcore.TooltipOptions
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
     data object Sources: TabScreen(titleResId = R.string.tabscreen_sources, Icons.Default.Favorite)
@@ -113,15 +109,10 @@ fun MyBottomBar(
     onHoldProgressChanged: (progress: Float, centerOffset: Offset, isHolding: Boolean) -> Unit = { _, _, _ -> },
     onBlitzTriggered: (centerOffset: Offset) -> Unit = {},
     isBlitzActive: Boolean = false,
-    showBlitzTooltip: Boolean = false,
-    isOnline: Boolean? = null,
-    showSummaryTooltip: Boolean = false,
     tooltipOption: TooltipOptions,
-    setDefaultTooltip: () -> Unit
 ) {
     val tooltipChannel = remember { Channel<TooltipMessage>(Channel.UNLIMITED) }
     var currentTooltipTextId by remember { mutableIntStateOf(0) }
-    var previousIsOnline by remember { mutableStateOf<Boolean?>(null) }
 
     val tabs = remember { listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings) }
     val currentOnTabSelected by rememberUpdatedState(onTabSelected)

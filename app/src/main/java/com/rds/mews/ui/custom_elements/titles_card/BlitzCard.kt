@@ -72,6 +72,8 @@ import com.rds.mews.ui.custom_elements.CustomDropdown
 import com.rds.mews.ui.custom_elements.CustomIconButton
 import com.rds.mews.ui.custom_elements.CustomTextButton
 import com.rds.mews.ui.custom_elements.DetachableOverlayCard
+import com.rds.mews.ui.custom_elements.image_viewer.DynamicPagerIndicator
+import com.rds.mews.ui.custom_elements.image_viewer.FullScreenImageViewer
 import com.rds.mews.ui.theme.Shapes
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.launch
@@ -99,6 +101,7 @@ fun BlitzCard(
     onImageChanged: (Int) -> Unit,
     onImageClicked: (Boolean) -> Unit,
     isExpanded: Boolean = false,
+    setShowMedia: (Long, Boolean) -> Unit,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -272,7 +275,8 @@ fun BlitzCard(
                             coroutineScope.launch {
                                 imagePagerState.scrollToPage(page)
                             }
-                        }
+                        },
+                        setShowImages = setShowMedia
                     )
                 }
             }
@@ -349,6 +353,7 @@ fun BlitzCardSourceExpansionOverlay(
     clickedImageIndex: Int?,
     onImageChanged: (Int) -> Unit,
     onImageClicked: (Boolean) -> Unit,
+    setShowMedia: (Long, Boolean) -> Unit,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     val iconParams = IconParams(
@@ -374,7 +379,8 @@ fun BlitzCardSourceExpansionOverlay(
                 imagePagerState = imagePagerState,
                 clickedImageIndex = clickedImageIndex,
                 onImageChanged = onImageChanged,
-                onImageClicked = onImageClicked
+                onImageClicked = onImageClicked,
+                setShowMedia = setShowMedia
             )
         },
         actionsContent = {
@@ -399,7 +405,8 @@ private fun BlitzCardExpandedMainContent(
     imagePagerState: PagerState,
     clickedImageIndex: Int?,
     onImageChanged: (Int) -> Unit,
-    onImageClicked: (Boolean) -> Unit
+    onImageClicked: (Boolean) -> Unit,
+    setShowMedia: (Long, Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val config = LocalConfiguration.current
@@ -538,7 +545,8 @@ private fun BlitzCardExpandedMainContent(
                         coroutineScope.launch {
                             imagePagerState.scrollToPage(page)
                         }
-                    }
+                    },
+                    setShowImages = setShowMedia
                 )
             }
         }

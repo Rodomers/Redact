@@ -27,8 +27,6 @@
     <string name="link">Ссылка</string>
     <string name="source_track">Отслеживать</string>
     <string name="source_do_not_track">Не отслеживать</string>
-    <string name="source_show_media">Использовать медиа</string>
-    <string name="source_do_not_show_media">Не использовать медиа</string>
 
     <string name="titles_update_text">Потяните вниз,\nчтобы обновить</string>
     <string name="today">сегодня</string>
@@ -39,6 +37,7 @@
     <string name="settings_chapter_titles">Заголовки</string>
     <string name="settings_chapter_llm">Нейросеть</string>
     <string name="settings_chapter_additional">Дополнительные</string>
+    <string name="settings_chapter_sources">Источники</string>
     <string name="settings_system_theme">Системная</string>
     <string name="settings_light_theme">Светлая</string>
     <string name="settings_dark_theme">Тёмная</string>
@@ -49,6 +48,7 @@
     <string name="settings_compact_tab">Компактная навигация</string>
     <string name="settings_endure_time">Компактное время</string>
     <string name="settings_show_snippets">Предпросмотр новостей</string>
+    <string name="settings_do_not_block_sources">Не отключать источники</string>
     <string name="settings_expand_sources">Разворачивать источники</string>
     <string name="settings_save_on_cancel">Сохранение при отмене</string>
     <string name="settings_filter_topics">LLM-фильтр тем</string>
@@ -159,6 +159,11 @@
     <string name="summarizing">Резюмирую…</string>
     <string name="restart_updating">Перезапуск</string>
     <string name="update_cancelled">Обновление отменено.</string>
+
+    <string name="download">Скачать</string>
+    <string name="saving_to_gallery">Сохранение в галерею…</string>
+    <string name="source_show_media">Использовать медиа</string>
+    <string name="source_do_not_show_media">Не использовать медиа</string>
 
     <string name="err_header_success">Успех</string>
     <string name="err_text_success">Мы не знаем, почему это здесь. Обновление прошло успешно.</string>

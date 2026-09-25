@@ -268,6 +268,10 @@ class BlitzViewModel(
         }
     }
 
+    fun setShowMedia(id: Long, value: Boolean) {
+        repository.setShowSourceMedia(id, value)
+    }
+
     fun lastTitlesUpdateExists(): Boolean {
         return repository.lastTitlesUpdate.value != 0L
     }

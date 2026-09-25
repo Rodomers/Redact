@@ -62,7 +62,7 @@ fun DetachableOverlayCard(
     mainCardColor: Color = MaterialTheme.colorScheme.secondaryContainer,
     containerColor: Color = MaterialTheme.colorScheme.surface,
     mainContent: @Composable () -> Unit,
-    actionsContent: @Composable () -> Unit
+    actionsContent: @Composable (dismiss: () -> Unit) -> Unit
 ) {
     val context = LocalContext.current
     val config = LocalConfiguration.current
@@ -88,7 +88,7 @@ fun DetachableOverlayCard(
     }
     val isActionsAbove = !isTopQuadrant
 
-    val handleDismiss = {
+    val handleDismiss: () -> Unit = {
         scope.launch {
             expansionAnim.animateTo(
                 targetValue = 0f,
@@ -139,7 +139,7 @@ fun DetachableOverlayCard(
                     actionsMaxHeight = actionsMaxHeight,
                     contentAlpha = 1f,
                     modifier = Modifier.fillMaxWidth(),
-                    actionsContent = actionsContent
+                    actionsContent = { actionsContent(handleDismiss) }
                 )
             }
         }
@@ -223,7 +223,7 @@ fun DetachableOverlayCard(
                             .align(androidx.compose.ui.Alignment.TopCenter)
                             .fillMaxWidth()
                             .height(actionsHeightDp),
-                        actionsContent = actionsContent
+                        actionsContent = { actionsContent(handleDismiss) }
                     )
                     Surface(
                         shape = mainCardShape,
@@ -253,7 +253,7 @@ fun DetachableOverlayCard(
                             .align(androidx.compose.ui.Alignment.BottomCenter)
                             .fillMaxWidth()
                             .height(actionsHeightDp),
-                        actionsContent = actionsContent
+                        actionsContent = { actionsContent(handleDismiss) }
                     )
                 }
             }

@@ -195,6 +195,7 @@ fun TitlesScreen(
         setCurrentTitleImage = viewModel::setCurrentTitleImage,
         setFullscreenView = viewModel::setFullscreenImageForTitle,
         stopTitlesUpdate = viewModel::stopTitlesUpdate,
+        setShowMedia = viewModel::setShowMedia,
         onOverscrollDetected = onOverscrollDetected
     )
 }
@@ -245,6 +246,7 @@ fun TitlesGrid(
     setCurrentTitleImage: (Long, Int) -> Unit,
     setFullscreenView: (Long, Boolean) -> Unit,
     stopTitlesUpdate: (Context) -> Unit,
+    setShowMedia: (Long, Boolean) -> Unit,
     onOverscrollDetected: () -> Unit = {}
 ) {
     val verticalArrangement by remember { mutableStateOf(8.dp) }
@@ -516,7 +518,8 @@ fun TitlesGrid(
                                     clickedImageIndex = clickedImageIndex,
                                     onImageClicked = { flag ->
                                         setFullscreenView(item.id, flag)
-                                    }
+                                    },
+                                    setShowMedia = setShowMedia
                                 )
 
                                 if (isPartiallyObscured) {

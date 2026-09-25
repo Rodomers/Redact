@@ -81,7 +81,7 @@ import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
 import com.rds.mews.ui.custom_elements.titles_card.BlitzCard
 import com.rds.mews.ui.custom_elements.titles_card.BlitzCardSourceExpansionOverlay
-import com.rds.mews.ui.custom_elements.titles_card.RootViewOverlay
+import com.rds.mews.ui.custom_elements.image_viewer.RootViewOverlay
 import com.rds.mews.ui.theme.Shapes
 import com.rds.mews.viewmodels.BlitzViewModel
 import com.rds.mews.viewmodels.TitleUiItem
@@ -191,7 +191,8 @@ fun BlitzScreen(
         stopTitlesUpdate = viewModel::stopTitlesUpdate,
         onLoadMediaUrls = viewModel::loadDynamicMediaUrls,
         setCurrentTitleImage = viewModel::setCurrentTitleImage,
-        setFullscreenView = viewModel::setFullscreenImageForTitle
+        setFullscreenView = viewModel::setFullscreenImageForTitle,
+        setShowMedia = viewModel::setShowMedia
     )
 }
 
@@ -229,7 +230,8 @@ fun BlitzGrid(
     stopTitlesUpdate: (Context) -> Unit,
     onLoadMediaUrls: (Long, Boolean) -> Unit,
     setCurrentTitleImage: (Long, Int) -> Unit,
-    setFullscreenView: (Long, Boolean) -> Unit
+    setFullscreenView: (Long, Boolean) -> Unit,
+    setShowMedia: (Long, Boolean) -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -386,7 +388,7 @@ fun BlitzGrid(
                         val dateString = try {
                             if (item.eventDate.number != null) context.getString(item.eventDate.date, item.eventDate.number)
                             else context.getString(item.eventDate.date)
-                        } catch (e: Exception) { "" }
+                        } catch (_: Exception) { "" }
 
                         val isCardExpanded = expandedCardData?.title?.id == title.id
                         val statesItem = titlesCardStates.find { it.id == title.id }
@@ -434,6 +436,7 @@ fun BlitzGrid(
                             clickedImageIndex = clickedImageIndex,
                             onImageChanged = { setCurrentTitleImage(title.id, it) },
                             onImageClicked = { setFullscreenView(title.id, it) },
+                            setShowMedia = setShowMedia,
                             modifier = Modifier
                         )
                     }
@@ -486,6 +489,7 @@ fun BlitzGrid(
                         imagePagerState = overlayImagePagerState,
                         clickedImageIndex = overlayClickedImageIndex,
                         onImageChanged = { setCurrentTitleImage(titleId, it) },
+                        setShowMedia = setShowMedia,
                         onImageClicked = { setFullscreenView(titleId, it) }
                     )
                 }

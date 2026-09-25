@@ -150,7 +150,9 @@ class ParserWorker(
 
             MewsRepository.resetErrorCount(source.id)
         } catch (_: Exception) {
-            MewsRepository.incrementErrorCount(source.id)
+            if (MewsRepository.isOnline.first() ?: false) MewsRepository.incrementErrorCount(
+                source.id
+            )
         }
     }
 

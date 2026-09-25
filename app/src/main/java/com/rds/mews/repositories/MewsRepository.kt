@@ -96,6 +96,8 @@ object MewsRepository {
     lateinit var saveUnreadTitles: StateFlow<Boolean>
     lateinit var enableUpdateNotification: StateFlow<Boolean>
 
+    lateinit var doNotBlockSources: StateFlow<Boolean>
+
     lateinit var modelBatchInfo: StateFlow<Set<ModelBatchConfig>>
 
     lateinit var isOnline: StateFlow<Boolean?>
@@ -232,6 +234,8 @@ object MewsRepository {
         userApiKey = createSettingFlow({
             it.userApiKey.ifBlank { DEFAULT_GEMINI_API_KEY }
         }, DEFAULT_GEMINI_API_KEY)
+
+        doNotBlockSources = createSettingFlow({ it.doNotBlockSources }, false)
 
         showDates = createSettingFlow({ it.showDates }, false)
         rssUpdateInterval = createSettingFlow({ it.rssUpdateInterval }, 30)
@@ -909,6 +913,8 @@ object MewsRepository {
     fun setSaveUnreadTitles(newValue: Boolean) = updateSetting { it.copy(saveUnreadTitles = newValue) }
     fun setEnableUpdateNotification(newValue: Boolean) = updateSetting { it.copy(enableUpdateNotification = newValue) }
 
+    fun setDoNotBlockSources(newValue: Boolean) = updateSetting { it.copy(doNotBlockSources = newValue) }
+
     fun setRssUpdateInterval(context: Context, newValue: Int) {
         externalScope.launch {
             settingsManager.updateSettings { it.copy(rssUpdateInterval = newValue) }
@@ -1058,8 +1064,9 @@ object MewsRepository {
     }
 
     suspend fun getSourcesQueue(): List<SourceEntity> = withContext(Dispatchers.IO) {
+        val doNotBlock = doNotBlockSources.first()
         sourceDao.getAllSourcesFlow().first()
-            .filter { it.errCount < 3 }
+            .filter { it.errCount < 3 || doNotBlock }
             .sortedBy { it.lastSyncTime }
     }
 

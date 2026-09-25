@@ -1,5 +1,6 @@
 package com.rds.mews.ui.custom_elements
 
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -286,7 +287,7 @@ fun SourcesCardExpansionOverlay(
                 menuColor = Color(0xFF2B2D30)
             )
         },
-        actionsContent = {
+        actionsContent = { dismiss ->
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -300,7 +301,7 @@ fun SourcesCardExpansionOverlay(
                             text = btn.text,
                             action = {
                                 btn.action()
-                                onDismissRequest()
+                                dismiss()
                             },
                             toast = btn.toast
                         ),

@@ -195,18 +195,15 @@ fun MainScreen(mainActivity: MainActivity) {
                 }
             }
         }
-//        val titles by MewsRepository.titles.collectAsStateWithLifecycle(emptyList())
-//        LaunchedEffect(Unit, titles.size) {
-//            if (titles.isEmpty()) return@LaunchedEffect
-//            val t1 = titles.findLast { it.title.contains("Развитие спутниковой группировки") }
-//            val t2 = titles.find { it.title.contains("Развитие спутникового интернета на поездах") }
-//            val t3 = titles.findLast { it.title.contains("Дипломатический конфликт из-за ареста судна") }
-//            val t4 = titles.find { it.title.contains("В Норвегии арестовано российское научное судно") }
-//
-//            val summarizer = NewsSummarizer(LLMClient())
-//            summarizer.compareTopics(t1!!.title, t1.keywords, t2!!.title, t2.keywords, t1.summary, t2.summary)
-//            summarizer.compareTopics(t3!!.title, t3.keywords, t4!!.title, t4.keywords, t3.summary, t4.summary)
-//        }
+
+        val titles by MewsRepository.titles.collectAsStateWithLifecycle(emptyList())
+        LaunchedEffect(Unit, titles.size) {
+            val pinned = titles.filter { it.isPinned }
+
+            val summarizer = NewsSummarizer(LLMClient())
+            summarizer.compareTopics(t1!!.title, t1.keywords, t2!!.title, t2.keywords, t1.summary, t2.summary)
+            summarizer.compareTopics(t3!!.title, t3.keywords, t4!!.title, t4.keywords, t3.summary, t4.summary)
+        }
 
         Scaffold { paddingValues ->
             Box(modifier = Modifier.fillMaxSize()) {
@@ -243,7 +240,6 @@ fun MainScreen(mainActivity: MainActivity) {
                                     } else {
                                         titlesViewModel.scrollToTop()
                                         MewsRepository.setTooltipState(TooltipOptions.BLITZ_TOOLTIP)
-//                                        showBlitzTooltip = true
                                     }
                                 }
                                 TabScreen.Settings -> settingsViewModel.scrollToTop()
@@ -263,10 +259,8 @@ fun MainScreen(mainActivity: MainActivity) {
                         blitzViewModel.toggleBlitzActive()
                     },
                     isBlitzActive = isBlitzActive,
-                    isOnline = isOnline,
                     modifier = Modifier.align(Alignment.BottomCenter),
-                    tooltipOption = tooltipState,
-                    setDefaultTooltip = { MewsRepository.setTooltipState(TooltipOptions.DEFAULT) }
+                    tooltipOption = tooltipState
                 )
             }
         }
