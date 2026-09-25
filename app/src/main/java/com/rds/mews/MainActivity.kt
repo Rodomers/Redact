@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationManager
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -196,14 +197,20 @@ fun MainScreen(mainActivity: MainActivity) {
             }
         }
 
-        val titles by MewsRepository.titles.collectAsStateWithLifecycle(emptyList())
-        LaunchedEffect(Unit, titles.size) {
-            val pinned = titles.filter { it.isPinned }
-
-            val summarizer = NewsSummarizer(LLMClient())
-            summarizer.compareTopics(t1!!.title, t1.keywords, t2!!.title, t2.keywords, t1.summary, t2.summary)
-            summarizer.compareTopics(t3!!.title, t3.keywords, t4!!.title, t4.keywords, t3.summary, t4.summary)
-        }
+//        val titles by MewsRepository.titles.collectAsStateWithLifecycle(emptyList())
+//        LaunchedEffect(Unit, titles.size) {
+//            if (titles.isEmpty()) return@LaunchedEffect
+//            val pinned = titles.filter { it.isPinned && it.eventTime >= System.currentTimeMillis() - 72 * 3600_000L }
+//            val summarizer = NewsSummarizer(LLMClient())
+//            pinned.forEach { pinnedTitle ->
+//                val filtered = titles.filter { it.eventTime < pinnedTitle.eventTime }
+//                println("\nPinned title: ${pinnedTitle.title}")
+//                filtered.forEach { title ->
+//                    summarizer.compareTopics(pinnedTitle.title, pinnedTitle.keywords, title.title, title.keywords)
+//                    summarizer.compareTopics(pinnedTitle.title, pinnedTitle.keywords, title.title, title.keywords, pinnedTitle.summary, title.summary)
+//                }
+//            }
+//        }
 
         Scaffold { paddingValues ->
             Box(modifier = Modifier.fillMaxSize()) {

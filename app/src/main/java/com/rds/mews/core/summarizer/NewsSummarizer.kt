@@ -85,7 +85,7 @@ class NewsSummarizer(private val llm: LLMClient) {
     )
 
     companion object {
-        private const val MATCH_RATE = 0.5f
+        private const val MATCH_RATE = 0.52f
         private const val TOPIC_TOKEN_LIMIT = 6000
         private const val TOPIC_MAX_MESSAGES_LIMIT = 30
         private const val SIGNAL_SIMILARITY_THRESHOLD = 0.8f
@@ -699,7 +699,8 @@ class NewsSummarizer(private val llm: LLMClient) {
         return (matches.toDouble() / minSize) >= clusterMatchRate
     }
 
-    suspend fun compareTopics(
+
+    private suspend fun compareTopics(
         topicTitle: String, topicKeywords: List<String>, otherTitle: String, otherKeywords: List<String>,
         topicText: String? = null, otherText: String? = null
     ): Double {
@@ -707,10 +708,10 @@ class NewsSummarizer(private val llm: LLMClient) {
         if (topicTitle.isEmpty() || otherTitle.isEmpty()) return 0.0
 
         val expandedTopicKeywords = topicKeywords.toMutableSet()
-        for (kw in topicKeywords) expandedTopicKeywords += GraphCache.getRelatedEntities(kw)
+        for (kw in topicKeywords) expandedTopicKeywords += GraphCache.getRelatedEntities(kw, 0.9)
 
         val expandedOtherKeywords = otherKeywords.toMutableSet()
-        for (kw in otherKeywords) expandedOtherKeywords += GraphCache.getRelatedEntities(kw)
+        for (kw in otherKeywords) expandedOtherKeywords += GraphCache.getRelatedEntities(kw, 0.9)
 
         val cleanTopicTitle = topicTitle.lowercase().trim()
         val cleanOtherTitle = otherTitle.lowercase().trim()
@@ -728,20 +729,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             ).toDouble()
         }
 
-        if (titlesThreshold >= 0.85) return 1.0
-
         var kwMatches = 0
-        var baseKwMatches = 0
-
-        for (tk in topicKeywords) {
-            for (hk in otherKeywords) {
-                if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.7f)) {
-                    baseKwMatches++
-                    break
-                }
-            }
-        }
-        if (baseKwMatches / minOf(topicKeywords.size, otherKeywords.size) < 0.3) return 0.0
         for (tk in expandedTopicKeywords) {
             for (hk in expandedOtherKeywords) {
                 if (tk.equals(hk, ignoreCase = true) || TextComparator.areSimilar(tk.lowercase(), hk.lowercase(), 0.7f)) {
@@ -752,15 +740,12 @@ class NewsSummarizer(private val llm: LLMClient) {
         }
 
         val keywordScore = kwMatches.toDouble() / (minOf(
-            topicKeywords.size + (expandedTopicKeywords.size * 0.5).toInt(),
-            otherKeywords.size + (expandedOtherKeywords.size * 0.5).toInt()
+            expandedTopicKeywords.size,
+            expandedOtherKeywords.size
         ).coerceAtLeast(1))
 
-        val baseTitlesScore = TextComparator.countThreshold(
-            topicTitle.lowercase(),
-            otherTitle.lowercase()
-        )
-        if (kwMatches == 0 && baseTitlesScore < 0.2f) return 0.0
+        if (keywordScore < 0.2 || titlesThreshold < 0.55f) return 0.0
+        if (keywordScore > 0.9 || (titlesThreshold > 0.65 && keywordScore > 0.5)) return 1.0
 
         val hasSummary = !topicText.isNullOrBlank() && !otherText.isNullOrBlank()
         val summaryThreshold = if (hasSummary) {
@@ -770,15 +755,18 @@ class NewsSummarizer(private val llm: LLMClient) {
             )
             val topicTextTokens = TextComparator.tokenize(topicText)
             val historySummaryTokens = TextComparator.tokenize(otherText)
-            TextComparator.combineWithSemanticScore(
+            val score = TextComparator.combineWithSemanticScore(
                 baseScore = baseScore,
                 tokens1 = topicTextTokens,
                 tokens2 = historySummaryTokens
             ).toDouble()
+            (score - 0.6).coerceIn(0.0, 1.0) * 2.5
         } else 0.0
+        if (summaryThreshold > 0.7) return 1.0
 
         val totalWeight = if (hasSummary) 6.0 else 3.0
-        return (keywordScore * 1.0 + titlesThreshold * 2.0 + summaryThreshold * 3.0) / totalWeight
+        println("Title: $otherTitle. Keywords score: $keywordScore, titles: $titlesThreshold, summary: $summaryThreshold. Total: ${(keywordScore * 2.0 + titlesThreshold * 1.0 + summaryThreshold * 3.0) / totalWeight}.")
+        return (keywordScore * 2.0 + titlesThreshold * 1.0 + summaryThreshold * 3.0) / totalWeight
     }
 
     private suspend fun buildPayloads(

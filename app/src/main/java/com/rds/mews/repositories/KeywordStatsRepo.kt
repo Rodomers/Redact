@@ -235,7 +235,7 @@ object KeywordStatsRepository {
         knowledgeGraphDao.deleteDanglingEdges()
     }
 
-    suspend fun getRelatedEntities(keyword: String, threshold: Double = 0.3): Set<String> {
+    suspend fun getRelatedEntities(keyword: String, threshold: Double = 0.75): Set<String> {
         val entities = knowledgeGraphDao.getRelatedEntities(keyword, threshold)
         return entities.map { if (it.nodeA != keyword) it.nodeA else it.nodeB }.toSet().plus(keyword)
     }

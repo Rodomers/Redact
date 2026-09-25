@@ -23,7 +23,7 @@ object GraphCache {
 
     private val relatedEntitiesCache = ConcurrentHashMap<String, Set<String>>()
 
-    suspend fun getRelatedEntities(keyword: String, threshold: Double = 0.4): Set<String> {
+    suspend fun getRelatedEntities(keyword: String, threshold: Double = 0.7): Set<String> {
         val key = keyword.lowercase()
         return relatedEntitiesCache.getOrPut(key) {
             KeywordStatsRepository.getRelatedEntities(key, threshold)
