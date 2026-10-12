@@ -1,5 +1,8 @@
 package com.rds.mews.ui.grids
 
+import com.rds.mews.ui.custom_elements.bottom_sheet.ApiKeyBottomSheet
+import com.rds.mews.ui.custom_elements.bottom_sheet.CustomErrorBottomSheet
+import com.rds.mews.ui.custom_elements.bottom_sheet.SettingsListBottomSheet
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Build
@@ -49,15 +52,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rds.mews.MainActivity
 import com.rds.mews.R
 import com.rds.mews.localcore.*
-import com.rds.mews.ui.custom_elements.ApiKeyBottomSheet
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
-import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.SettingsItem
 import com.rds.mews.ui.custom_elements.CustomSwitch
 import com.rds.mews.ui.custom_elements.CustomTextButton
 import com.rds.mews.ui.custom_elements.DropdownButton
-import com.rds.mews.ui.custom_elements.SettingsListBottomSheet
 import com.rds.mews.ui.custom_elements.customHeader
 import com.rds.mews.ui.theme.Shapes
 import com.rds.mews.viewmodels.SettingsViewModel
@@ -66,6 +66,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.key
 import com.rds.mews.ui.custom_elements.AnimatedKeywordItem
+import com.rds.mews.ui.custom_elements.bottom_sheet.ReorderableButtonsBottomSheet
 
 @Composable
 fun SettingsScreen(
@@ -88,6 +89,8 @@ fun SettingsScreen(
     val isApiKeyValid by viewModel.isApiKeyCorrect.collectAsStateWithLifecycle()
 
     val groupStates by viewModel.groupStates.collectAsStateWithLifecycle()
+
+    val themes by viewModel.currentThemes.collectAsStateWithLifecycle()
 
     val showDates by viewModel.showDates.collectAsStateWithLifecycle()
     val compactTab by viewModel.compactTabBar.collectAsStateWithLifecycle()
@@ -119,6 +122,7 @@ fun SettingsScreen(
     val doNotBlockSources by viewModel.doNotBlockSources.collectAsStateWithLifecycle()
 
     val state = SettingsUiState(
+        themes = themes,
         autoUpdateScreenOpened = autoupdateScreenOpened,
         bannedNewsScreenOpened = bannedNewsScreenOpened,
         geminiKeyScreenOpened = geminiScreenOpened,
@@ -165,6 +169,7 @@ fun SettingsScreen(
 
     val functions = remember {
         SettingsUiFunctions(
+            setThemePlace = viewModel::setThemePlace,
             setAutoupdateScreen = viewModel::setAutoupdateScreen,
             setBannedNewsScreen = viewModel::setBannedNewsScreen,
             setGeminiScreenOpened = viewModel::setGeminiScreen,
@@ -277,6 +282,20 @@ fun SettingsGrid(
         )
     }
 
+    var themesScreenOpened by remember { mutableStateOf(false) }
+    val themesBtnState = remember { MutableTransitionState(false) }
+    val themesBtnText = stringResource(R.string.setup)
+    val themesButtonText = remember { mutableStateOf(themesBtnText) }
+    val themesButtonInputs = remember {
+        TextButtonInputs(
+            themesButtonText.value,
+            action = {
+                themesScreenOpened = true
+                themesBtnState.targetState = true
+            }
+        )
+    }
+
     var alarmHrsText by remember { mutableIntStateOf(state.alarmMins / 60) }
     var alarmMinsText by remember { mutableIntStateOf(state.alarmMins % 60) }
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -306,7 +325,7 @@ fun SettingsGrid(
         }
         .map { theme ->
             stringResource(theme.themeName) to { functions.setAppTheme(theme) }
-    }
+        }
 
     val colorSchemeDropdownItems = state.darkThemes.map { theme ->
         stringResource(theme.displayedName) to { functions.setDarkTheme(theme) }
@@ -555,6 +574,20 @@ fun SettingsGrid(
         )
     }
 
+    if (themesScreenOpened) {
+        ReorderableButtonsBottomSheet(
+            items = state.themes.map { it.theme to it.place },
+            onSavePositions = functions.setThemePlace,
+            onDismissRequest = {
+                themesScreenOpened = false
+                themesBtnState.targetState = false
+            },
+            sheetState = screensState,
+            scope = screenScope,
+            title = stringResource(R.string.settings_themes)
+        )
+    }
+
     if (state.showAlarmsSheet) {
         CustomErrorBottomSheet(
             title = stringResource(R.string.settings_alarms_sheet_title),
@@ -788,6 +821,25 @@ fun SettingsGrid(
                                 initialSelectedIndex = state.titlesKeepings.indexOfFirst(state.titlesKeeping::equals)
                             )
                         }
+                        if (state.themes.isNotEmpty()) {
+                            SettingsItem(
+                                text = stringResource(R.string.settings_themes),
+                                modifier = Modifier.padding(vertical = verticalArrangement)
+                            ) {
+                                CustomTextButton(
+                                    inputs = themesButtonInputs,
+                                    modifier = Modifier
+                                        .wrapContentSize()
+                                        .widthIn(min = 150.dp, max = 250.dp),
+                                    shape = Shapes.large,
+                                    defaultBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(
+                                        alpha = 0.98f
+                                    ),
+                                    transitionBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    transitionState = themesBtnState
+                                )
+                            }
+                        }
                         SettingsItem(
                             text = stringResource(R.string.settings_titles_auto_update),
                             modifier = Modifier.padding(vertical = verticalArrangement)
@@ -902,7 +954,6 @@ fun SettingsGrid(
                             modifier = Modifier.padding(vertical = verticalArrangement)
                         ) {
                             CustomSwitch(
-//                                checked = state.proxyEnabled,
                                 checked = false,
                                 onCheckedChange = { functions.setProxyEnabled(it) },
                                 enabled = false

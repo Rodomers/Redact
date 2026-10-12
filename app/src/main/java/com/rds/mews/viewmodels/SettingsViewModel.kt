@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -46,6 +47,13 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     private val _isApiKeyCorrect = MutableStateFlow(false)
     val isApiKeyCorrect = _isApiKeyCorrect
+
+    private val _currentThemes = repository.themes
+    val currentThemes = _currentThemes.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     val darkThemes: List<DarkTheme> = repository.darkThemeList
     val appThemes: List<AppTheme> = repository.appThemeList
@@ -192,6 +200,8 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     fun setTitlesPeriod(value: TitlesPeriod) = viewModelScope.launch { repository.setTitlesPeriod(value) }
     fun setTitlesKeeping(value: TitlesKeeping) = viewModelScope.launch { repository.setTitlesKeeping(value) }
+
+    fun setThemePlace(theme: String, newPlace: Int) = viewModelScope.launch { repository.setThemePlace(theme, newPlace) }
 
     fun setRssUpdateInterval(context: Context, value: Int) {
         viewModelScope.launch {

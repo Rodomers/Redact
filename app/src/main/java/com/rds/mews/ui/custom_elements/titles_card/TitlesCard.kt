@@ -618,13 +618,13 @@ private fun AnimatedKeywordTag(
     shouldAnimate: Boolean = true
 ) {
     val offsetX = remember { Animatable(if (shouldAnimate) 200f else 0f) }
-    val alpha = remember { Animatable(0f) }
+    val alpha = remember { Animatable(if (shouldAnimate) 0f else 1f) }
     var isOffScreen by remember { mutableStateOf(false) }
     var isMeasured by remember { mutableStateOf(false) }
 
     LaunchedEffect(isExpanded, isMeasured) {
         if (isExpanded) {
-            if (isOffScreen) {
+            if (!shouldAnimate || isOffScreen) {
                 offsetX.snapTo(0f)
                 alpha.snapTo(1f)
             } else {
@@ -719,7 +719,7 @@ private fun ExpandedCardContent(
 
     val imageBoundsMap = remember { mutableMapOf<Int, Rect>() }
 
-    val shouldAnimate = remember { !isRead }
+    val shouldAnimate = remember(isRead) { !isRead }
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }

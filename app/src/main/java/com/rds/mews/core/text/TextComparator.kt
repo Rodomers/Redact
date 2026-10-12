@@ -148,7 +148,7 @@ object TextComparator {
             val keyword = alias?.keywordTarget
             val entity = alias?.entityTarget
             when (keyword) {
-                null -> if (entity != null) Alias(entity, 1.5) else Alias(token)
+                null -> if (entity != null) Alias(entity, 2.0) else Alias(token)
                 else -> Alias(keyword)
             }
 //            alias?.keywordTarget ?: alias?.entityTarget ?: token
@@ -158,7 +158,7 @@ object TextComparator {
             val keyword = alias?.keywordTarget
             val entity = alias?.entityTarget
             when (keyword) {
-                null -> if (entity != null) Alias(entity, 1.5) else Alias(token)
+                null -> if (entity != null) Alias(entity, 2.0) else Alias(token)
                 else -> Alias(keyword)
             }
 //            alias?.keywordTarget ?: alias?.entityTarget ?: token

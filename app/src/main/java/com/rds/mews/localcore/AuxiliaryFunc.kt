@@ -59,6 +59,8 @@ fun getFormattedTimeUnix(unixTime: Long, date: Boolean = false, fullDate: Boolea
             .withLocale(Locale.getDefault())
             .withZone(zoneId)
         fullDate -> DateTimeFormatter.ofPattern("dd.MM.yyyy")
+            .withLocale(Locale.getDefault())
+            .withZone(zoneId)
         else -> DateTimeFormatter.ofPattern("HH:mm")
             .withLocale(Locale.getDefault())
             .withZone(zoneId)

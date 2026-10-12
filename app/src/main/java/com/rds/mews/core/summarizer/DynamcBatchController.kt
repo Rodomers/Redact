@@ -12,7 +12,7 @@ enum class BatchMode(
     val maxTokens: Int = 150000
 ) {
     RAW_ITEMS(60),
-    BLITZ_TOPICS(10),
+    BLITZ_TOPICS(20),
     BASE_TOPICS(20)
 }
 

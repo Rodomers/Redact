@@ -296,12 +296,14 @@ object KeywordStatsRepository {
         return burstClusterDao.getActiveClusters(sinceTimestamp)
     }
 
-    fun saveBurstCluster(cluster: BurstClusterEntity) {
+    fun saveBurstCluster(cluster: BurstClusterEntity): Boolean {
+        var original = true
         externalScope.launch(Dispatchers.IO) {
             val found = burstClusters.first().findLast { TextComparator.compareKeywords(cluster.keywords, it.keywords) >= 0.8 }
             when (found) {
                 null -> burstClusterDao.upsertCluster(cluster)
                 else -> {
+                    original = false
                     burstClusterDao.upsertCluster(
                         found.copy(
                             keywords = (found.keywords + cluster.keywords).distinct(),
@@ -314,6 +316,7 @@ object KeywordStatsRepository {
             }
             burstClusterDao.upsertCluster(cluster)
         }
+        return original
     }
 
     fun deleteClusters(cutoffTimestamp: Long? = null) {

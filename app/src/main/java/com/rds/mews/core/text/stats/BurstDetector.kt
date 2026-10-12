@@ -27,15 +27,6 @@ class BurstDetector {
         val zScore: Double
     )
 
-
-
-    /**
-     * Обработка окна ключевых слов и расчет финального значения IDF с учетом всплесков.
-     *
-     * @param windowData Список токенов с их частотой и количеством источников в окне.
-     * @param totalWindowWords Суммарный объем токенов в текущем окне (Mw).
-     * @param totalNews Общее число обработанных документов N.
-     */
     suspend fun processWindow(
         windowData: List<WordWindowData>,
         totalWindowWords: Long,

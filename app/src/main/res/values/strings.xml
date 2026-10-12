@@ -57,6 +57,7 @@
     <string name="settings_filter_topics">LLM-based topics filter</string>
     <string name="settings_titles_auto_update">Topics autoupdate</string>
     <string name="settings_banned_news">Blocked news</string>
+    <string name="settings_themes">Themes priority</string>
     <string name="settings_unban_new_button">Unban news button</string>
     <string name="settings_titles_alarm_update">Turn on autoupdate</string>
     <string name="settings_titles_update_time">Update time</string>

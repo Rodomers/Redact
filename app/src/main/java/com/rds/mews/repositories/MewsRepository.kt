@@ -647,8 +647,8 @@ object MewsRepository {
             link = link,
             pubTime = messageTime,
             title = title,
-            originalText = messageText,
-            cleanText = TextSanitizer.sanitize(TextCleaner.clean(messageText)),
+            originalText = messageText.take(200_000),
+            cleanText = TextSanitizer.sanitize(TextCleaner.clean(messageText)).take(200_000),
             isDuplicate = false,
             isRead = false,
             factCheck = null,
@@ -828,7 +828,8 @@ object MewsRepository {
         parentId: Long? = null,
         macroTag: String? = null,
         isBlitz: Boolean = false,
-        newMessageIds: List<Long>? = null
+        newMessageIds: List<Long>? = null,
+        newWeight: Int? = null
     ) = withContext(Dispatchers.IO) {
         val existing = titleDao.getTitleById(id) ?: return@withContext
         val updatedEntity = existing.copy(
@@ -837,7 +838,8 @@ object MewsRepository {
             eventTime = newEventTime ?: existing.eventTime,
             status = status,
             keywords = if (macroTag != null) (listOf(macroTag) + existing.keywords).distinctBy { it.lowercase() } else existing.keywords,
-            isBlitz = isBlitz
+            isBlitz = isBlitz,
+            importanceWeight = newWeight ?: existing.importanceWeight
         )
         titleDao.update(updatedEntity)
 
@@ -940,6 +942,10 @@ object MewsRepository {
     fun delBannedNew(value: String) {
         if (bannedNewsFlow.value.contains(value)) {
             updateSetting { it.copy(bannedNews = it.bannedNews - value) }
+            externalScope.launch {
+                val found = themes.first().find { it.theme == value }
+                if (found != null) deleteTheme(value)
+            }
         }
     }
 
@@ -1122,11 +1128,10 @@ object MewsRepository {
         withContext(Dispatchers.IO) {
             val existing = themesDao.getTheme(theme)
             if (existing == null) {
-                val nextPlace = (themesDao.getMaxPlace() ?: 0) + 1
                 themesDao.upsertTheme(
                     ThemeEntity(
                         theme = theme,
-                        place = nextPlace,
+                        place = 0,
                         timesSeen = 1
                     )
                 )
@@ -1145,6 +1150,12 @@ object MewsRepository {
     fun deleteTheme(theme: String) {
         externalScope.launch(Dispatchers.IO) {
             themesDao.deleteTheme(theme)
+        }
+    }
+
+    fun deleteMessageById(id: Long) {
+        externalScope.launch {
+            messageDao.deleteById(id)
         }
     }
 

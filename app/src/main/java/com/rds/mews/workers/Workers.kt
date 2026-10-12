@@ -22,7 +22,12 @@ import com.rds.mews.core.text.stats.BurstDetector
 import com.rds.mews.database.keyword_stats.BurstClusterEntity
 import com.rds.mews.repositories.KeywordStatsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.time.Instant
@@ -78,13 +83,17 @@ class ParserWorker(
                 val minifluxClient = MinifluxClient(httpClient)
                 val sourcesQueue = MewsRepository.getSourcesQueue()
 
-                for (source in sourcesQueue) {
-                    if (source.errCount < 3 && System.currentTimeMillis() - source.lastSyncTime > 1_800_000)
-                        processSource(
-                        source,
-                        minifluxClient,
-                        enableProxy
-                    )
+                val semaphore = Semaphore(4)
+                coroutineScope {
+                    sourcesQueue
+                        .filter { it.errCount < 3 && System.currentTimeMillis() - it.lastSyncTime > 1_800_000 }
+                        .map { source ->
+                            async(Dispatchers.IO) {
+                                semaphore.withPermit {
+                                    processSource(source, minifluxClient, enableProxy)
+                                }
+                            }
+                        }.awaitAll()
                 }
 
                 MewsRepository.messageTimeKill(864000L)
@@ -192,38 +201,42 @@ class ParserWorker(
 
         val windowTexts = windowMessages.map { it.cleanText }
 
-        for (i in batch.indices) {
-            val entry = batch[i]
-            val pubTimeMs = pubTimes[i]
+        val parsedResults = withContext(Dispatchers.Default) {
+            batch.indices.map { i ->
+                async {
+                    val entry = batch[i]
+                    val pubTimeMs = pubTimes[i]
 
-            val cleanText = TextSanitizer.sanitize(TextCleaner.clean(entry.content))
+                    val cleanText = TextSanitizer.sanitize(TextCleaner.clean(entry.content))
+                    val tokens = cleanText.lowercase()
+                        .split(Regex("[^\\p{L}\\p{N}_-]+"))
+                        .filter { it.length > 1 }
+                    val isDuplicate = duplicateDetector.checkIsDuplicate(cleanText, windowTexts)
 
-            val tokens = cleanText.lowercase()
-                .split(Regex("[^\\p{L}\\p{N}_-]+"))
-                .filter { it.length > 1 }
+                    val entity = MessageEntity(
+                        sourceId = source.id,
+                        link = entry.url,
+                        pubTime = pubTimeMs,
+                        title = entry.title,
+                        originalText = entry.content,
+                        cleanText = cleanText,
+                        isDuplicate = isDuplicate,
+                        isRead = false,
+                        factCheck = null
+                    )
+                    entity to tokens
+                }
+            }.awaitAll()
+        }
 
+        for ((entity, tokens) in parsedResults) {
             if (inBurst) {
                 tokens.forEach { word ->
                     batchWordCounts[word] = (batchWordCounts[word] ?: 0.0) + 1.0
                     wordToSourcesMap.getOrPut(word) { mutableSetOf() }.add(source.id)
                 }
             }
-
-            val isDuplicate = duplicateDetector.checkIsDuplicate(cleanText, windowTexts)
-
-            entitiesToInsert.add(
-                MessageEntity(
-                    sourceId = source.id,
-                    link = entry.url,
-                    pubTime = pubTimeMs,
-                    title = entry.title,
-                    originalText = entry.content,
-                    cleanText = cleanText,
-                    isDuplicate = isDuplicate,
-                    isRead = false,
-                    factCheck = null
-                )
-            )
+            entitiesToInsert.add(entity)
         }
 
         if (batchWordCounts.isNotEmpty()) {
@@ -316,17 +329,17 @@ class ParserWorker(
                         timestamp = syncTimeMs
                     )
 
-                    KeywordStatsRepository.saveBurstCluster(clusterEntity)
+                    if (KeywordStatsRepository.saveBurstCluster(clusterEntity)) {
+                        val clusterText = allMessages
+                            .filter { it.id in clusterMsgIds }.joinToString("\n") { it.cleanText }
 
-                    val clusterText = allMessages
-                        .filter { it.id in clusterMsgIds }.joinToString("\n") { it.cleanText }
+                        val snippet = SnippetExtractor.extractSnippet(
+                            MewsRepository.getAppContext(),
+                            clusterText
+                        )
 
-                    val snippet = SnippetExtractor.extractSnippet(
-                        MewsRepository.getAppContext(),
-                        clusterText
-                    )
-
-                    applicationContext.sendBurstNotification(snippet)
+                        applicationContext.sendBurstNotification(snippet)
+                    }
                 }
             }
         }

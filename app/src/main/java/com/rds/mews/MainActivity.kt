@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rds.mews.core.summarizer.LLMClient
 import com.rds.mews.core.summarizer.NewsSummarizer
+import com.rds.mews.database.main.MessageDao
 import com.rds.mews.localcore.TooltipOptions
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.localcore.isScheduleExactAlarm
@@ -117,7 +118,6 @@ fun MainScreen(mainActivity: MainActivity) {
         val selectedTab by MewsRepository.selectedTab.collectAsStateWithLifecycle()
         val compactTab by settingsViewModel.compactTabBar.collectAsStateWithLifecycle()
         val isBlitzActive by blitzViewModel.isBlitzActive.collectAsStateWithLifecycle()
-        val isOnline by MewsRepository.isOnline.collectAsStateWithLifecycle()
         val scope = rememberCoroutineScope()
 
         var holdProgress by remember { mutableFloatStateOf(0f) }
@@ -197,10 +197,12 @@ fun MainScreen(mainActivity: MainActivity) {
             }
         }
 
+        MewsRepository.deleteMessageById(287529)
+
 //        val titles by MewsRepository.titles.collectAsStateWithLifecycle(emptyList())
 //        LaunchedEffect(Unit, titles.size) {
 //            if (titles.isEmpty()) return@LaunchedEffect
-//            val pinned = titles.filter { it.isPinned && it.eventTime >= System.currentTimeMillis() - 72 * 3600_000L }
+//            val pinned = titles.filter { it.isPinned && it.eventTime >= System.currentTimeMillis() - 72 * 3600_000L }.sortedByDescending { it.eventTime }
 //            val summarizer = NewsSummarizer(LLMClient())
 //            pinned.forEach { pinnedTitle ->
 //                val filtered = titles.filter { it.eventTime < pinnedTitle.eventTime }

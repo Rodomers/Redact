@@ -138,7 +138,7 @@ interface MessageDao {
     suspend fun insertAll(messages: List<MessageEntity>): List<Long> {
         if (messages.isEmpty()) return emptyList()
         return messages.chunked(100).flatMap { chunk ->
-            insertAllInternal(chunk)
+            insertAllInternal(chunk.map { it.copy(originalText = it.originalText.take(200_000), cleanText = it.cleanText.take(200_000)) })
         }
     }
 

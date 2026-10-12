@@ -5,6 +5,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.rds.mews.MainActivity
+import com.rds.mews.database.main.ThemeEntity
 import com.rds.mews.settings_manager.SummarizationErrorType
 
 data class Message(
@@ -80,6 +81,7 @@ sealed interface SummarizationResult {
 }
 
 data class SettingsUiState(
+    val themes: List<ThemeEntity>,
     val autoUpdateScreenOpened: Boolean,
     val bannedNewsScreenOpened: Boolean,
     val geminiKeyScreenOpened: Boolean,
@@ -125,6 +127,7 @@ data class SettingsUiState(
 )
 
 data class SettingsUiFunctions(
+    val setThemePlace: (String, Int) -> Unit,
     val setAutoupdateScreen: (Boolean) -> Unit,
     val setBannedNewsScreen: (Boolean) -> Unit,
     val setGeminiScreenOpened: (Boolean) -> Unit,

@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScope
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
@@ -73,6 +75,7 @@ fun CustomHeaderContent(
     fontSize: TextUnit = 26.sp,
     buttonsColor: Color? = null,
     bottomPadding: Dp = 6.dp,
+    showBackground: Boolean = true,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     val titleText = textId?.let { stringResource(it) } ?: text
@@ -97,7 +100,7 @@ fun CustomHeaderContent(
             .height(IntrinsicSize.Min)
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f), Color.Transparent)
+                    colors = listOf(MaterialTheme.colorScheme.surface.copy(alpha = if (showBackground) 0.7f else 0f), Color.Transparent)
                 )
             )
             .padding(start = 2.dp, top = 8.dp, bottom = animatedBottomPadding, end = 2.dp),
@@ -190,6 +193,36 @@ fun LazyStaggeredGridScope.customHeader(
             buttonsColor = buttonsColor,
             bottomPadding = bottomPadding,
             modifier = modifier
+        )
+    }
+}
+
+fun LazyListScope.customHeader(
+    text: String = "null",
+    textId: Int? = null,
+    isExpanded: Boolean = false,
+    onHeaderClick: () -> Unit = {},
+    onTextClick: (() -> Unit)? = null,
+    expandable: Boolean = true,
+    fontSize: TextUnit = 26.sp,
+    buttonsColor: Color? = null,
+    bottomPadding: Dp = 6.dp,
+    modifier: Modifier = Modifier,
+    showBackground: Boolean = false
+) {
+    stickyHeader {
+        CustomHeaderContent(
+            text = text,
+            textId = textId,
+            isExpanded = isExpanded,
+            onHeaderClick = onHeaderClick,
+            onTextClick = onTextClick,
+            expandable = expandable,
+            fontSize = fontSize,
+            buttonsColor = buttonsColor,
+            bottomPadding = bottomPadding,
+            modifier = modifier,
+            showBackground = showBackground
         )
     }
 }

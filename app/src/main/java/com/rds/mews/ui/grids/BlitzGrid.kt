@@ -1,5 +1,6 @@
 package com.rds.mews.ui.grids
 
+import com.rds.mews.ui.custom_elements.bottom_sheet.CustomErrorBottomSheet
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -77,7 +78,6 @@ import com.rds.mews.localcore.mapResultToUiResources
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
-import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
 import com.rds.mews.ui.custom_elements.titles_card.BlitzCard
 import com.rds.mews.ui.custom_elements.titles_card.BlitzCardSourceExpansionOverlay
@@ -114,11 +114,10 @@ fun BlitzScreen(
         viewModel.scrollEvents.collect { event ->
             when (event) {
                 is TitlesScrollEvent.ScrollToTop -> {
-                    if (lazyStaggeredGridState.firstVisibleItemIndex > 15) {
-                        lazyStaggeredGridState.scrollToItem(0)
-                    } else {
-                        lazyStaggeredGridState.animateScrollToItem(0)
+                    if (lazyStaggeredGridState.firstVisibleItemIndex > 10) {
+                        lazyStaggeredGridState.scrollToItem(6)
                     }
+                    lazyStaggeredGridState.animateScrollToItem(0)
                 }
                 is TitlesScrollEvent.ScrollToItem -> {
                     if (event.animated) {
@@ -248,7 +247,10 @@ fun BlitzGrid(
             .map { visibleItems -> visibleItems.mapNotNull { it.key as? Long } }
             .distinctUntilChanged()
             .collect { visibleIds ->
-                visibleIds.forEach { id -> markTitleAsRead(id, true) }
+                delay(1500.milliseconds)
+                visibleIds.forEach { id ->
+                    markTitleAsRead(id, true)
+                }
             }
     }
 

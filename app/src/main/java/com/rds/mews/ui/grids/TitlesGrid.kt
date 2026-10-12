@@ -1,5 +1,6 @@
 package com.rds.mews.ui.grids
 
+import com.rds.mews.ui.custom_elements.bottom_sheet.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.TimelineMarker
 import android.annotation.SuppressLint
 import android.content.Context
@@ -73,7 +74,6 @@ import com.rds.mews.localcore.TitlesGroupState
 import com.rds.mews.localcore.mapResultToUiResources
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
-import com.rds.mews.ui.custom_elements.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
 import com.rds.mews.ui.custom_elements.titles_card.TitlesCard
 import com.rds.mews.ui.custom_elements.customHeader

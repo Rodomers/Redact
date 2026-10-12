@@ -14,7 +14,9 @@ import com.rds.mews.core.text.TokenEstimator
 import com.rds.mews.core.text.graph.GraphCache
 import com.rds.mews.core.text.graph.KnowledgeGraphManager
 import com.rds.mews.database.keyword_stats.BurstClusterEntity
+import com.rds.mews.database.main.ThemeEntity
 import com.rds.mews.localcore.TitleStatus
+import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.repositories.KeywordStatsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -85,7 +87,7 @@ class NewsSummarizer(private val llm: LLMClient) {
     )
 
     companion object {
-        private const val MATCH_RATE = 0.52f
+        private const val MATCH_RATE = 0.43f
         private const val TOPIC_TOKEN_LIMIT = 6000
         private const val TOPIC_MAX_MESSAGES_LIMIT = 30
         private const val SIGNAL_SIMILARITY_THRESHOLD = 0.8f
@@ -431,7 +433,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             val preHistory = try {
                 MewsRepository.getRecentTitlesForStorylines(
                     (stateManager.readState()?.timemark
-                        ?: System.currentTimeMillis()) - 72 * 3600_000L
+                        ?: System.currentTimeMillis()) - 1680 * 3600_000L
                 )
                     .filter { it.updateTime != MewsRepository.lastTitlesUpdate.first() }
                     .filter { it.id !in currentTopics }
@@ -699,7 +701,6 @@ class NewsSummarizer(private val llm: LLMClient) {
         return (matches.toDouble() / minSize) >= clusterMatchRate
     }
 
-
     private suspend fun compareTopics(
         topicTitle: String, topicKeywords: List<String>, otherTitle: String, otherKeywords: List<String>,
         topicText: String? = null, otherText: String? = null
@@ -744,8 +745,8 @@ class NewsSummarizer(private val llm: LLMClient) {
             expandedOtherKeywords.size
         ).coerceAtLeast(1))
 
-        if (keywordScore < 0.2 || titlesThreshold < 0.55f) return 0.0
-        if (keywordScore > 0.9 || (titlesThreshold > 0.65 && keywordScore > 0.5)) return 1.0
+        if ((keywordScore < 0.2 && kwMatches < 2) || titlesThreshold < 0.45f) return 0.0
+        if (keywordScore > 0.7 || (titlesThreshold > 0.65 && keywordScore > 0.5)) return 1.0
 
         val hasSummary = !topicText.isNullOrBlank() && !otherText.isNullOrBlank()
         val summaryThreshold = if (hasSummary) {
@@ -938,6 +939,57 @@ class NewsSummarizer(private val llm: LLMClient) {
         return if (result.isEmpty()) listOf(prepared.first().message) else result
     }
 
+    private suspend fun resolveCanonicalMacroTag(
+        rawTag: String,
+        existingThemes: List<ThemeEntity>
+    ): Pair<String, Int> {
+        val cleanTag = rawTag.trim()
+        if (cleanTag.isEmpty()) return Pair(cleanTag, 0)
+
+        val exactMatch = existingThemes.find { it.theme.equals(cleanTag, ignoreCase = true) }
+        if (exactMatch != null) {
+            return Pair(exactMatch.theme, exactMatch.place)
+        }
+
+        val alias = GraphCache.findAlias(cleanTag)
+        val aliasTarget = alias?.entityTarget ?: alias?.keywordTarget
+        if (aliasTarget != null) {
+            val targetMatch = existingThemes.find {
+                it.theme.equals(aliasTarget, ignoreCase = true) ||
+                        TextComparator.areSimilar(it.theme.lowercase(), aliasTarget.lowercase(), 0.8f)
+            }
+            if (targetMatch != null) {
+                return Pair(targetMatch.theme, targetMatch.place)
+            }
+        }
+
+        val rawTokens = TextComparator.tokenize(cleanTag)
+        var bestScore = 0f
+        var bestMatch: ThemeEntity? = null
+
+        for (themeEntity in existingThemes) {
+            val baseScore = TextComparator.countThreshold(cleanTag.lowercase(), themeEntity.theme.lowercase())
+            val themeTokens = TextComparator.tokenize(themeEntity.theme)
+            val totalScore = TextComparator.combineWithSemanticScore(
+                baseScore = baseScore,
+                tokens1 = rawTokens,
+                tokens2 = themeTokens,
+                graphTrustFactor = 1.0f
+            )
+
+            if (totalScore > bestScore && totalScore >= 0.70f) {
+                bestScore = totalScore
+                bestMatch = themeEntity
+            }
+        }
+
+        if (bestMatch != null) {
+            return Pair(bestMatch.theme, bestMatch.place)
+        }
+
+        return Pair(cleanTag, 0)
+    }
+
     private fun processSummaryResults(
         scope: CoroutineScope,
         results: List<SummaryResult>,
@@ -961,14 +1013,39 @@ class NewsSummarizer(private val llm: LLMClient) {
             var bestMatchId: Long? = null
             val newTimeVal = item.payload.allMessagesTime ?: suitableMessages.minOfOrNull { it.time } ?: extractionTime
 
-            val updateJob = scope.launch {
+            val updateJob = scope.launch(Dispatchers.IO) {
+                val existingThemes = try {
+                    MewsRepository.themes.first()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+
+                val (canonicalTag, place) = if (!macroTag.isNullOrBlank()) {
+                    resolveCanonicalMacroTag(macroTag, existingThemes)
+                } else {
+                    Pair(null, 0)
+                }
+
+                if (canonicalTag != null) {
+                    MewsRepository.addTheme(canonicalTag)
+                }
+
+                val baseDampedWeight = topic.weight * 0.8
+                val priorityMultiplier = if (place > 0) {
+                    1.0 + (0.35 / (1.0 + 0.15 * (place - 1)))
+                } else {
+                    1.0
+                }
+                val finalWeight = (baseDampedWeight * priorityMultiplier).roundToInt().coerceIn(1, 10)
+
                 MewsRepository.updateTitle(
                     id = topic.id,
                     newEventTime = newTimeVal,
                     newTitle = newTitle,
-                    macroTag = macroTag,
+                    macroTag = canonicalTag,
                     isBlitz = topic.isBlitz,
-                    summary = summary
+                    summary = summary,
+                    newWeight = finalWeight
                 )
             }
             jobs.add(updateJob)
@@ -1134,10 +1211,11 @@ class NewsSummarizer(private val llm: LLMClient) {
                     if (combinedKeywords.none { TextComparator.areSimilar(it, word, 0.85f) }) combinedKeywords.add(word)
                 }
                 val fromBurst = existing.fromBurst || candidate.fromBurst
+                val multiplier = if (fromBurst) 1.5 else 1.0
 
                 globalCache[existingIndex] = existing.copy(
                     ids = combinedIds,
-                    weight = combinedIds.size,
+                    weight = (combinedIds.size * multiplier).toInt(),
                     keywords = combinedKeywords,
                     isBlitz = existing.isBlitz,
                     fromBurst = fromBurst
@@ -1266,6 +1344,8 @@ class NewsSummarizer(private val llm: LLMClient) {
     }
 
     object PromptFactory {
+        val fullDate = getFormattedTimeUnix(System.currentTimeMillis(), fullDate = true)
+
         fun buildExtractionPrompt(
             batch: List<Message>,
             maxLimit: Int,
@@ -1279,6 +1359,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             }
 
             return """
+                Текущая дата - $fullDate. Учитывай это при обработке дат.
                 Проанализируй новости и выдели ОТДЕЛЬНЫЕ новостные события.
                 Максимальное количество тем: $maxLimit. Если событий больше — оставь самые резонансные и значимые.
                 
@@ -1342,6 +1423,7 @@ class NewsSummarizer(private val llm: LLMClient) {
 
             return if (isBlitz) {
                 """
+                Текущая дата - $fullDate. Учитывай это при обработке дат.
                 Ты — аналитик. Твоя цель — написать краткий дайджест микроновостей. Каждая тема - 1-2 предложения.
                 1. ДОСТОВЕРНОСТЬ: Строй обзор исключительно на фактах из поля news_content. Запрещено генерировать несуществующие данные.
                 2. УМНАЯ ФИЛЬТРАЦИЯ: Если спам/запрет ('$banned') — вырезай. Если нарушена безопасность — верни "text": "REJECTED". Если новость уже описана без изменений — верни "text": "NO_UPDATE".
@@ -1527,8 +1609,6 @@ class NewsSummarizer(private val llm: LLMClient) {
                     }
 
                     if (original != null && summary.trim().length > 15 && !bannedWords.contains(macroTag ?: " null ")) {
-                        if (macroTag != null) MewsRepository.addTheme(macroTag)
-
                         results.add(SummaryResult(
                             id = original.topic.id,
                             summary = summary,
