@@ -49,20 +49,10 @@ fun AddSourceBottomSheet(
     BaseFloatingBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
-        scope = scope
+        scope = scope,
+        stickyHeaderText = stringResource(R.string.change_dialog_add_source)
     ) { closeSheet ->
         listOf(
-            {
-                Text(
-                    text = stringResource(R.string.change_dialog_add_source),
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    modifier = Modifier
-                        .padding(vertical = 16.dp)
-                        .fillMaxWidth()
-                )
-            },
             {
                 TextField(
                     value = rssLinkValue,

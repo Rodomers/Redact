@@ -36,20 +36,10 @@ fun CustomErrorBottomSheet(
     BaseFloatingBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
-        scope = scope
+        scope = scope,
+        stickyHeaderText = title
     ) { closeSheet ->
         listOf(
-            {
-                Text(
-                    text = title,
-                    textAlign = TextAlign.Center,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .padding(vertical = 16.dp)
-                        .fillMaxWidth()
-                )
-            },
             {
                 Text(
                     text = text,

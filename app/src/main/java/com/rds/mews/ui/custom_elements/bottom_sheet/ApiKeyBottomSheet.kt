@@ -76,17 +76,6 @@ fun ApiKeyBottomSheet(
     ) { _ ->
         listOf(
             {
-//                Text(
-//                    text = stringResource(R.string.settings_sheet_current_key),
-//                    textAlign = TextAlign.Center,
-//                    fontSize = 20.sp,
-//                    fontWeight = FontWeight.Bold,
-//                    modifier = Modifier
-//                        .padding(vertical = 16.dp)
-//                        .fillMaxWidth()
-//                )
-            },
-            {
                 TextField(
                     value = textFieldValue,
                     onValueChange = {
