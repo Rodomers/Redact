@@ -115,6 +115,7 @@ class BatchController {
         return batches
     }
 
+    @Synchronized
     fun onBatchSuccess(model: GeminiModelOption, isProbe: Boolean, batchMode: BatchMode, kSafeTokens: Boolean) {
         val additional = if (isProbe) 0.15 else 0.02
 
@@ -146,6 +147,7 @@ class BatchController {
         }
     }
 
+    @Synchronized
     fun onBatchFailure(model: GeminiModelOption, isProbe: Boolean, batchMode: BatchMode, kSafeTokens: Boolean, savedRatio: Double = 0.0) {
         if (isProbe) return
 
@@ -188,6 +190,7 @@ class BatchController {
         }
     }
 
+    @Synchronized
     fun shouldProbe(): Boolean {
         return successfulBatchesCount > 0 && successfulBatchesCount % 15 == 0
     }

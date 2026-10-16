@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -515,9 +516,14 @@ fun SettingsGrid(
         )
     }
 
+    val apiPagerState = rememberPagerState(
+        initialPage = 0,
+        pageCount = { state.geminiApiBuffer.size.coerceIn(1, 5) }
+    )
+
     if (state.geminiKeyScreenOpened) {
         ApiKeyBottomSheet(
-            apiKeyValue = state.geminiApiBuffer,
+            apiKeys = state.geminiApiBuffer,
             onApiKeyChange = functions.setGeminiBuffer,
             confirmBtnInputs = TextButtonInputs(
                 text = stringResource(R.string.settings_sheet_api_save),
@@ -532,7 +538,6 @@ fun SettingsGrid(
                         if (!screensState.isVisible) {
                             functions.setGeminiScreenOpened(false)
                         }
-                        functions.setGeminiBuffer("")
                     }
                 }
             ),
@@ -547,7 +552,6 @@ fun SettingsGrid(
                         if (!screensState.isVisible) {
                             functions.setGeminiScreenOpened(false)
                         }
-                        functions.setGeminiBuffer("")
                     }
                 }
             ),
@@ -555,7 +559,6 @@ fun SettingsGrid(
                 text = stringResource(R.string.settings_reset),
                 action = {
                     functions.resetUserGeminiApi()
-                    functions.setGeminiBuffer("")
 
                     apiBtnState.targetState = false
 
@@ -570,7 +573,8 @@ fun SettingsGrid(
             ),
             sheetState = screensState,
             scope = screenScope,
-            isApiKeyCorrect = state.isApiKeyCorrect
+            isApiKeysCorrect = state.isApiKeyCorrect,
+            pagerState = apiPagerState
         )
     }
 

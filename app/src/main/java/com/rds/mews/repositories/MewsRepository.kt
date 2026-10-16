@@ -77,6 +77,8 @@ object MewsRepository {
     lateinit var titlesAutoUpdateFrequency: StateFlow<AutoUpdateFrequency>
 
     lateinit var userApiKey: StateFlow<String>
+    lateinit var additionalApiKeys: StateFlow<List<String>>
+    lateinit var userApiKeys: StateFlow<List<String>>
     lateinit var showDates: StateFlow<Boolean>
     lateinit var rssUpdateInterval: StateFlow<Int>
     lateinit var lastRssUpdate: StateFlow<Long>
@@ -234,6 +236,23 @@ object MewsRepository {
         userApiKey = createSettingFlow({
             it.userApiKey.ifBlank { DEFAULT_GEMINI_API_KEY }
         }, DEFAULT_GEMINI_API_KEY)
+
+        additionalApiKeys = createSettingFlow({
+            it.additionalApiKeys
+        }, emptyList())
+
+        userApiKeys = createSettingFlow({ settings ->
+            val combined = (listOf(settings.userApiKey) + settings.additionalApiKeys)
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .distinct()
+            val withoutDefault = if (combined.size > 1) {
+                combined.filter { it != DEFAULT_GEMINI_API_KEY }
+            } else {
+                combined
+            }
+            withoutDefault.ifEmpty { listOf(DEFAULT_GEMINI_API_KEY) }.take(5)
+        }, listOf(DEFAULT_GEMINI_API_KEY))
 
         doNotBlockSources = createSettingFlow({ it.doNotBlockSources }, false)
 
@@ -910,6 +929,25 @@ object MewsRepository {
     fun setLlmModel(newValue: GeminiModelOption) = updateSetting { it.copy(llmModel = newValue) }
     fun setTitlesAutoUpdateFrequency(newValue: AutoUpdateFrequency) = updateSetting { it.copy(titlesAutoUpdateFrequency = newValue) }
     fun setUserApiKey(newValue: String) = updateSetting { it.copy(userApiKey = newValue) }
+    fun setUserApiKeys(keys: List<String>) = updateSetting { current ->
+        val cleaned = keys
+            .map { it.trim() }
+            .filter { it.isNotBlank() && it != DEFAULT_GEMINI_API_KEY }
+            .distinct()
+            .take(5)
+
+        if (cleaned.isEmpty()) {
+            current.copy(
+                userApiKey = DEFAULT_GEMINI_API_KEY,
+                additionalApiKeys = emptyList()
+            )
+        } else {
+            current.copy(
+                userApiKey = cleaned.first(),
+                additionalApiKeys = cleaned.drop(1)
+            )
+        }
+    }
     fun setShowDates(newValue: Boolean) = updateSetting { it.copy(showDates = newValue) }
     fun setSanitizeCopiedText(newValue: Boolean) = updateSetting { it.copy(sanitizeCopiedText = newValue) }
     fun setSaveUnreadTitles(newValue: Boolean) = updateSetting { it.copy(saveUnreadTitles = newValue) }

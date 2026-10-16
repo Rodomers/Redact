@@ -111,8 +111,8 @@ data class SettingsUiState(
     val showNotificationsSheet: Boolean,
     val defaultApiCheck: Boolean,
     val defaultGeminiModel: GeminiModelOption,
-    val geminiApiBuffer: String,
-    val isApiKeyCorrect: Boolean,
+    val geminiApiBuffer: List<String>,
+    val isApiKeyCorrect: List<Boolean>,
     val copyPlainText: Boolean,
     val keepUnreadTitles: Boolean,
     val enableUpdateNotifications: Boolean,
@@ -152,7 +152,7 @@ data class SettingsUiFunctions(
     val setUpdateNotifications: (Boolean) -> Unit,
     val delBannedNews: (String) -> Unit,
     val setCurrentLlm: (GeminiModelOption) -> Unit,
-    val setUserGeminiApi: (String) -> Unit,
+    val setUserGeminiApi: (List<String>) -> Unit,
     val resetUserGeminiApi: () -> Unit,
     val setProxyEnabled: (Boolean) -> Unit,
     val setTitlesAlarmUpdate: (Context, () -> Unit, () -> Unit, Boolean, MainActivity) -> Unit,
@@ -164,7 +164,7 @@ data class SettingsUiFunctions(
     val setShowNotificationsSheet: (Boolean) -> Unit,
     val addGroupState: (Int, Boolean) -> Unit,
     val changeGroupState: (Int) -> Unit,
-    val setGeminiBuffer: (String) -> Unit,
+    val setGeminiBuffer: (Int, String) -> Unit,
     val clearFeed: () -> Unit
 )
 

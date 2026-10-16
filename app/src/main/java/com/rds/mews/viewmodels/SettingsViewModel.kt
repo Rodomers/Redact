@@ -7,18 +7,18 @@ import androidx.lifecycle.viewModelScope
 import com.rds.mews.MainActivity
 import com.rds.mews.localcore.*
 import com.rds.mews.repositories.MewsRepository
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 
 class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     private val _scrollEvents = Channel<SettingsScrollEvent>(Channel.CONFLATED)
@@ -42,11 +42,14 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     private val _geminiKeyScreenOpened = MutableStateFlow(false)
     val geminiScreenOpened = _geminiKeyScreenOpened
 
-    private val _geminiKeyBuffer = MutableStateFlow("")
-    val geminiKeyBuffer = _geminiKeyBuffer
+    private val _geminiKeyBuffer = MutableStateFlow<List<String>>(listOf(""))
+    val geminiKeyBuffer = _geminiKeyBuffer.asStateFlow()
 
-    private val _isApiKeyCorrect = MutableStateFlow(false)
-    val isApiKeyCorrect = _isApiKeyCorrect
+    private val _isApiKeyCorrect = MutableStateFlow<List<Boolean>>(listOf(false))
+    val isApiKeyCorrect = _isApiKeyCorrect.asStateFlow()
+
+    private val validationJobs = mutableMapOf<Int, Job>()
+    private val validationCache = ConcurrentHashMap<String, Boolean>()
 
     private val _currentThemes = repository.themes
     val currentThemes = _currentThemes.stateIn(
@@ -145,15 +148,65 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     val bannedNews = repository.bannedNewsFlow
 
-    fun setGeminiKeyBuffer(value: String) {
-        val default = value == _defaultApiKey
+    fun setGeminiKeyBuffer(index: Int, value: String) {
+        val currentList = _geminiKeyBuffer.value.toMutableList()
+        if (index !in currentList.indices) return
 
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                _geminiKeyBuffer.value = value
-                if (!default) _isApiKeyCorrect.value = repository.checkGeminiApiKey(value)
+        currentList[index] = value
+
+        if (currentList.last().isNotBlank() && currentList.size < 5) {
+            currentList.add("")
+        }
+        while (currentList.size > 1 && currentList.last().isBlank() && currentList[currentList.size - 2].isBlank()) {
+            currentList.removeAt(currentList.lastIndex)
+        }
+
+        _geminiKeyBuffer.value = currentList
+        recalculateValidates(currentList)
+
+        val trimmed = value.trim()
+        validationJobs[index]?.cancel()
+
+        if (trimmed.isEmpty() || trimmed == _defaultApiKey || validationCache.containsKey(trimmed)) {
+            return
+        }
+
+        validationJobs[index] = viewModelScope.launch {
+            kotlinx.coroutines.delay(350L.milliseconds)
+            val isValid = repository.checkGeminiApiKey(trimmed)
+            validationCache[trimmed] = isValid
+            recalculateValidates(_geminiKeyBuffer.value)
+        }
+    }
+
+    private fun recalculateValidates(keys: List<String>) {
+        val seen = mutableSetOf<String>()
+        val validates = keys.map { raw ->
+            val trimmed = raw.trim()
+            if (trimmed.isEmpty() || trimmed == _defaultApiKey) {
+                false
+            } else if (!seen.add(trimmed)) {
+                false
+            } else {
+                validationCache[trimmed] == true
             }
         }
+        _isApiKeyCorrect.value = validates
+    }
+
+    private fun initGeminiBufferFromRepo() {
+        validationJobs.values.forEach { it.cancel() }
+        validationJobs.clear()
+
+        val savedKeys = repository.userApiKeys.value
+            .filter { it.isNotBlank() && it != _defaultApiKey }
+            .take(5)
+
+        savedKeys.forEach { validationCache[it] = true }
+
+        val initialSlots = if (savedKeys.size < 5) savedKeys + "" else savedKeys
+        _geminiKeyBuffer.value = initialSlots
+        _isApiKeyCorrect.value = initialSlots.map { it.isNotBlank() && validationCache[it] == true }
     }
 
     fun addGroupState(group: Int, initState: Boolean = true) {
@@ -178,8 +231,8 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     }
 
     fun setGeminiScreen(value: Boolean) {
-        if (_geminiKeyBuffer.value == "" && !isKeyDefault.value) {
-            setGeminiKeyBuffer(repository.userApiKey.value)
+        if (value) {
+            initGeminiBufferFromRepo()
         }
         _geminiKeyScreenOpened.value = value
     }
@@ -215,12 +268,12 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
 
     fun setCurrentLlm(value: GeminiModelOption) = viewModelScope.launch { repository.setLlmModel(value) }
 
-    fun setUserGeminiApi(value: String) = viewModelScope.launch {
-        repository.setUserApiKey(value)
+    fun setUserGeminiApi(values: List<String>) = viewModelScope.launch {
+        repository.setUserApiKeys(values)
     }
 
     fun resetApiKey() = viewModelScope.launch {
-        repository.setUserApiKey(_defaultApiKey)
+        repository.setUserApiKeys(emptyList())
         repository.setLlmModel(defaultGeminiModel)
         repository.setFilterTopics(false)
         if (repository.titlesNum.value.num > 20) repository.setTitlesNum(HeadersNum.NUM_10)

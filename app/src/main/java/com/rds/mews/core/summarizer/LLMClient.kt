@@ -15,6 +15,7 @@ import kotlinx.serialization.Serializable
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 import java.io.Closeable
 import kotlin.math.pow
 import kotlin.time.Duration.Companion.milliseconds
@@ -53,29 +54,70 @@ class LLMClient(
     var currentModelApiName = MODEL.ifBlank { MewsRepository.defaultModel.apiModelName }
     var currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
 
-    private val rateLimiter = SmartRateLimiter()
+    private val rateLimiters = ConcurrentHashMap<String, SmartRateLimiter>()
+    private val keyModels = ConcurrentHashMap<String, String>()
+    private val exhaustedKeys = ConcurrentHashMap.newKeySet<String>()
+
     private val httpClient = SharedHttpClient.createInstance(MewsRepository.PROXY_ADDRESS, MewsRepository.SERVER_KEY, enableProxy = enableProxy)
     private val jsonParser = SharedHttpClient.jsonParser
     private val MAX_RETRIES = 3
     private val TAG = "LLMClient"
 
-    fun switchToFallbackModel(): Boolean {
+    fun getAvailableKeys(): List<String> {
+        val repoKeys = try {
+            MewsRepository.userApiKeys.value
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val baseKeys = repoKeys.ifEmpty {
+            listOf(apiKey.ifBlank { MewsRepository.DEFAULT_GEMINI_API_KEY })
+        }
+        return baseKeys.filter { it.isNotBlank() && !exhaustedKeys.contains(it) }
+    }
+
+    fun markKeyExhausted(targetKey: String) {
+        exhaustedKeys.add(targetKey)
+    }
+
+    fun getModelForKey(targetKey: String): String {
+        return keyModels.getOrPut(targetKey) { currentModelApiName }
+    }
+
+    fun switchToFallbackModel(targetKey: String = apiKey): Boolean {
         val models = MewsRepository.geminiModelsList.filter { !it.apiModelName.lowercase().contains("pro") }
-        val currentIndex = models.indexOfFirst { it.apiModelName == currentModelApiName }
+        val activeModel = getModelForKey(targetKey)
+        val currentIndex = models.indexOfFirst { it.apiModelName == activeModel }
 
         if (currentIndex > 0) {
-            currentModelApiName = models[currentIndex - 1].apiModelName
-            currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
+            val nextModel = models[currentIndex - 1].apiModelName
+            keyModels[targetKey] = nextModel
+            if (targetKey == apiKey) {
+                currentModelApiName = nextModel
+                currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
+            }
             return true
-        } else if (currentIndex == -1) {
-            currentModelApiName = models.first().apiModelName
-            currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
+        } else if (currentIndex == -1 && models.isNotEmpty()) {
+            val nextModel = models.first().apiModelName
+            keyModels[targetKey] = nextModel
+            if (targetKey == apiKey) {
+                currentModelApiName = nextModel
+                currentUrl = URL_TEMPLATE.replace("%MODEL%", currentModelApiName)
+            }
             return true
         }
         return false
     }
 
-    suspend fun sendPrompt(prompt: String, customConfig: GenerationConfig? = null): String {
+    suspend fun sendPrompt(
+        prompt: String,
+        customConfig: GenerationConfig? = null,
+        targetApiKey: String = apiKey
+    ): String {
+        val effectiveKey = targetApiKey.ifBlank { apiKey }
+        val limiter = rateLimiters.getOrPut(effectiveKey) { SmartRateLimiter() }
+        val activeModel = getModelForKey(effectiveKey)
+        val targetUrl = URL_TEMPLATE.replace("%MODEL%", activeModel)
+
         val config = customConfig ?: GenerationConfig(
             temperature = 0.5,
             maxOutputTokens = 8192,
@@ -98,13 +140,13 @@ class LLMClient(
 
         while (attempt <= MAX_RETRIES) {
             try {
-                rateLimiter.waitIfNeeded()
+                limiter.waitIfNeeded()
 
                 val response = httpClient.post(
-                    url = currentUrl,
+                    url = targetUrl,
                     body = requestBodyString,
                     headers = mapOf(
-                        "x-goog-api-key" to apiKey,
+                        "x-goog-api-key" to effectiveKey,
                         "Content-Type" to "application/json"
                     )
                 )
@@ -117,7 +159,7 @@ class LLMClient(
                 if (responseStatus != 200) {
                     when (responseStatus) {
                         429 -> {
-                            handle429Error(responseString, attempt)
+                            handle429Error(responseString, attempt, limiter)
                             attempt++
                             continue
                         }
@@ -145,7 +187,7 @@ class LLMClient(
                     }
 
                     if (geminiResponse.error.code == 429 || msg.contains("quota", true)) {
-                        handle429Error(msg, attempt)
+                        handle429Error(msg, attempt, limiter)
                         attempt++
                         continue
                     }
@@ -190,14 +232,8 @@ class LLMClient(
     }
 
 
-    private suspend fun handle429Error(responseString: String, attempt: Int) {
-        rateLimiter.penalize()
-
-//        if (responseString.contains("Requests per day", ignoreCase = true) ||
-//            responseString.contains("RequestsPerDay", ignoreCase = true) ||
-//            responseString.contains("FreeTier", ignoreCase = true)) {
-//            throw GeminiException(SummarizationErrorType.QUOTA_EXCEEDED, "Daily quota exceeded")
-//        }
+    private suspend fun handle429Error(responseString: String, attempt: Int, limiter: SmartRateLimiter) {
+        limiter.penalize()
 
         val waitTime = extractRetryTime(responseString)
 

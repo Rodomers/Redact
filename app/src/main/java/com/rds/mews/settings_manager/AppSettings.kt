@@ -61,6 +61,7 @@ data class AppSettings(
 
     // Network & AI
     val userApiKey: String = "",
+    val additionalApiKeys: List<String> = emptyList(),
     val llmModel: GeminiModelOption = GeminiModelOption.FLASH_LITE_LATEST,
     val enableProxy: Boolean = false,
     val doNotBlockSources: Boolean = false,
@@ -109,9 +110,14 @@ data class AppSettings(
 object AppSettingsSerializer : Serializer<AppSettings> {
     override val defaultValue: AppSettings = AppSettings()
 
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+
     override suspend fun readFrom(input: InputStream): AppSettings {
         return try {
-            Json.decodeFromString(AppSettings.serializer(), input.readBytes().decodeToString())
+            json.decodeFromString(AppSettings.serializer(), input.readBytes().decodeToString())
         } catch (exception: SerializationException) {
             exception.printStackTrace()
             defaultValue
@@ -120,7 +126,7 @@ object AppSettingsSerializer : Serializer<AppSettings> {
 
     override suspend fun writeTo(t: AppSettings, output: OutputStream) {
         withContext(Dispatchers.IO) {
-            output.write(Json.encodeToString(AppSettings.serializer(), t).encodeToByteArray())
+            output.write(json.encodeToString(AppSettings.serializer(), t).encodeToByteArray())
         }
     }
 }
