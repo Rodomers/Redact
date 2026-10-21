@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,11 +22,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -46,6 +50,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -57,6 +62,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
+import androidx.compose.ui.unit.toSize
+import coil.annotation.ExperimentalCoilApi
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
@@ -84,7 +91,7 @@ private data class IconParams(
     val iconSize: Dp
 )
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalCoilApi::class)
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun BlitzCard(
@@ -150,7 +157,10 @@ fun BlitzCard(
             .fillMaxWidth()
             .wrapContentHeight()
             .onGloballyPositioned { coordinates ->
-                cardBounds = coordinates.boundsInWindow()
+                cardBounds = Rect(
+                    offset = coordinates.positionInWindow(),
+                    size = coordinates.size.toSize()
+                )
             }
             .alpha(if (isExpanded) 0f else 1f)
             .combinedClickable(
@@ -168,12 +178,36 @@ fun BlitzCard(
         color = MaterialTheme.colorScheme.secondaryContainer,
         shadowElevation = 0.dp
     ) {
+        val minPagerHeight = iconParams.iconSize + 20.dp
+        val validMedia = filteredMediaUrls?.filter { it.mediaLink.isNotBlank() } ?: emptyList()
+
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(10.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Box(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 10.dp, end = 10.dp, top = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatusTimeBadge(
+                    eventTime = title.eventTime,
+                    isRead = isRead,
+                    isPinned = isPinned,
+                    dateString = dateString.replaceFirstChar {
+                        if (it.isLowerCase()) it.titlecase(
+                            LocalLocale.current.platformLocale
+                        ) else it.toString()
+                    },
+                    modifier = Modifier.heightIn(min = iconParams.iconSize)
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
                 MarkdownText(
                     markdown = title.summary.ifBlank { title.title },
                     style = MaterialTheme.typography.titleMedium.copy(
@@ -201,66 +235,157 @@ fun BlitzCard(
                 )
             }
 
-            val validMedia = filteredMediaUrls?.filter { it.mediaLink.isNotBlank() } ?: emptyList()
             if (validMedia.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Box(modifier = Modifier.fillMaxWidth().clip(Shapes.medium)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = minPagerHeight)
+                        .clip(Shapes.large)
+                ) {
                     HorizontalPager(
                         state = imagePagerState,
-                        verticalAlignment = Alignment.Top,
-                        modifier = Modifier.fillMaxWidth()
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = minPagerHeight)
                     ) { page ->
+                        val mediaUrl = validMedia[page].mediaLink
                         val isImageFullOpened = clickedImageIndex == page
-                        var isImageLoaded by remember(validMedia[page].mediaLink) { mutableStateOf(false) }
+                        var isImageLoaded by remember(mediaUrl) { mutableStateOf(false) }
+                        var retryCount by remember(mediaUrl) { mutableStateOf(0) }
+                        var lastRetryTime by remember(mediaUrl) { mutableStateOf(0L) }
+                        var isLoadError by remember(mediaUrl) { mutableStateOf(false) }
 
-                        val imageRequest = remember(validMedia[page].mediaLink) {
+                        val imageRequest = remember(mediaUrl, retryCount) {
                             ImageRequest.Builder(context)
-                                .data(validMedia[page].mediaLink)
+                                .data(mediaUrl)
                                 .diskCachePolicy(CachePolicy.ENABLED)
                                 .memoryCachePolicy(CachePolicy.ENABLED)
+                                .setParameter("retry_token", retryCount, memoryCacheKey = null)
+                                .listener(
+                                    onError = { _, _ -> isLoadError = true },
+                                    onSuccess = { _, _ ->
+                                        isLoadError = false
+                                        isImageLoaded = true
+                                    }
+                                )
                                 .build()
+                        }
+
+                        val canRetry = retryCount < 3 && (System.currentTimeMillis() - lastRetryTime > 2000L)
+                        val onRetryClick: () -> Unit = {
+                            if (canRetry) {
+                                lastRetryTime = System.currentTimeMillis()
+                                retryCount++
+                                isLoadError = false
+                                coil.Coil.imageLoader(context).diskCache?.remove(mediaUrl)
+                                coil.Coil.imageLoader(context).memoryCache?.remove(coil.memory.MemoryCache.Key(mediaUrl))
+                            }
                         }
 
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .heightIn(min = minPagerHeight)
                                 .then(
                                     if (isImageLoaded) Modifier.heightIn(max = maxHeightLimit)
+                                    else if (isLoadError) Modifier.height(180.dp)
                                     else Modifier.wrapContentHeight()
                                 )
                                 .onGloballyPositioned { coordinates ->
                                     imageBoundsMap[page] = coordinates.boundsInWindow()
                                 }
-                                .clickable(enabled = !isImageFullOpened) {
+                                .clickable(enabled = !isImageFullOpened && !isLoadError) {
                                     onImageClicked(true)
-                                }
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            AsyncImage(
-                                model = imageRequest,
-                                contentDescription = null,
-                                onSuccess = { isImageLoaded = true },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .then(
-                                        if (isImageLoaded) Modifier.heightIn(max = maxHeightLimit)
-                                        else Modifier.wrapContentHeight()
+                            if (isLoadError) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(180.dp)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    CustomIconButton(
+                                        inputs = IconButtonInputs(
+                                            icon = androidx.compose.material.icons.Icons.Default.Refresh,
+                                            action = onRetryClick
+                                        ),
+                                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .alpha(if (canRetry) 1f else 0.4f),
+                                        iconModifier = Modifier.size(20.dp),
+                                        shape = Shapes.large
                                     )
-                                    .graphicsLayer {
-                                        alpha = if (isImageFullOpened) 0f else 1f
-                                    },
-                                contentScale = ContentScale.FillWidth
-                            )
+                                }
+                            } else {
+                                AsyncImage(
+                                    model = imageRequest,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .blur(24.dp)
+                                        .alpha(0.6f),
+                                    contentScale = ContentScale.Crop
+                                )
+
+                                AsyncImage(
+                                    model = imageRequest,
+                                    contentDescription = null,
+                                    onSuccess = { isImageLoaded = true },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .then(
+                                            if (isImageLoaded) Modifier.heightIn(max = maxHeightLimit)
+                                            else Modifier.wrapContentHeight()
+                                        )
+                                        .graphicsLayer {
+                                            alpha = if (isImageFullOpened) 0f else 1f
+                                        },
+                                    contentScale = ContentScale.FillWidth
+                                )
+                            }
                         }
                     }
 
-                    if (validMedia.size > 1) {
-                        DynamicPagerIndicator(
-                            currentPage = imagePagerState.currentPage,
-                            pageCount = validMedia.size,
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(10.dp)
+                    ) {
+                        if (validMedia.size > 1) {
+                            DynamicPagerIndicator(
+                                currentPage = imagePagerState.currentPage,
+                                pageCount = validMedia.size,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+
+                        CustomIconButton(
+                            inputs = IconButtonInputs(
+                                icon = Icons.Default.MoreVert,
+                                action = {
+                                    dropdownTransitionState.targetState =
+                                        !dropdownTransitionState.currentState
+                                }
+                            ),
                             modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 6.dp)
+                                .requiredSize(iconParams.iconSize)
+                                .aspectRatio(1f)
+                                .align(Alignment.CenterEnd)
+                                .onGloballyPositioned { coordinates ->
+                                    buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                                },
+                            iconModifier = Modifier.size(16.dp),
+                            defaultBackgroundColor = iconParams.defaultIconColor.copy(alpha = 0.85f),
+                            transitionBackgroundColor = iconParams.transitionIconColor,
+                            transitionState = dropdownTransitionState,
+                            shape = Shapes.large
                         )
                     }
                 }
@@ -279,47 +404,35 @@ fun BlitzCard(
                         setShowImages = setShowMedia
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                StatusTimeBadge(
-                    eventTime = title.eventTime,
-                    isRead = isRead,
-                    isPinned = isPinned,
-                    dateString = dateString.replaceFirstChar {
-                        if (it.isLowerCase()) it.titlecase(
-                            LocalLocale.current.platformLocale
-                        ) else it.toString()
-                    },
-                    modifier = Modifier.heightIn(min = iconParams.iconSize)
-                )
-
-                CustomIconButton(
-                    inputs = IconButtonInputs(
-                        icon = Icons.Default.MoreVert,
-                        action = {
-                            dropdownTransitionState.targetState =
-                                !dropdownTransitionState.currentState
-                        }
-                    ),
+            } else {
+                Row(
                     modifier = Modifier
-                        .requiredSize(iconParams.iconSize)
-                        .aspectRatio(1f)
-                        .onGloballyPositioned { coordinates ->
-                            buttonBounds = coordinates.boundsInWindow().roundToIntRect()
-                        },
-                    iconModifier = Modifier.size(16.dp),
-                    defaultBackgroundColor = iconParams.defaultIconColor,
-                    transitionBackgroundColor = iconParams.transitionIconColor,
-                    transitionState = dropdownTransitionState,
-                    shape = Shapes.large
-                )
+                        .fillMaxWidth()
+                        .padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CustomIconButton(
+                        inputs = IconButtonInputs(
+                            icon = Icons.Default.MoreVert,
+                            action = {
+                                dropdownTransitionState.targetState =
+                                    !dropdownTransitionState.currentState
+                            }
+                        ),
+                        modifier = Modifier
+                            .requiredSize(iconParams.iconSize)
+                            .aspectRatio(1f)
+                            .onGloballyPositioned { coordinates ->
+                                buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                            },
+                        iconModifier = Modifier.size(16.dp),
+                        defaultBackgroundColor = iconParams.defaultIconColor,
+                        transitionBackgroundColor = iconParams.transitionIconColor,
+                        transitionState = dropdownTransitionState,
+                        shape = Shapes.large
+                    )
+                }
             }
 
             if (dropdownTransitionState.currentState || dropdownTransitionState.targetState) {
@@ -392,7 +505,8 @@ fun BlitzCardSourceExpansionOverlay(
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@SuppressLint("ConfigurationScreenWidthHeight")
+@OptIn(ExperimentalFoundationApi::class, ExperimentalCoilApi::class)
 @Composable
 private fun BlitzCardExpandedMainContent(
     iconParams: IconParams,
@@ -436,6 +550,9 @@ private fun BlitzCardExpandedMainContent(
         )
     )
 
+    val minPagerHeight = iconParams.iconSize + 20.dp
+    val validMedia = dynamicMediaUrls?.filter { it.mediaLink.isNotBlank() } ?: emptyList()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -445,9 +562,31 @@ private fun BlitzCardExpandedMainContent(
                 onClick = {},
                 onLongClick = onLongClick
             )
-            .padding(10.dp)
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 10.dp, end = 10.dp, top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            StatusTimeBadge(
+                eventTime = title.eventTime,
+                isRead = isRead,
+                isPinned = isPinned,
+                dateString = dateString.replaceFirstChar {
+                    if (it.isLowerCase()) it.titlecase(
+                        LocalLocale.current.platformLocale
+                    ) else it.toString()
+                },
+                modifier = Modifier.heightIn(min = iconParams.iconSize)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
             MarkdownText(
                 markdown = title.summary.ifBlank { title.title },
                 style = MaterialTheme.typography.titleMedium.copy(
@@ -471,66 +610,156 @@ private fun BlitzCardExpandedMainContent(
             )
         }
 
-        val validMedia = dynamicMediaUrls?.filter { it.mediaLink.isNotBlank() } ?: emptyList()
         if (validMedia.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Box(modifier = Modifier.fillMaxWidth().clip(Shapes.medium)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = minPagerHeight)
+                    .clip(Shapes.large)
+            ) {
                 HorizontalPager(
                     state = imagePagerState,
-                    verticalAlignment = Alignment.Top,
-                    modifier = Modifier.fillMaxWidth()
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = minPagerHeight)
                 ) { page ->
+                    val mediaUrl = validMedia[page].mediaLink
                     val isImageFullOpened = clickedImageIndex == page
-                    var isImageLoaded by remember(validMedia[page].mediaLink) { mutableStateOf(false) }
+                    var isImageLoaded by remember(mediaUrl) { mutableStateOf(false) }
+                    var retryCount by remember(mediaUrl) { mutableStateOf(0) }
+                    var lastRetryTime by remember(mediaUrl) { mutableStateOf(0L) }
+                    var isLoadError by remember(mediaUrl) { mutableStateOf(false) }
 
-                    val imageRequest = remember(validMedia[page].mediaLink) {
+                    val imageRequest = remember(mediaUrl, retryCount) {
                         ImageRequest.Builder(context)
-                            .data(validMedia[page].mediaLink)
+                            .data(mediaUrl)
                             .diskCachePolicy(CachePolicy.ENABLED)
                             .memoryCachePolicy(CachePolicy.ENABLED)
+                            .setParameter("retry_token", retryCount, memoryCacheKey = null)
+                            .listener(
+                                onError = { _, _ -> isLoadError = true },
+                                onSuccess = { _, _ ->
+                                    isLoadError = false
+                                    isImageLoaded = true
+                                }
+                            )
                             .build()
+                    }
+
+                    val canRetry = retryCount < 3 && (System.currentTimeMillis() - lastRetryTime > 2000L)
+                    val onRetryClick: () -> Unit = {
+                        if (canRetry) {
+                            lastRetryTime = System.currentTimeMillis()
+                            retryCount++
+                            isLoadError = false
+                            coil.Coil.imageLoader(context).diskCache?.remove(mediaUrl)
+                            coil.Coil.imageLoader(context).memoryCache?.remove(coil.memory.MemoryCache.Key(mediaUrl))
+                        }
                     }
 
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = minPagerHeight)
                             .then(
                                 if (isImageLoaded) Modifier.heightIn(max = maxHeightLimit)
+                                else if (isLoadError) Modifier.height(180.dp)
                                 else Modifier.wrapContentHeight()
                             )
                             .onGloballyPositioned { coordinates ->
                                 imageBoundsMap[page] = coordinates.boundsInWindow()
                             }
-                            .clickable(enabled = !isImageFullOpened) {
+                            .clickable(enabled = !isImageFullOpened && !isLoadError) {
                                 onImageClicked(true)
-                            }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        AsyncImage(
-                            model = imageRequest,
-                            contentDescription = null,
-                            onSuccess = { isImageLoaded = true },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(
-                                    if (isImageLoaded) Modifier.heightIn(max = maxHeightLimit)
-                                    else Modifier.wrapContentHeight()
+                        if (isLoadError) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                CustomIconButton(
+                                    inputs = IconButtonInputs(
+                                        icon = Icons.Default.Refresh,
+                                        action = onRetryClick
+                                    ),
+                                    defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .alpha(if (canRetry) 1f else 0.4f),
+                                    iconModifier = Modifier.size(20.dp),
+                                    shape = Shapes.large
                                 )
-                                .graphicsLayer {
-                                    alpha = if (isImageFullOpened) 0f else 1f
-                                },
-                            contentScale = ContentScale.FillWidth
-                        )
+                            }
+                        } else {
+                            AsyncImage(
+                                model = imageRequest,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .blur(24.dp)
+                                    .alpha(0.6f),
+                                contentScale = ContentScale.Crop
+                            )
+
+                            AsyncImage(
+                                model = imageRequest,
+                                contentDescription = null,
+                                onSuccess = { isImageLoaded = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(
+                                        if (isImageLoaded) Modifier.heightIn(max = maxHeightLimit)
+                                        else Modifier.wrapContentHeight()
+                                    )
+                                    .graphicsLayer {
+                                        alpha = if (isImageFullOpened) 0f else 1f
+                                    },
+                                contentScale = ContentScale.FillWidth
+                            )
+                        }
                     }
                 }
 
-                if (validMedia.size > 1) {
-                    DynamicPagerIndicator(
-                        currentPage = imagePagerState.currentPage,
-                        pageCount = validMedia.size,
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(10.dp)
+                ) {
+                    if (validMedia.size > 1) {
+                        DynamicPagerIndicator(
+                            currentPage = imagePagerState.currentPage,
+                            pageCount = validMedia.size,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
+
+                    CustomIconButton(
+                        inputs = IconButtonInputs(
+                            icon = Icons.Default.MoreVert,
+                            action = {
+                                dropdownTransitionState.targetState =
+                                    !dropdownTransitionState.currentState
+                            }
+                        ),
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 6.dp)
+                            .size(iconParams.iconSize)
+                            .align(Alignment.CenterEnd)
+                            .onGloballyPositioned { coordinates ->
+                                buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                            },
+                        iconModifier = Modifier.size(16.dp),
+                        defaultBackgroundColor = iconParams.defaultIconColor.copy(alpha = 0.85f),
+                        transitionBackgroundColor = iconParams.transitionIconColor,
+                        transitionState = dropdownTransitionState,
+                        shape = Shapes.large
                     )
                 }
             }
@@ -549,46 +778,34 @@ private fun BlitzCardExpandedMainContent(
                     setShowImages = setShowMedia
                 )
             }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            StatusTimeBadge(
-                eventTime = title.eventTime,
-                isRead = isRead,
-                isPinned = isPinned,
-                dateString = dateString.replaceFirstChar {
-                    if (it.isLowerCase()) it.titlecase(
-                        LocalLocale.current.platformLocale
-                    ) else it.toString()
-                },
-                modifier = Modifier.heightIn(min = iconParams.iconSize)
-            )
-
-            CustomIconButton(
-                inputs = IconButtonInputs(
-                    icon = Icons.Default.MoreVert,
-                    action = {
-                        dropdownTransitionState.targetState =
-                            !dropdownTransitionState.currentState
-                    }
-                ),
+        } else {
+            Row(
                 modifier = Modifier
-                    .size(iconParams.iconSize)
-                    .onGloballyPositioned { coordinates ->
-                        buttonBounds = coordinates.boundsInWindow().roundToIntRect()
-                    },
-                iconModifier = Modifier.size(16.dp),
-                defaultBackgroundColor = iconParams.defaultIconColor,
-                transitionBackgroundColor = iconParams.transitionIconColor,
-                transitionState = dropdownTransitionState,
-                shape = Shapes.large
-            )
+                    .fillMaxWidth()
+                    .padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CustomIconButton(
+                    inputs = IconButtonInputs(
+                        icon = Icons.Default.MoreVert,
+                        action = {
+                            dropdownTransitionState.targetState =
+                                !dropdownTransitionState.currentState
+                        }
+                    ),
+                    modifier = Modifier
+                        .size(iconParams.iconSize)
+                        .onGloballyPositioned { coordinates ->
+                            buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                        },
+                    iconModifier = Modifier.size(16.dp),
+                    defaultBackgroundColor = iconParams.defaultIconColor,
+                    transitionBackgroundColor = iconParams.transitionIconColor,
+                    transitionState = dropdownTransitionState,
+                    shape = Shapes.large
+                )
+            }
         }
 
         if (dropdownTransitionState.currentState || dropdownTransitionState.targetState) {
@@ -620,12 +837,12 @@ private fun BlitzCardActionsContent(
             .fillMaxWidth()
             .padding(10.dp)
     ) {
-        Text(
-            text = stringResource(R.string.titles_card_source),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold
-        )
+//        Text(
+//            text = stringResource(R.string.titles_card_source),
+//            style = MaterialTheme.typography.labelSmall,
+//            color = MaterialTheme.colorScheme.onSurfaceVariant,
+//            fontWeight = FontWeight.SemiBold
+//        )
 
         Spacer(modifier = Modifier.height(6.dp))
 

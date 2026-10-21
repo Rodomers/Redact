@@ -45,7 +45,8 @@ fun SettingsItem(
                     .padding(horizontal = 16.dp),
                 textAlign = TextAlign.Left,
                 fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
             )
             item()
         }

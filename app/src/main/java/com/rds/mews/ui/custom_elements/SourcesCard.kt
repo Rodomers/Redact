@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -48,6 +49,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
@@ -79,7 +81,10 @@ fun SourcesCard(
             .fillMaxWidth()
             .aspectRatio(1f)
             .onGloballyPositioned { coordinates ->
-                cardBounds = coordinates.boundsInWindow()
+                cardBounds = Rect(
+                    offset = coordinates.positionInWindow(),
+                    size = coordinates.size.toSize()
+                )
             }
             .alpha(if (isExpanded) 0f else 1f)
             .clickable(

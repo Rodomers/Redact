@@ -44,6 +44,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -1092,13 +1093,34 @@ private fun ExpandedCardContent(
                                             state = imagePagerState,
                                             modifier = Modifier.fillMaxSize(),
                                         ) { pageIndex ->
+                                            val mediaUrl = dynamicMediaUrls[pageIndex].mediaLink
                                             val isImageFullOpened = clickedImageIndex == pageIndex
-                                            val imageRequest = remember(dynamicMediaUrls[pageIndex].mediaLink) {
+                                            var retryCount by remember(mediaUrl) { mutableStateOf(0) }
+                                            var lastRetryTime by remember(mediaUrl) { mutableStateOf(0L) }
+                                            var isLoadError by remember(mediaUrl) { mutableStateOf(false) }
+
+                                            val imageRequest = remember(mediaUrl, retryCount) {
                                                 ImageRequest.Builder(context)
-                                                    .data(dynamicMediaUrls[pageIndex].mediaLink)
+                                                    .data(mediaUrl)
                                                     .diskCachePolicy(CachePolicy.ENABLED)
                                                     .memoryCachePolicy(CachePolicy.ENABLED)
+                                                    .setParameter("retry_token", retryCount, memoryCacheKey = null)
+                                                    .listener(
+                                                        onError = { _, _ -> isLoadError = true },
+                                                        onSuccess = { _, _ -> isLoadError = false }
+                                                    )
                                                     .build()
+                                            }
+
+                                            val canRetry = retryCount < 3 && (System.currentTimeMillis() - lastRetryTime > 2000L)
+                                            val onRetryClick: () -> Unit = {
+                                                if (canRetry) {
+                                                    lastRetryTime = System.currentTimeMillis()
+                                                    retryCount++
+                                                    isLoadError = false
+                                                    coil.Coil.imageLoader(context).diskCache?.remove(mediaUrl)
+                                                    coil.Coil.imageLoader(context).memoryCache?.remove(coil.memory.MemoryCache.Key(mediaUrl))
+                                                }
                                             }
 
                                             Box(
@@ -1108,33 +1130,54 @@ private fun ExpandedCardContent(
                                                         imageBoundsMap[pageIndex] =
                                                             coordinates.boundsInWindow()
                                                     }
-                                                    .clickable(enabled = !isImageFullOpened) {
-                                                        onImageClicked(
-                                                            true
-                                                        )
+                                                    .clickable(enabled = !isImageFullOpened && !isLoadError) {
+                                                        onImageClicked(true)
                                                     }
                                             ) {
-                                                AsyncImage(
-                                                    model = imageRequest,
-                                                    contentDescription = null,
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .blur(24.dp)
-                                                        .alpha(0.6f),
-                                                    contentScale = ContentScale.Crop
-                                                )
+                                                if (isLoadError) {
+                                                    Column(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                                        verticalArrangement = Arrangement.Center
+                                                    ) {
+                                                        CustomIconButton(
+                                                            inputs = IconButtonInputs(
+                                                                icon = Icons.Default.Refresh,
+                                                                action = onRetryClick
+                                                            ),
+                                                            defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                            modifier = Modifier
+                                                                .size(40.dp)
+                                                                .alpha(if (canRetry) 1f else 0.4f),
+                                                            iconModifier = Modifier.size(20.dp),
+                                                            shape = Shapes.large
+                                                        )
+                                                    }
+                                                } else {
+                                                    AsyncImage(
+                                                        model = imageRequest,
+                                                        contentDescription = null,
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .blur(24.dp)
+                                                            .alpha(0.6f),
+                                                        contentScale = ContentScale.Crop
+                                                    )
 
-                                                AsyncImage(
-                                                    model = imageRequest,
-                                                    contentDescription = null,
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .graphicsLayer {
-                                                            alpha =
-                                                                if (isImageFullOpened) 0f else 1f
-                                                        },
-                                                    contentScale = ContentScale.Fit
-                                                )
+                                                    AsyncImage(
+                                                        model = imageRequest,
+                                                        contentDescription = null,
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .graphicsLayer {
+                                                                alpha =
+                                                                    if (isImageFullOpened) 0f else 1f
+                                                            },
+                                                        contentScale = ContentScale.Fit
+                                                    )
+                                                }
                                             }
                                         }
 

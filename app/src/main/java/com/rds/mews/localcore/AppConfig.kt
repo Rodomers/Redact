@@ -212,7 +212,8 @@ enum class TooltipOptions(val id: Int, val duration: Long) {
     IS_OFFLINE(1, 5000),
     IS_ONLINE(2, 2000),
     SUMMARY_TOOLTIP(3, 5000),
-    BLITZ_TOOLTIP(4, 3000);
+    BLITZ_TOOLTIP(4, 3000),
+    DEFAULT_KEY_TOOLTIP(5, 5000);
 
     companion object {
         fun fromId(key: Int): TooltipOptions {

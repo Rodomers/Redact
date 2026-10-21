@@ -12,6 +12,7 @@
     <string name="tooltip_no_network">No network connection.</string>
     <string name="tooltip_network_restored">Network connection restored.</string>
     <string name="summary_tooltip">Algorithmic topic linking has begun. Internet connection will no longer be needed.</string>
+    <string name="default_api_key_tooltip">Please use your Gemini API key. It can be specified in settings.</string>
 
     <string name="source_type_telegram">Telegram</string>
     <string name="source_type_rss">Sites and RSS-feeds</string>
@@ -72,11 +73,12 @@
     <string name="settings_news_period">Search range</string>
     <string name="settings_news_keeping">Keep history for</string>
     <string name="settings_news_update_frequency">Sources update frequency</string>
-    <string name="settings_gemini_api_key">Gemini API key</string>
-    <string name="settings_sheet_current_key">API key change</string>
+    <string name="settings_gemini_api_key">Gemini API keys</string>
+    <string name="settings_sheet_current_key">API keys change</string>
     <string name="settings_sheet_api_key">API key</string>
     <string name="settings_sheet_api_save">Save</string>
     <string name="settings_sheet_api_cancel">Cancel</string>
+    <string name="settings_sheet_api_hint">You can use multiple keys to make the titles update faster.</string>
     <string name="settings_reset">Reset</string>
     <string name="settings_change">Change</string>
     <string name="settings_ignore_optimization">Ignore battery optimization</string>

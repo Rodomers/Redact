@@ -296,18 +296,21 @@ fun TitlesGrid(
         if (expandedCardId != -1L && groupedItems.isNotEmpty()) {
             var globIndex = 0
             var item = -1
+            var foundGroup: TimeDate? = null
 
-            for ((_, items) in groupedItems) {
+            for ((group, items) in groupedItems) {
                 globIndex++
                 val itIndex = items.indexOfFirst { it.id == expandedCardId }
                 if (itIndex != -1) {
                     item = itIndex + globIndex
+                    foundGroup = group
                     break
                 }
                 globIndex += items.size
             }
 
             if (item != -1) {
+                if (foundGroup != null && groupStates.any { it.group == foundGroup && !it.expanded }) changeGroupState(foundGroup)
                 scrollToItem(item)
             }
         }

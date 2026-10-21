@@ -47,7 +47,7 @@ fun CustomErrorBottomSheet(
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Normal,
                     modifier = Modifier
-                        .padding(vertical = 8.dp)
+                        .padding(vertical = 8.dp, horizontal = 8.dp)
                         .fillMaxWidth()
                 )
             },

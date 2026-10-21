@@ -34,13 +34,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -54,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -83,6 +84,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import coil.annotation.ExperimentalCoilApi
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import com.rds.mews.R
@@ -100,6 +102,7 @@ import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalCoilApi::class)
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun FullScreenImageViewer(
@@ -228,6 +231,67 @@ fun FullScreenImageViewer(
                     var imageSize by remember { mutableStateOf(Size.Zero) }
                     var containerSize by remember { mutableStateOf(Size.Zero) }
 
+                    val mediaUrl = dynamicMediaUrls[page].mediaLink
+                    var retryCount by remember(mediaUrl) { mutableStateOf(0) }
+                    var lastRetryTime by remember(mediaUrl) { mutableStateOf(0L) }
+                    var isLoadError by remember(mediaUrl) { mutableStateOf(false) }
+
+                    LaunchedEffect(isClosing) {
+                        if (isClosing && (scale.value != 1f || offsetX.value != 0f || offsetY.value != 0f)) {
+                            launch {
+                                scale.animateTo(
+                                    targetValue = 1f,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.9f,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                )
+                            }
+                            launch {
+                                offsetX.animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.9f,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                )
+                            }
+                            launch {
+                                offsetY.animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.9f,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    val imageRequest = remember(mediaUrl, retryCount) {
+                        coil.request.ImageRequest.Builder(context)
+                            .data(mediaUrl)
+                            .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                            .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                            .setParameter("retry_token", retryCount, memoryCacheKey = null)
+                            .listener(
+                                onError = { _, _ -> isLoadError = true },
+                                onSuccess = { _, _ -> isLoadError = false }
+                            )
+                            .build()
+                    }
+
+                    val canRetry = retryCount < 3 && (System.currentTimeMillis() - lastRetryTime > 2000L)
+                    val onRetryClick: () -> Unit = {
+                        if (canRetry) {
+                            lastRetryTime = System.currentTimeMillis()
+                            retryCount++
+                            isLoadError = false
+                            coil.Coil.imageLoader(context).diskCache?.remove(mediaUrl)
+                            coil.Coil.imageLoader(context).memoryCache?.remove(coil.memory.MemoryCache.Key(mediaUrl))
+                        }
+                    }
+
                     val actualImageWidth = remember(imageSize, containerSize) {
                         if (imageSize.width > 0 && imageSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
                             val scaleFactor = minOf(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
@@ -245,36 +309,42 @@ fun FullScreenImageViewer(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(actualImageWidth, actualImageHeight, containerSize) {
-                                detectTapGestures(
-                                    onDoubleTap = { tapOffset ->
-                                        coroutineScope.launch {
-                                            if (scale.value > 1.05f) {
-                                                launch { scale.animateTo(1f) }
-                                                launch { offsetX.animateTo(0f) }
-                                                launch { offsetY.animateTo(0f) }
-                                            } else {
-                                                val targetScale = 2.5f
-                                                val containerCenter = Offset(containerSize.width / 2f, containerSize.height / 2f)
-                                                val tapFromCenter = tapOffset - containerCenter
+                            .then(
+                                if (!isLoadError) {
+                                    Modifier.pointerInput(actualImageWidth, actualImageHeight, containerSize) {
+                                        detectTapGestures(
+                                            onDoubleTap = { tapOffset ->
+                                                coroutineScope.launch {
+                                                    if (scale.value > 1.05f) {
+                                                        launch { scale.animateTo(1f) }
+                                                        launch { offsetX.animateTo(0f) }
+                                                        launch { offsetY.animateTo(0f) }
+                                                    } else {
+                                                        val targetScale = 2.5f
+                                                        val containerCenter = Offset(containerSize.width / 2f, containerSize.height / 2f)
+                                                        val tapFromCenter = tapOffset - containerCenter
 
-                                                val targetX = -tapFromCenter.x * (targetScale - 1f)
-                                                val targetY = -tapFromCenter.y * (targetScale - 1f)
+                                                        val targetX = -tapFromCenter.x * (targetScale - 1f)
+                                                        val targetY = -tapFromCenter.y * (targetScale - 1f)
 
-                                                val maxX = maxOf(0f, (actualImageWidth * targetScale - containerSize.width) / 2f)
-                                                val maxY = maxOf(0f, (actualImageHeight * targetScale - containerSize.height) / 2f)
+                                                        val maxX = maxOf(0f, (actualImageWidth * targetScale - containerSize.width) / 2f)
+                                                        val maxY = maxOf(0f, (actualImageHeight * targetScale - containerSize.height) / 2f)
 
-                                                launch { scale.animateTo(targetScale) }
-                                                launch { offsetX.animateTo(targetX.coerceIn(-maxX, maxX)) }
-                                                launch { offsetY.animateTo(targetY.coerceIn(-maxY, maxY)) }
+                                                        launch { scale.animateTo(targetScale) }
+                                                        launch { offsetX.animateTo(targetX.coerceIn(-maxX, maxX)) }
+                                                        launch { offsetY.animateTo(targetY.coerceIn(-maxY, maxY)) }
+                                                    }
+                                                }
+                                            },
+                                            onTap = {
+                                                isUiVisible = !isUiVisible
                                             }
-                                        }
-                                    },
-                                    onTap = {
-                                        isUiVisible = !isUiVisible
+                                        )
                                     }
-                                )
-                            }
+                                } else {
+                                    Modifier
+                                }
+                            )
                             .pointerInput(actualImageWidth, actualImageHeight, containerSize) {
                                 awaitEachGesture {
                                     awaitFirstDown(requireUnconsumed = false)
@@ -356,30 +426,51 @@ fun FullScreenImageViewer(
                                 }
                             }
                     ) {
-                        AsyncImage(
-                            model = dynamicMediaUrls[page].mediaLink,
-                            contentDescription = null,
-                            onState = { state ->
-                                if (state is AsyncImagePainter.State.Success) {
-                                    imageSize = state.painter.intrinsicSize
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .onGloballyPositioned { coordinates ->
-                                    containerSize = Size(
-                                        coordinates.size.width.toFloat(),
-                                        coordinates.size.height.toFloat()
-                                    )
-                                }
-                                .graphicsLayer(
-                                    scaleX = scale.value,
-                                    scaleY = scale.value,
-                                    translationX = offsetX.value,
-                                    translationY = offsetY.value
-                                ),
-                            contentScale = ContentScale.Fit
-                        )
+                        if (isLoadError) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                CustomIconButton(
+                                    inputs = IconButtonInputs(
+                                        icon = Icons.Default.Refresh,
+                                        action = onRetryClick
+                                    ),
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .alpha(if (canRetry) 1f else 0.4f),
+                                    iconModifier = Modifier.size(24.dp),
+                                    defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = Shapes.large
+                                )
+                            }
+                        } else {
+                            AsyncImage(
+                                model = imageRequest,
+                                contentDescription = null,
+                                onState = { state ->
+                                    if (state is AsyncImagePainter.State.Success) {
+                                        imageSize = state.painter.intrinsicSize
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .onGloballyPositioned { coordinates ->
+                                        containerSize = Size(
+                                            coordinates.size.width.toFloat(),
+                                            coordinates.size.height.toFloat()
+                                        )
+                                    }
+                                    .graphicsLayer(
+                                        scaleX = scale.value,
+                                        scaleY = scale.value,
+                                        translationX = offsetX.value,
+                                        translationY = offsetY.value
+                                    ),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                     }
                 }
             }
@@ -414,7 +505,8 @@ fun FullScreenImageViewer(
                             ),
                             defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
                             shape = Shapes.large,
-                            modifier = Modifier.padding(horizontal = 48.dp)
+                            modifier = Modifier.padding(horizontal = 48.dp),
+                            textColor = MaterialTheme.colorScheme.onSurface
                         )
 
                         CustomIconButton(
@@ -434,6 +526,8 @@ fun FullScreenImageViewer(
                             iconModifier = Modifier.size(18.dp),
                             defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
                             transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            defaultContentColor = MaterialTheme.colorScheme.onSurface,
+                            transitionContentColor = MaterialTheme.colorScheme.onSurface,
                             transitionState = dropdownTransitionState,
                             shape = Shapes.large
                         )

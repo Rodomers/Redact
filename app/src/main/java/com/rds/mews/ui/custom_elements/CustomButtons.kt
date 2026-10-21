@@ -66,6 +66,7 @@ fun CustomTextButton(
     enabled: Boolean = true,
     defaultBackgroundColor: Color = Color.Transparent,
     transitionBackgroundColor: Color? = null,
+    textColor: Color = Color.Unspecified,
     defaultContentColor: Color = LocalContentColor.current,
     transitionContentColor: Color? = null,
     transitionState: MutableTransitionState<Boolean>? = null,
@@ -146,7 +147,8 @@ fun CustomTextButton(
             fontSize = fontSize,
             fontWeight = fontWeight,
             textAlign = textAlign,
-            maxLines = maxLines
+            maxLines = maxLines,
+            color = textColor
         )
     }
 }

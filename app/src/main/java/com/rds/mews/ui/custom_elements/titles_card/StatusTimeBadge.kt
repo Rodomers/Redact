@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rds.mews.localcore.getFormattedTimeUnix
@@ -117,7 +118,9 @@ fun StatusTimeBadge(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
             fontSize = 14.sp,
             fontWeight = FontWeight(timeWeight),
-            textAlign = TextAlign.Left
+            textAlign = TextAlign.Left,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

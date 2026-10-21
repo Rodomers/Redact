@@ -840,7 +840,8 @@ fun SettingsGrid(
                                         alpha = 0.98f
                                     ),
                                     transitionBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    transitionState = themesBtnState
+                                    transitionState = themesBtnState,
+                                    textColor = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -858,7 +859,8 @@ fun SettingsGrid(
                                     alpha = 0.98f
                                 ),
                                 transitionBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                transitionState = autoUpdateBtnState
+                                transitionState = autoUpdateBtnState,
+                                textColor = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Spacer(modifier = Modifier.height(16.dp))
@@ -916,7 +918,8 @@ fun SettingsGrid(
                                     alpha = 0.98f
                                 ),
                                 transitionBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                transitionState = apiBtnState
+                                transitionState = apiBtnState,
+                                textColor = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         if (state.bannedNews.any { it.isNotBlank() }) {
@@ -934,7 +937,8 @@ fun SettingsGrid(
                                         alpha = 0.98f
                                     ),
                                     transitionBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    transitionState = filterBtnState
+                                    transitionState = filterBtnState,
+                                    textColor = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }

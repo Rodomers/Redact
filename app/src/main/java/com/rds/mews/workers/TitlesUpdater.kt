@@ -6,6 +6,7 @@ import com.rds.mews.core.summarizer.NewsSummarizer
 import com.rds.mews.core.parser.RssFetcher
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.TitlesPeriod
+import com.rds.mews.localcore.TooltipOptions
 import com.rds.mews.localcore.UpdatingState
 import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.settings_manager.SummarizationErrorType
@@ -53,6 +54,9 @@ class TitlesUpdater() {
 
             MewsRepository.setUpdatingTitles(true)
             MewsRepository.setUpdatingState(UpdatingState.UPDATING)
+
+            if (MewsRepository.DEFAULT_GEMINI_API_KEY == llmApiKey) MewsRepository.setTooltipState(
+                TooltipOptions.DEFAULT_KEY_TOOLTIP)
 
             currentCoroutineContext().ensureActive()
 

@@ -59,6 +59,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlin.math.abs
+import kotlin.time.Duration.Companion.milliseconds
 
 class TitlesViewModel(
     private val application: Application,
@@ -105,6 +106,9 @@ class TitlesViewModel(
 
     private val _titles = MutableStateFlow<List<Title>>(emptyList())
     val titles = _titles.asStateFlow()
+
+    private val _failedMediaTitleIds = MutableStateFlow<Set<Long>>(emptySet())
+    val failedMediaTitleIds: StateFlow<Set<Long>> = _failedMediaTitleIds.asStateFlow()
 
     val isRefreshing: StateFlow<Boolean> = repository.updatingTitles
     val expandSources: StateFlow<Boolean> = repository.expandSources
@@ -220,7 +224,7 @@ class TitlesViewModel(
 
                 val finalIndex = (targetGridIndex - 2).coerceIn(0, Int.MAX_VALUE)
                 _scrollEvents.trySend(TitlesScrollEvent.ScrollToItem(finalIndex, animated = true))
-                delay(450)
+                delay(450.milliseconds)
                 if (currentState?.expanded != true) {
                     toggleTitleExpanded(targetTitleId)
                 }
@@ -243,9 +247,9 @@ class TitlesViewModel(
                 sources = "",
                 ids = ""
             )
-            delay(300L)
+            delay(300L.milliseconds)
             _greetingMessages.value = list.toList()
-            delay(800L)
+            delay(800L.milliseconds)
             list += Title(
                 id = -2L,
                 eventTime = System.currentTimeMillis(),
@@ -255,7 +259,7 @@ class TitlesViewModel(
                 ids = ""
             )
             _greetingMessages.value = list.toList()
-            delay(800L)
+            delay(800L.milliseconds)
             list += Title(
                 id = -3L,
                 eventTime = System.currentTimeMillis(),
@@ -375,14 +379,15 @@ class TitlesViewModel(
     }
 
     fun loadDynamicMediaUrls(titleId: Long, fromZero: Boolean = false) {
-        if (fromZero) _dynamicMediaUrls.update { currentMap ->
-            currentMap - titleId
+        if (fromZero) {
+            _dynamicMediaUrls.update { it - titleId }
+            _failedMediaTitleIds.update { it - titleId }
+        } else if (_dynamicMediaUrls.value.containsKey(titleId) && !_failedMediaTitleIds.value.contains(titleId)) {
+            return
         }
-        else if (_dynamicMediaUrls.value.containsKey(titleId)) return
 
         val targetTitle = _titles.value.find { it.id == titleId } ?: return
         val mediaObjects = targetTitle.mediaUrls
-
         val targetState = _titleCardStates.value.find { it.id == titleId }
         val sources = targetState?.sources
         val allMessages = sources?.flatMap { it.messages } ?: emptyList()
@@ -393,8 +398,8 @@ class TitlesViewModel(
                 mediaLink = media.mediaLink.substringBefore("?"),
                 message = media.message
             )
-            // !cleanUrl.contains("telesco.pe") && !cleanUrl.contains("cdn-telegram.org")
         }.filter { media ->
+            // !cleanUrl.contains("telesco.pe") && !cleanUrl.contains("cdn-telegram.org")
             val cleanUrl = media.mediaLink.lowercase()
             !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") &&
                     !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
@@ -402,40 +407,46 @@ class TitlesViewModel(
 
         if (telegramLinks.isEmpty()) {
             _dynamicMediaUrls.update { it + (titleId to validOriginals) }
+            _failedMediaTitleIds.update { it - titleId }
             return
         }
 
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 val scraper = TelegramRssClient(repository.proxyEnabled.value)
-                telegramLinks.forEach { message ->
-                    launch {
-                        try {
-                            val scrapedUrls = scraper.scrapeEmbedMedia(message.link)
-                                .map { MediaWithSource(it, message) }
-                                .filter { media ->
-                                    val cleanUrl = media.mediaLink.lowercase()
-                                    !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") &&
-                                            !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
-                                }
+                var hasScrapeErrors = false
 
-                            if (scrapedUrls.isNotEmpty()) {
-                                _dynamicMediaUrls.update { currentMap ->
-                                    val existingList = currentMap[titleId] ?: validOriginals
-                                    val updatedList = (existingList + scrapedUrls).distinctBy { it.mediaLink }
-                                    currentMap + (titleId to updatedList)
-                                }
-                            } else {
-                                _dynamicMediaUrls.update { currentMap ->
-                                    if (!currentMap.containsKey(titleId)) currentMap + (titleId to validOriginals) else currentMap
-                                }
+                telegramLinks.forEach { message ->
+                    try {
+                        val scrapedUrls = scraper.scrapeEmbedMedia(message.link)
+                            .map { MediaWithSource(it, message) }
+                            .filter { media ->
+                                val cleanUrl = media.mediaLink.lowercase()
+                                !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") &&
+                                        !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
                             }
-                        } catch (e: Exception) {
+
+                        if (scrapedUrls.isNotEmpty()) {
                             _dynamicMediaUrls.update { currentMap ->
-                                if (!currentMap.containsKey(titleId)) currentMap + (titleId to validOriginals) else currentMap
+                                val existingList = currentMap[titleId] ?: validOriginals
+                                val updatedList = (existingList + scrapedUrls).distinctBy { it.mediaLink }
+                                currentMap + (titleId to updatedList)
                             }
+                        } else if (!_dynamicMediaUrls.value.containsKey(titleId)) {
+                            _dynamicMediaUrls.update { it + (titleId to validOriginals) }
+                        }
+                    } catch (_: Exception) {
+                        hasScrapeErrors = true
+                        if (!_dynamicMediaUrls.value.containsKey(titleId)) {
+                            _dynamicMediaUrls.update { it + (titleId to validOriginals) }
                         }
                     }
+                }
+
+                if (hasScrapeErrors) {
+                    _failedMediaTitleIds.update { it + titleId }
+                } else {
+                    _failedMediaTitleIds.update { it - titleId }
                 }
             }
         }

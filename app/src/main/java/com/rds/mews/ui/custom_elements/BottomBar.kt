@@ -225,6 +225,13 @@ fun MyBottomBar(
                     durationMs = tooltipOption.duration
                 )
             )
+
+            TooltipOptions.DEFAULT_KEY_TOOLTIP -> tooltipChannel.send(
+                TooltipMessage(
+                    textRes = R.string.default_api_key_tooltip,
+                    durationMs = tooltipOption.duration
+                )
+            )
             else -> return@LaunchedEffect
         }
     }
@@ -407,7 +414,7 @@ fun BottomBarButton(
     modifier: Modifier = Modifier
 ) {
     val contentColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onSurface
         else MaterialTheme.colorScheme.onSurface,
         animationSpec = tween(300),
         label = "ContentColor"

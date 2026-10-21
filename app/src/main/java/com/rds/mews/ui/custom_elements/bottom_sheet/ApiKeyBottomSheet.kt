@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -72,16 +73,16 @@ fun ApiKeyBottomSheet(
     }
 
     val pageCount = pagerState.pageCount
-    val currentPage = pagerState.currentPage
+    val settledPage = pagerState.settledPage
 
     val startPadding by animateDpAsState(
-        targetValue = if (pageCount <= 1 || currentPage == 0) 0.dp else 24.dp,
-        animationSpec = tween(durationMillis = 250),
+        targetValue = if (pageCount <= 1 || settledPage == 0) 0.dp else 24.dp,
+        animationSpec = tween(durationMillis = 200),
         label = "pagerStartPadding"
     )
     val endPadding by animateDpAsState(
-        targetValue = if (pageCount <= 1 || currentPage >= pageCount - 1) 0.dp else 24.dp,
-        animationSpec = tween(durationMillis = 250),
+        targetValue = if (pageCount <= 1 || settledPage >= pageCount - 1) 0.dp else 24.dp,
+        animationSpec = tween(durationMillis = 200),
         label = "pagerEndPadding"
     )
 
@@ -131,7 +132,11 @@ fun ApiKeyBottomSheet(
                         .fillMaxWidth()
                         .padding(top = 8.dp),
                     contentPadding = PaddingValues(start = startPadding, end = endPadding),
-                    pageSpacing = 8.dp
+                    pageSpacing = 12.dp,
+                    flingBehavior = PagerDefaults.flingBehavior(
+                        state = pagerState,
+                        snapPositionalThreshold = 0.15f
+                    )
                 ) { page ->
                     val currentKey = apiKeys.getOrElse(page) { "" }
                     val isCurrentValid = isApiKeysCorrect.getOrElse(page) { false }
@@ -240,18 +245,10 @@ fun ApiKeyBottomSheet(
                 }
             },
             {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    CustomTextButton(
-                        inputs = resetBtnInputs,
-                        shape = Shapes.large,
-                        defaultBackgroundColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                }
+                Text(
+                    text = stringResource(R.string.settings_sheet_api_hint),
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
             },
             {
                 Row(
