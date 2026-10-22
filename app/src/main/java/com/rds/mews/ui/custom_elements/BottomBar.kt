@@ -304,53 +304,7 @@ fun MyBottomBar(
                         val downIndex = getIndexForOffset(down.position.x)
                         val targetTab = tabs.getOrNull(downIndex)
 
-                        if (targetTab == TabScreen.Titles) {
-                            if (currentSelectedTab == TabScreen.Titles) {
-                                pressedIndex = downIndex
-                                val centerOffset = buttonCenters[downIndex] ?: Offset.Zero
-                                var isHolding = true
-                                var holdSuccess = false
-                                val startTime = System.currentTimeMillis()
-
-                                val progressJob = coroutineScope.launch {
-                                    while (isHolding) {
-                                        val elapsed = System.currentTimeMillis() - startTime
-                                        val progress = (elapsed / 250f).coerceIn(0f, 1f)
-
-                                        if (progress >= 1f && !holdSuccess) {
-                                            holdSuccess = true
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        }
-
-                                        currentOnHoldProgressChanged(progress, centerOffset, true)
-                                        delay(16.milliseconds)
-                                    }
-                                }
-
-                                var pointer = down
-                                while (pointer.pressed) {
-                                    val event = awaitPointerEvent()
-                                    pointer = event.changes.firstOrNull() ?: break
-                                }
-
-                                val totalDuration = System.currentTimeMillis() - startTime
-                                isHolding = false
-                                progressJob.cancel()
-
-                                pressedIndex = -1
-                                currentOnHoldProgressChanged(0f, centerOffset, false)
-
-                                if (holdSuccess) {
-                                    currentOnBlitzTriggered(centerOffset)
-                                } else if (totalDuration < 200) {
-                                    currentOnTabSelected(TabScreen.Titles)
-                                }
-                            } else {
-                                pressedIndex = downIndex
-                                currentOnTabSelected(TabScreen.Titles)
-                                pressedIndex = -1
-                            }
-                        } else if (targetTab != null) {
+                        if (targetTab != null) {
                             pressedIndex = downIndex
                             currentOnTabSelected(targetTab)
                             var lastSentIndex = downIndex

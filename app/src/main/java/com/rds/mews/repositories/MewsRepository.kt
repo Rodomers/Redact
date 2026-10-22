@@ -343,7 +343,7 @@ object MewsRepository {
         titles = titleDao.getAllTitlesFlow()
             .map { entities ->
                 coroutineScope {
-                    entities.filter { !it.isBlitz }.map { entity ->
+                    entities.map { entity ->
                         async {
                             val sourcesList = titleDao.getSourcesForTitleFlow(entity.id).first()
                             val messagesList = titleDao.getMessagesForTitleFlow(entity.id).first()
@@ -377,6 +377,7 @@ object MewsRepository {
                                 status = entity.status,
                                 isRead = entity.isRead,
                                 isPinned = entity.isPinned,
+                                isBlitz = entity.isBlitz,
                                 sources = sourcesStr,
                                 ids = idsStr,
                                 keywords = entity.keywords,
@@ -385,50 +386,6 @@ object MewsRepository {
                                 relatedTitle = child?.title,
                                 relatedSnippet = "${TextSanitizer.sanitize(child?.summary ?: "").take(120)}...",
                                 storyDepth = depth,
-                                mediaUrls = mediaUrlsList
-                            )
-                        }
-                    }.awaitAll()
-                }
-            }
-            .flowOn(Dispatchers.Default)
-
-        blitzTitles = titleDao.getAllTitlesFlow()
-            .map { entities ->
-                coroutineScope {
-                    entities.filter { it.isBlitz }.map { entity ->
-                        async {
-                            val sourcesList = titleDao.getSourcesForTitleFlow(entity.id).first()
-                            val messagesList = titleDao.getMessagesForTitleFlow(entity.id).first()
-                            val sourcesStr = sourcesList.distinct().joinToString(", ") { it.customName ?: it.originalName }
-                            val idsStr = messagesList.joinToString(", ") { it.id.toString() }
-
-                            val mediaUrlsList = messagesList.flatMap { message ->
-                                message.mediaUrls.map { url ->
-                                    MediaWithSource(
-                                        mediaLink = url,
-                                        message = Message(
-                                            id = message.id,
-                                            time = message.pubTime,
-                                            link = message.link,
-                                            source = getSource(message.sourceId),
-                                            originalText = "",
-                                            cleanText = ""
-                                        )
-                                    ) }
-                            }.distinct()
-
-                            Title(
-                                id = entity.id,
-                                title = entity.title,
-                                summary = entity.summary,
-                                eventTime = entity.eventTime,
-                                updateTime = entity.updateTime,
-                                status = entity.status,
-                                isRead = entity.isRead,
-                                isPinned = entity.isPinned,
-                                sources = sourcesStr,
-                                ids = idsStr,
                                 mediaUrls = mediaUrlsList
                             )
                         }

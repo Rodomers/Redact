@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Rect
 import androidx.collection.intListOf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.platform.ClipboardManager
@@ -51,6 +52,7 @@ import java.time.format.DateTimeFormatter
 import com.rds.mews.R
 import com.rds.mews.core.TelegramRssClient
 import com.rds.mews.localcore.MediaWithSource
+import com.rds.mews.localcore.Message
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.TitleStatus
 import com.rds.mews.localcore.UpdatingState
@@ -65,6 +67,13 @@ class TitlesViewModel(
     private val application: Application,
     private val repository: MewsRepository
 ): AndroidViewModel(application) {
+    data class ExpandedBlitzData(
+        val title: Title,
+        val bounds: Rect,
+        val dateString: String,
+        val sources: List<SourceMessages>? = null
+    )
+
     private val _scrollEvents = Channel<TitlesScrollEvent>(Channel.CONFLATED)
     val scrollEvents = _scrollEvents.receiveAsFlow()
 
@@ -178,6 +187,10 @@ class TitlesViewModel(
     private val _titleCardStates = MutableStateFlow<Set<TitleCardStates>>(emptySet())
     val titleCardStates: StateFlow<Set<TitleCardStates>> = _titleCardStates.asStateFlow()
 
+    private val _blitzCardSources = MutableStateFlow<Map<Long, List<SourceMessages>>>(emptyMap())
+    val blitzCardSources: StateFlow<Map<Long, List<SourceMessages>>> = _blitzCardSources.asStateFlow()
+
+
     private val _dynamicMediaUrls = MutableStateFlow<Map<Long, List<MediaWithSource>>>(emptyMap())
     val dynamicMediaUrls: StateFlow<Map<Long, List<MediaWithSource>>> = _dynamicMediaUrls.asStateFlow()
 
@@ -211,12 +224,14 @@ class TitlesViewModel(
 
             for ((_, titlesInDate) in groups) {
                 globalIndex++
-                val indexInGroup = titlesInDate.indexOfFirst { it.id == targetTitleId }
+                val regularTitles = titlesInDate.filter { !it.isBlitz }
+                val hasBlitz = titlesInDate.any { it.isBlitz }
+                val indexInGroup = regularTitles.indexOfFirst { it.id == targetTitleId }
                 if (indexInGroup != -1) {
                     targetGridIndex = globalIndex + indexInGroup
                     break
                 }
-                globalIndex += titlesInDate.size
+                globalIndex += regularTitles.size + if (hasBlitz) 1 else 0
             }
 
             if (targetGridIndex != -1) {
@@ -226,6 +241,7 @@ class TitlesViewModel(
                 _scrollEvents.trySend(TitlesScrollEvent.ScrollToItem(finalIndex, animated = true))
                 delay(450.milliseconds)
                 if (currentState?.expanded != true) {
+                    toggleTitleExpanded(targetTitleId)
                     toggleTitleExpanded(targetTitleId)
                 }
             }
@@ -382,16 +398,25 @@ class TitlesViewModel(
         if (fromZero) {
             _dynamicMediaUrls.update { it - titleId }
             _failedMediaTitleIds.update { it - titleId }
-        } else if (_dynamicMediaUrls.value.containsKey(titleId) && !_failedMediaTitleIds.value.contains(titleId)) {
-            return
         }
 
         val targetTitle = _titles.value.find { it.id == titleId } ?: return
-        val mediaObjects = targetTitle.mediaUrls
         val targetState = _titleCardStates.value.find { it.id == titleId }
         val sources = targetState?.sources
         val allMessages = sources?.flatMap { it.messages } ?: emptyList()
         val telegramLinks = allMessages.filter { it.link.contains("t.me") }
+
+        val currentMedia = _dynamicMediaUrls.value[titleId]
+        val alreadyLoaded = currentMedia != null && !_failedMediaTitleIds.value.contains(titleId)
+
+        if (!fromZero && alreadyLoaded) {
+            val hasScrapedTelegram = currentMedia.any { it.message?.link?.contains("t.me") == true }
+            if (telegramLinks.isEmpty() || hasScrapedTelegram) {
+                return
+            }
+        }
+
+        val mediaObjects = targetTitle.mediaUrls
 
         val validOriginals = mediaObjects.map { media ->
             MediaWithSource(
@@ -489,6 +514,14 @@ class TitlesViewModel(
                 time = fPair.second
             )
         }
+    }
+
+    suspend fun getSourceMessagesForBlitz(id: Long): List<SourceMessages>? {
+        val title = titles.value.find { it.id == id && it.isBlitz } ?: return null
+        return repository.getMessages(title.ids)?.groupBy { it.source }
+            ?.map { (source, msgs) ->
+                SourceMessages(source, true, msgs)
+            }
     }
 
     init {

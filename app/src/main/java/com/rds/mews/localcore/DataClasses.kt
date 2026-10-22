@@ -39,6 +39,7 @@ data class Title(
     val status: Int? = null,
     val isRead: Boolean = false,
     val isPinned: Boolean = false,
+    val isBlitz: Boolean = false,
     var sources: String,
     var ids: String,
     var keywords: List<String> = emptyList(),

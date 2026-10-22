@@ -4,6 +4,7 @@ import com.rds.mews.ui.custom_elements.bottom_sheet.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.TimelineMarker
 import android.annotation.SuppressLint
 import android.content.Context
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -47,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -89,10 +91,22 @@ import com.rds.mews.ui.theme.Shapes
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
 import androidx.compose.ui.res.pluralStringResource
 import com.rds.mews.localcore.MediaWithSource
+import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.UpdatingState
 import com.rds.mews.settings_manager.SummarizationErrorType
+import com.rds.mews.ui.custom_elements.image_viewer.RootViewOverlay
+import com.rds.mews.ui.custom_elements.titles_card.BlitzCardSourceExpansionOverlay
+import com.rds.mews.ui.custom_elements.titles_card.BlitzCarouselRow
 import com.rds.mews.viewmodels.TitlesScrollEvent
+import kotlin.time.Duration.Companion.milliseconds
+
+private data class ExpandedBlitzData(
+    val title: Title,
+    val bounds: Rect?,
+    val dateString: String,
+    val sources: List<SourceMessages>? = null
+)
 
 @Composable
 fun TitlesScreen(
@@ -262,6 +276,7 @@ fun TitlesGrid(
 
     var allowPullToRefresh by remember { mutableStateOf(false) }
     var lastOverscrollTime by remember { mutableLongStateOf(0L) }
+    var expandedBlitzData by remember { mutableStateOf<ExpandedBlitzData?>(null) }
 
     val connection = remember(onOverscrollDetected) {
         object : NestedScrollConnection {
@@ -300,13 +315,15 @@ fun TitlesGrid(
 
             for ((group, items) in groupedItems) {
                 globIndex++
-                val itIndex = items.indexOfFirst { it.id == expandedCardId }
+                val regularItems = items.filter { !it.isBlitz }
+                val hasBlitz = items.any { it.isBlitz }
+                val itIndex = regularItems.indexOfFirst { it.id == expandedCardId }
                 if (itIndex != -1) {
                     item = itIndex + globIndex
                     foundGroup = group
                     break
                 }
-                globIndex += items.size
+                globIndex += regularItems.size + if (hasBlitz) 1 else 0
             }
 
             if (item != -1) {
@@ -318,7 +335,7 @@ fun TitlesGrid(
 
     LaunchedEffect(groupedItems.isEmpty(), isRefreshing) {
         if (groupedItems.isEmpty() && !isRefreshing && lastTitlesUpdateExists()) {
-            delay(300L)
+            delay(300L.milliseconds)
             if (groupedItems.isEmpty()) toggleEmptyMess(true)
         } else toggleEmptyMess(false)
     }
@@ -367,79 +384,87 @@ fun TitlesGrid(
             )
         }
     ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(1),
-            modifier = Modifier
-                .nestedScroll(connection)
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            awaitFirstDown(requireUnconsumed = false)
-                            allowPullToRefresh = !lazyGridState.canScrollBackward
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(1),
+                modifier = Modifier
+                    .nestedScroll(connection)
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitFirstDown(requireUnconsumed = false)
+                                allowPullToRefresh = !lazyGridState.canScrollBackward
+                            }
                         }
                     }
-                }
-                .fillMaxSize()
-                .padding(horizontal = 10.dp),
-            contentPadding = WindowInsets.statusBars.asPaddingValues(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            state = lazyGridState
-        ) {
-            if (showEmptyMess) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .wrapContentSize()
-                                .background(
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    shape = Shapes.large
-                                ),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp),
+                contentPadding = WindowInsets.statusBars.asPaddingValues(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                state = lazyGridState
+            ) {
+                if (showEmptyMess) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.zhdun),
-                                contentDescription = "zhdun.swag",
+                            Column(
                                 modifier = Modifier
-                                    .size(256.dp)
-                                    .padding(top = 50.dp),
-                                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSecondaryContainer)
-                            )
-                            Text(
-                                text = stringResource(R.string.titles_update_text),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(40.dp),
-                                textAlign = TextAlign.Center
-                            )
+                                    .wrapContentSize()
+                                    .background(
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        shape = Shapes.large
+                                    ),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.zhdun),
+                                    contentDescription = "zhdun.swag",
+                                    modifier = Modifier
+                                        .size(256.dp)
+                                        .padding(top = 50.dp),
+                                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSecondaryContainer)
+                                )
+                                Text(
+                                    text = stringResource(R.string.titles_update_text),
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(40.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            var globalIndex = 0
+                var globalIndex = 0
 
-            groupedItems.forEach { (date, titlesForDate) ->
-                customHeader(
-                    text = if (date.number != null) context.getString(
-                        date.date,
-                        date.number
-                    ) else context.getString(date.date)
-                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
-                    isExpanded = groupStates.find { it.group == date }?.expanded ?: true,
-                    onHeaderClick = { changeGroupState(date) },
-                    expandable = lastTitlesUpdateExists(),
-                    bottomPadding = 0.dp
-                )
-                globalIndex++
-                val currentGroupStartIndex = globalIndex
+                groupedItems.forEach { (date, allTitlesForDate) ->
+                    val regularTitles = allTitlesForDate.filter { !it.isBlitz }
+                    val blitzTitles = allTitlesForDate.filter { it.isBlitz }
+                    val isGroupExpanded = groupStates.find { it.group == date }?.expanded ?: true
 
-                itemsIndexed(titlesForDate) { index, item ->
-                    val isFirst = index == 0
-                    val isLast = index == titlesForDate.lastIndex
+                    customHeader(
+                        text = if (date.number != null) context.getString(
+                            date.date,
+                            date.number
+                        ) else context.getString(date.date)
+                            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
+                        isExpanded = isGroupExpanded,
+                        onHeaderClick = { changeGroupState(date) },
+                        expandable = lastTitlesUpdateExists(),
+                        bottomPadding = 0.dp
+                    )
+                    globalIndex++
+                    val currentGroupStartIndex = globalIndex
+
+                    itemsIndexed(
+                        items = regularTitles,
+                        key = { _, item -> item.id }
+                    ) { index, item ->
+                        val isFirst = index == 0
+                        val isLast = index == regularTitles.lastIndex
 
                     val itemGlobalIndex = currentGroupStartIndex + index
 
@@ -541,25 +566,91 @@ fun TitlesGrid(
                     }
                 }
 
-                globalIndex += titlesForDate.size
-            }
+                    globalIndex += regularTitles.size
 
-            if (groupedItems.isNotEmpty() && lastTitlesUpdateExists()) {
+                    if (blitzTitles.isNotEmpty()) {
+                        item(key = "blitz_carousel_${date.date}_${date.number}_${date.time}") {
+                            ExpandableContainer(visible = isGroupExpanded) {
+                                BlitzCarouselRow(
+                                    items = blitzTitles,
+                                    dateStringProvider = { blitzItem ->
+                                        val evDate = getDateFromUnix(blitzItem.eventTime)
+                                        try {
+                                            if (evDate.number != null) context.getString(evDate.date, evDate.number)
+                                            else context.getString(evDate.date)
+                                        } catch (_: Exception) { "" }
+                                    },
+                                    expandedTitleId = expandedBlitzData?.title?.id,
+                                    titlesCardStates = titlesCardStates,
+                                    dynamicMediaUrls = dynamicMediaUrls,
+                                    onToggleExpanded = { clickedTitle, bounds, dateStr ->
+                                        expandedBlitzData = ExpandedBlitzData(
+                                            title = clickedTitle,
+                                            bounds = bounds,
+                                            dateString = dateStr
+                                        )
+                                    },
+                                    onTogglePin = { id, isPinned -> markTitleAsPinned(id, isPinned) },
+                                    onLoadMediaUrls = { id -> loadDynamicMediaUrls(id) },
+                                    onImageChanged = { id, page -> setCurrentTitleImage(id, page) },
+                                    onImageClicked = { id, flag -> setFullscreenView(id, flag) },
+                                    setShowMedia = setShowMedia,
+                                    markTitleAsRead = markTitleAsRead,
+                                    sanitizeCopiedText = copyPlainText
+                                )
+                            }
+                        }
+                        globalIndex++
+                    }
+                }
+
+                if (groupedItems.isNotEmpty() && lastTitlesUpdateExists()) {
+                    item {
+                        CustomBottomFootnote(
+                            text = stringResource(
+                                R.string.updated_footnote,
+                                if (lastUpdatedDate.value.number == null) stringResource(lastUpdatedDate.value.date)
+                                else stringResource(lastUpdatedDate.value.date, lastUpdatedDate.value.number!!),
+                                lastUpdatedDate.value.time
+                            ),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        )
+                    }
+                }
+
                 item {
-                    CustomBottomFootnote(
-                        text = stringResource(
-                            R.string.updated_footnote,
-                            if (lastUpdatedDate.value.number == null) stringResource(lastUpdatedDate.value.date)
-                            else stringResource(lastUpdatedDate.value.date, lastUpdatedDate.value.number!!),
-                            lastUpdatedDate.value.time
-                        ),
-                        modifier = Modifier.padding(vertical = verticalArrangement)
-                    )
+                    Spacer(modifier = Modifier.height(bottomSpacer))
                 }
             }
 
-            item {
-                Spacer(modifier = Modifier.height(bottomSpacer))
+            if (expandedBlitzData != null && expandedBlitzData!!.bounds != null) {
+                val titleId = expandedBlitzData!!.title.id
+                val blitzTitle = groupedItems.values.flatten().find { it.id == titleId } ?: expandedBlitzData!!.title
+                val statesItem = titlesCardStates.find { it.id == titleId }
+                val mediaList = dynamicMediaUrls[titleId]?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
+                val overlayImagePagerState = rememberPagerState(
+                    initialPage = statesItem?.currentImage ?: 0,
+                    pageCount = { mediaList.size }
+                )
+                val overlayClickedImageIndex = if (statesItem?.fullscreenImage == true) statesItem.currentImage else null
+
+                RootViewOverlay {
+                    BlitzCardSourceExpansionOverlay(
+                        title = blitzTitle,
+                        dateString = expandedBlitzData!!.dateString,
+                        sources = statesItem?.sources,
+                        collapsedBounds = expandedBlitzData!!.bounds!!,
+                        onDismissRequest = { expandedBlitzData = null },
+                        onTogglePin = { isPinned -> markTitleAsPinned(titleId, isPinned) },
+                        dynamicMediaUrls = dynamicMediaUrls[titleId],
+                        imagePagerState = overlayImagePagerState,
+                        clickedImageIndex = overlayClickedImageIndex,
+                        onImageChanged = { setCurrentTitleImage(titleId, it) },
+                        onImageClicked = { setFullscreenView(titleId, it) },
+                        setShowMedia = setShowMedia,
+                        onBanTheme = onBanTheme
+                    )
+                }
             }
         }
     }

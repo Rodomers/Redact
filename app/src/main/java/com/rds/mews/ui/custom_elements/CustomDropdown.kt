@@ -56,6 +56,7 @@ import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.getScreenQuadrant
 import com.rds.mews.ui.theme.Shapes
 import androidx.compose.material3.ripple
+import androidx.compose.ui.text.style.TextAlign
 
 class BubbleShape(
     private val cornerShape: CornerBasedShape,
@@ -401,7 +402,8 @@ private fun NPDropdownMenuItem(
         verticalPadding = 0.dp,
         horizontalPadding = 0.dp,
         indication = ripple(bounded = true),
-        shape = Shapes.large
+        shape = Shapes.large,
+        textAlign = TextAlign.Center
     )
 }
 

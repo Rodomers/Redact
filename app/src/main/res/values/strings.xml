@@ -161,7 +161,7 @@
     <string name="update_cancelled">Update cancelled.</string>
 
     <string name="download">Download</string>
-    <string name="saving_to_gallery">Saving image to gallery…</string>
+    <string name="saving_to_gallery">Image saved to gallery.</string>
     <string name="source_show_media">Show media</string>
     <string name="source_do_not_show_media">Do not show media</string>
 

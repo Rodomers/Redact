@@ -289,7 +289,7 @@ interface TitleDao {
     @Query("DELETE FROM titles WHERE update_time < :timeMs")
     suspend fun deleteBeforeUpdateTime(timeMs: Long): Int
 
-    @Query("DELETE FROM titles WHERE update_time < :timeMs AND is_read = 1 AND is_pinned = 0")
+    @Query("DELETE FROM titles WHERE update_time < :timeMs AND (is_read = 1 OR is_blitz = 1) AND is_pinned = 0")
     suspend fun deleteReadItemsBeforeUpdateTime(timeMs: Long): Int
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
