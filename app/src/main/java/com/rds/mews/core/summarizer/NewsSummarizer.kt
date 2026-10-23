@@ -341,6 +341,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                     result = smartMergeTopics(result, currentLanguage, bannedWords, maxTopics)
                                 }
                                 Log.d(TAG, "[FILTERING] LLM smart merge finished. Result size: ${result.size}. Applying final time-window algorithmic merge.")
+                                result = result.map { it.copy(isBlitz = true) }
                                 val finalReg = mergeInTimeWindows(
                                     topics = result,
                                     messageTimeMap = messageTimeMap,
