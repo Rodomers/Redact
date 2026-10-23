@@ -92,7 +92,7 @@ class NewsSummarizer(private val llm: LLMClient) {
         private const val TOPIC_MAX_MESSAGES_LIMIT = 30
         private const val SIGNAL_SIMILARITY_THRESHOLD = 0.8f
 
-        private const val MAX_SUMMARIZATION_ATTEMPTS = 3
+        private const val MAX_SUMMARIZATION_ATTEMPTS = 10
         private const val SINGLE_NEWS_CHAR_LIMIT = 3000
         private const val TAG = "NewsSummarizer"
     }
@@ -328,13 +328,40 @@ class NewsSummarizer(private val llm: LLMClient) {
                 } catch (_: Exception) { emptyMap() }
 
                 coroutineScope {
+                    val smartBlitz = filterTopics && blitzTopics.isNotEmpty() && blitzTopics.size > 200
+
                     val blitzDeferred = async(Dispatchers.Default) {
-                        mergeInTimeWindows(blitzTopics, messageTimeMap)
+                        if (smartBlitz) {
+                            try {
+                                Log.d(TAG, "[FILTERING] Starting LLM smart merge on raw blitz topics...")
+                                var result: List<Topics> = smartMergeTopics(blitzTopics, currentLanguage, bannedWords, maxTopics)
+                                var attempts = 0
+                                while (attempts < MAX_SUMMARIZATION_ATTEMPTS && result.size > maxTopics * 2) {
+                                    attempts++
+                                    result = smartMergeTopics(result, currentLanguage, bannedWords, maxTopics)
+                                }
+                                Log.d(TAG, "[FILTERING] LLM smart merge finished. Result size: ${result.size}. Applying final time-window algorithmic merge.")
+                                val finalReg = mergeInTimeWindows(
+                                    topics = result,
+                                    messageTimeMap = messageTimeMap,
+                                    enableCrossWindowMerge = false
+                                )
+                                Log.d(TAG, "[FILTERING] Final merged blitz topics size: ${finalReg.size}")
+                                finalReg
+                            } catch (e: Exception) {
+                                Log.w(TAG, "[FILTERING] Smart merge failed, falling back to time-window algorithmic merge", e)
+                                mergeInTimeWindows(blitzTopics, messageTimeMap)
+                            }
+                        } else {
+                            Log.d(TAG, "[FILTERING] Filter disabled or no blitz topics. Applying time-window algorithmic merge directly.")
+                            mergeInTimeWindows(blitzTopics, messageTimeMap)
+                        }
                     }
 
                     val mergedTopicsDeferred = async(Dispatchers.Default) {
                         if (filterTopics && nonBlitzTopics.isNotEmpty()) {
                             try {
+                                if (smartBlitz) blitzDeferred.join()
                                 Log.d(TAG, "[FILTERING] Starting LLM smart merge on raw non-blitz topics...")
                                 var result: List<Topics> = smartMergeTopics(nonBlitzTopics, currentLanguage, bannedWords, maxTopics)
                                 var attempts = 0
@@ -766,7 +793,6 @@ class NewsSummarizer(private val llm: LLMClient) {
         if (summaryThreshold > 0.7) return 1.0
 
         val totalWeight = if (hasSummary) 6.0 else 3.0
-        println("Title: $otherTitle. Keywords score: $keywordScore, titles: $titlesThreshold, summary: $summaryThreshold. Total: ${(keywordScore * 2.0 + titlesThreshold * 1.0 + summaryThreshold * 3.0) / totalWeight}.")
         return (keywordScore * 2.0 + titlesThreshold * 1.0 + summaryThreshold * 3.0) / totalWeight
     }
 
@@ -1313,7 +1339,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             }
         )
 
-        return mergedResults
+        return mergedResults.sortedBy { it.weight }.take(targetLimit)
     }
 
     private suspend fun findBestMatch(topic: Topics, summaryToCompare: String?, history: List<TitleEntity>, aimedScore: Double = MATCH_RATE.toDouble()): Long? {
