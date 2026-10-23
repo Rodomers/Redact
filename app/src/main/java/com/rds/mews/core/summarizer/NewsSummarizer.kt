@@ -1258,7 +1258,7 @@ class NewsSummarizer(private val llm: LLMClient) {
 
         Log.d(TAG, "[SMART MERGE] Starting execution manager for ${topics.size} topics...")
         val mergedResults = mutableListOf<Topics>()
-        val targetLimit = maxTopics * 2
+        val targetLimit = maxTopics * 1.5.toInt()
 
         executionManager.execute<Topics, List<Topics>>(
             items = topics,
@@ -1339,7 +1339,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             }
         )
 
-        return mergedResults.sortedBy { it.weight }.take(targetLimit)
+        return mergedResults.sortedByDescending { it.weight }.take(targetLimit)
     }
 
     private suspend fun findBestMatch(topic: Topics, summaryToCompare: String?, history: List<TitleEntity>, aimedScore: Double = MATCH_RATE.toDouble()): Long? {
