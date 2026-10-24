@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -132,6 +133,7 @@ fun BlitzCard(
     onLoadMediaUrls: () -> Unit = {},
     imagePagerState: PagerState,
     clickedImageIndex: Int?,
+    currentImage: Int = 0,
     onImageChanged: (Int) -> Unit,
     onImageClicked: (Boolean) -> Unit,
     setShowMedia: (Long, Boolean) -> Unit,
@@ -210,6 +212,7 @@ fun BlitzCard(
             validMedia = validMedia,
             imagePagerState = imagePagerState,
             clickedImageIndex = clickedImageIndex,
+            currentImage = currentImage,
             isOverlayMode = false,
             isExpanded = isExpanded,
             onTogglePin = onTogglePin,
@@ -230,6 +233,7 @@ private fun BlitzCardInnerContent(
     validMedia: List<MediaWithSource>,
     imagePagerState: PagerState,
     clickedImageIndex: Int?,
+    currentImage: Int = 0,
     isOverlayMode: Boolean,
     isExpanded: Boolean,
     onTogglePin: (Boolean) -> Unit,
@@ -259,6 +263,14 @@ private fun BlitzCardInnerContent(
         28.dp
     )
     var sharedMediaBounds by remember { mutableStateOf<Rect?>(null) }
+
+    LaunchedEffect(currentImage) {
+        if (validMedia.isNotEmpty() && currentImage in validMedia.indices) {
+            if (imagePagerState.currentPage != currentImage) {
+                imagePagerState.scrollToPage(currentImage)
+            }
+        }
+    }
 
     LaunchedEffect(imagePagerState.currentPage) {
         onImageChanged(imagePagerState.currentPage)
@@ -618,6 +630,7 @@ private fun BlitzCardInnerContent(
 }
 
 
+@SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun BlitzCarouselRow(
     items: List<Title>,
@@ -634,9 +647,10 @@ fun BlitzCarouselRow(
     setShowMedia: (Long, Boolean) -> Unit,
     markTitleAsRead: (Long, Boolean) -> Unit,
     onBanTheme: (String) -> Unit = {},
+    carouselState: LazyListState = rememberLazyListState(),
+    cardImagePages: Map<Long, Int> = emptyMap(),
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
-    val listState = rememberLazyListState()
     val config = LocalConfiguration.current
 
     val isolateHorizontalGestures = remember {
@@ -649,6 +663,18 @@ fun BlitzCarouselRow(
                 return Offset(x = available.x, y = 0f)
             }
         }
+    }
+
+    LaunchedEffect(carouselState) {
+        snapshotFlow { carouselState.layoutInfo.visibleItemsInfo }
+            .map { visibleItems -> visibleItems.mapNotNull { it.key as? Long } }
+            .distinctUntilChanged()
+            .collect { visibleIds ->
+                delay(1500.milliseconds)
+                visibleIds.forEach { id ->
+                    markTitleAsRead(id, true)
+                }
+            }
     }
 
     LaunchedEffect(items) {
@@ -667,18 +693,6 @@ fun BlitzCarouselRow(
     LaunchedEffect(Unit) {
         delay(5000.milliseconds)
         isReady = true
-    }
-
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo }
-            .map { visibleItems -> visibleItems.mapNotNull { it.key as? Long } }
-            .distinctUntilChanged()
-            .collect { visibleIds ->
-                delay(1500.milliseconds)
-                visibleIds.forEach { id ->
-                    markTitleAsRead(id, true)
-                }
-            }
     }
 
     if (!isReady) {
@@ -779,7 +793,7 @@ fun BlitzCarouselRow(
 
             val rowPlaceable = subcompose("carousel_content") {
                 LazyRow(
-                    state = listState,
+                    state = carouselState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(rowHeightDp)
@@ -805,11 +819,12 @@ fun BlitzCarouselRow(
                         val mediaForTitle = dynamicMediaUrls[title.id]
                         val filteredMedia = mediaForTitle?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
 
+                        val currentImg = cardImagePages[title.id] ?: statesItem?.currentImage ?: 0
                         val imagePagerState = rememberPagerState(
-                            initialPage = statesItem?.currentImage ?: 0,
+                            initialPage = currentImg,
                             pageCount = { filteredMedia.size }
                         )
-                        val clickedImageIndex = if (statesItem?.fullscreenImage == true) statesItem.currentImage else null
+                        val clickedImageIndex = if (statesItem?.fullscreenImage == true) currentImg else null
 
                         BlitzCard(
                             title = title,

@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -46,6 +47,8 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -99,6 +102,7 @@ import com.rds.mews.ui.custom_elements.image_viewer.RootViewOverlay
 import com.rds.mews.ui.custom_elements.titles_card.BlitzCardSourceExpansionOverlay
 import com.rds.mews.ui.custom_elements.titles_card.BlitzCarouselRow
 import com.rds.mews.viewmodels.TitlesScrollEvent
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.time.Duration.Companion.milliseconds
 
 private data class ExpandedBlitzData(
@@ -165,6 +169,8 @@ fun TitlesScreen(
     val titleSorting by viewModel.titleSorting.collectAsStateWithLifecycle()
     val copyPlainText by viewModel.copyPlainText.collectAsStateWithLifecycle()
     val failedTitles by viewModel.failedTitles.collectAsStateWithLifecycle()
+    val blitzCarouselPositions by viewModel.blitzCarouselPositions.collectAsStateWithLifecycle()
+    val blitzImagePages by viewModel.blitzImagePages.collectAsStateWithLifecycle()
 
     TitlesGrid(
         lazyGridState = lazyGridState,
@@ -180,6 +186,8 @@ fun TitlesScreen(
         toggleEmptyMess = viewModel::toggleEmptyMess,
         errState = err,
         titlesCardStates = titlesCardStates,
+        blitzCarouselPositions = blitzCarouselPositions,
+        blitzImagePages = blitzImagePages,
         rememberCardPage = viewModel::changeTitleCurrentPage,
         onRefresh = viewModel::refreshTitles,
         onIndicatorClick = viewModel::changeIndicatorCollapsed,
@@ -207,6 +215,7 @@ fun TitlesScreen(
         onSwitchStoryline = viewModel::switchStorylineAndScroll,
         loadDynamicMediaUrls = viewModel::loadDynamicMediaUrls,
         setCurrentTitleImage = viewModel::setCurrentTitleImage,
+        onSaveBlitzScroll = viewModel::saveBlitzCarouselScroll,
         setFullscreenView = viewModel::setFullscreenImageForTitle,
         stopTitlesUpdate = viewModel::stopTitlesUpdate,
         setShowMedia = viewModel::setShowMedia,
@@ -231,6 +240,8 @@ fun TitlesGrid(
     toggleEmptyMess: (Boolean) -> Unit,
     errState: SummarizationResult.Failure?,
     titlesCardStates: Set<TitleCardStates>,
+    blitzCarouselPositions:  Map<String, Pair<Int, Int>>,
+    blitzImagePages:  Map<Long, Int>,
     rememberCardPage: (Long, Int) -> Unit,
     onRefresh: () -> Unit,
     onIndicatorClick: () -> Unit,
@@ -258,6 +269,7 @@ fun TitlesGrid(
     onSwitchStoryline: (Long) -> Unit,
     loadDynamicMediaUrls: (Long) -> Unit,
     setCurrentTitleImage: (Long, Int) -> Unit,
+    onSaveBlitzScroll: (String, Int, Int) -> Unit,
     setFullscreenView: (Long, Boolean) -> Unit,
     stopTitlesUpdate: (Context) -> Unit,
     setShowMedia: (Long, Boolean) -> Unit,
@@ -569,8 +581,29 @@ fun TitlesGrid(
                     globalIndex += regularTitles.size
 
                     if (blitzTitles.isNotEmpty()) {
-                        item(key = "blitz_carousel_${date.date}_${date.number}_${date.time}") {
+                        val carouselKey = "blitz_carousel_${date.date}_${date.number}_${date.time}"
+
+                        item(key = carouselKey) {
                             ExpandableContainer(visible = isGroupExpanded) {
+                                val savedPos = blitzCarouselPositions[carouselKey]
+                                val carouselState = rememberSaveable(
+                                    carouselKey,
+                                    saver = LazyListState.Saver
+                                ) {
+                                    LazyListState(
+                                        firstVisibleItemIndex = savedPos?.first ?: 0,
+                                        firstVisibleItemScrollOffset = savedPos?.second ?: 0
+                                    )
+                                }
+
+                                LaunchedEffect(carouselState) {
+                                    snapshotFlow { carouselState.firstVisibleItemIndex to carouselState.firstVisibleItemScrollOffset }
+                                        .distinctUntilChanged()
+                                        .collect { (idx, offset) ->
+                                            onSaveBlitzScroll(carouselKey, idx, offset)
+                                        }
+                                }
+
                                 BlitzCarouselRow(
                                     items = blitzTitles,
                                     dateStringProvider = { blitzItem ->
@@ -583,6 +616,8 @@ fun TitlesGrid(
                                     expandedTitleId = expandedBlitzData?.title?.id,
                                     titlesCardStates = titlesCardStates,
                                     dynamicMediaUrls = dynamicMediaUrls,
+                                    carouselState = carouselState,
+                                    cardImagePages = blitzImagePages,
                                     onToggleExpanded = { clickedTitle, bounds, dateStr ->
                                         expandedBlitzData = ExpandedBlitzData(
                                             title = clickedTitle,
@@ -628,11 +663,13 @@ fun TitlesGrid(
                 val blitzTitle = groupedItems.values.flatten().find { it.id == titleId } ?: expandedBlitzData!!.title
                 val statesItem = titlesCardStates.find { it.id == titleId }
                 val mediaList = dynamicMediaUrls[titleId]?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
+
+                val currentImg = blitzImagePages[titleId] ?: statesItem?.currentImage ?: 0
                 val overlayImagePagerState = rememberPagerState(
-                    initialPage = statesItem?.currentImage ?: 0,
+                    initialPage = currentImg,
                     pageCount = { mediaList.size }
                 )
-                val overlayClickedImageIndex = if (statesItem?.fullscreenImage == true) statesItem.currentImage else null
+                val overlayClickedImageIndex = if (statesItem?.fullscreenImage == true) currentImg else null
 
                 RootViewOverlay {
                     BlitzCardSourceExpansionOverlay(
@@ -640,7 +677,12 @@ fun TitlesGrid(
                         dateString = expandedBlitzData!!.dateString,
                         sources = statesItem?.sources,
                         collapsedBounds = expandedBlitzData!!.bounds!!,
-                        onDismissRequest = { expandedBlitzData = null },
+                        onDismissRequest = {
+                            scope.launch {
+                                delay(250.milliseconds)
+                                expandedBlitzData = null
+                            }
+                        },
                         onTogglePin = { isPinned -> markTitleAsPinned(titleId, isPinned) },
                         dynamicMediaUrls = dynamicMediaUrls[titleId],
                         imagePagerState = overlayImagePagerState,

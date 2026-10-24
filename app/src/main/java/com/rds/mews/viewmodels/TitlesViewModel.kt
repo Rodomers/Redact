@@ -52,7 +52,6 @@ import java.time.format.DateTimeFormatter
 import com.rds.mews.R
 import com.rds.mews.core.TelegramRssClient
 import com.rds.mews.localcore.MediaWithSource
-import com.rds.mews.localcore.Message
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.TitleStatus
 import com.rds.mews.localcore.UpdatingState
@@ -60,7 +59,6 @@ import com.rds.mews.localcore.cancelTitlesUpdate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
-import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
 
 class TitlesViewModel(
@@ -187,9 +185,14 @@ class TitlesViewModel(
     private val _titleCardStates = MutableStateFlow<Set<TitleCardStates>>(emptySet())
     val titleCardStates: StateFlow<Set<TitleCardStates>> = _titleCardStates.asStateFlow()
 
+    private val _blitzCarouselPositions = MutableStateFlow<Map<String, Pair<Int, Int>>>(emptyMap())
+    val blitzCarouselPositions: StateFlow<Map<String, Pair<Int, Int>>> = _blitzCarouselPositions.asStateFlow()
+
     private val _blitzCardSources = MutableStateFlow<Map<Long, List<SourceMessages>>>(emptyMap())
     val blitzCardSources: StateFlow<Map<Long, List<SourceMessages>>> = _blitzCardSources.asStateFlow()
 
+    private val _blitzImagePages = MutableStateFlow<Map<Long, Int>>(emptyMap())
+    val blitzImagePages: StateFlow<Map<Long, Int>> = _blitzImagePages.asStateFlow()
 
     private val _dynamicMediaUrls = MutableStateFlow<Map<Long, List<MediaWithSource>>>(emptyMap())
     val dynamicMediaUrls: StateFlow<Map<Long, List<MediaWithSource>>> = _dynamicMediaUrls.asStateFlow()
@@ -334,6 +337,10 @@ class TitlesViewModel(
         }
     }
 
+    fun saveBlitzCarouselScroll(key: String, index: Int, offset: Int) {
+        _blitzCarouselPositions.update { it + (key to (index to offset)) }
+    }
+
     fun markTitleAsRead(id: Long, read: Boolean = true) {
         repository.markTitleAsRead(id, read)
         _titleCardStates.update { currentSet ->
@@ -349,6 +356,10 @@ class TitlesViewModel(
     }
 
     fun setCurrentTitleImage(id: Long, image: Int) {
+        if (_titles.value.find { it.id == id }?.isBlitz ?: false) {
+            _blitzImagePages.update { it + (id to image) }
+        }
+
         _titleCardStates.update { currentSet ->
             currentSet.map {
                 if (it.id == id) { it.copy(currentImage = image) }

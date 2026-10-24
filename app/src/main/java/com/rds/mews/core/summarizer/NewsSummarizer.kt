@@ -1339,8 +1339,9 @@ class NewsSummarizer(private val llm: LLMClient) {
                 mergedResults.addAll(batch)
             }
         )
+        val result = smartMergeTopics(mergedResults.take(100), lang, banned, targetLimit)
 
-        return mergedResults.sortedByDescending { it.weight }.take(targetLimit)
+        return result
     }
 
     private suspend fun findBestMatch(topic: Topics, summaryToCompare: String?, history: List<TitleEntity>, aimedScore: Double = MATCH_RATE.toDouble()): Long? {
