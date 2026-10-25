@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -45,7 +47,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -149,8 +150,7 @@ fun BlitzCard(
     val filteredMediaUrls = dynamicMediaUrls?.filter {
         (it.message?.source?.showMedia ?: true) && it.mediaLink.isNotBlank()
     } ?: emptyList()
-    val validMedia = filteredMediaUrls
-    val hasMedia = validMedia.isNotEmpty()
+    val hasMedia = filteredMediaUrls.isNotEmpty()
 
     val maxCardWidth = (config.screenWidthDp - 36).dp
     val defaultWidth = if (hasMedia) maxCardWidth else (config.screenWidthDp * 0.7f).dp
@@ -196,7 +196,7 @@ fun BlitzCard(
                     size = coordinates.size.toSize()
                 )
             }
-            .alpha(if (isExpanded) 0f else 1f)
+//            .alpha(if (isExpanded) 0f else 1f)
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -209,7 +209,7 @@ fun BlitzCard(
     ) {
         BlitzCardInnerContent(
             title = title,
-            validMedia = validMedia,
+            validMedia = filteredMediaUrls,
             imagePagerState = imagePagerState,
             clickedImageIndex = clickedImageIndex,
             currentImage = currentImage,
@@ -226,7 +226,7 @@ fun BlitzCard(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalCoilApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalCoilApi::class)
 @Composable
 private fun BlitzCardInnerContent(
     title: Title,
@@ -256,6 +256,12 @@ private fun BlitzCardInnerContent(
     val isPinned = title.isPinned
     val isRead = title.isRead
     val hasMedia = validMedia.isNotEmpty()
+
+    val targetWeight = if (isRead) 500 else 700
+    val currentWeight by animateIntAsState(targetValue = targetWeight, label = "titleWeight")
+
+    val targetAlpha = if (isRead) 0.65f else 1.0f
+    val currentAlpha by animateFloatAsState(targetValue = targetAlpha, label = "contentAlpha")
 
     val iconParams = IconParams(
         MaterialTheme.colorScheme.surface,
@@ -321,10 +327,8 @@ private fun BlitzCardInnerContent(
                         Text(
                             text = title.summary.ifBlank { title.title },
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = if (isRead) FontWeight.Medium else FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface.copy(
-                                    alpha = if (isRead) 0.65f else 1.0f
-                                )
+                                fontWeight = FontWeight(currentWeight),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = currentAlpha)
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -390,151 +394,151 @@ private fun BlitzCardInnerContent(
                             .clip(Shapes.large)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                    HorizontalPager(
-                        state = imagePagerState,
-                        userScrollEnabled = isOverlayMode && validMedia.size > 1,
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        val mediaUrl = validMedia[page].mediaLink
-                        val isImageFullOpened = clickedImageIndex != null && imagePagerState.currentPage == page
-                        var retryCount by remember(mediaUrl) { mutableStateOf(0) }
-                        var lastRetryTime by remember(mediaUrl) { mutableStateOf(0L) }
-                        var isLoadError by remember(mediaUrl) { mutableStateOf(false) }
+                        HorizontalPager(
+                            state = imagePagerState,
+                            userScrollEnabled = isOverlayMode && validMedia.size > 1,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxSize()
+                        ) { page ->
+                            val mediaUrl = validMedia[page].mediaLink
+                            val isImageFullOpened = clickedImageIndex != null && imagePagerState.currentPage == page
+                            var retryCount by remember(mediaUrl) { mutableStateOf(0) }
+                            var lastRetryTime by remember(mediaUrl) { mutableStateOf(0L) }
+                            var isLoadError by remember(mediaUrl) { mutableStateOf(false) }
 
-                        val imageRequest = remember(mediaUrl, retryCount) {
-                            ImageRequest.Builder(context)
-                                .data(mediaUrl)
-                                .diskCachePolicy(CachePolicy.ENABLED)
-                                .memoryCachePolicy(CachePolicy.ENABLED)
-                                .setParameter("retry_token", retryCount, memoryCacheKey = null)
-                                .listener(
-                                    onError = { _, _ -> isLoadError = true },
-                                    onSuccess = { _, _ -> isLoadError = false }
-                                )
-                                .build()
-                        }
-
-                        val canRetry =
-                            retryCount < 3 && (System.currentTimeMillis() - lastRetryTime > 2000L)
-                        val onRetryClick: () -> Unit = {
-                            if (canRetry) {
-                                lastRetryTime = System.currentTimeMillis()
-                                retryCount++
-                                isLoadError = false
-                                coil.Coil.imageLoader(context).diskCache?.remove(mediaUrl)
-                                coil.Coil.imageLoader(context).memoryCache?.remove(
-                                    coil.memory.MemoryCache.Key(
-                                        mediaUrl
+                            val imageRequest = remember(mediaUrl, retryCount) {
+                                ImageRequest.Builder(context)
+                                    .data(mediaUrl)
+                                    .diskCachePolicy(CachePolicy.ENABLED)
+                                    .memoryCachePolicy(CachePolicy.ENABLED)
+                                    .setParameter("retry_token", retryCount, memoryCacheKey = null)
+                                    .listener(
+                                        onError = { _, _ -> isLoadError = true },
+                                        onSuccess = { _, _ -> isLoadError = false }
                                     )
-                                )
+                                    .build()
+                            }
+
+                            val canRetry =
+                                retryCount < 3 && (System.currentTimeMillis() - lastRetryTime > 2000L)
+                            val onRetryClick: () -> Unit = {
+                                if (canRetry) {
+                                    lastRetryTime = System.currentTimeMillis()
+                                    retryCount++
+                                    isLoadError = false
+                                    coil.Coil.imageLoader(context).diskCache?.remove(mediaUrl)
+                                    coil.Coil.imageLoader(context).memoryCache?.remove(
+                                        coil.memory.MemoryCache.Key(
+                                            mediaUrl
+                                        )
+                                    )
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .onGloballyPositioned { coordinates ->
+                                        imageBoundsMap[page] = coordinates.boundsInWindow()
+                                    }
+                                    .clickable(enabled = !isImageFullOpened && !isLoadError) {
+                                        onImageClicked(true)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isLoadError) {
+                                    CustomIconButton(
+                                        inputs = IconButtonInputs(
+                                            icon = Icons.Default.Refresh,
+                                            action = onRetryClick
+                                        ),
+                                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .alpha(if (canRetry) 1f else 0.4f),
+                                        iconModifier = Modifier.size(18.dp),
+                                        shape = Shapes.large
+                                    )
+                                } else {
+                                    AsyncImage(
+                                        model = imageRequest,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .blur(24.dp)
+                                            .alpha(0.6f)
+                                            .clip(Shapes.large),
+                                        contentScale = ContentScale.Crop
+                                    )
+
+                                    AsyncImage(
+                                        model = imageRequest,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .graphicsLayer {
+                                                alpha = if (isImageFullOpened) 0f else 1f
+                                            },
+                                        contentScale = ContentScale.Fit
+                                    )
+                                }
                             }
                         }
 
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .onGloballyPositioned { coordinates ->
-                                    imageBoundsMap[page] = coordinates.boundsInWindow()
-                                }
-                                .clickable(enabled = !isImageFullOpened && !isLoadError) {
-                                    onImageClicked(true)
-                                },
-                            contentAlignment = Alignment.Center
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .padding(6.dp)
                         ) {
-                            if (isLoadError) {
-                                CustomIconButton(
-                                    inputs = IconButtonInputs(
-                                        icon = Icons.Default.Refresh,
-                                        action = onRetryClick
-                                    ),
-                                    defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .alpha(if (canRetry) 1f else 0.4f),
-                                    iconModifier = Modifier.size(18.dp),
-                                    shape = Shapes.large
+                            if (isOverlayMode && validMedia.size > 1) {
+                                DynamicPagerIndicator(
+                                    currentPage = imagePagerState.currentPage,
+                                    pageCount = validMedia.size,
+                                    modifier = Modifier.align(Alignment.CenterStart)
                                 )
-                            } else {
-                                AsyncImage(
-                                    model = imageRequest,
-                                    contentDescription = null,
+                            } else if (!isOverlayMode && validMedia.size > 1) {
+                                Box(
                                     modifier = Modifier
-                                        .fillMaxSize()
-                                        .blur(24.dp)
-                                        .alpha(0.6f)
-                                        .clip(Shapes.large),
-                                    contentScale = ContentScale.Crop
-                                )
-
-                                AsyncImage(
-                                    model = imageRequest,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .graphicsLayer {
-                                            alpha = if (isImageFullOpened) 0f else 1f
-                                        },
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .padding(6.dp)
-                    ) {
-                        if (isOverlayMode && validMedia.size > 1) {
-                            DynamicPagerIndicator(
-                                currentPage = imagePagerState.currentPage,
-                                pageCount = validMedia.size,
-                                modifier = Modifier.align(Alignment.CenterStart)
-                            )
-                        } else if (!isOverlayMode && validMedia.size > 1) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.CenterStart)
-                                    .background(
-                                        color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f),
-                                        shape = CircleShape
+                                        .align(Alignment.CenterStart)
+                                        .background(
+                                            color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f),
+                                            shape = CircleShape
+                                        )
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "+${validMedia.size - 1}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "+${validMedia.size - 1}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        CustomIconButton(
-                            inputs = IconButtonInputs(
-                                icon = Icons.Default.MoreVert,
-                                action = {
-                                    dropdownTransitionState.targetState =
-                                        !dropdownTransitionState.currentState
                                 }
-                            ),
-                            modifier = Modifier
-                                .requiredSize(iconParams.iconSize)
-                                .aspectRatio(1f)
-                                .align(Alignment.CenterEnd)
-                                .onGloballyPositioned { coordinates ->
-                                    buttonBounds = coordinates.boundsInWindow().roundToIntRect()
-                                },
-                            iconModifier = Modifier.size(14.dp),
-                            defaultBackgroundColor = iconParams.defaultIconColor.copy(alpha = 0.85f),
-                            transitionBackgroundColor = iconParams.transitionIconColor,
-                            transitionState = dropdownTransitionState,
-                            shape = Shapes.large
-                        )
+                            }
+
+                            CustomIconButton(
+                                inputs = IconButtonInputs(
+                                    icon = Icons.Default.MoreVert,
+                                    action = {
+                                        dropdownTransitionState.targetState =
+                                            !dropdownTransitionState.currentState
+                                    }
+                                ),
+                                modifier = Modifier
+                                    .requiredSize(iconParams.iconSize)
+                                    .aspectRatio(1f)
+                                    .align(Alignment.CenterEnd)
+                                    .onGloballyPositioned { coordinates ->
+                                        buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                                    },
+                                iconModifier = Modifier.size(14.dp),
+                                defaultBackgroundColor = iconParams.defaultIconColor.copy(alpha = 0.85f),
+                                transitionBackgroundColor = iconParams.transitionIconColor,
+                                transitionState = dropdownTransitionState,
+                                shape = Shapes.large
+                            )
+                        }
                     }
-                }
 
                     if (clickedImageIndex != null && (isOverlayMode || !isExpanded)) {
                         val fallbackBoundsMap = remember(imageBoundsMap, sharedMediaBounds) {

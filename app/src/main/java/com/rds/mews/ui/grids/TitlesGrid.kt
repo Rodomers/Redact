@@ -678,10 +678,7 @@ fun TitlesGrid(
                         sources = statesItem?.sources,
                         collapsedBounds = expandedBlitzData!!.bounds!!,
                         onDismissRequest = {
-                            scope.launch {
-                                delay(250.milliseconds)
-                                expandedBlitzData = null
-                            }
+                            expandedBlitzData = null
                         },
                         onTogglePin = { isPinned -> markTitleAsPinned(titleId, isPinned) },
                         dynamicMediaUrls = dynamicMediaUrls[titleId],
