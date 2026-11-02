@@ -224,27 +224,33 @@ class TitlesViewModel(
             val groups = groupedTitles.value
             var globalIndex = 0
             var targetGridIndex = -1
+            var targetGroup: TimeDate? = null
 
-            for ((_, titlesInDate) in groups) {
+            for ((groupDate, titlesInDate) in groups) {
                 globalIndex++
                 val regularTitles = titlesInDate.filter { !it.isBlitz }
                 val hasBlitz = titlesInDate.any { it.isBlitz }
                 val indexInGroup = regularTitles.indexOfFirst { it.id == targetTitleId }
                 if (indexInGroup != -1) {
                     targetGridIndex = globalIndex + indexInGroup
+                    targetGroup = groupDate
                     break
                 }
                 globalIndex += regularTitles.size + if (hasBlitz) 1 else 0
             }
 
             if (targetGridIndex != -1) {
+                if (targetGroup != null && _groupStates.value[targetGroup] == false) {
+                    changeGroupState(targetGroup)
+                    delay(200.milliseconds)
+                }
+
                 val currentState = _titleCardStates.value.find { it.id == targetTitleId }
 
                 val finalIndex = (targetGridIndex - 2).coerceIn(0, Int.MAX_VALUE)
                 _scrollEvents.trySend(TitlesScrollEvent.ScrollToItem(finalIndex, animated = true))
                 delay(450.milliseconds)
                 if (currentState?.expanded != true) {
-                    toggleTitleExpanded(targetTitleId)
                     toggleTitleExpanded(targetTitleId)
                 }
             }

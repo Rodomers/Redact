@@ -6,7 +6,6 @@ import android.widget.Toast
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -119,7 +118,6 @@ private data class IconParams(
     val iconSize: Dp
 )
 
-@OptIn(ExperimentalFoundationApi::class)
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun BlitzCard(
