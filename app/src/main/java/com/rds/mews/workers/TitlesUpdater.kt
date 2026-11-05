@@ -56,7 +56,7 @@ class TitlesUpdater() {
             MewsRepository.setUpdatingState(UpdatingState.UPDATING)
 
             if (MewsRepository.DEFAULT_GEMINI_API_KEY == llmApiKey) MewsRepository.setTooltipState(
-                TooltipOptions.DEFAULT_KEY_TOOLTIP)
+                TooltipOptions.DefaultKeyTooltip)
 
             currentCoroutineContext().ensureActive()
 

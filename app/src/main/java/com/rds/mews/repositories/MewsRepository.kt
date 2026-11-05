@@ -130,7 +130,7 @@ object MewsRepository {
     private val _showSummaryTooltip = MutableStateFlow(false)
     val showSummaryTooltip = _showSummaryTooltip.asStateFlow()
 
-    private val _tooltipState = MutableStateFlow(TooltipOptions.DEFAULT)
+    private val _tooltipState: MutableStateFlow<TooltipOptions> = MutableStateFlow(TooltipOptions.Default)
     val tooltipState = _tooltipState.asStateFlow()
 
     const val CURRENT_THEME = "current_theme"
@@ -286,8 +286,8 @@ object MewsRepository {
 
         isOnline.onEach { state ->
             when (state) {
-                true -> if (_previousIsOnline != null) setTooltipState(TooltipOptions.IS_ONLINE)
-                false -> setTooltipState(TooltipOptions.IS_OFFLINE)
+                true -> if (_previousIsOnline != null) setTooltipState(TooltipOptions.IsOnline)
+                false -> setTooltipState(TooltipOptions.IsOffline)
                 null -> {}
             }
             _previousIsOnline = isOnline.value
@@ -295,9 +295,9 @@ object MewsRepository {
 
         showSummaryTooltip.onEach { state ->
             when (state) {
-                true -> setTooltipState(TooltipOptions.SUMMARY_TOOLTIP)
-                else -> if (_tooltipState.value == TooltipOptions.SUMMARY_TOOLTIP) setTooltipState(
-                    TooltipOptions.DEFAULT)
+                true -> setTooltipState(TooltipOptions.SummaryTooltip)
+                else -> if (_tooltipState.value == TooltipOptions.SummaryTooltip) setTooltipState(
+                    TooltipOptions.Default)
             }
         }.launchIn(MewsRepository.externalScope)
 
@@ -980,7 +980,7 @@ object MewsRepository {
     @Synchronized
     fun setTooltipState(value: TooltipOptions) {
         externalScope.launch(Dispatchers.Default) {
-            _tooltipState.first { it == TooltipOptions.DEFAULT }
+            _tooltipState.first { it == TooltipOptions.Default }
             _tooltipState.value = value
         }
     }

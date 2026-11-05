@@ -13,6 +13,10 @@
     <string name="tooltip_network_restored">Network connection restored.</string>
     <string name="summary_tooltip">Algorithmic topic linking has begun. Internet connection will no longer be needed.</string>
     <string name="default_api_key_tooltip">Please use your Gemini API key. It can be specified in settings.</string>
+    <plurals name="message_quantity_tooltip">
+        <item quantity="one">Looking closely at %d message…</item>
+        <item quantity="other">Looking closely at %d messages…</item>
+    </plurals>
 
     <string name="source_type_telegram">Telegram</string>
     <string name="source_type_rss">Sites and RSS-feeds</string>
@@ -150,6 +154,10 @@
     <string name="titles_card_background">Background</string>
     <string name="titles_card_continued">To be continued…</string>
     <string name="titles_card_release">Release to read more</string>
+    <plurals name="titles_card_sources">
+        <item quantity="one">%d source</item>
+        <item quantity="other">%d sources</item>
+    </plurals>
 
     <string name="update">Update</string>
     <string name="updating">Updating…</string>

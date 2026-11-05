@@ -1,6 +1,7 @@
 package com.rds.mews.ui.custom_elements
 
 import android.annotation.SuppressLint
+import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -49,6 +50,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -69,6 +71,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -77,6 +80,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.rds.mews.R
 import com.rds.mews.localcore.TooltipOptions
+import com.rds.mews.repositories.MewsRepository
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -91,8 +95,9 @@ sealed class TabScreen(@StringRes val titleResId: Int, val icon: ImageVector) {
 }
 
 private data class TooltipMessage(
-    @StringRes val textRes: Int,
-    val durationMs: Long = 3000L
+    @StringRes @PluralsRes val textRes: Int,
+    val durationMs: Long = 3000L,
+    val additionalInt: Int? = null
 )
 
 @SuppressLint("UseOfNonLambdaOffsetOverload")
@@ -106,29 +111,22 @@ fun MyBottomBar(
     indicatorShape: CornerBasedShape = Shapes.large,
     backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.97f),
     indicatorColor: Color = MaterialTheme.colorScheme.secondaryContainer,
-    onHoldProgressChanged: (progress: Float, centerOffset: Offset, isHolding: Boolean) -> Unit = { _, _, _ -> },
-    onBlitzTriggered: (centerOffset: Offset) -> Unit = {},
     isBlitzActive: Boolean = false,
     tooltipOption: TooltipOptions,
 ) {
     val tooltipChannel = remember { Channel<TooltipMessage>(Channel.UNLIMITED) }
-    var currentTooltipTextId by remember { mutableIntStateOf(0) }
+    var currentTooltipMessage by remember { mutableStateOf<TooltipMessage?>(null) }
 
     val tabs = remember { listOf(TabScreen.Sources, TabScreen.Titles, TabScreen.Settings) }
     val currentOnTabSelected by rememberUpdatedState(onTabSelected)
-    val currentOnHoldProgressChanged by rememberUpdatedState(onHoldProgressChanged)
-    val currentOnBlitzTriggered by rememberUpdatedState(onBlitzTriggered)
-    val currentSelectedTab by rememberUpdatedState(selectedTab)
 
     val selectedIndex = tabs.indexOf(selectedTab)
     val density = LocalDensity.current
-    val haptic = LocalHapticFeedback.current
 
     var pressedIndex by remember { mutableIntStateOf(-1) }
     var totalWidthPx by remember { mutableFloatStateOf(1f) }
 
     val buttonCenters = remember { mutableStateMapOf<Int, Offset>() }
-    val coroutineScope = rememberCoroutineScope()
 
     val containerHeight by animateDpAsState(
         targetValue = if (compact) 50.dp else 70.dp,
@@ -188,7 +186,7 @@ fun MyBottomBar(
 
     LaunchedEffect(Unit) {
         for (message in tooltipChannel) {
-            currentTooltipTextId = message.textRes
+            currentTooltipMessage = message
             showTooltip()
             delay(message.durationMs.milliseconds)
             hideTooltip()
@@ -198,38 +196,46 @@ fun MyBottomBar(
 
     LaunchedEffect(tooltipOption) {
         when (tooltipOption) {
-            TooltipOptions.IS_ONLINE -> tooltipChannel.send(
+            TooltipOptions.IsOnline -> tooltipChannel.send(
                 TooltipMessage(
                     textRes = R.string.tooltip_network_restored,
                     durationMs = tooltipOption.duration
                 )
             )
 
-            TooltipOptions.IS_OFFLINE -> tooltipChannel.send(
+            TooltipOptions.IsOffline -> tooltipChannel.send(
                 TooltipMessage(
                     textRes = R.string.tooltip_no_network,
                     durationMs = tooltipOption.duration
                 )
             )
 
-            TooltipOptions.SUMMARY_TOOLTIP -> tooltipChannel.send(
+            TooltipOptions.SummaryTooltip -> tooltipChannel.send(
                 TooltipMessage(
                     textRes = R.string.summary_tooltip,
                     durationMs = tooltipOption.duration
                 )
             )
 
-            TooltipOptions.BLITZ_TOOLTIP -> tooltipChannel.send(
+            TooltipOptions.BlitzTooltip -> tooltipChannel.send(
                 TooltipMessage(
                     textRes = R.string.tabscreen_tooltip_blitz,
                     durationMs = tooltipOption.duration
                 )
             )
 
-            TooltipOptions.DEFAULT_KEY_TOOLTIP -> tooltipChannel.send(
+            TooltipOptions.DefaultKeyTooltip -> tooltipChannel.send(
                 TooltipMessage(
                     textRes = R.string.default_api_key_tooltip,
                     durationMs = tooltipOption.duration
+                )
+            )
+
+            is TooltipOptions.MessageQuantity -> tooltipChannel.send(
+                TooltipMessage(
+                    textRes = R.plurals.message_quantity_tooltip,
+                    durationMs = tooltipOption.duration,
+                    additionalInt = tooltipOption.count
                 )
             )
             else -> return@LaunchedEffect
@@ -253,9 +259,20 @@ fun MyBottomBar(
                 .offset(y = tooltipOffset),
             contentAlignment = Alignment.BottomCenter
         ) {
-            if (currentTooltipTextId != 0) {
+            val currentMessage = currentTooltipMessage
+            if (currentMessage != null) {
+                val tooltipText = if (currentMessage.additionalInt != null) {
+                    pluralStringResource(
+                        id = currentMessage.textRes,
+                        count = currentMessage.additionalInt,
+                        currentMessage.additionalInt
+                    )
+                } else {
+                    stringResource(id = currentMessage.textRes)
+                }
+
                 TextTooltip(
-                    text = stringResource(currentTooltipTextId),
+                    text = tooltipText,
                     revealProgress = tooltipReveal.value,
                     backgroundColor = backgroundColor,
                     textColor = MaterialTheme.colorScheme.onSurface,

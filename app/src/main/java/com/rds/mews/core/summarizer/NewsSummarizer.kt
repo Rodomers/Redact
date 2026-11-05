@@ -16,6 +16,7 @@ import com.rds.mews.core.text.graph.KnowledgeGraphManager
 import com.rds.mews.database.keyword_stats.BurstClusterEntity
 import com.rds.mews.database.main.ThemeEntity
 import com.rds.mews.localcore.TitleStatus
+import com.rds.mews.localcore.TooltipOptions
 import com.rds.mews.localcore.getFormattedTimeUnix
 import com.rds.mews.repositories.KeywordStatsRepository
 import kotlinx.coroutines.CancellationException
@@ -161,6 +162,7 @@ class NewsSummarizer(private val llm: LLMClient) {
             if (isExtracting && remainingIds.isEmpty() && currentState.stagedRawTopics.isEmpty()) {
                 val target = if (adaptive) MewsRepository.getTargetWindowTimeMark() else System.currentTimeMillis() - messageSeconds * 1000L
                 val msgs = MewsRepository.getUniqueMessagesList(target)
+                MewsRepository.setTooltipState(TooltipOptions.MessageQuantity(msgs.size))
                 Log.d(TAG, "[INIT] Fetched unique messages: ${msgs.size}, target time: $target")
 
                 val processedMessageIds = try { MewsRepository.getAllUsedMessageIds(targetMs = target) } catch (_: Exception) { emptySet() }

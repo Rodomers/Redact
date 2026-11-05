@@ -2,6 +2,7 @@ package com.rds.mews.localcore
 
 import com.rds.mews.R
 import com.rds.mews.localcore.TitlesPeriod.ADAPTIVE
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -207,17 +208,35 @@ enum class UpdatingState(val stringId: Int, val id: Int) {
     }
 }
 @Serializable
-enum class TooltipOptions(val id: Int, val duration: Long) {
-    DEFAULT(0, 0),
-    IS_OFFLINE(1, 5000),
-    IS_ONLINE(2, 2000),
-    SUMMARY_TOOLTIP(3, 5000),
-    BLITZ_TOOLTIP(4, 3000),
-    DEFAULT_KEY_TOOLTIP(5, 5000);
+sealed class TooltipOptions(val id: Int, val duration: Long) {
 
-    companion object {
-        fun fromId(key: Int): TooltipOptions {
-            return entries.find { it.id == key } ?: DEFAULT
-        }
-    }
+    @Serializable
+    @SerialName("DEFAULT")
+    data object Default : TooltipOptions(0, 0)
+
+    @Serializable
+    @SerialName("IS_OFFLINE")
+    data object IsOffline : TooltipOptions(1, 5000)
+
+    @Serializable
+    @SerialName("IS_ONLINE")
+    data object IsOnline : TooltipOptions(2, 2000)
+
+    @Serializable
+    @SerialName("SUMMARY_TOOLTIP")
+    data object SummaryTooltip : TooltipOptions(3, 5000)
+
+    @Serializable
+    @SerialName("BLITZ_TOOLTIP")
+    data object BlitzTooltip : TooltipOptions(4, 3000)
+
+    @Serializable
+    @SerialName("DEFAULT_KEY_TOOLTIP")
+    data object DefaultKeyTooltip : TooltipOptions(5, 5000)
+
+    @Serializable
+    @SerialName("MESSAGE_QUANTITY")
+    data class MessageQuantity(
+        val count: Int
+    ) : TooltipOptions(6, 3000)
 }

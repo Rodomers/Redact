@@ -11,6 +11,11 @@
     <string name="tooltip_network_restored">Интернет-подключение восстановлено.</string>
     <string name="summary_tooltip">Начато алгоритмическое связывание тем. Интернет больше не понадобится.</string>
     <string name="default_api_key_tooltip">Пожалуйста, используйте свой ключ Gemini API. Его можно указать в настройках.</string>
+    <plurals name="message_quantity_tooltip">
+        <item quantity="one">Пристально разглядываю %d сообщение…</item>
+        <item quantity="few">Пристально разглядываю %d сообщения…</item>
+        <item quantity="many">Пристально разглядываю %d сообщений…</item>
+    </plurals>
 
     <string name="source_type_telegram">Telegram</string>
     <string name="source_type_rss">Сайты и RSS-ленты</string>
@@ -153,6 +158,11 @@
     <string name="titles_card_background">Предыстория</string>
     <string name="titles_card_continued">Продолжение сюжета</string>
     <string name="titles_card_release">Отпустите для перехода</string>
+    <plurals name="titles_card_sources">
+        <item quantity="one">%d источник</item>
+        <item quantity="few">%d источника</item>
+        <item quantity="many">%d источников</item>
+    </plurals>
 
     <string name="update">Обновить</string>
     <string name="updating">Обновление…</string>

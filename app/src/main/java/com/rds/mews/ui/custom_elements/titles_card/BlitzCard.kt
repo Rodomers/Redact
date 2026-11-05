@@ -263,7 +263,9 @@ private fun BlitzCardInnerContent(
 
     val iconParams = IconParams(
         MaterialTheme.colorScheme.surface,
-        MaterialTheme.colorScheme.secondaryContainer,
+        MaterialTheme.colorScheme.surfaceContainerLow.copy(
+            alpha = 0.7f
+        ),
         28.dp
     )
     var sharedMediaBounds by remember { mutableStateOf<Rect?>(null) }
@@ -713,7 +715,7 @@ fun BlitzCarouselRow(
         SubcomposeLayout(modifier = modifier.fillMaxWidth()) { constraints ->
             val defaultCardWidthDp = (config.screenWidthDp * 0.7f).dp
             val minCardWidthDp = (config.screenWidthDp * 0.46f).dp
-            val maxCardWidthDp = (config.screenWidthDp - 36).dp
+            val maxCardWidthDp = (config.screenWidthDp - 48).dp
 
             val defaultHeights = items.associate { title ->
                 val mediaForTitle = dynamicMediaUrls[title.id]

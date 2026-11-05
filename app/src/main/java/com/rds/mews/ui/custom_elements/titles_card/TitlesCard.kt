@@ -128,6 +128,7 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import com.rds.mews.ui.custom_elements.image_viewer.DynamicPagerIndicator
@@ -1213,6 +1214,7 @@ private fun ExpandedCardContent(
                             }
                         } else {
                             val allMessages = remember(sources) { sources.flatMap { it.messages } }
+                            val messageCount = allMessages.size
                             val minLength = remember(allMessages) { allMessages.minOfOrNull { it.originalText.length } ?: 0 }
                             val maxLength = remember(allMessages) { allMessages.maxOfOrNull { it.originalText.length } ?: 1 }
                             val headerColor = MaterialTheme.colorScheme.secondaryContainer
@@ -1300,6 +1302,8 @@ private fun ExpandedCardContent(
                     .fillMaxWidth()
                     .wrapContentHeight()
                     .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val messageCount = remember(title.sources, sources) { sources?.flatMap { it.messages }?.size ?: title.sources.split(" ").size }
+
                     AnimatedSegmentedControl(
                         items = listOf(
                             stringResource(R.string.titles_card_text) to {
@@ -1309,7 +1313,7 @@ private fun ExpandedCardContent(
                                     )
                                 }
                             },
-                            stringResource(R.string.titles_card_source) to {
+                            pluralStringResource(R.plurals.titles_card_sources, messageCount) to {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(1)
                                 }
