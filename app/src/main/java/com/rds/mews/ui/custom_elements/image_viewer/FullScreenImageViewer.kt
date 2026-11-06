@@ -14,6 +14,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -78,6 +80,9 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -118,6 +123,19 @@ fun FullScreenImageViewer(
     val handler = LocalUriHandler.current
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val activity = remember(context) { context.findActivity() }
+
+    DisposableEffect(activity) {
+        val window = activity?.window ?: return@DisposableEffect onDispose {}
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        val previousBehavior = insetsController.systemBarsBehavior
+        insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insetsController.hide(WindowInsetsCompat.Type.statusBars())
+        onDispose {
+            insetsController.show(WindowInsetsCompat.Type.statusBars())
+            insetsController.systemBarsBehavior = previousBehavior
+        }
+    }
 
     RootViewOverlay {
         val fullScreenPagerState = rememberPagerState(initialPage = initialPage) { dynamicMediaUrls.size }
@@ -477,8 +495,20 @@ fun FullScreenImageViewer(
 
             AnimatedVisibility(
                 visible = isUiVisible && transitionAnim.value > 0.05f && abs(swipeDismissY.value) < 100f,
-                enter = fadeIn(animationSpec = tween(300)),
-                exit = fadeOut(animationSpec = tween(200)),
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + fadeIn(animationSpec = tween(200)),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                ) + fadeOut(animationSpec = tween(200)),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(bottom = 24.dp)
@@ -488,26 +518,48 @@ fun FullScreenImageViewer(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val specificSource = currentMedia?.message?.source?.currentName ?: currentMedia?.message?.source?.originalName ?: "null"
-                    val specificTime = currentMedia?.message?.time ?: 0L
-                    val link = currentMedia?.message?.link
-
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CustomTextButton(
-                            inputs = TextButtonInputs(
-                                text = "$specificSource • ${getFormattedTimeUnix(specificTime)}",
-                                action = { link?.let { handler.openUri(it) } }
-                            ),
-                            defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = Shapes.large,
-                            modifier = Modifier.padding(horizontal = 48.dp),
-                            textColor = MaterialTheme.colorScheme.onSurface
-                        )
+                        val currentPage = fullScreenPagerState.currentPage
+                        val minPage = (currentPage - 1).coerceAtLeast(0)
+                        val maxPage = (currentPage + 1).coerceAtMost(dynamicMediaUrls.size - 1)
+
+                        for (pageIndex in minPage..maxPage) {
+                            val pageMedia = dynamicMediaUrls.getOrNull(pageIndex)
+                            val specificSource = pageMedia?.message?.source?.currentName ?: pageMedia?.message?.source?.originalName ?: "null"
+                            val specificTime = pageMedia?.message?.time ?: 0L
+                            val link = pageMedia?.message?.link
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        val pageOffset = fullScreenPagerState.currentPage + fullScreenPagerState.currentPageOffsetFraction
+                                        translationX = (pageIndex - pageOffset) * screenWidth
+                                        translationY = swipeDismissY.value
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CustomTextButton(
+                                    inputs = TextButtonInputs(
+                                        text = "$specificSource • ${getFormattedTimeUnix(specificTime)}",
+                                        action = {
+                                            if (pageIndex == fullScreenPagerState.currentPage) {
+                                                link?.let { handler.openUri(it) }
+                                            }
+                                        }
+                                    ),
+                                    defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = Shapes.large,
+                                    modifier = Modifier.padding(horizontal = 48.dp),
+                                    textColor = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
 
                         CustomIconButton(
                             inputs = IconButtonInputs(

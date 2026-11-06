@@ -263,9 +263,7 @@ private fun BlitzCardInnerContent(
 
     val iconParams = IconParams(
         MaterialTheme.colorScheme.surface,
-        MaterialTheme.colorScheme.surfaceContainerLow.copy(
-            alpha = 0.7f
-        ),
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.17f),
         28.dp
     )
     var sharedMediaBounds by remember { mutableStateOf<Rect?>(null) }

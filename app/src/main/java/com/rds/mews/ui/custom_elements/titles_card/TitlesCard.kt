@@ -54,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -609,7 +610,7 @@ private fun PullToSwitchIndicator(text: String, progress: Float, modifier: Modif
     }
 }
 
-@SuppressLint("ConfigurationScreenWidthHeight")
+@SuppressLint("ConfigurationScreenWidthHeight", "AutoboxingStateCreation")
 @Composable
 private fun ExpandedCardContent(
     title: Title,
@@ -1214,7 +1215,6 @@ private fun ExpandedCardContent(
                             }
                         } else {
                             val allMessages = remember(sources) { sources.flatMap { it.messages } }
-                            val messageCount = allMessages.size
                             val minLength = remember(allMessages) { allMessages.minOfOrNull { it.originalText.length } ?: 0 }
                             val maxLength = remember(allMessages) { allMessages.maxOfOrNull { it.originalText.length } ?: 1 }
                             val headerColor = MaterialTheme.colorScheme.secondaryContainer
@@ -1313,7 +1313,7 @@ private fun ExpandedCardContent(
                                     )
                                 }
                             },
-                            pluralStringResource(R.plurals.titles_card_sources, messageCount) to {
+                            pluralStringResource(R.plurals.titles_card_sources, messageCount, messageCount) to {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(1)
                                 }

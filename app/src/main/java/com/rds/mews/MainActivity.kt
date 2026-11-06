@@ -89,7 +89,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(mainActivity: MainActivity) {
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory())
@@ -111,7 +110,6 @@ fun MainScreen(mainActivity: MainActivity) {
 
         var holdProgress by remember { mutableFloatStateOf(0f) }
         var isHolding by remember { mutableStateOf(false) }
-        var blitzCenterOffset by remember { mutableStateOf(Offset.Zero) }
 
         val tooltipState by MewsRepository.tooltipState.collectAsStateWithLifecycle()
 
@@ -237,11 +235,6 @@ fun MainScreen(mainActivity: MainActivity) {
                         }
                     },
                     compact = compactTab,
-                    onHoldProgressChanged = { progress, centerOffset, holding ->
-                        holdProgress = progress
-                        blitzCenterOffset = centerOffset
-                        isHolding = holding
-                    },
                     modifier = Modifier.align(Alignment.BottomCenter),
                     tooltipOption = tooltipState
                 )
