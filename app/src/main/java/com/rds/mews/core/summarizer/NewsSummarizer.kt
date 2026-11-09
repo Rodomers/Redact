@@ -1214,7 +1214,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 .maxOfOrNull { it.peakZScore } ?: 0.0
 
             val sBurst = kotlin.math.min(10.0, kotlin.math.max(0.0, peakZ) * 2.0)
-            val finalScore = (wLlm * 0.35) + (sVol * 0.45) + (sBurst * 0.20)
+            val finalScore = (wLlm * 0.25) + (sVol * 0.45) + (sBurst * 0.30)
             val roundedWeight = finalScore.roundToInt().coerceIn(1, 10)
             topic.copy(weight = roundedWeight) to finalScore
         }.sortedByDescending { it.second }
