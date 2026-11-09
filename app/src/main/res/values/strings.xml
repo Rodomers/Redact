@@ -70,6 +70,7 @@
     <string name="settings_titles_copy_plain_text">Copy as plain text</string>
     <string name="settings_keep_unread">Keep unread titles</string>
     <string name="settings_update_notifications">Update notifications</string>
+    <string name="settings_event_notifications">Events notifications</string>
     <string name="settings_titles_sorting">Sort by</string>
     <string name="settings_titles_sorting_newest">Newest</string>
     <string name="settings_titles_sorting_oldest">Oldest</string>

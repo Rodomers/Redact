@@ -4,6 +4,7 @@ import com.rds.mews.ui.custom_elements.bottom_sheet.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.TimelineMarker
 import android.annotation.SuppressLint
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -58,6 +59,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -96,7 +98,10 @@ import kotlin.collections.component2
 import kotlin.collections.iterator
 import com.rds.mews.ui.theme.Shapes
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.text.AnnotatedString
+import com.rds.mews.core.text.TextSanitizer
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.localcore.TitleSorting
@@ -665,10 +670,29 @@ fun TitlesGrid(
             }
 
             if (expandedBlitzData != null && expandedBlitzData!!.bounds != null) {
-                val titleId = expandedBlitzData!!.title.id
+                val title = expandedBlitzData!!.title
+                val titleId = title.id
                 val blitzTitle = groupedItems.values.flatten().find { it.id == titleId } ?: expandedBlitzData!!.title
                 val statesItem = titlesCardStates.find { it.id == titleId }
                 val mediaList = dynamicMediaUrls[titleId]?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
+
+                val clipboardManager = LocalClipboardManager.current
+                val haptics = LocalHapticFeedback.current
+
+                val sourceLabel = stringResource(R.string.titles_card_source)
+                val appNameLabel = stringResource(R.string.app_name)
+                val copiedToastText = stringResource(R.string.titles_card_copied)
+
+                val copiedText = remember(title.summary, title.sources, copyPlainText, sourceLabel, appNameLabel) {
+                    val summary = if (copyPlainText) TextSanitizer.sanitize(title.summary, saveWhitespace = true) else title.summary
+                    val sourcesFormatted = title.sources
+                    "$summary\n\n$sourceLabel: $appNameLabel, $sourcesFormatted"
+                }
+                val onCopyAction: () -> Unit = {
+                    clipboardManager.setText(AnnotatedString(copiedText))
+                    Toast.makeText(context, copiedToastText, Toast.LENGTH_SHORT).show()
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
 
                 val currentImg = blitzImagePages[titleId] ?: statesItem?.currentImage ?: 0
                 val overlayImagePagerState = rememberPagerState(
@@ -686,6 +710,7 @@ fun TitlesGrid(
                         onDismissRequest = {
                             expandedBlitzData = null
                         },
+                        onLongClick = onCopyAction,
                         onTogglePin = { isPinned -> markTitleAsPinned(titleId, isPinned) },
                         dynamicMediaUrls = dynamicMediaUrls[titleId],
                         imagePagerState = overlayImagePagerState,

@@ -120,6 +120,7 @@ fun SettingsScreen(
     val copyPlainText by viewModel.copyPlainText.collectAsStateWithLifecycle()
     val keepUnreadTitles by viewModel.keepUnreadTitles.collectAsStateWithLifecycle()
     val updateNotifications by viewModel.enableUpdateNotifications.collectAsStateWithLifecycle()
+    val eventsNotifications by viewModel.enableEventsNotifications.collectAsStateWithLifecycle()
     val doNotBlockSources by viewModel.doNotBlockSources.collectAsStateWithLifecycle()
 
     val state = SettingsUiState(
@@ -159,6 +160,7 @@ fun SettingsScreen(
         copyPlainText = copyPlainText,
         keepUnreadTitles = keepUnreadTitles,
         enableUpdateNotifications = updateNotifications,
+        enableEventsNotification = eventsNotifications,
         darkThemes = viewModel.darkThemes,
         appThemes = viewModel.appThemes,
         titleSortingList = viewModel.titleSortingList,
@@ -208,7 +210,8 @@ fun SettingsScreen(
             clearFeed = viewModel::clearFeed,
             setPlainText = viewModel::setPlainText,
             setKeepUnread = viewModel::setKeepUnread,
-            setUpdateNotifications = viewModel::setUpdateNotifications
+            setUpdateNotifications = viewModel::setUpdateNotifications,
+            setEventsNotification = viewModel::setEventsNotifications
         )
     }
 
@@ -480,7 +483,6 @@ fun SettingsGrid(
             val list = mutableListOf<@Composable () -> Unit>()
 
             list.add {
-                @OptIn(ExperimentalLayoutApi::class)
                 FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -721,6 +723,15 @@ fun SettingsGrid(
                     visible = groupStates.find { it.group == sourcesChapterId }?.expanded ?: true
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
+                        SettingsItem(
+                            text = stringResource(R.string.settings_event_notifications),
+                            modifier = Modifier.padding(vertical = verticalArrangement)
+                        ) {
+                            CustomSwitch(
+                                checked = state.enableEventsNotification,
+                                onCheckedChange = { functions.setEventsNotification(it) }
+                            )
+                        }
                         SettingsItem(
                             text = stringResource(R.string.settings_do_not_block_sources),
                             modifier = Modifier.padding(vertical = verticalArrangement)

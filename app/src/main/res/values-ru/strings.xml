@@ -68,6 +68,7 @@
     <string name="settings_titles_copy_plain_text">Копировать без форматирования</string>
     <string name="settings_keep_unread">Сохранять непрочитанные</string>
     <string name="settings_update_notifications">Уведомления об обновлении</string>
+    <string name="settings_event_notifications">Уведомления о событиях</string>
     <string name="settings_titles_sorting">Сортировка</string>
     <string name="settings_titles_sorting_newest">Сначала новые</string>
     <string name="settings_titles_sorting_oldest">Сначала старые</string>

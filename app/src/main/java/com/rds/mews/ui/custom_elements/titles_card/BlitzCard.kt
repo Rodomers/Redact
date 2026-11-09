@@ -255,8 +255,7 @@ private fun BlitzCardInnerContent(
     val isRead = title.isRead
     val hasMedia = validMedia.isNotEmpty()
 
-    val targetWeight = if (isRead) 500 else 700
-    val currentWeight by animateIntAsState(targetValue = targetWeight, label = "titleWeight")
+    val currentWeight = if (isRead) FontWeight.Normal else FontWeight.Bold
 
     val targetAlpha = if (isRead) 0.65f else 1.0f
     val currentAlpha by animateFloatAsState(targetValue = targetAlpha, label = "contentAlpha")
@@ -325,23 +324,21 @@ private fun BlitzCardInnerContent(
                         Text(
                             text = title.summary.ifBlank { title.title },
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = FontWeight(currentWeight),
+                                fontWeight = currentWeight,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = currentAlpha)
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
-                        if (!isOverlayMode) {
-                            Box(
-                                modifier = Modifier
-                                    .matchParentSize()
-                                    .combinedClickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                        onClick = onCardClick,
-                                        onLongClick = onLongClick
-                                    )
-                            )
-                        }
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .combinedClickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = onCardClick,
+                                    onLongClick = onLongClick
+                                )
+                        )
                     }
 
                     Row(
@@ -746,49 +743,57 @@ fun BlitzCarouselRow(
 
             val maxItemHeightPx = defaultHeights.values.maxOrNull() ?: 0
 
+//            val cardWidths = items.associate { title ->
+//                val mediaForTitle = dynamicMediaUrls[title.id]
+//                val filteredMedia = mediaForTitle?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
+//                val hasMedia = filteredMedia.isNotEmpty()
+//
+//                if (hasMedia) {
+//                    title.id to maxCardWidthDp
+//                } else {
+//                    val hDefault = defaultHeights[title.id] ?: 0
+//                    if (maxItemHeightPx <= 0 || hDefault >= maxItemHeightPx) {
+//                        title.id to defaultCardWidthDp
+//                    } else {
+//                        val dummyPager = PagerState(currentPage = 0) { 0 }
+//                        val hMin = subcompose("measure_min_${title.id}") {
+//                            BlitzCard(
+//                                title = title,
+//                                dateString = "",
+//                                isExpanded = false,
+//                                onToggleExpanded = {},
+//                                onTogglePin = {},
+//                                sources = null,
+//                                sanitizeCopiedText = sanitizeCopiedText,
+//                                dynamicMediaUrls = mediaForTitle,
+//                                imagePagerState = dummyPager,
+//                                clickedImageIndex = null,
+//                                onImageChanged = {},
+//                                onImageClicked = {},
+//                                setShowMedia = { _, _ -> },
+//                                customWidth = minCardWidthDp
+//                            )
+//                        }.firstOrNull()?.measure(Constraints(maxWidth = constraints.maxWidth))?.height ?: 0
+//
+//                        val calculatedWidth = when {
+//                            hMin < (maxItemHeightPx * 0.72f) -> defaultCardWidthDp
+//                            hMin <= maxItemHeightPx -> minCardWidthDp
+//                            else -> {
+//                                val ratio = ((maxItemHeightPx - hDefault).toFloat() / (hMin - hDefault).coerceAtLeast(1)).coerceIn(0f, 1f)
+//                                defaultCardWidthDp - (defaultCardWidthDp - minCardWidthDp) * ratio
+//                            }
+//                        }
+//                        title.id to calculatedWidth
+//                    }
+//                }
+//            }
             val cardWidths = items.associate { title ->
                 val mediaForTitle = dynamicMediaUrls[title.id]
-                val filteredMedia = mediaForTitle?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
+                val filteredMedia = mediaForTitle?.filter {
+                    (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank()
+                } ?: emptyList()
                 val hasMedia = filteredMedia.isNotEmpty()
-
-                if (hasMedia) {
-                    title.id to maxCardWidthDp
-                } else {
-                    val hDefault = defaultHeights[title.id] ?: 0
-                    if (maxItemHeightPx <= 0 || hDefault >= maxItemHeightPx) {
-                        title.id to defaultCardWidthDp
-                    } else {
-                        val dummyPager = PagerState(currentPage = 0) { 0 }
-                        val hMin = subcompose("measure_min_${title.id}") {
-                            BlitzCard(
-                                title = title,
-                                dateString = "",
-                                isExpanded = false,
-                                onToggleExpanded = {},
-                                onTogglePin = {},
-                                sources = null,
-                                sanitizeCopiedText = sanitizeCopiedText,
-                                dynamicMediaUrls = mediaForTitle,
-                                imagePagerState = dummyPager,
-                                clickedImageIndex = null,
-                                onImageChanged = {},
-                                onImageClicked = {},
-                                setShowMedia = { _, _ -> },
-                                customWidth = minCardWidthDp
-                            )
-                        }.firstOrNull()?.measure(Constraints(maxWidth = constraints.maxWidth))?.height ?: 0
-
-                        val calculatedWidth = when {
-                            hMin < (maxItemHeightPx * 0.72f) -> defaultCardWidthDp
-                            hMin <= maxItemHeightPx -> minCardWidthDp
-                            else -> {
-                                val ratio = ((maxItemHeightPx - hDefault).toFloat() / (hMin - hDefault).coerceAtLeast(1)).coerceIn(0f, 1f)
-                                defaultCardWidthDp - (defaultCardWidthDp - minCardWidthDp) * ratio
-                            }
-                        }
-                        title.id to calculatedWidth
-                    }
-                }
+                title.id to if (hasMedia) maxCardWidthDp else defaultCardWidthDp
             }
 
             val rowHeightDp = maxItemHeightPx.toDp() + 16.dp
@@ -879,6 +884,7 @@ fun BlitzCardSourceExpansionOverlay(
     onBanTheme: (String) -> Unit = {},
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
+
     val filteredMediaUrls = dynamicMediaUrls?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
 
     DetachableOverlayCard(
@@ -976,7 +982,9 @@ fun BlitzCardActionsContent(
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
             ) {
                 keywords.forEach { keyword ->
                     CustomTextButton(

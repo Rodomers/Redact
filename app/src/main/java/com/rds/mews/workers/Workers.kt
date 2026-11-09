@@ -329,7 +329,7 @@ class ParserWorker(
                         timestamp = syncTimeMs
                     )
 
-                    if (KeywordStatsRepository.saveBurstCluster(clusterEntity)) {
+                    if (KeywordStatsRepository.saveBurstCluster(clusterEntity) && MewsRepository.enableEventsNotification.value) {
                         val clusterText = allMessages
                             .filter { it.id in clusterMsgIds }.joinToString("\n") { it.cleanText }
 

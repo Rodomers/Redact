@@ -97,6 +97,7 @@ object MewsRepository {
     lateinit var sanitizeCopiedText: StateFlow<Boolean>
     lateinit var saveUnreadTitles: StateFlow<Boolean>
     lateinit var enableUpdateNotification: StateFlow<Boolean>
+    lateinit var enableEventsNotification: StateFlow<Boolean>
 
     lateinit var doNotBlockSources: StateFlow<Boolean>
 
@@ -161,7 +162,6 @@ object MewsRepository {
 
     lateinit var sources: Flow<List<RSS>>
     lateinit var titles: Flow<List<Title>>
-    lateinit var blitzTitles: Flow<List<Title>>
 
     lateinit var themes: Flow<List<ThemeEntity>>
 
@@ -171,9 +171,6 @@ object MewsRepository {
 
         this.database = Room.databaseBuilder(appContext, AppDatabase::class.java, "MainDB")
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-//            .setQueryCallback({ sqlQuery, bindArgs ->
-//                Log.d("ROOM_QUERY", "Выполнение: $sqlQuery | Параметры: $bindArgs")
-//            }, java.util.concurrent.Executors.newSingleThreadExecutor())
             .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4,
                 AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7,
                 AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10)
@@ -215,8 +212,6 @@ object MewsRepository {
                 .stateIn(externalScope, SharingStarted.Eagerly, default)
         }
 
-//        updatingState = createSettingFlow({ it.updatingState }, "off")
-//        updatingProgress = createSettingFlow({ it.updatingProgress }, 0f)
         lastTitlesUpdate = createSettingFlow({ it.lastTitlesUpdate }, 0L)
         bannedNewsFlow = createSettingFlow({ it.bannedNews }, emptySet())
 
@@ -229,8 +224,9 @@ object MewsRepository {
         titlesKeeping = createSettingFlow({ it.titlesKeeping }, TitlesKeeping.DAYS_1)
         titlesAutoUpdateFrequency = createSettingFlow({ it.titlesAutoUpdateFrequency }, AutoUpdateFrequency.FREQ_24)
         sanitizeCopiedText = createSettingFlow( { it.sanitizeCopiedText }, false)
-        saveUnreadTitles = createSettingFlow(  { it.saveUnreadTitles }, false)
-        enableUpdateNotification = createSettingFlow({ it.enableUpdateNotification }, false)
+        saveUnreadTitles = createSettingFlow( { it.saveUnreadTitles }, false)
+        enableUpdateNotification = createSettingFlow( { it.enableUpdateNotification }, false)
+        enableEventsNotification = createSettingFlow( { it.enableBurstNotification }, false )
         llmModel = createSettingFlow({ it.llmModel }, GeminiModelOption.FLASH_LATEST)
 
         userApiKey = createSettingFlow({
@@ -706,22 +702,22 @@ object MewsRepository {
         return@withContext messageDao.getAllUsedMessages(time).distinct()
     }
 
-    suspend fun findLastChild(titleId: Long): Long = withContext(Dispatchers.IO) {
-        var selectedTopic = titleId
-        var childTopic = titleDao.getChildTitle(selectedTopic)?.id
-        var depth = 0
-        val maxDepth = 15
-        while (childTopic != null && depth <= maxDepth) {
-            depth++
-            selectedTopic = childTopic
-            childTopic = titleDao.getChildTitle(selectedTopic)?.id
-        }
-        return@withContext selectedTopic
-    }
-
-    suspend fun getCleanTextsInWindow(timeStart: Long, timeEnd: Long): List<String> = withContext(Dispatchers.IO) {
-        messageDao.getCleanTextsInWindow(timeStart, timeEnd)
-    }
+//    suspend fun findLastChild(titleId: Long): Long = withContext(Dispatchers.IO) {
+//        var selectedTopic = titleId
+//        var childTopic = titleDao.getChildTitle(selectedTopic)?.id
+//        var depth = 0
+//        val maxDepth = 15
+//        while (childTopic != null && depth <= maxDepth) {
+//            depth++
+//            selectedTopic = childTopic
+//            childTopic = titleDao.getChildTitle(selectedTopic)?.id
+//        }
+//        return@withContext selectedTopic
+//    }
+//
+//    suspend fun getCleanTextsInWindow(timeStart: Long, timeEnd: Long): List<String> = withContext(Dispatchers.IO) {
+//        messageDao.getCleanTextsInWindow(timeStart, timeEnd)
+//    }
 
     suspend fun getMessagesInWindow(timeStart: Long, timeEnd: Long): List<MessageEntity> = withContext(
         Dispatchers.IO) {
@@ -885,7 +881,6 @@ object MewsRepository {
     fun setTitlesKeeping(newValue: TitlesKeeping) = updateSetting { it.copy(titlesKeeping = newValue) }
     fun setLlmModel(newValue: GeminiModelOption) = updateSetting { it.copy(llmModel = newValue) }
     fun setTitlesAutoUpdateFrequency(newValue: AutoUpdateFrequency) = updateSetting { it.copy(titlesAutoUpdateFrequency = newValue) }
-    fun setUserApiKey(newValue: String) = updateSetting { it.copy(userApiKey = newValue) }
     fun setUserApiKeys(keys: List<String>) = updateSetting { current ->
         val cleaned = keys
             .map { it.trim() }
@@ -909,6 +904,7 @@ object MewsRepository {
     fun setSanitizeCopiedText(newValue: Boolean) = updateSetting { it.copy(sanitizeCopiedText = newValue) }
     fun setSaveUnreadTitles(newValue: Boolean) = updateSetting { it.copy(saveUnreadTitles = newValue) }
     fun setEnableUpdateNotification(newValue: Boolean) = updateSetting { it.copy(enableUpdateNotification = newValue) }
+    fun setEnableEventsNotification(newValue: Boolean) = updateSetting { it.copy(enableBurstNotification = newValue) }
 
     fun setDoNotBlockSources(newValue: Boolean) = updateSetting { it.copy(doNotBlockSources = newValue) }
 

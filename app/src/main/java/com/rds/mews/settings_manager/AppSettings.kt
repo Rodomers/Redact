@@ -77,6 +77,7 @@ data class AppSettings(
     val lastRssUpdate: Long = 0L,
     val saveUnreadTitles: Boolean = false,
     val enableUpdateNotification: Boolean = false,
+    val enableBurstNotification: Boolean = false,
 
     // UI Toggles
     val compactTabBar: Boolean = false,

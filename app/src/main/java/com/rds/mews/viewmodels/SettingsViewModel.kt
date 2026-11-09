@@ -135,6 +135,8 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val enableUpdateNotifications: StateFlow<Boolean> = repository.enableUpdateNotification
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val enableEventsNotifications: StateFlow<Boolean> = repository.enableEventsNotification
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _defaultApiKey = repository.DEFAULT_GEMINI_API_KEY
 
@@ -288,6 +290,11 @@ class SettingsViewModel(private val repository: MewsRepository) : ViewModel() {
     fun setUpdateNotifications(value: Boolean) = viewModelScope.launch {
         val granted = repository.notificationsGranted.value
         if (granted == value || granted) repository.setEnableUpdateNotification(value)
+        if (!granted && value) setShowNotificationsSheet(true)
+    }
+    fun setEventsNotifications(value: Boolean) = viewModelScope.launch {
+        val granted = repository.notificationsGranted.value
+        if (granted == value || granted) repository.setEnableEventsNotification(value)
         if (!granted && value) setShowNotificationsSheet(true)
     }
 
