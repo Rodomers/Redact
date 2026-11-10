@@ -743,50 +743,6 @@ fun BlitzCarouselRow(
 
             val maxItemHeightPx = defaultHeights.values.maxOrNull() ?: 0
 
-//            val cardWidths = items.associate { title ->
-//                val mediaForTitle = dynamicMediaUrls[title.id]
-//                val filteredMedia = mediaForTitle?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
-//                val hasMedia = filteredMedia.isNotEmpty()
-//
-//                if (hasMedia) {
-//                    title.id to maxCardWidthDp
-//                } else {
-//                    val hDefault = defaultHeights[title.id] ?: 0
-//                    if (maxItemHeightPx <= 0 || hDefault >= maxItemHeightPx) {
-//                        title.id to defaultCardWidthDp
-//                    } else {
-//                        val dummyPager = PagerState(currentPage = 0) { 0 }
-//                        val hMin = subcompose("measure_min_${title.id}") {
-//                            BlitzCard(
-//                                title = title,
-//                                dateString = "",
-//                                isExpanded = false,
-//                                onToggleExpanded = {},
-//                                onTogglePin = {},
-//                                sources = null,
-//                                sanitizeCopiedText = sanitizeCopiedText,
-//                                dynamicMediaUrls = mediaForTitle,
-//                                imagePagerState = dummyPager,
-//                                clickedImageIndex = null,
-//                                onImageChanged = {},
-//                                onImageClicked = {},
-//                                setShowMedia = { _, _ -> },
-//                                customWidth = minCardWidthDp
-//                            )
-//                        }.firstOrNull()?.measure(Constraints(maxWidth = constraints.maxWidth))?.height ?: 0
-//
-//                        val calculatedWidth = when {
-//                            hMin < (maxItemHeightPx * 0.72f) -> defaultCardWidthDp
-//                            hMin <= maxItemHeightPx -> minCardWidthDp
-//                            else -> {
-//                                val ratio = ((maxItemHeightPx - hDefault).toFloat() / (hMin - hDefault).coerceAtLeast(1)).coerceIn(0f, 1f)
-//                                defaultCardWidthDp - (defaultCardWidthDp - minCardWidthDp) * ratio
-//                            }
-//                        }
-//                        title.id to calculatedWidth
-//                    }
-//                }
-//            }
             val cardWidths = items.associate { title ->
                 val mediaForTitle = dynamicMediaUrls[title.id]
                 val filteredMedia = mediaForTitle?.filter {

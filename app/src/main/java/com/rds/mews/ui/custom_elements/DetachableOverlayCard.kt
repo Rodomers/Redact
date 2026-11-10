@@ -211,7 +211,9 @@ fun DetachableOverlayCard(
                 color = containerColor,
                 shadowElevation = (8 * expansionProgress).dp
             ) {
-                Column(
+                val cornerOverlap = 28.dp
+
+                Box(
                     modifier = Modifier
                         .requiredWidth(targetWidthDp)
                         .requiredHeight(currentContainerHeightDp)
@@ -219,62 +221,68 @@ fun DetachableOverlayCard(
                     if (isActionsAbove) {
                         Box(
                             modifier = Modifier
+                                .align(Alignment.TopCenter)
                                 .requiredWidth(targetWidthDp)
-                                .requiredHeight(currentActionsHeightDp)
+                                .requiredHeight(currentActionsHeightDp + cornerOverlap)
                                 .graphicsLayer { clip = true }
                         ) {
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .requiredWidth(targetWidthDp)
-                                    .requiredHeight(actionsHeightDp)
+                                    .requiredHeight(actionsHeightDp + cornerOverlap)
                             ) {
                                 ActionsWrapper(
-                                    actionsMaxHeight = actionsMaxHeight,
+                                    actionsMaxHeight = actionsMaxHeight?.let { it + cornerOverlap },
                                     contentAlpha = contentAlpha,
                                     modifier = Modifier.fillMaxSize(),
                                     actionsContent = { actionsContent(handleDismiss) }
                                 )
                             }
                         }
+
                         Surface(
                             shape = mainCardShape,
                             color = mainCardColor,
                             modifier = Modifier
+                                .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
                                 .requiredHeight(mainHeightDp)
                         ) {
                             mainContent()
                         }
                     } else {
-                        Surface(
-                            shape = mainCardShape,
-                            color = mainCardColor,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .requiredHeight(mainHeightDp)
-                        ) {
-                            mainContent()
-                        }
                         Box(
                             modifier = Modifier
+                                .align(Alignment.BottomCenter)
                                 .requiredWidth(targetWidthDp)
-                                .requiredHeight(currentActionsHeightDp)
+                                .requiredHeight(currentActionsHeightDp + cornerOverlap)
                                 .graphicsLayer { clip = true }
                         ) {
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopCenter)
                                     .requiredWidth(targetWidthDp)
-                                    .requiredHeight(actionsHeightDp)
+                                    .requiredHeight(actionsHeightDp + cornerOverlap)
                             ) {
                                 ActionsWrapper(
-                                    actionsMaxHeight = actionsMaxHeight,
+                                    actionsMaxHeight = actionsMaxHeight?.let { it + cornerOverlap },
                                     contentAlpha = contentAlpha,
                                     modifier = Modifier.fillMaxSize(),
                                     actionsContent = { actionsContent(handleDismiss) }
                                 )
                             }
+                        }
+
+                        Surface(
+                            shape = mainCardShape,
+                            color = mainCardColor,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .requiredHeight(mainHeightDp)
+                        ) {
+                            mainContent()
                         }
                     }
                 }
