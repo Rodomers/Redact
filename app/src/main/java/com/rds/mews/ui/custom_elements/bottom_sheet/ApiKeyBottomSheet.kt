@@ -247,7 +247,7 @@ fun ApiKeyBottomSheet(
             {
                 Text(
                     text = stringResource(R.string.settings_sheet_api_hint),
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    modifier = Modifier.padding(top = 12.dp, bottom = 0.dp, start = 8.dp, end = 8.dp)
                 )
             },
             {
