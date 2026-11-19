@@ -131,7 +131,10 @@ enum class GeminiModelOption(val displayedName: String, val apiModelName: String
     PRO_3_PREVIEW("3.1 Pro Preview", "gemini-3.1-pro-preview"),
     FLASH_LITE_3_5("3.5 Flash Lite", "gemini-3.5-flash-lite"),
     FLASH_3_8("3.8 Flash", "gemini-3.8-flash"),
+    HYDROGEN_4_0("4.0 Hydrogen", "gemini-4-hydrogen"),
+    NEON("4.0 Neon", "gemini-4-neon"),
     ARGON_4_0("4.0 Argon", "gemini-4-argon"),
+    CARBON_4_0("4.0 Carbon", "gemini-4-carbon"),
     FLASH_LITE_LATEST("Flash Lite Latest", "gemini-flash-lite-latest"),
     FLASH_LATEST("Flash Latest", "gemini-flash-latest"),
     PRO_LATEST("Pro Latest", "gemini-pro-latest");

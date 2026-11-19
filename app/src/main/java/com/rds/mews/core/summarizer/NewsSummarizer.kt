@@ -346,9 +346,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                                 result = result.map { it.copy(isBlitz = true) }
                                 val finalReg = mergeInTimeWindows(
                                     topics = result,
-                                    messageTimeMap = messageTimeMap,
-                                    // спорное
-                                    enableCrossWindowMerge = true
+                                    messageTimeMap = messageTimeMap
                                 )
                                 Log.d(TAG, "[FILTERING] Final merged blitz topics size: ${finalReg.size}")
                                 finalReg
@@ -1159,7 +1157,7 @@ class NewsSummarizer(private val llm: LLMClient) {
     private suspend fun mergeInTimeWindows(
         topics: List<Topics>,
         messageTimeMap: Map<Long, Long>,
-        windowMs: Long = 4 * 3600_000L,
+        windowMs: Long = 6 * 3600_000L,
         enableCrossWindowMerge: Boolean = true
     ): List<Topics> {
         if (topics.size <= 1) return topics
