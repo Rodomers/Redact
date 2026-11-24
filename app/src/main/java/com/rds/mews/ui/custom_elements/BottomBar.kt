@@ -85,6 +85,7 @@ import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -112,7 +113,7 @@ fun MyBottomBar(
     backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.97f),
     indicatorColor: Color = MaterialTheme.colorScheme.secondaryContainer,
     isBlitzActive: Boolean = false,
-    tooltipOption: TooltipOptions,
+    tooltipEvents: Flow<TooltipOptions>,
 ) {
     val tooltipChannel = remember { Channel<TooltipMessage>(Channel.UNLIMITED) }
     var currentTooltipMessage by remember { mutableStateOf<TooltipMessage?>(null) }
@@ -194,51 +195,33 @@ fun MyBottomBar(
         }
     }
 
-    LaunchedEffect(tooltipOption) {
-        when (tooltipOption) {
-            TooltipOptions.IsOnline -> tooltipChannel.send(
-                TooltipMessage(
-                    textRes = R.string.tooltip_network_restored,
-                    durationMs = tooltipOption.duration
+    LaunchedEffect(tooltipEvents) {
+        tooltipEvents.collect { option ->
+            when (option) {
+                TooltipOptions.IsOnline -> tooltipChannel.send(
+                    TooltipMessage(R.string.tooltip_network_restored, option.duration)
                 )
-            )
-
-            TooltipOptions.IsOffline -> tooltipChannel.send(
-                TooltipMessage(
-                    textRes = R.string.tooltip_no_network,
-                    durationMs = tooltipOption.duration
+                TooltipOptions.IsOffline -> tooltipChannel.send(
+                    TooltipMessage(R.string.tooltip_no_network, option.duration)
                 )
-            )
-
-            TooltipOptions.SummaryTooltip -> tooltipChannel.send(
-                TooltipMessage(
-                    textRes = R.string.summary_tooltip,
-                    durationMs = tooltipOption.duration
+                TooltipOptions.SummaryTooltip -> tooltipChannel.send(
+                    TooltipMessage(R.string.summary_tooltip, option.duration)
                 )
-            )
-
-            TooltipOptions.BlitzTooltip -> tooltipChannel.send(
-                TooltipMessage(
-                    textRes = R.string.tabscreen_tooltip_blitz,
-                    durationMs = tooltipOption.duration
+                TooltipOptions.BlitzTooltip -> tooltipChannel.send(
+                    TooltipMessage(R.string.tabscreen_tooltip_blitz, option.duration)
                 )
-            )
-
-            TooltipOptions.DefaultKeyTooltip -> tooltipChannel.send(
-                TooltipMessage(
-                    textRes = R.string.default_api_key_tooltip,
-                    durationMs = tooltipOption.duration
+                TooltipOptions.DefaultKeyTooltip -> tooltipChannel.send(
+                    TooltipMessage(R.string.default_api_key_tooltip, option.duration)
                 )
-            )
-
-            is TooltipOptions.MessageQuantity -> tooltipChannel.send(
-                TooltipMessage(
-                    textRes = R.plurals.message_quantity_tooltip,
-                    durationMs = tooltipOption.duration,
-                    additionalInt = tooltipOption.count
+                is TooltipOptions.MessageQuantity -> tooltipChannel.send(
+                    TooltipMessage(
+                        textRes = R.plurals.message_quantity_tooltip,
+                        durationMs = option.duration,
+                        additionalInt = option.count
+                    )
                 )
-            )
-            else -> return@LaunchedEffect
+                TooltipOptions.Default -> Unit
+            }
         }
     }
 

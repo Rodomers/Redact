@@ -35,6 +35,7 @@ import com.rds.mews.database.main.ThemesDao
 import com.rds.mews.ui.custom_elements.TabScreen
 import com.rds.mews.workers.AlarmScheduler
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import java.util.Calendar
@@ -131,8 +132,8 @@ object MewsRepository {
     private val _showSummaryTooltip = MutableStateFlow(false)
     val showSummaryTooltip = _showSummaryTooltip.asStateFlow()
 
-    private val _tooltipState: MutableStateFlow<TooltipOptions> = MutableStateFlow(TooltipOptions.Default)
-    val tooltipState = _tooltipState.asStateFlow()
+    private val _tooltipChannel = Channel<TooltipOptions>(Channel.UNLIMITED)
+    val tooltipEvents = _tooltipChannel.receiveAsFlow()
 
     const val CURRENT_THEME = "current_theme"
     const val IS_MONET = "is_monet"
@@ -290,11 +291,7 @@ object MewsRepository {
         }.launchIn(MewsRepository.externalScope)
 
         showSummaryTooltip.onEach { state ->
-            when (state) {
-                true -> setTooltipState(TooltipOptions.SummaryTooltip)
-                else -> if (_tooltipState.value == TooltipOptions.SummaryTooltip) setTooltipState(
-                    TooltipOptions.Default)
-            }
+            if (state) setTooltipState(TooltipOptions.SummaryTooltip)
         }.launchIn(MewsRepository.externalScope)
 
         lastError = settingsFlow.map { settings ->
@@ -973,12 +970,9 @@ object MewsRepository {
         _showSummaryTooltip.value = value
     }
 
-    @Synchronized
     fun setTooltipState(value: TooltipOptions) {
-        externalScope.launch(Dispatchers.Default) {
-            _tooltipState.first { it == TooltipOptions.Default }
-            _tooltipState.value = value
-        }
+        if (value == TooltipOptions.Default) return
+        _tooltipChannel.trySend(value)
     }
 
     fun saveLastError(failure: SummarizationResult.Failure) {

@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rds.mews.localcore.TooltipOptions
 import com.rds.mews.localcore.isNotificationPermissionGranted
 import com.rds.mews.localcore.isScheduleExactAlarm
 import com.rds.mews.repositories.MewsRepository
@@ -110,8 +112,6 @@ fun MainScreen(mainActivity: MainActivity) {
 
         var holdProgress by remember { mutableFloatStateOf(0f) }
         var isHolding by remember { mutableStateOf(false) }
-
-        val tooltipState by MewsRepository.tooltipState.collectAsStateWithLifecycle()
 
         val sourcesGridState = rememberLazyGridState()
         val titlesGridState = rememberLazyGridState()
@@ -236,7 +236,7 @@ fun MainScreen(mainActivity: MainActivity) {
                     },
                     compact = compactTab,
                     modifier = Modifier.align(Alignment.BottomCenter),
-                    tooltipOption = tooltipState
+                    tooltipEvents = MewsRepository.tooltipEvents
                 )
             }
         }
