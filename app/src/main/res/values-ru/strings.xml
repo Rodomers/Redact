@@ -178,6 +178,7 @@
     <string name="saving_to_gallery">Сохранено в галерею</string>
     <string name="source_show_media">Использовать медиа</string>
     <string name="source_do_not_show_media">Не использовать медиа</string>
+    <string name="open_in_browser">Открыть в браузере</string>
 
     <string name="err_header_success">Успех</string>
     <string name="err_text_success">Мы не знаем, почему это здесь. Обновление прошло успешно.</string>

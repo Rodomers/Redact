@@ -133,13 +133,35 @@ class TelegramRssClient(private val enableProxy: Boolean = false) {
             if (response.status !in 200..299) return@withContext emptyList()
 
             val document = Jsoup.parse(response.body, embedUrl)
-            val elements = document.select(".tgme_widget_message_photo_wrap")
-            val regex = Regex("""url\('([^']+)'\)""")
+            val elements = document.select(
+                ".tgme_widget_message_photo_wrap, .tgme_widget_message_video_wrap, .tgme_widget_message_roundvideo_wrap"
+            )
+            val regex = Regex("""url\(['"]?([^'")]+)['"]?\)""")
 
             elements.mapNotNull { element ->
-                val style = element.attr("style")
-                regex.find(style)?.groupValues?.get(1)
-            }
+                val rawUrl = if (
+                    element.hasClass("tgme_widget_message_video_wrap") ||
+                    element.hasClass("tgme_widget_message_roundvideo_wrap")
+                ) {
+                    val videoElement = element.selectFirst("video[src], video source[src]")
+                    val videoSrc = videoElement?.absUrl("src")?.ifBlank { videoElement.attr("src") }.orEmpty()
+                    if (videoSrc.isNotBlank()) {
+                        videoSrc
+                    } else {
+                        val thumbStyle = element.selectFirst(
+                            ".tgme_widget_message_video_thumb, .tgme_widget_message_roundvideo_thumb"
+                        )?.attr("style").orEmpty()
+                        regex.find(thumbStyle)?.groupValues?.get(1)
+                    }
+                } else {
+                    val style = element.attr("style")
+                    regex.find(style)?.groupValues?.get(1)
+                }
+
+                rawUrl?.let { url ->
+                    if (url.startsWith("//")) "https:$url" else url
+                }?.takeIf { it.isNotBlank() }
+            }.distinct()
         } finally {
             httpClient.close()
         }

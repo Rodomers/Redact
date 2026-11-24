@@ -44,9 +44,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,6 +57,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -135,6 +138,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.rds.mews.ui.custom_elements.image_viewer.DynamicPagerIndicator
 import com.rds.mews.ui.custom_elements.image_viewer.FullScreenImageViewer
 import com.rds.mews.ui.custom_elements.image_viewer.RootViewOverlay
+import com.rds.mews.ui.custom_elements.image_viewer.VideoThumbnailFetcher
+import com.rds.mews.ui.custom_elements.image_viewer.isVideoUrl
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -651,7 +656,8 @@ private fun ExpandedCardContent(
     val handler = LocalUriHandler.current
     val haptics = LocalHapticFeedback.current
 
-    val imageBoundsMap = remember { mutableMapOf<Int, Rect>() }
+    val imageBoundsMap = remember { mutableStateMapOf<Int, Rect>() }
+    var mediaContainerBounds by remember { mutableStateOf<Rect?>(null) }
 
     val shouldAnimate = remember(isRead) { !isRead }
 
@@ -1020,6 +1026,9 @@ private fun ExpandedCardContent(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(250.dp)
+                                            .onGloballyPositioned { coordinates ->
+                                                mediaContainerBounds = coordinates.boundsInWindow()
+                                            }
                                             .clip(Shapes.large)
                                     ) {
                                         HorizontalPager(
@@ -1027,14 +1036,21 @@ private fun ExpandedCardContent(
                                             modifier = Modifier.fillMaxSize(),
                                         ) { pageIndex ->
                                             val mediaUrl = dynamicMediaUrls[pageIndex].mediaLink
+                                            val isVideo = remember(mediaUrl) { isVideoUrl(mediaUrl) }
                                             val isImageFullOpened = clickedImageIndex == pageIndex
                                             var retryCount by remember(mediaUrl) { mutableStateOf(0) }
                                             var lastRetryTime by remember(mediaUrl) { mutableStateOf(0L) }
                                             var isLoadError by remember(mediaUrl) { mutableStateOf(false) }
 
-                                            val imageRequest = remember(mediaUrl, retryCount) {
+                                            val imageRequest = remember(mediaUrl, retryCount, isVideo) {
                                                 ImageRequest.Builder(context)
                                                     .data(mediaUrl)
+                                                    .apply {
+                                                        if (isVideo) {
+                                                            fetcherFactory(VideoThumbnailFetcher.Factory())
+                                                            memoryCacheKey("video_thumb_${mediaUrl}_$retryCount")
+                                                        }
+                                                    }
                                                     .diskCachePolicy(CachePolicy.ENABLED)
                                                     .memoryCachePolicy(CachePolicy.ENABLED)
                                                     .setParameter("retry_token", retryCount, memoryCacheKey = null)
@@ -1051,23 +1067,32 @@ private fun ExpandedCardContent(
                                                     lastRetryTime = System.currentTimeMillis()
                                                     retryCount++
                                                     isLoadError = false
-                                                    coil.Coil.imageLoader(context).diskCache?.remove(mediaUrl)
-                                                    coil.Coil.imageLoader(context).memoryCache?.remove(coil.memory.MemoryCache.Key(mediaUrl))
+                                                    if (isVideo) {
+                                                        VideoThumbnailFetcher.clearCachedThumbnail(context, mediaUrl)
+                                                        coil.Coil.imageLoader(context).memoryCache?.remove(
+                                                            coil.memory.MemoryCache.Key("video_thumb_${mediaUrl}_${retryCount - 1}")
+                                                        )
+                                                    } else {
+                                                        coil.Coil.imageLoader(context).diskCache?.remove(mediaUrl)
+                                                        coil.Coil.imageLoader(context).memoryCache?.remove(coil.memory.MemoryCache.Key(mediaUrl))
+                                                    }
                                                 }
                                             }
 
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant)
                                                     .onGloballyPositioned { coordinates ->
                                                         imageBoundsMap[pageIndex] =
                                                             coordinates.boundsInWindow()
                                                     }
-                                                    .clickable(enabled = !isImageFullOpened && !isLoadError) {
+                                                    .clickable(enabled = !isImageFullOpened && (!isLoadError || isVideo)) {
                                                         onImageClicked(true)
-                                                    }
+                                                    },
+                                                contentAlignment = Alignment.Center
                                             ) {
-                                                if (isLoadError) {
+                                                if (isLoadError && !isVideo) {
                                                     Column(
                                                         modifier = Modifier
                                                             .fillMaxSize()
@@ -1089,27 +1114,46 @@ private fun ExpandedCardContent(
                                                         )
                                                     }
                                                 } else {
-                                                    AsyncImage(
-                                                        model = imageRequest,
-                                                        contentDescription = null,
-                                                        modifier = Modifier
-                                                            .fillMaxSize()
-                                                            .blur(24.dp)
-                                                            .alpha(0.6f),
-                                                        contentScale = ContentScale.Crop
-                                                    )
+                                                    if (!isLoadError) {
+                                                        AsyncImage(
+                                                            model = imageRequest,
+                                                            contentDescription = null,
+                                                            modifier = Modifier
+                                                                .fillMaxSize()
+                                                                .blur(24.dp)
+                                                                .alpha(0.6f),
+                                                            contentScale = ContentScale.Crop
+                                                        )
 
-                                                    AsyncImage(
-                                                        model = imageRequest,
-                                                        contentDescription = null,
-                                                        modifier = Modifier
-                                                            .fillMaxSize()
-                                                            .graphicsLayer {
-                                                                alpha =
-                                                                    if (isImageFullOpened) 0f else 1f
-                                                            },
-                                                        contentScale = ContentScale.Fit
-                                                    )
+                                                        AsyncImage(
+                                                            model = imageRequest,
+                                                            contentDescription = null,
+                                                            modifier = Modifier
+                                                                .fillMaxSize()
+                                                                .graphicsLayer {
+                                                                    alpha =
+                                                                        if (isImageFullOpened) 0f else 1f
+                                                                },
+                                                            contentScale = ContentScale.Fit
+                                                        )
+                                                    }
+
+                                                    if (isVideo && !isImageFullOpened) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(44.dp)
+                                                                .clip(CircleShape)
+                                                                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.65f)),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.PlayArrow,
+                                                                contentDescription = null,
+                                                                tint = Color.White,
+                                                                modifier = Modifier.size(26.dp)
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -1127,14 +1171,15 @@ private fun ExpandedCardContent(
                                         FullScreenImageViewer(
                                             initialPage = clickedImageIndex,
                                             dynamicMediaUrls = dynamicMediaUrls,
-                                            imageBoundsMap = imageBoundsMap,
+                                            imageBoundsMap = imageBoundsMap.toMap(),
                                             onClose = { onImageClicked(false) },
                                             onPageChanged = { page ->
                                                 coroutineScope.launch {
                                                     imagePagerState.scrollToPage(page)
                                                 }
                                             },
-                                            setShowImages = setShowMedia
+                                            setShowImages = setShowMedia,
+                                            fallbackBounds = mediaContainerBounds
                                         )
                                     }
                                 }

@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Rect
+import android.util.Log
 import androidx.collection.intListOf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.platform.ClipboardManager
@@ -434,17 +435,13 @@ class TitlesViewModel(
         }
 
         val mediaObjects = targetTitle.mediaUrls
+        Log.d("MEDIA_CHECK", "Title ${titleId}: raw=${targetTitle.mediaUrls.map { it.mediaLink }}")
 
         val validOriginals = mediaObjects.map { media ->
             MediaWithSource(
                 mediaLink = media.mediaLink.substringBefore("?"),
                 message = media.message
             )
-        }.filter { media ->
-            // !cleanUrl.contains("telesco.pe") && !cleanUrl.contains("cdn-telegram.org")
-            val cleanUrl = media.mediaLink.lowercase()
-            !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") &&
-                    !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
         }.distinctBy { it.mediaLink }
 
         if (telegramLinks.isEmpty()) {
@@ -462,11 +459,7 @@ class TitlesViewModel(
                     try {
                         val scrapedUrls = scraper.scrapeEmbedMedia(message.link)
                             .map { MediaWithSource(it, message) }
-                            .filter { media ->
-                                val cleanUrl = media.mediaLink.lowercase()
-                                !cleanUrl.endsWith(".mp4") && !cleanUrl.endsWith(".webm") &&
-                                        !cleanUrl.endsWith(".mov") && !cleanUrl.endsWith(".mkv")
-                            }
+                        Log.d("MEDIA_CHECK", "Scraped ${message.link}: $scrapedUrls")
 
                         if (scrapedUrls.isNotEmpty()) {
                             _dynamicMediaUrls.update { currentMap ->

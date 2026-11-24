@@ -38,14 +38,17 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -105,6 +108,8 @@ import com.rds.mews.ui.custom_elements.CustomTextButton
 import com.rds.mews.ui.custom_elements.DetachableOverlayCard
 import com.rds.mews.ui.custom_elements.image_viewer.DynamicPagerIndicator
 import com.rds.mews.ui.custom_elements.image_viewer.FullScreenImageViewer
+import com.rds.mews.ui.custom_elements.image_viewer.VideoThumbnailFetcher
+import com.rds.mews.ui.custom_elements.image_viewer.isVideoUrl
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -246,7 +251,7 @@ private fun BlitzCardInnerContent(
     val config = LocalConfiguration.current
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
-    val imageBoundsMap = remember { mutableMapOf<Int, Rect>() }
+    val imageBoundsMap = remember { mutableStateMapOf<Int, Rect>() }
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
@@ -396,14 +401,21 @@ private fun BlitzCardInnerContent(
                             modifier = Modifier.fillMaxSize()
                         ) { page ->
                             val mediaUrl = validMedia[page].mediaLink
+                            val isVideo = remember(mediaUrl) { isVideoUrl(mediaUrl) }
                             val isImageFullOpened = clickedImageIndex != null && imagePagerState.currentPage == page
                             var retryCount by remember(mediaUrl) { mutableStateOf(0) }
                             var lastRetryTime by remember(mediaUrl) { mutableStateOf(0L) }
                             var isLoadError by remember(mediaUrl) { mutableStateOf(false) }
 
-                            val imageRequest = remember(mediaUrl, retryCount) {
+                            val imageRequest = remember(mediaUrl, retryCount, isVideo) {
                                 ImageRequest.Builder(context)
                                     .data(mediaUrl)
+                                    .apply {
+                                        if (isVideo) {
+                                            fetcherFactory(VideoThumbnailFetcher.Factory())
+                                            memoryCacheKey("video_thumb_${mediaUrl}_$retryCount")
+                                        }
+                                    }
                                     .diskCachePolicy(CachePolicy.ENABLED)
                                     .memoryCachePolicy(CachePolicy.ENABLED)
                                     .setParameter("retry_token", retryCount, memoryCacheKey = null)
@@ -421,12 +433,19 @@ private fun BlitzCardInnerContent(
                                     lastRetryTime = System.currentTimeMillis()
                                     retryCount++
                                     isLoadError = false
-                                    coil.Coil.imageLoader(context).diskCache?.remove(mediaUrl)
-                                    coil.Coil.imageLoader(context).memoryCache?.remove(
-                                        coil.memory.MemoryCache.Key(
-                                            mediaUrl
+                                    if (isVideo) {
+                                        VideoThumbnailFetcher.clearCachedThumbnail(context, mediaUrl)
+                                        coil.Coil.imageLoader(context).memoryCache?.remove(
+                                            coil.memory.MemoryCache.Key("video_thumb_${mediaUrl}_${retryCount - 1}")
                                         )
-                                    )
+                                    } else {
+                                        coil.Coil.imageLoader(context).diskCache?.remove(mediaUrl)
+                                        coil.Coil.imageLoader(context).memoryCache?.remove(
+                                            coil.memory.MemoryCache.Key(
+                                                mediaUrl
+                                            )
+                                        )
+                                    }
                                 }
                             }
 
@@ -436,12 +455,12 @@ private fun BlitzCardInnerContent(
                                     .onGloballyPositioned { coordinates ->
                                         imageBoundsMap[page] = coordinates.boundsInWindow()
                                     }
-                                    .clickable(enabled = !isImageFullOpened && !isLoadError) {
+                                    .clickable(enabled = !isImageFullOpened && (!isLoadError || isVideo)) {
                                         onImageClicked(true)
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (isLoadError) {
+                                if (isLoadError && !isVideo) {
                                     CustomIconButton(
                                         inputs = IconButtonInputs(
                                             icon = Icons.Default.Refresh,
@@ -455,27 +474,46 @@ private fun BlitzCardInnerContent(
                                         shape = Shapes.large
                                     )
                                 } else {
-                                    AsyncImage(
-                                        model = imageRequest,
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .blur(24.dp)
-                                            .alpha(0.6f)
-                                            .clip(Shapes.large),
-                                        contentScale = ContentScale.Crop
-                                    )
+                                    if (!isLoadError) {
+                                        AsyncImage(
+                                            model = imageRequest,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .blur(24.dp)
+                                                .alpha(0.6f)
+                                                .clip(Shapes.large),
+                                            contentScale = ContentScale.Crop
+                                        )
 
-                                    AsyncImage(
-                                        model = imageRequest,
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .graphicsLayer {
-                                                alpha = if (isImageFullOpened) 0f else 1f
-                                            },
-                                        contentScale = ContentScale.Fit
-                                    )
+                                        AsyncImage(
+                                            model = imageRequest,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .graphicsLayer {
+                                                    alpha = if (isImageFullOpened) 0f else 1f
+                                                },
+                                            contentScale = ContentScale.Fit
+                                        )
+                                    }
+
+                                    if (isVideo && !isImageFullOpened) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.65f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -536,16 +574,10 @@ private fun BlitzCardInnerContent(
                     }
 
                     if (clickedImageIndex != null && (isOverlayMode || !isExpanded)) {
-                        val fallbackBoundsMap = remember(imageBoundsMap, sharedMediaBounds) {
-                            validMedia.indices.associateWith { page ->
-                                imageBoundsMap[page] ?: sharedMediaBounds ?: Rect.Zero
-                            }
-                        }
-
                         FullScreenImageViewer(
                             initialPage = clickedImageIndex,
                             dynamicMediaUrls = validMedia,
-                            imageBoundsMap = fallbackBoundsMap,
+                            imageBoundsMap = imageBoundsMap.toMap(),
                             onClose = { onImageClicked(false) },
                             onPageChanged = { page ->
                                 onImageChanged(page)
@@ -553,7 +585,8 @@ private fun BlitzCardInnerContent(
                                     imagePagerState.scrollToPage(page)
                                 }
                             },
-                            setShowImages = setShowMedia
+                            setShowImages = setShowMedia,
+                            fallbackBounds = sharedMediaBounds
                         )
                     }
                 }

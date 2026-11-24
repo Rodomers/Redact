@@ -173,6 +173,7 @@
     <string name="saving_to_gallery">Image saved to gallery.</string>
     <string name="source_show_media">Show media</string>
     <string name="source_do_not_show_media">Do not show media</string>
+    <string name="open_in_browser">Open in browser</string>
 
     <string name="err_header_success">Success</string>
     <string name="err_text_success">We have no idea why you are seeing this. The update was actually successful.</string>
