@@ -5,9 +5,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -33,7 +31,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -48,10 +45,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -107,14 +103,12 @@ import com.rds.mews.ui.custom_elements.CustomIconButton
 import com.rds.mews.ui.custom_elements.CustomTextButton
 import com.rds.mews.ui.custom_elements.DetachableOverlayCard
 import com.rds.mews.ui.custom_elements.image_viewer.DynamicPagerIndicator
-import com.rds.mews.ui.custom_elements.image_viewer.FullScreenImageViewer
 import com.rds.mews.ui.custom_elements.image_viewer.VideoThumbnailFetcher
 import com.rds.mews.ui.custom_elements.image_viewer.isVideoUrl
 import com.rds.mews.ui.theme.Shapes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 private data class IconParams(
@@ -135,12 +129,12 @@ fun BlitzCard(
     sanitizeCopiedText: Boolean,
     dynamicMediaUrls: List<MediaWithSource>? = null,
     onLoadMediaUrls: () -> Unit = {},
-    imagePagerState: PagerState,
-    clickedImageIndex: Int?,
+    clickedImageIndex: Int? = null,
     currentImage: Int = 0,
     onImageChanged: (Int) -> Unit,
-    onImageClicked: (Boolean) -> Unit,
-    setShowMedia: (Long, Boolean) -> Unit,
+    onImageClicked: (Int) -> Unit,
+    onMediaItemBoundsChanged: (Int, Rect) -> Unit = { _, _ -> },
+    onMediaContainerBoundsChanged: (Rect) -> Unit = {},
     onBanTheme: (String) -> Unit = {},
     customWidth: Dp? = null,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
@@ -150,9 +144,11 @@ fun BlitzCard(
     val clipboardManager = LocalClipboardManager.current
     val haptics = LocalHapticFeedback.current
 
-    val filteredMediaUrls = dynamicMediaUrls?.filter {
-        (it.message?.source?.showMedia ?: true) && it.mediaLink.isNotBlank()
-    } ?: emptyList()
+    val filteredMediaUrls = remember(dynamicMediaUrls) {
+        dynamicMediaUrls?.filter {
+            (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank()
+        } ?: emptyList()
+    }
     val hasMedia = filteredMediaUrls.isNotEmpty()
 
     val maxCardWidth = (config.screenWidthDp - 36).dp
@@ -199,7 +195,6 @@ fun BlitzCard(
                     size = coordinates.size.toSize()
                 )
             }
-//            .alpha(if (isExpanded) 0f else 1f)
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -213,7 +208,6 @@ fun BlitzCard(
         BlitzCardInnerContent(
             title = title,
             validMedia = filteredMediaUrls,
-            imagePagerState = imagePagerState,
             clickedImageIndex = clickedImageIndex,
             currentImage = currentImage,
             isOverlayMode = false,
@@ -224,7 +218,8 @@ fun BlitzCard(
             onCardClick = { onToggleExpanded(cardBounds) },
             onImageChanged = onImageChanged,
             onImageClicked = onImageClicked,
-            setShowMedia = setShowMedia
+            onMediaItemBoundsChanged = onMediaItemBoundsChanged,
+            onMediaContainerBoundsChanged = onMediaContainerBoundsChanged
         )
     }
 }
@@ -234,7 +229,6 @@ fun BlitzCard(
 private fun BlitzCardInnerContent(
     title: Title,
     validMedia: List<MediaWithSource>,
-    imagePagerState: PagerState,
     clickedImageIndex: Int?,
     currentImage: Int = 0,
     isOverlayMode: Boolean,
@@ -244,14 +238,13 @@ private fun BlitzCardInnerContent(
     onLongClick: () -> Unit,
     onCardClick: () -> Unit,
     onImageChanged: (Int) -> Unit,
-    onImageClicked: (Boolean) -> Unit,
-    setShowMedia: (Long, Boolean) -> Unit
+    onImageClicked: (Int) -> Unit,
+    onMediaItemBoundsChanged: (Int, Rect) -> Unit,
+    onMediaContainerBoundsChanged: (Rect) -> Unit
 ) {
     val context = LocalContext.current
     val config = LocalConfiguration.current
     val density = LocalDensity.current
-    val coroutineScope = rememberCoroutineScope()
-    val imageBoundsMap = remember { mutableStateMapOf<Int, Rect>() }
 
     val dropdownTransitionState = remember { MutableTransitionState(false) }
     var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
@@ -259,6 +252,17 @@ private fun BlitzCardInnerContent(
     val isPinned = title.isPinned
     val isRead = title.isRead
     val hasMedia = validMedia.isNotEmpty()
+    val isActiveMediaHost = isOverlayMode || !isExpanded
+
+    val mediaCount = validMedia.size
+    val targetPage = if (mediaCount > 0) currentImage.coerceIn(0, mediaCount - 1) else 0
+    val imagePagerState = rememberPagerState(
+        initialPage = targetPage,
+        pageCount = { mediaCount }
+    )
+    val latestTargetPage by rememberUpdatedState(targetPage)
+    var isProgrammaticScroll by remember(title.id, isOverlayMode) { mutableStateOf(false) }
+    var wasUserScrolling by remember(title.id, isOverlayMode) { mutableStateOf(false) }
 
     val currentWeight = if (isRead) FontWeight.Normal else FontWeight.Bold
 
@@ -267,26 +271,47 @@ private fun BlitzCardInnerContent(
 
     val iconParams = IconParams(
         MaterialTheme.colorScheme.surface,
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.17f),
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.17f),
         28.dp
     )
     var sharedMediaBounds by remember { mutableStateOf<Rect?>(null) }
 
-    LaunchedEffect(currentImage) {
-        if (validMedia.isNotEmpty() && currentImage in validMedia.indices) {
-            if (imagePagerState.currentPage != currentImage) {
-                imagePagerState.scrollToPage(currentImage)
+    LaunchedEffect(targetPage, mediaCount, isActiveMediaHost) {
+        if (isActiveMediaHost && mediaCount > 0 && !imagePagerState.isScrollInProgress && imagePagerState.currentPage != targetPage) {
+            isProgrammaticScroll = true
+            try {
+                imagePagerState.scrollToPage(targetPage)
+            } finally {
+                isProgrammaticScroll = false
             }
         }
     }
 
-    LaunchedEffect(imagePagerState.currentPage) {
-        onImageChanged(imagePagerState.currentPage)
+    LaunchedEffect(imagePagerState, mediaCount, isActiveMediaHost) {
+        if (!isActiveMediaHost || mediaCount <= 0) {
+            wasUserScrolling = false
+            return@LaunchedEffect
+        }
+        snapshotFlow { imagePagerState.isScrollInProgress to imagePagerState.currentPage }
+            .collect { (scrolling, page) ->
+                if (scrolling && !isProgrammaticScroll) {
+                    wasUserScrolling = true
+                } else if (!scrolling && wasUserScrolling) {
+                    wasUserScrolling = false
+                    if (!isProgrammaticScroll) {
+                        val safePage = page.coerceIn(0, mediaCount - 1)
+                        if (safePage != latestTargetPage) {
+                            onImageChanged(safePage)
+                        }
+                    }
+                }
+            }
     }
 
-    LaunchedEffect(clickedImageIndex) {
-        if (clickedImageIndex != null && imagePagerState.currentPage != clickedImageIndex) {
-            imagePagerState.scrollToPage(clickedImageIndex)
+    LaunchedEffect(isActiveMediaHost, sharedMediaBounds) {
+        val bounds = sharedMediaBounds
+        if (isActiveMediaHost && bounds != null) {
+            onMediaContainerBoundsChanged(bounds)
         }
     }
 
@@ -400,12 +425,21 @@ private fun BlitzCardInnerContent(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxSize()
                         ) { page ->
-                            val mediaUrl = validMedia[page].mediaLink
+                            val mediaItem = validMedia.getOrNull(page) ?: return@HorizontalPager
+                            val mediaUrl = mediaItem.mediaLink
                             val isVideo = remember(mediaUrl) { isVideoUrl(mediaUrl) }
-                            val isImageFullOpened = clickedImageIndex != null && imagePagerState.currentPage == page
+                            val isImageFullOpened = clickedImageIndex != null && imagePagerState.currentPage == page && isActiveMediaHost
                             var retryCount by remember(mediaUrl) { mutableStateOf(0) }
                             var lastRetryTime by remember(mediaUrl) { mutableStateOf(0L) }
                             var isLoadError by remember(mediaUrl) { mutableStateOf(false) }
+                            var pageBounds by remember { mutableStateOf<Rect?>(null) }
+
+                            LaunchedEffect(isActiveMediaHost, pageBounds, page) {
+                                val bounds = pageBounds
+                                if (isActiveMediaHost && bounds != null) {
+                                    onMediaItemBoundsChanged(page, bounds)
+                                }
+                            }
 
                             val imageRequest = remember(mediaUrl, retryCount, isVideo) {
                                 ImageRequest.Builder(context)
@@ -453,11 +487,13 @@ private fun BlitzCardInnerContent(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .onGloballyPositioned { coordinates ->
-                                        imageBoundsMap[page] = coordinates.boundsInWindow()
+                                        pageBounds = coordinates.boundsInWindow()
                                     }
-                                    .clickable(enabled = !isImageFullOpened && (!isLoadError || isVideo)) {
-                                        onImageClicked(true)
-                                    },
+                                    .combinedClickable(
+                                        enabled = !isImageFullOpened && (!isLoadError || isVideo),
+                                        onClick = { onImageClicked(page) },
+                                        onLongClick = onLongClick
+                                    ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isLoadError && !isVideo) {
@@ -572,23 +608,6 @@ private fun BlitzCardInnerContent(
                             )
                         }
                     }
-
-                    if (clickedImageIndex != null && (isOverlayMode || !isExpanded)) {
-                        FullScreenImageViewer(
-                            initialPage = clickedImageIndex,
-                            dynamicMediaUrls = validMedia,
-                            imageBoundsMap = imageBoundsMap.toMap(),
-                            onClose = { onImageClicked(false) },
-                            onPageChanged = { page ->
-                                onImageChanged(page)
-                                coroutineScope.launch {
-                                    imagePagerState.scrollToPage(page)
-                                }
-                            },
-                            setShowImages = setShowMedia,
-                            fallbackBounds = sharedMediaBounds
-                        )
-                    }
                 }
             }
         ) { measurables, constraints ->
@@ -675,12 +694,15 @@ fun BlitzCarouselRow(
     onTogglePin: (Long, Boolean) -> Unit,
     onLoadMediaUrls: (Long) -> Unit,
     onImageChanged: (Long, Int) -> Unit,
-    onImageClicked: (Long, Boolean) -> Unit,
-    setShowMedia: (Long, Boolean) -> Unit,
+    onImageClicked: (Long, Int) -> Unit,
+    onMediaItemBoundsChanged: (Long, Int, Rect) -> Unit = { _, _, _ -> },
+    onMediaContainerBoundsChanged: (Long, Rect) -> Unit = { _, _ -> },
     markTitleAsRead: (Long, Boolean) -> Unit,
     onBanTheme: (String) -> Unit = {},
     carouselState: LazyListState = rememberLazyListState(),
     cardImagePages: Map<Long, Int> = emptyMap(),
+    fullscreenTitleId: Long? = null,
+    fullscreenPage: Int? = null,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     val config = LocalConfiguration.current
@@ -713,7 +735,9 @@ fun BlitzCarouselRow(
         items.forEach { onLoadMediaUrls(it.id) }
     }
 
-    var isReady by remember { mutableStateOf(false) }
+    var isReady by remember {
+        mutableStateOf(items.all { dynamicMediaUrls.containsKey(it.id) })
+    }
 
     LaunchedEffect(items, dynamicMediaUrls) {
         val allLoaded = items.all { dynamicMediaUrls.containsKey(it.id) }
@@ -742,7 +766,6 @@ fun BlitzCarouselRow(
     } else {
         SubcomposeLayout(modifier = modifier.fillMaxWidth()) { constraints ->
             val defaultCardWidthDp = (config.screenWidthDp * 0.7f).dp
-            val minCardWidthDp = (config.screenWidthDp * 0.46f).dp
             val maxCardWidthDp = (config.screenWidthDp - 48).dp
 
             val defaultHeights = items.associate { title ->
@@ -750,7 +773,6 @@ fun BlitzCarouselRow(
                 val filteredMedia = mediaForTitle?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
                 val hasMedia = filteredMedia.isNotEmpty()
                 val initialWidth = if (hasMedia) maxCardWidthDp else defaultCardWidthDp
-                val dummyPager = PagerState(currentPage = 0) { filteredMedia.size }
 
                 val measuredHeight = subcompose("measure_def_${title.id}") {
                     BlitzCard(
@@ -762,11 +784,10 @@ fun BlitzCarouselRow(
                         sources = null,
                         sanitizeCopiedText = sanitizeCopiedText,
                         dynamicMediaUrls = mediaForTitle,
-                        imagePagerState = dummyPager,
                         clickedImageIndex = null,
+                        currentImage = 0,
                         onImageChanged = {},
                         onImageClicked = {},
-                        setShowMedia = { _, _ -> },
                         customWidth = initialWidth
                     )
                 }.firstOrNull()?.measure(Constraints(maxWidth = constraints.maxWidth))?.height ?: 0
@@ -813,14 +834,9 @@ fun BlitzCarouselRow(
                         val sources = statesItem?.sources
                         val dateStr = dateStringProvider(title)
                         val mediaForTitle = dynamicMediaUrls[title.id]
-                        val filteredMedia = mediaForTitle?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
 
                         val currentImg = cardImagePages[title.id] ?: statesItem?.currentImage ?: 0
-                        val imagePagerState = rememberPagerState(
-                            initialPage = currentImg,
-                            pageCount = { filteredMedia.size }
-                        )
-                        val clickedImageIndex = if (statesItem?.fullscreenImage == true) currentImg else null
+                        val clickedImageIndex = if (fullscreenTitleId == title.id) fullscreenPage else null
 
                         BlitzCard(
                             title = title,
@@ -835,11 +851,16 @@ fun BlitzCarouselRow(
                             sanitizeCopiedText = sanitizeCopiedText,
                             dynamicMediaUrls = mediaForTitle,
                             onLoadMediaUrls = { onLoadMediaUrls(title.id) },
-                            imagePagerState = imagePagerState,
                             clickedImageIndex = clickedImageIndex,
+                            currentImage = currentImg,
                             onImageChanged = { page -> onImageChanged(title.id, page) },
-                            onImageClicked = { flag -> onImageClicked(title.id, flag) },
-                            setShowMedia = setShowMedia,
+                            onImageClicked = { page -> onImageClicked(title.id, page) },
+                            onMediaItemBoundsChanged = { page, bounds ->
+                                onMediaItemBoundsChanged(title.id, page, bounds)
+                            },
+                            onMediaContainerBoundsChanged = { bounds ->
+                                onMediaContainerBoundsChanged(title.id, bounds)
+                            },
                             onBanTheme = onBanTheme,
                             customWidth = cardWidths[title.id]
                         )
@@ -865,16 +886,18 @@ fun BlitzCardSourceExpansionOverlay(
     onShare: () -> Unit = {},
     onLongClick: () -> Unit = {},
     dynamicMediaUrls: List<MediaWithSource>? = null,
-    imagePagerState: PagerState,
-    clickedImageIndex: Int?,
+    currentImage: Int = 0,
+    clickedImageIndex: Int? = null,
     onImageChanged: (Int) -> Unit,
-    onImageClicked: (Boolean) -> Unit,
-    setShowMedia: (Long, Boolean) -> Unit,
+    onImageClicked: (Int) -> Unit,
+    onMediaItemBoundsChanged: (Int, Rect) -> Unit = { _, _ -> },
+    onMediaContainerBoundsChanged: (Rect) -> Unit = {},
     onBanTheme: (String) -> Unit = {},
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
-
-    val filteredMediaUrls = dynamicMediaUrls?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
+    val filteredMediaUrls = remember(dynamicMediaUrls) {
+        dynamicMediaUrls?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
+    }
 
     DetachableOverlayCard(
         collapsedBounds = collapsedBounds,
@@ -885,17 +908,18 @@ fun BlitzCardSourceExpansionOverlay(
             BlitzCardInnerContent(
                 title = title,
                 validMedia = filteredMediaUrls,
-                imagePagerState = imagePagerState,
                 clickedImageIndex = clickedImageIndex,
+                currentImage = currentImage,
                 isOverlayMode = true,
+                isExpanded = false,
                 onTogglePin = onTogglePin,
                 onShare = onShare,
                 onLongClick = onLongClick,
                 onCardClick = {},
                 onImageChanged = onImageChanged,
                 onImageClicked = onImageClicked,
-                setShowMedia = setShowMedia,
-                isExpanded = false
+                onMediaItemBoundsChanged = onMediaItemBoundsChanged,
+                onMediaContainerBoundsChanged = onMediaContainerBoundsChanged
             )
         },
         actionsContent = {

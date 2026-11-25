@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.view.TextureView
+import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -17,6 +19,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -52,16 +55,21 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -70,10 +78,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
@@ -92,6 +102,9 @@ import androidx.compose.ui.unit.roundToIntRect
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -124,9 +137,13 @@ import kotlin.math.roundToInt
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun FullScreenImageViewer(
+    activeTitleId: Long,
     initialPage: Int,
+    hasOpened: Boolean,
     dynamicMediaUrls: List<MediaWithSource>,
     imageBoundsMap: Map<Int, Rect>,
+    videoPlayerController: SharedVideoPlayerController,
+    onOpened: () -> Unit,
     onClose: () -> Unit,
     onPageChanged: (Int) -> Unit,
     setShowImages: (Long, Boolean) -> Unit,
@@ -138,7 +155,7 @@ fun FullScreenImageViewer(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val activity = remember(context) { context.findActivity() }
-    val videoPlayerState = rememberVideoPlayerState(context)
+    val videoPlayerState = rememberVideoPlayerState(videoPlayerController)
 
     DisposableEffect(activity) {
         val window = activity?.window ?: return@DisposableEffect onDispose {}
@@ -152,21 +169,22 @@ fun FullScreenImageViewer(
         }
     }
 
-    RootViewOverlay {
-        val fullScreenPagerState = rememberPagerState(initialPage = initialPage) { dynamicMediaUrls.size }
-        var hasOpened by rememberSaveable { mutableStateOf(false) }
-        val transitionAnim = remember { Animatable(if (hasOpened) 1f else 0f) }
-        var isClosing by remember { mutableStateOf(false) }
-        val swipeDismissY = remember { Animatable(0f) }
-        var isUiVisible by rememberSaveable { mutableStateOf(true) }
+    RootViewOverlay(alwaysOnTop = true) {
+        val pageCount = dynamicMediaUrls.size
+        val safeInitialPage = if (pageCount > 0) initialPage.coerceIn(0, pageCount - 1) else 0
+        val fullScreenPagerState = rememberPagerState(initialPage = safeInitialPage) { pageCount }
+        val transitionAnim = remember(activeTitleId) { Animatable(if (hasOpened) 1f else 0f) }
+        var isClosing by remember(activeTitleId) { mutableStateOf(false) }
+        val swipeDismissY = remember(activeTitleId) { Animatable(0f) }
+        var isUiVisible by rememberSaveable(activeTitleId) { mutableStateOf(true) }
+        var isProgrammaticScroll by remember(activeTitleId) { mutableStateOf(false) }
+        val latestSafeInitialPage by rememberUpdatedState(safeInitialPage)
 
         val dropdownTransitionState = remember { MutableTransitionState(false) }
         var buttonBounds by remember { mutableStateOf<IntRect?>(null) }
 
         val sourceMediaOverrides = remember { mutableStateMapOf<Long, Boolean>() }
         val currentMedia = dynamicMediaUrls.getOrNull(fullScreenPagerState.currentPage)
-        val currentMediaUrl = currentMedia?.mediaLink.orEmpty()
-        val isCurrentPageVideo = remember(currentMediaUrl) { isVideoUrl(currentMediaUrl) }
         val currentSource = currentMedia?.message?.source
         val isMediaShown = if (currentSource != null) {
             sourceMediaOverrides[currentSource.id] ?: (currentSource.showMedia)
@@ -177,13 +195,15 @@ fun FullScreenImageViewer(
                 text = stringResource(R.string.download),
                 action = {
                     dropdownTransitionState.targetState = false
-                    val targetUrl = dynamicMediaUrls[fullScreenPagerState.currentPage].mediaLink
-                    coroutineScope.launch {
-                        saveMediaToGallery(
-                            context = context,
-                            mediaUrl = targetUrl,
-                            isVideo = isVideoUrl(targetUrl)
-                        )
+                    val targetUrl = dynamicMediaUrls.getOrNull(fullScreenPagerState.currentPage)?.mediaLink
+                    if (!targetUrl.isNullOrBlank()) {
+                        coroutineScope.launch {
+                            saveMediaToGallery(
+                                context = context,
+                                mediaUrl = targetUrl,
+                                isVideo = isVideoUrl(targetUrl)
+                            )
+                        }
                     }
                 },
                 toast = stringResource(R.string.saving_to_gallery)
@@ -205,30 +225,49 @@ fun FullScreenImageViewer(
             )
         )
 
-        LaunchedEffect(Unit) {
+        LaunchedEffect(activeTitleId, hasOpened) {
             if (!hasOpened) {
                 transitionAnim.animateTo(
                     targetValue = 1f,
                     animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
                 )
-                hasOpened = true
+                onOpened()
+            } else if (transitionAnim.value != 1f) {
+                transitionAnim.snapTo(1f)
             }
         }
 
-        LaunchedEffect(fullScreenPagerState.currentPage) {
-            onPageChanged(fullScreenPagerState.currentPage)
-            val currentIdx = fullScreenPagerState.currentPage
-            listOf(currentIdx - 1, currentIdx + 1).forEach { neighborIndex ->
-                val neighborUrl = dynamicMediaUrls.getOrNull(neighborIndex)?.mediaLink.orEmpty()
-                if (isVideoUrl(neighborUrl)) {
-                    launch {
-                        VideoCacheManager.preload(context, neighborUrl, 2L * 1024L * 1024L)
-                    }
+        LaunchedEffect(activeTitleId, safeInitialPage, pageCount) {
+            if (pageCount > 0 && !fullScreenPagerState.isScrollInProgress && fullScreenPagerState.currentPage != safeInitialPage) {
+                isProgrammaticScroll = true
+                try {
+                    fullScreenPagerState.scrollToPage(safeInitialPage)
+                } finally {
+                    isProgrammaticScroll = false
                 }
             }
         }
 
-        LaunchedEffect(fullScreenPagerState.settledPage, isClosing, dynamicMediaUrls) {
+        LaunchedEffect(fullScreenPagerState, pageCount) {
+            if (pageCount <= 0) return@LaunchedEffect
+            snapshotFlow { fullScreenPagerState.currentPage }
+                .collect { page ->
+                    val safePage = page.coerceIn(0, pageCount - 1)
+                    if (!isProgrammaticScroll && safePage != latestSafeInitialPage) {
+                        onPageChanged(safePage)
+                    }
+                    listOf(safePage - 1, safePage + 1).forEach { neighborIndex ->
+                        val neighborUrl = dynamicMediaUrls.getOrNull(neighborIndex)?.mediaLink.orEmpty()
+                        if (isVideoUrl(neighborUrl)) {
+                            launch {
+                                VideoCacheManager.preload(context, neighborUrl, 2L * 1024L * 1024L)
+                            }
+                        }
+                    }
+                }
+        }
+
+        LaunchedEffect(activeTitleId, fullScreenPagerState.settledPage, isClosing, dynamicMediaUrls) {
             if (isClosing) {
                 videoPlayerState.pause(persistUserChoice = false)
                 return@LaunchedEffect
@@ -237,7 +276,7 @@ fun FullScreenImageViewer(
             val settledMedia = dynamicMediaUrls.getOrNull(settledIndex)
             val settledUrl = settledMedia?.mediaLink.orEmpty()
             if (isVideoUrl(settledUrl)) {
-                videoPlayerState.bindToPage(settledIndex, settledUrl)
+                videoPlayerState.bindToPage(activeTitleId, settledIndex, settledUrl)
             } else {
                 videoPlayerState.clearPage()
             }
@@ -248,7 +287,9 @@ fun FullScreenImageViewer(
                 isClosing = true
                 videoPlayerState.pause(persistUserChoice = false)
                 coroutineScope.launch {
-                    onPageChanged(fullScreenPagerState.currentPage)
+                    if (dynamicMediaUrls.isNotEmpty()) {
+                        onPageChanged(fullScreenPagerState.currentPage.coerceIn(0, dynamicMediaUrls.lastIndex))
+                    }
                     launch {
                         swipeDismissY.animateTo(0f, animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessLow))
                     }
@@ -272,7 +313,12 @@ fun FullScreenImageViewer(
                 .fillMaxSize()
                 .background(dynamicThemeSurfaceColor.copy(alpha = backgroundAlpha))
         ) {
-            val targetBounds = imageBoundsMap[fullScreenPagerState.currentPage]
+            val currentBoundsPage = if (dynamicMediaUrls.isNotEmpty()) {
+                fullScreenPagerState.currentPage.coerceIn(0, dynamicMediaUrls.lastIndex)
+            } else {
+                0
+            }
+            val targetBounds = imageBoundsMap[currentBoundsPage]
                 ?: fallbackBounds
                 ?: imageBoundsMap.values.firstOrNull { it != Rect.Zero }
                 ?: Rect.Zero
@@ -296,23 +342,86 @@ fun FullScreenImageViewer(
                     modifier = Modifier.fillMaxSize(),
                     userScrollEnabled = transitionAnim.value == 1f && swipeDismissY.value == 0f && !videoPlayerState.isScrubbing
                 ) { page ->
-                    val mediaItem = dynamicMediaUrls[page]
+                    val mediaItem = dynamicMediaUrls.getOrNull(page) ?: return@HorizontalPager
                     val mediaUrl = mediaItem.mediaLink
                     val isVideoPage = remember(mediaUrl) { isVideoUrl(mediaUrl) }
 
                     if (isVideoPage) {
-                        val isBoundToThisPage = videoPlayerState.activePage == page
-                        val presentationState = rememberPresentationState(videoPlayerState.player)
+                        val isBoundToThisPage = videoPlayerState.activeTitleId == activeTitleId && videoPlayerState.activePage == page
+                        val presentationState = rememberPresentationState(
+                            player = if (isBoundToThisPage) videoPlayerState.player else null
+                        )
                         var videoContainerSize by remember { mutableStateOf(Size.Zero) }
+                        val initialCachedThumb = remember(mediaUrl) {
+                            val memCache = coil.Coil.imageLoader(context).memoryCache
+                            val bitmap = memCache?.get(coil.memory.MemoryCache.Key("video_thumb_${mediaUrl}_0"))?.bitmap
+                                ?: memCache?.get(coil.memory.MemoryCache.Key("video_thumb_$mediaUrl"))?.bitmap
+                            bitmap?.takeIf { !it.isRecycled && it.width > 0 && it.height > 0 }?.also {
+                                VideoCacheManager.recordMediaSize(
+                                    mediaUrl,
+                                    it.width.toFloat(),
+                                    it.height.toFloat()
+                                )
+                            }
+                        }
+                        var previewIntrinsicSize by remember(mediaUrl) {
+                            mutableStateOf(
+                                initialCachedThumb?.let { Size(it.width.toFloat(), it.height.toFloat()) }
+                                    ?: VideoCacheManager.getMediaSize(mediaUrl)
+                            )
+                        }
+                        val hostView = LocalView.current
+                        val lifecycleOwner = LocalLifecycleOwner.current
+                        val currentCoverSurface by rememberUpdatedState(presentationState.coverSurface)
 
                         val previewRequest = remember(mediaUrl) {
                             coil.request.ImageRequest.Builder(context)
                                 .data(mediaUrl)
                                 .fetcherFactory(VideoThumbnailFetcher.Factory())
-                                .memoryCacheKey("video_thumb_$mediaUrl")
+                                .memoryCacheKey("video_thumb_${mediaUrl}_0")
                                 .diskCachePolicy(coil.request.CachePolicy.ENABLED)
                                 .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
                                 .build()
+                        }
+
+                        val lastFrameBitmap = if (isBoundToThisPage && videoPlayerState.lastFrameUrl == mediaUrl) {
+                            videoPlayerState.lastFrameBitmap
+                        } else {
+                            null
+                        }
+
+                        val showPreview = !isBoundToThisPage || presentationState.coverSurface
+
+                        LaunchedEffect(isBoundToThisPage, presentationState.coverSurface) {
+                            if (isBoundToThisPage && !presentationState.coverSurface && videoPlayerState.lastFrameUrl == mediaUrl) {
+                                videoPlayerState.clearLastFrame()
+                            }
+                        }
+
+                        DisposableEffect(isBoundToThisPage, mediaUrl, lifecycleOwner, hostView) {
+                            if (!isBoundToThisPage) return@DisposableEffect onDispose {}
+                            val observer = LifecycleEventObserver { _, event ->
+                                if (event == Lifecycle.Event.ON_PAUSE && activity?.isChangingConfigurations == true && !currentCoverSurface) {
+                                    val textureView = findAttachedTextureView(hostView)
+                                    if (textureView != null && textureView.isAvailable && textureView.width > 0 && textureView.height > 0) {
+                                        runCatching { textureView.bitmap }.getOrNull()?.let { bitmap ->
+                                            videoPlayerState.saveLastFrame(mediaUrl, bitmap)
+                                        }
+                                    }
+                                }
+                            }
+                            lifecycleOwner.lifecycle.addObserver(observer)
+                            onDispose {
+                                lifecycleOwner.lifecycle.removeObserver(observer)
+                                if (activity?.isChangingConfigurations == true && !currentCoverSurface && videoPlayerState.lastFrameUrl != mediaUrl) {
+                                    val textureView = findAttachedTextureView(hostView)
+                                    if (textureView != null && textureView.isAvailable && textureView.width > 0 && textureView.height > 0) {
+                                        runCatching { textureView.bitmap }.getOrNull()?.let { bitmap ->
+                                            videoPlayerState.saveLastFrame(mediaUrl, bitmap)
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         Box(
@@ -398,11 +507,23 @@ fun FullScreenImageViewer(
                                     }
                                 }
                             } else {
-                                val videoSize = presentationState.videoSizeDp
+                                val lastFrameSize = lastFrameBitmap?.let {
+                                    if (it.width > 0 && it.height > 0) {
+                                        Size(it.width.toFloat(), it.height.toFloat())
+                                    } else {
+                                        null
+                                    }
+                                }
+                                val videoSize = listOfNotNull(
+                                    if (isBoundToThisPage) videoPlayerState.videoSize else null,
+                                    lastFrameSize,
+                                    previewIntrinsicSize,
+                                    VideoCacheManager.getMediaSize(mediaUrl)
+                                ).firstOrNull {
+                                    it.width.isFinite() && it.height.isFinite() && it.width > 0f && it.height > 0f
+                                }
                                 val fittedVideoModifier = if (
                                     videoSize != null &&
-                                    videoSize.width > 0f &&
-                                    videoSize.height > 0f &&
                                     videoContainerSize.width > 0f &&
                                     videoContainerSize.height > 0f
                                 ) {
@@ -418,11 +539,42 @@ fun FullScreenImageViewer(
                                     Modifier.fillMaxSize()
                                 }
 
-                                if (!isBoundToThisPage || presentationState.coverSurface) {
+                                val previewLayerModifier = fittedVideoModifier.graphicsLayer {
+                                    alpha = if (showPreview) 1f else 0f
+                                }
+
+                                if (lastFrameBitmap != null) {
+                                    Image(
+                                        bitmap = lastFrameBitmap.asImageBitmap(),
+                                        contentDescription = null,
+                                        modifier = previewLayerModifier,
+                                        contentScale = ContentScale.Fit
+                                    )
+                                } else if (initialCachedThumb != null) {
+                                    Image(
+                                        bitmap = initialCachedThumb.asImageBitmap(),
+                                        contentDescription = null,
+                                        modifier = previewLayerModifier,
+                                        contentScale = ContentScale.Fit
+                                    )
+                                } else {
                                     AsyncImage(
                                         model = previewRequest,
                                         contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
+                                        onState = { state ->
+                                            if (state is AsyncImagePainter.State.Success) {
+                                                val intrinsic = state.painter.intrinsicSize
+                                                if (intrinsic.width.isFinite() && intrinsic.height.isFinite() && intrinsic.width > 0f && intrinsic.height > 0f) {
+                                                    previewIntrinsicSize = intrinsic
+                                                    VideoCacheManager.recordMediaSize(
+                                                        mediaUrl,
+                                                        intrinsic.width,
+                                                        intrinsic.height
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        modifier = previewLayerModifier,
                                         contentScale = ContentScale.Fit
                                     )
                                 }
@@ -431,9 +583,9 @@ fun FullScreenImageViewer(
                                     PlayerSurface(
                                         player = videoPlayerState.player,
                                         surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
-                                        modifier = fittedVideoModifier.alpha(
-                                            if (presentationState.coverSurface) 0f else 1f
-                                        )
+                                        modifier = fittedVideoModifier.graphicsLayer {
+                                            alpha = if (presentationState.coverSurface) 0f else 1f
+                                        }
                                     )
                                 }
 
@@ -718,150 +870,39 @@ fun FullScreenImageViewer(
                     .padding(bottom = 24.dp)
                     .fillMaxWidth()
             ) {
-                if (isCurrentPageVideo) {
-                    val activeMedia = dynamicMediaUrls.getOrNull(fullScreenPagerState.currentPage)
-                    val specificSource = activeMedia?.message?.source?.currentName ?: activeMedia?.message?.source?.originalName ?: "null"
-                    val specificTime = activeMedia?.message?.time ?: 0L
-                    val link = activeMedia?.message?.link
-                    val durationMs = videoPlayerState.durationMs
-                    val positionMs = videoPlayerState.displayPositionMs
-                    val sliderMax = durationMs.coerceAtLeast(1L).toFloat()
-                    val sliderValue = positionMs.coerceIn(0L, durationMs.coerceAtLeast(1L)).toFloat()
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    if (dynamicMediaUrls.isNotEmpty()) {
+                        val currentPage = fullScreenPagerState.currentPage
+                        val minPage = (currentPage - 1).coerceAtLeast(0)
+                        val maxPage = (currentPage + 1).coerceAtMost(dynamicMediaUrls.size - 1)
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            CustomIconButton(
-                                inputs = IconButtonInputs(
-                                    icon = if (videoPlayerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    action = { videoPlayerState.togglePlayPause() }
-                                ),
-                                modifier = Modifier.size(36.dp),
-                                iconModifier = Modifier.size(20.dp),
-                                defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                defaultContentColor = MaterialTheme.colorScheme.onSurface,
-                                shape = Shapes.large
-                            )
-
-                            Slider(
-                                value = if (durationMs > 0L) sliderValue else 0f,
-                                onValueChange = { newValue ->
-                                    if (!videoPlayerState.isScrubbing) {
-                                        videoPlayerState.onScrubStart()
-                                    }
-                                    videoPlayerState.onScrubChange(newValue.toLong())
-                                },
-                                onValueChangeFinished = {
-                                    videoPlayerState.onScrubEnd()
-                                },
-                                valueRange = 0f..sliderMax,
-                                enabled = durationMs > 0L,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = MaterialTheme.colorScheme.secondaryContainer
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            Box(
-                                modifier = Modifier
-                                    .clip(Shapes.large)
-                                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                val formattedPos = formatMediaDuration(positionMs)
-                                val formattedDur = if (durationMs > 0L) formatMediaDuration(durationMs) else "--:--"
-                                Text(
-                                    text = "$formattedPos / $formattedDur",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Clip
-                                )
-                            }
-
-                            CustomIconButton(
-                                inputs = IconButtonInputs(
-                                    icon = Icons.Default.MoreVert,
-                                    action = {
-                                        dropdownTransitionState.targetState =
-                                            !dropdownTransitionState.currentState
-                                    }
-                                ),
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .onGloballyPositioned { coordinates ->
-                                        buttonBounds = coordinates.boundsInWindow().roundToIntRect()
-                                    },
-                                iconModifier = Modifier.size(18.dp),
-                                defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                defaultContentColor = MaterialTheme.colorScheme.onSurface,
-                                transitionContentColor = MaterialTheme.colorScheme.onSurface,
-                                transitionState = dropdownTransitionState,
-                                shape = Shapes.large
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                CustomTextButton(
-                                    inputs = TextButtonInputs(
-                                        text = "$specificSource • ${getFormattedTimeUnix(specificTime)}",
-                                        action = {
-                                            link?.let { handler.openUri(it) }
-                                        }
-                                    ),
-                                    defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    shape = Shapes.large,
-                                    textColor = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1
-                                )
-                            }
-
-                            DynamicPagerIndicator(
-                                currentPage = fullScreenPagerState.currentPage,
-                                pageCount = dynamicMediaUrls.size
-                            )
-                        }
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val currentPage = fullScreenPagerState.currentPage
-                            val minPage = (currentPage - 1).coerceAtLeast(0)
-                            val maxPage = (currentPage + 1).coerceAtMost(dynamicMediaUrls.size - 1)
-
-                            for (pageIndex in minPage..maxPage) {
+                        for (pageIndex in minPage..maxPage) {
+                            key(pageIndex) {
                                 val pageMedia = dynamicMediaUrls.getOrNull(pageIndex)
-                                val specificSource = pageMedia?.message?.source?.currentName ?: pageMedia?.message?.source?.originalName ?: "null"
+                                val pageMediaUrl = pageMedia?.mediaLink.orEmpty()
+                                val isPageVideo = remember(pageMediaUrl) { isVideoUrl(pageMediaUrl) }
+                                val specificSource = pageMedia?.message?.source?.currentName
+                                    ?: pageMedia?.message?.source?.originalName
+                                    ?: "null"
                                 val specificTime = pageMedia?.message?.time ?: 0L
                                 val link = pageMedia?.message?.link
+                                val isActivePage = pageIndex == fullScreenPagerState.currentPage
+                                var menuButtonCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+                                LaunchedEffect(
+                                    isActivePage,
+                                    fullScreenPagerState.settledPage,
+                                    fullScreenPagerState.isScrollInProgress
+                                ) {
+                                    if (isActivePage) {
+                                        menuButtonCoordinates?.takeIf { it.isAttached }?.let { coordinates ->
+                                            buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                                        }
+                                    }
+                                }
 
                                 Box(
                                     modifier = Modifier
@@ -869,57 +910,220 @@ fun FullScreenImageViewer(
                                         .graphicsLayer {
                                             val pageOffset = fullScreenPagerState.currentPage + fullScreenPagerState.currentPageOffsetFraction
                                             translationX = (pageIndex - pageOffset) * screenWidth
-                                            translationY = swipeDismissY.value
-                                        },
-                                    contentAlignment = Alignment.Center
+                                        }
                                 ) {
-                                    CustomTextButton(
-                                        inputs = TextButtonInputs(
-                                            text = "$specificSource • ${getFormattedTimeUnix(specificTime)}",
-                                            action = {
-                                                if (pageIndex == fullScreenPagerState.currentPage) {
-                                                    link?.let { handler.openUri(it) }
+                                    if (isPageVideo) {
+                                        val isBoundVideoPage = videoPlayerState.activeTitleId == activeTitleId &&
+                                                videoPlayerState.activePage == pageIndex
+                                        val isPlayingForPage = isBoundVideoPage && videoPlayerState.isPlaying
+                                        val durationMs = if (isBoundVideoPage) videoPlayerState.durationMs else 0L
+                                        val positionMs = if (isBoundVideoPage) videoPlayerState.displayPositionMs else 0L
+                                        val sliderMax = durationMs.coerceAtLeast(1L).toFloat()
+                                        val sliderValue = positionMs.coerceIn(0L, durationMs.coerceAtLeast(1L)).toFloat()
+
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                CustomIconButton(
+                                                    inputs = IconButtonInputs(
+                                                        icon = if (isPlayingForPage) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                        action = {
+                                                            if (isActivePage && isBoundVideoPage) {
+                                                                videoPlayerState.togglePlayPause()
+                                                            }
+                                                        }
+                                                    ),
+                                                    modifier = Modifier.size(36.dp),
+                                                    iconModifier = Modifier.size(20.dp),
+                                                    defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    defaultContentColor = MaterialTheme.colorScheme.onSurface,
+                                                    shape = Shapes.large
+                                                )
+
+                                                Slider(
+                                                    value = if (durationMs > 0L) sliderValue else 0f,
+                                                    onValueChange = { newValue ->
+                                                        if (isActivePage && isBoundVideoPage) {
+                                                            if (!videoPlayerState.isScrubbing) {
+                                                                videoPlayerState.onScrubStart()
+                                                            }
+                                                            videoPlayerState.onScrubChange(newValue.toLong())
+                                                        }
+                                                    },
+                                                    onValueChangeFinished = {
+                                                        if (isActivePage && isBoundVideoPage) {
+                                                            videoPlayerState.onScrubEnd()
+                                                        }
+                                                    },
+                                                    valueRange = 0f..sliderMax,
+                                                    enabled = isActivePage && isBoundVideoPage && durationMs > 0L,
+                                                    colors = SliderDefaults.colors(
+                                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                                        inactiveTrackColor = MaterialTheme.colorScheme.secondaryContainer
+                                                    ),
+                                                    modifier = Modifier.weight(1f)
+                                                )
+
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(Shapes.large)
+                                                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    val formattedPos = formatMediaDuration(positionMs)
+                                                    val formattedDur = if (durationMs > 0L) formatMediaDuration(durationMs) else "--:--"
+                                                    Text(
+                                                        text = "$formattedPos / $formattedDur",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Clip
+                                                    )
                                                 }
+
+                                                CustomIconButton(
+                                                    inputs = IconButtonInputs(
+                                                        icon = Icons.Default.MoreVert,
+                                                        action = {
+                                                            if (isActivePage) {
+                                                                menuButtonCoordinates?.takeIf { it.isAttached }?.let { coordinates ->
+                                                                    buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                                                                }
+                                                                dropdownTransitionState.targetState =
+                                                                    !dropdownTransitionState.currentState
+                                                            }
+                                                        }
+                                                    ),
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .onGloballyPositioned { coordinates ->
+                                                            menuButtonCoordinates = coordinates
+                                                            if (isActivePage) {
+                                                                buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                                                            }
+                                                        },
+                                                    iconModifier = Modifier.size(18.dp),
+                                                    defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                                    defaultContentColor = MaterialTheme.colorScheme.onSurface,
+                                                    transitionContentColor = MaterialTheme.colorScheme.onSurface,
+                                                    transitionState = dropdownTransitionState,
+                                                    shape = Shapes.large
+                                                )
                                             }
-                                        ),
-                                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        shape = Shapes.large,
-                                        modifier = Modifier.padding(horizontal = 48.dp),
-                                        textColor = MaterialTheme.colorScheme.onSurface
-                                    )
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier.weight(1f),
+                                                    contentAlignment = Alignment.CenterStart
+                                                ) {
+                                                    CustomTextButton(
+                                                        inputs = TextButtonInputs(
+                                                            text = "$specificSource • ${getFormattedTimeUnix(specificTime)}",
+                                                            action = {
+                                                                if (isActivePage) {
+                                                                    link?.let { handler.openUri(it) }
+                                                                }
+                                                            }
+                                                        ),
+                                                        defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                        shape = Shapes.large,
+                                                        textColor = MaterialTheme.colorScheme.onSurface,
+                                                        maxLines = 1
+                                                    )
+                                                }
+
+                                                DynamicPagerIndicator(
+                                                    currentPage = pageIndex,
+                                                    pageCount = dynamicMediaUrls.size
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                CustomTextButton(
+                                                    inputs = TextButtonInputs(
+                                                        text = "$specificSource • ${getFormattedTimeUnix(specificTime)}",
+                                                        action = {
+                                                            if (isActivePage) {
+                                                                link?.let { handler.openUri(it) }
+                                                            }
+                                                        }
+                                                    ),
+                                                    defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    shape = Shapes.large,
+                                                    modifier = Modifier.padding(horizontal = 48.dp),
+                                                    textColor = MaterialTheme.colorScheme.onSurface
+                                                )
+
+                                                CustomIconButton(
+                                                    inputs = IconButtonInputs(
+                                                        icon = Icons.Default.MoreVert,
+                                                        action = {
+                                                            if (isActivePage) {
+                                                                menuButtonCoordinates?.takeIf { it.isAttached }?.let { coordinates ->
+                                                                    buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                                                                }
+                                                                dropdownTransitionState.targetState =
+                                                                    !dropdownTransitionState.currentState
+                                                            }
+                                                        }
+                                                    ),
+                                                    modifier = Modifier
+                                                        .align(Alignment.CenterEnd)
+                                                        .size(36.dp)
+                                                        .onGloballyPositioned { coordinates ->
+                                                            menuButtonCoordinates = coordinates
+                                                            if (isActivePage) {
+                                                                buttonBounds = coordinates.boundsInWindow().roundToIntRect()
+                                                            }
+                                                        },
+                                                    iconModifier = Modifier.size(18.dp),
+                                                    defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                                    defaultContentColor = MaterialTheme.colorScheme.onSurface,
+                                                    transitionContentColor = MaterialTheme.colorScheme.onSurface,
+                                                    transitionState = dropdownTransitionState,
+                                                    shape = Shapes.large
+                                                )
+                                            }
+
+                                            if (dynamicMediaUrls.size > 1) {
+                                                Spacer(modifier = Modifier.height(16.dp))
+
+                                                DynamicPagerIndicator(
+                                                    currentPage = pageIndex,
+                                                    pageCount = dynamicMediaUrls.size
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
-
-                            CustomIconButton(
-                                inputs = IconButtonInputs(
-                                    icon = Icons.Default.MoreVert,
-                                    action = {
-                                        dropdownTransitionState.targetState =
-                                            !dropdownTransitionState.currentState
-                                    }
-                                ),
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .size(36.dp)
-                                    .onGloballyPositioned { coordinates ->
-                                        buttonBounds = coordinates.boundsInWindow().roundToIntRect()
-                                    },
-                                iconModifier = Modifier.size(18.dp),
-                                defaultBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                transitionBackgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                defaultContentColor = MaterialTheme.colorScheme.onSurface,
-                                transitionContentColor = MaterialTheme.colorScheme.onSurface,
-                                transitionState = dropdownTransitionState,
-                                shape = Shapes.large
-                            )
                         }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        DynamicPagerIndicator(
-                            currentPage = fullScreenPagerState.currentPage,
-                            pageCount = dynamicMediaUrls.size
-                        )
                     }
                 }
             }
@@ -938,6 +1142,18 @@ fun FullScreenImageViewer(
             }
         }
     }
+}
+
+private fun findAttachedTextureView(view: View?): TextureView? {
+    if (view is TextureView) {
+        return if (view.isAvailable) view else null
+    }
+    if (view is ViewGroup) {
+        for (i in 0 until view.childCount) {
+            findAttachedTextureView(view.getChildAt(i))?.let { return it }
+        }
+    }
+    return null
 }
 
 @Composable
@@ -982,14 +1198,16 @@ fun DynamicPagerIndicator(
 
 @Composable
 fun RootViewOverlay(
+    alwaysOnTop: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val view = LocalView.current
     val context = LocalContext.current
     val parentComposition = rememberCompositionContext()
+    val parentSaveableStateRegistry = LocalSaveableStateRegistry.current
     val overlayId = remember { UUID.randomUUID() }
 
-    DisposableEffect(overlayId) {
+    DisposableEffect(overlayId, alwaysOnTop) {
         val activity = context.findActivity() ?: return@DisposableEffect onDispose {}
         val rootViewGroup = activity.window.decorView as ViewGroup
 
@@ -998,25 +1216,57 @@ fun RootViewOverlay(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            if (alwaysOnTop) {
+                translationZ = 100f
+            }
             setParentCompositionContext(parentComposition)
             setViewTreeLifecycleOwner(view.findViewTreeLifecycleOwner())
             setViewTreeViewModelStoreOwner(view.findViewTreeViewModelStoreOwner())
             setViewTreeSavedStateRegistryOwner(view.findViewTreeSavedStateRegistryOwner())
             setContent {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { }
+                CompositionLocalProvider(
+                    LocalSaveableStateRegistry provides parentSaveableStateRegistry
                 ) {
-                    content()
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { }
+                    ) {
+                        content()
+                    }
                 }
             }
         }
+        val hierarchyListener = if (alwaysOnTop) {
+            object : ViewGroup.OnHierarchyChangeListener {
+                override fun onChildViewAdded(parent: View?, child: View?) {
+                    if (child !== composeView) {
+                        composeView.post {
+                            if (composeView.isAttachedToWindow) {
+                                composeView.bringToFront()
+                            }
+                        }
+                    }
+                }
+
+                override fun onChildViewRemoved(parent: View?, child: View?) {}
+            }
+        } else {
+            null
+        }
+        if (hierarchyListener != null) {
+            rootViewGroup.setOnHierarchyChangeListener(hierarchyListener)
+        }
         rootViewGroup.addView(composeView)
-        onDispose { rootViewGroup.removeView(composeView) }
+        onDispose {
+            if (hierarchyListener != null) {
+                rootViewGroup.setOnHierarchyChangeListener(null)
+            }
+            rootViewGroup.removeView(composeView)
+        }
     }
 }
 

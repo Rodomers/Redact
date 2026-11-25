@@ -14,6 +14,7 @@ import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import androidx.annotation.OptIn
 import androidx.core.graphics.drawable.toDrawable
+import androidx.core.net.toUri
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
@@ -28,7 +29,6 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.Options
 import coil.request.SuccessResult
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +42,6 @@ import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import androidx.core.net.toUri
 
 private val mediaDownloadClient by lazy { OkHttpClient() }
 
@@ -197,7 +196,7 @@ class VideoThumbnailFetcher(
         }
     }
 
-    override suspend fun fetch(): FetchResult? {
+    override suspend fun fetch(): FetchResult {
         val appContext = options.context.applicationContext
         val thumbFile = getThumbFile(appContext, url)
 
@@ -206,6 +205,11 @@ class VideoThumbnailFetcher(
                 BitmapFactory.decodeFile(thumbFile.absolutePath)
             }
             if (cachedBitmap != null) {
+                VideoCacheManager.recordMediaSize(
+                    url,
+                    cachedBitmap.width.toFloat(),
+                    cachedBitmap.height.toFloat()
+                )
                 return DrawableResult(
                     drawable = cachedBitmap.toDrawable(options.context.resources),
                     isSampled = true,
@@ -236,6 +240,12 @@ class VideoThumbnailFetcher(
                             rawBitmap.recycle()
                         }
 
+                        VideoCacheManager.recordMediaSize(
+                            url,
+                            scaledBitmap.width.toFloat(),
+                            scaledBitmap.height.toFloat()
+                        )
+
                         runCatching {
                             FileOutputStream(thumbFile).use { out ->
                                 scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
@@ -255,7 +265,8 @@ class VideoThumbnailFetcher(
             }
         }
 
-        val bitmap = deferred.await() ?: return null
+        val bitmap = deferred.await()
+            ?: throw IllegalStateException("Failed to extract video thumbnail for $url")
         return DrawableResult(
             drawable = bitmap.toDrawable(options.context.resources),
             isSampled = true,
@@ -263,10 +274,11 @@ class VideoThumbnailFetcher(
         )
     }
 
-    class Factory : Fetcher.Factory<String> {
-        override fun create(data: String, options: Options, imageLoader: ImageLoader): Fetcher? {
-            if (!isVideoUrl(data)) return null
-            return VideoThumbnailFetcher(data, options)
+    class Factory : Fetcher.Factory<Uri> {
+        override fun create(data: Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
+            val urlString = data.toString()
+            if (!isVideoUrl(urlString)) return null
+            return VideoThumbnailFetcher(urlString, options)
         }
     }
 }

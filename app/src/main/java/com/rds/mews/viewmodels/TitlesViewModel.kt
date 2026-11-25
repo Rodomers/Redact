@@ -1,14 +1,15 @@
 package com.rds.mews.viewmodels
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Rect
-import android.util.Log
 import androidx.collection.intListOf
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.core.content.ContextCompat
@@ -19,19 +20,29 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.rds.mews.MainActivity
+import com.rds.mews.R
+import com.rds.mews.core.TelegramRssClient
+import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.SourceMessages
-import com.rds.mews.repositories.MewsRepository
-import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.TimeDate
 import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.TitleCardStates
+import com.rds.mews.localcore.TitleSorting
+import com.rds.mews.localcore.TitleStatus
 import com.rds.mews.localcore.TitlesGroupState
+import com.rds.mews.localcore.UpdatingState
+import com.rds.mews.localcore.cancelTitlesUpdate
 import com.rds.mews.localcore.formatUpdateTime
 import com.rds.mews.localcore.getStringsFromDate
 import com.rds.mews.localcore.requestNotificationPermission
+import com.rds.mews.repositories.MewsRepository
+import com.rds.mews.settings_manager.SummarizationErrorType
+import com.rds.mews.ui.custom_elements.image_viewer.SharedVideoPlayerController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -45,21 +56,12 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import com.rds.mews.R
-import com.rds.mews.core.TelegramRssClient
-import com.rds.mews.localcore.MediaWithSource
-import com.rds.mews.localcore.TitleSorting
-import com.rds.mews.localcore.TitleStatus
-import com.rds.mews.localcore.UpdatingState
-import com.rds.mews.localcore.cancelTitlesUpdate
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
 import kotlin.time.Duration.Companion.milliseconds
 
 class TitlesViewModel(
@@ -72,6 +74,15 @@ class TitlesViewModel(
         val dateString: String,
         val sources: List<SourceMessages>? = null
     )
+
+    data class FullscreenMediaState(
+        val titleId: Long,
+        val initialPage: Int,
+        val currentPage: Int,
+        val hasOpened: Boolean = false
+    )
+
+    val videoPlayerController = SharedVideoPlayerController(application.applicationContext)
 
     private val _scrollEvents = Channel<TitlesScrollEvent>(Channel.CONFLATED)
     val scrollEvents = _scrollEvents.receiveAsFlow()
@@ -195,9 +206,20 @@ class TitlesViewModel(
     private val _blitzImagePages = MutableStateFlow<Map<Long, Int>>(emptyMap())
     val blitzImagePages: StateFlow<Map<Long, Int>> = _blitzImagePages.asStateFlow()
 
+    private val _mediaPages = MutableStateFlow<Map<Long, Int>>(emptyMap())
+    val mediaPages: StateFlow<Map<Long, Int>> = _mediaPages.asStateFlow()
+
+    private val _fullscreenMediaState = MutableStateFlow<FullscreenMediaState?>(null)
+    val fullscreenMediaState: StateFlow<FullscreenMediaState?> = _fullscreenMediaState.asStateFlow()
+
+    private val _mediaItemBounds = MutableStateFlow<Map<Pair<Long, Int>, ComposeRect>>(emptyMap())
+    val mediaItemBounds: StateFlow<Map<Pair<Long, Int>, ComposeRect>> = _mediaItemBounds.asStateFlow()
+
+    private val _mediaContainerBounds = MutableStateFlow<Map<Long, ComposeRect>>(emptyMap())
+    val mediaContainerBounds: StateFlow<Map<Long, ComposeRect>> = _mediaContainerBounds.asStateFlow()
+
     private val _dynamicMediaUrls = MutableStateFlow<Map<Long, List<MediaWithSource>>>(emptyMap())
     val dynamicMediaUrls: StateFlow<Map<Long, List<MediaWithSource>>> = _dynamicMediaUrls.asStateFlow()
-
 
     fun toggleEmptyMess(newValue: Boolean) {
         _showEmptyMessage.value = newValue
@@ -363,24 +385,98 @@ class TitlesViewModel(
     }
 
     fun setCurrentTitleImage(id: Long, image: Int) {
-        if (_titles.value.find { it.id == id }?.isBlitz ?: false) {
-            _blitzImagePages.update { it + (id to image) }
+        val safeImage = image.coerceAtLeast(0)
+        if (_mediaPages.value[id] != safeImage) {
+            _mediaPages.update { it + (id to safeImage) }
+        }
+
+        if (_titles.value.find { it.id == id }?.isBlitz == true) {
+            if (_blitzImagePages.value[id] != safeImage) {
+                _blitzImagePages.update { it + (id to safeImage) }
+            }
         }
 
         _titleCardStates.update { currentSet ->
-            currentSet.map {
-                if (it.id == id) { it.copy(currentImage = image) }
-                else it
-            }.toSet()
+            var changed = false
+            val updated = currentSet.map {
+                if (it.id == id && it.currentImage != safeImage) {
+                    changed = true
+                    it.copy(currentImage = safeImage)
+                } else it
+            }
+            if (changed) updated.toSet() else currentSet
         }
     }
 
     fun setFullscreenImageForTitle(id: Long, state: Boolean) {
+        if (state) {
+            val currentPage = _mediaPages.value[id]
+                ?: _titleCardStates.value.find { it.id == id }?.currentImage
+                ?: 0
+            openFullscreenMedia(id, currentPage)
+        } else if (_fullscreenMediaState.value?.titleId == id) {
+            closeFullscreenMedia()
+        }
+    }
+
+    fun openFullscreenMedia(titleId: Long, page: Int) {
+        val safePage = page.coerceAtLeast(0)
+        setCurrentTitleImage(titleId, safePage)
+        _fullscreenMediaState.value = FullscreenMediaState(
+            titleId = titleId,
+            initialPage = safePage,
+            currentPage = safePage,
+            hasOpened = false
+        )
         _titleCardStates.update { currentSet ->
             currentSet.map {
-                if (it.id == id) { it.copy(fullscreenImage = state) }
-                else it
+                if (it.id == titleId) {
+                    it.copy(currentImage = safePage, fullscreenImage = true)
+                } else {
+                    it.copy(fullscreenImage = false)
+                }
             }.toSet()
+        }
+    }
+
+    fun updateFullscreenMediaPage(page: Int) {
+        val safePage = page.coerceAtLeast(0)
+        val current = _fullscreenMediaState.value ?: return
+        if (current.currentPage != safePage) {
+            _fullscreenMediaState.value = current.copy(currentPage = safePage)
+        }
+        setCurrentTitleImage(current.titleId, safePage)
+    }
+
+    fun markFullscreenMediaOpened() {
+        _fullscreenMediaState.update { state ->
+            if (state == null || state.hasOpened) state else state.copy(hasOpened = true)
+        }
+    }
+
+    fun closeFullscreenMedia() {
+        videoPlayerController.clearPage()
+        val activeTitleId = _fullscreenMediaState.value?.titleId
+        _fullscreenMediaState.value = null
+        if (activeTitleId != null) {
+            _titleCardStates.update { currentSet ->
+                currentSet.map {
+                    if (it.id == activeTitleId) it.copy(fullscreenImage = false) else it
+                }.toSet()
+            }
+        }
+    }
+
+    fun updateMediaItemBounds(titleId: Long, pageIndex: Int, bounds: ComposeRect) {
+        val key = titleId to pageIndex
+        if (_mediaItemBounds.value[key] != bounds) {
+            _mediaItemBounds.update { it + (key to bounds) }
+        }
+    }
+
+    fun updateMediaContainerBounds(titleId: Long, bounds: ComposeRect) {
+        if (_mediaContainerBounds.value[titleId] != bounds) {
+            _mediaContainerBounds.update { it + (titleId to bounds) }
         }
     }
 
@@ -435,7 +531,6 @@ class TitlesViewModel(
         }
 
         val mediaObjects = targetTitle.mediaUrls
-        Log.d("MEDIA_CHECK", "Title ${titleId}: raw=${targetTitle.mediaUrls.map { it.mediaLink }}")
 
         val validOriginals = mediaObjects.map { media ->
             MediaWithSource(
@@ -459,7 +554,6 @@ class TitlesViewModel(
                     try {
                         val scrapedUrls = scraper.scrapeEmbedMedia(message.link)
                             .map { MediaWithSource(it, message) }
-                        Log.d("MEDIA_CHECK", "Scraped ${message.link}: $scrapedUrls")
 
                         if (scrapedUrls.isNotEmpty()) {
                             _dynamicMediaUrls.update { currentMap ->
@@ -595,8 +689,8 @@ class TitlesViewModel(
                             read = title.isRead,
                             currentPage = oldState?.currentPage ?: 0,
                             sources = newSources,
-                            currentImage = oldState?.currentImage ?: 0,
-                            fullscreenImage = oldState?.fullscreenImage ?: false
+                            currentImage = _mediaPages.value[title.id] ?: oldState?.currentImage ?: 0,
+                            fullscreenImage = _fullscreenMediaState.value?.titleId == title.id
                         )
                     }.toSet()
                 }
@@ -608,6 +702,12 @@ class TitlesViewModel(
                 _errState.value = error
             }
         }
+    }
+
+    @SuppressLint("EmptySuperCall")
+    override fun onCleared() {
+        videoPlayerController.release()
+        super.onCleared()
     }
 }
 

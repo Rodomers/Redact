@@ -1,7 +1,11 @@
 package com.rds.mews.ui.custom_elements.image_viewer
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
+import android.graphics.Bitmap
 import android.net.Uri
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -11,10 +15,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -23,6 +27,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSpec
@@ -48,7 +53,7 @@ private val VIDEO_EXTENSIONS = setOf("mp4", "webm", "mkv", "mov", "m4v", "3gp", 
 
 fun isVideoUrl(url: String): Boolean {
     if (url.isBlank()) return false
-    val lastSegment = Uri.parse(url).lastPathSegment?.lowercase(Locale.ROOT) ?: return false
+    val lastSegment = url.toUri().lastPathSegment?.lowercase(Locale.ROOT) ?: return false
     val extension = lastSegment.substringAfterLast('.', "")
     return extension in VIDEO_EXTENSIONS
 }
@@ -73,7 +78,16 @@ object VideoCacheManager {
     @Volatile
     private var simpleCache: SimpleCache? = null
     private val preloadedBytesByUrl = ConcurrentHashMap<String, Long>()
+    private val mediaSizesByUrl = ConcurrentHashMap<String, Size>()
     private val preloadSemaphore = Semaphore(2)
+
+    fun recordMediaSize(url: String, width: Float, height: Float) {
+        if (url.isNotBlank() && width.isFinite() && height.isFinite() && width > 0f && height > 0f) {
+            mediaSizesByUrl[url] = Size(width, height)
+        }
+    }
+
+    fun getMediaSize(url: String): Size? = mediaSizesByUrl[url]
 
     fun getCache(context: Context): SimpleCache {
         return simpleCache ?: synchronized(this) {
@@ -144,16 +158,36 @@ object VideoCacheManager {
     }
 }
 
+@OptIn(UnstableApi::class)
 @Stable
-class VideoPlayerState(
-    val player: ExoPlayer,
-    restoredPage: Int = -1,
-    restoredUrl: String? = null,
-    restoredPositionMs: Long = 0L,
-    restoredDurationMs: Long = 0L,
-    restoredPlayWhenReady: Boolean = true,
-    private val onPersistState: (page: Int, url: String?, positionMs: Long, durationMs: Long, playWhenReady: Boolean) -> Unit
+class SharedVideoPlayerController(
+    context: Context
 ) {
+    private val appContext = context.applicationContext
+
+    val player: ExoPlayer = ExoPlayer.Builder(appContext)
+        .setMediaSourceFactory(
+            DefaultMediaSourceFactory(
+                VideoCacheManager.getCacheDataSourceFactory(appContext)
+            )
+        )
+        .setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                .build(),
+            true
+        )
+        .setHandleAudioBecomingNoisy(true)
+        .build()
+        .apply {
+            repeatMode = Player.REPEAT_MODE_ONE
+            volume = 1f
+        }
+
+    var activeTitleId by mutableLongStateOf(-1L)
+        private set
+
     var activePage by mutableIntStateOf(-1)
         private set
 
@@ -190,12 +224,20 @@ class VideoPlayerState(
     var lastRetryTime by mutableLongStateOf(0L)
         private set
 
-    private var desiredPlayWhenReady: Boolean = restoredPlayWhenReady
-    private var pendingRestorePage: Int = restoredPage
-    private var pendingRestoreUrl: String? = restoredUrl
-    private var pendingRestorePositionMs: Long = restoredPositionMs
-    private var pendingRestoreDurationMs: Long = restoredDurationMs
-    private var pendingRestorePlayWhenReady: Boolean = restoredPlayWhenReady
+    var desiredPlayWhenReady by mutableStateOf(true)
+        private set
+
+    var videoSize by mutableStateOf<Size?>(null)
+        private set
+
+    var lastFrameBitmap by mutableStateOf<Bitmap?>(null)
+        private set
+
+    var lastFrameUrl by mutableStateOf<String?>(null)
+        private set
+
+    private var wasPlayingBeforeScrub: Boolean = false
+    private var lastScrubSeekTimeMs: Long = 0L
 
     val canRetry: Boolean
         get() = retryCount < 3 && (System.currentTimeMillis() - lastRetryTime > 2000L)
@@ -208,6 +250,15 @@ class VideoPlayerState(
             isPlaying = playing
         }
 
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            if (videoSize.width > 0 && videoSize.height > 0) {
+                val width = videoSize.width * videoSize.pixelWidthHeightRatio
+                val height = videoSize.height.toFloat()
+                this@SharedVideoPlayerController.videoSize = Size(width, height)
+                activeUrl?.let { VideoCacheManager.recordMediaSize(it, width, height) }
+            }
+        }
+
         override fun onPlaybackStateChanged(playbackState: Int) {
             isBuffering = playbackState == Player.STATE_BUFFERING
             if (playbackState == Player.STATE_READY) {
@@ -216,16 +267,15 @@ class VideoPlayerState(
                 val dur = player.duration
                 if (dur != C.TIME_UNSET && dur > 0L) {
                     durationMs = dur
-                    onPersistState(activePage, activeUrl, currentPositionMs, dur, desiredPlayWhenReady)
                 }
             }
         }
 
-        @OptIn(UnstableApi::class)
         override fun onPlayerError(error: PlaybackException) {
             hasError = true
             isBuffering = false
             isPlaying = false
+            clearLastFrame()
             isUnsupportedFormat = error.cause is UnrecognizedInputFormatException ||
                     error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
                     error.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED
@@ -236,41 +286,39 @@ class VideoPlayerState(
         player.addListener(listener)
     }
 
-    fun bindToPage(page: Int, url: String) {
-        if (activePage == page && activeUrl == url) return
+    fun bindToPage(titleId: Long, page: Int, url: String) {
+        if (activeTitleId == titleId && activePage == page && activeUrl == url) return
 
-        val hasPendingRestore = pendingRestoreUrl == url && (pendingRestorePage == page || pendingRestorePage == -1)
-        val startPosition = if (hasPendingRestore) pendingRestorePositionMs.coerceAtLeast(0L) else 0L
-        val startDuration = if (hasPendingRestore) pendingRestoreDurationMs.coerceAtLeast(0L) else 0L
-        val startPlayWhenReady = if (hasPendingRestore) pendingRestorePlayWhenReady else true
-
-        pendingRestoreUrl = null
-        pendingRestorePage = -1
-        pendingRestorePositionMs = 0L
-        pendingRestoreDurationMs = 0L
-        pendingRestorePlayWhenReady = true
-
+        activeTitleId = titleId
         activePage = page
         activeUrl = url
-        desiredPlayWhenReady = startPlayWhenReady
+        desiredPlayWhenReady = true
         hasError = false
         isUnsupportedFormat = false
         isBuffering = true
-        currentPositionMs = startPosition
-        durationMs = startDuration
+        currentPositionMs = 0L
+        durationMs = 0L
         isScrubbing = false
-        scrubPositionMs = startPosition
+        scrubPositionMs = 0L
+        wasPlayingBeforeScrub = false
+        lastScrubSeekTimeMs = 0L
         retryCount = 0
         lastRetryTime = 0L
+        videoSize = null
+        clearLastFrame()
 
-        player.setMediaItem(MediaItem.fromUri(url), startPosition)
+        player.setMediaItem(MediaItem.fromUri(url), 0L)
         player.prepare()
-        player.playWhenReady = startPlayWhenReady
-        onPersistState(page, url, startPosition, startDuration, startPlayWhenReady)
+        player.playWhenReady = true
+    }
+
+    fun bindToPage(page: Int, url: String) {
+        bindToPage(-1L, page, url)
     }
 
     fun clearPage() {
-        if (activePage == -1 && activeUrl == null) return
+        if (activeTitleId == -1L && activePage == -1 && activeUrl == null) return
+        activeTitleId = -1L
         activePage = -1
         activeUrl = null
         desiredPlayWhenReady = true
@@ -279,22 +327,40 @@ class VideoPlayerState(
         hasError = false
         isUnsupportedFormat = false
         isScrubbing = false
+        scrubPositionMs = 0L
+        wasPlayingBeforeScrub = false
+        lastScrubSeekTimeMs = 0L
         currentPositionMs = 0L
         durationMs = 0L
+        retryCount = 0
+        lastRetryTime = 0L
+        videoSize = null
+        clearLastFrame()
         player.playWhenReady = false
         player.stop()
         player.clearMediaItems()
-        onPersistState(-1, null, 0L, 0L, true)
+    }
+
+    fun saveLastFrame(url: String, bitmap: Bitmap) {
+        if (activeUrl != url || hasError) return
+        lastFrameUrl = url
+        lastFrameBitmap = bitmap
+    }
+
+    fun clearLastFrame() {
+        lastFrameBitmap = null
+        lastFrameUrl = null
     }
 
     fun pause(persistUserChoice: Boolean = true) {
         if (persistUserChoice) {
             desiredPlayWhenReady = false
         }
+        val wasPlaying = isPlaying
         player.playWhenReady = false
-        val pos = player.currentPosition.coerceAtLeast(currentPositionMs)
-        currentPositionMs = pos
-        onPersistState(activePage, activeUrl, pos, durationMs, desiredPlayWhenReady)
+        if (wasPlaying) {
+            currentPositionMs = player.currentPosition.coerceAtLeast(0L)
+        }
     }
 
     fun togglePlayPause() {
@@ -308,16 +374,25 @@ class VideoPlayerState(
         player.playWhenReady = nextPlayState
         val pos = player.currentPosition.coerceAtLeast(0L)
         currentPositionMs = pos
-        onPersistState(activePage, activeUrl, pos, durationMs, nextPlayState)
     }
 
     fun onScrubStart() {
         isScrubbing = true
+        wasPlayingBeforeScrub = isPlaying || desiredPlayWhenReady
         scrubPositionMs = currentPositionMs
+        lastScrubSeekTimeMs = 0L
+        player.playWhenReady = false
     }
 
     fun onScrubChange(positionMs: Long) {
-        scrubPositionMs = positionMs.coerceIn(0L, durationMs.coerceAtLeast(0L))
+        val target = positionMs.coerceIn(0L, durationMs.coerceAtLeast(0L))
+        scrubPositionMs = target
+        currentPositionMs = target
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastScrubSeekTimeMs >= 60L) {
+            lastScrubSeekTimeMs = now
+            player.seekTo(target)
+        }
     }
 
     fun onScrubEnd() {
@@ -327,9 +402,12 @@ class VideoPlayerState(
             scrubPositionMs
         }
         currentPositionMs = target
+        scrubPositionMs = target
         player.seekTo(target)
         isScrubbing = false
-        onPersistState(activePage, activeUrl, target, durationMs, desiredPlayWhenReady)
+        val shouldResume = wasPlayingBeforeScrub && desiredPlayWhenReady
+        wasPlayingBeforeScrub = false
+        player.playWhenReady = shouldResume
     }
 
     fun retry() {
@@ -341,10 +419,10 @@ class VideoPlayerState(
         isUnsupportedFormat = false
         isBuffering = true
         desiredPlayWhenReady = true
+        clearLastFrame()
         player.setMediaItem(MediaItem.fromUri(url), currentPositionMs)
         player.prepare()
         player.playWhenReady = true
-        onPersistState(activePage, url, currentPositionMs, durationMs, true)
     }
 
     fun syncProgress() {
@@ -356,86 +434,54 @@ class VideoPlayerState(
             val pos = player.currentPosition
             if (pos >= 0L) {
                 currentPositionMs = pos
-                onPersistState(activePage, activeUrl, pos, durationMs, desiredPlayWhenReady)
             }
         }
     }
 
     fun release() {
+        clearLastFrame()
+        videoSize = null
         player.removeListener(listener)
         player.release()
     }
 }
 
-@OptIn(UnstableApi::class)
+typealias VideoPlayerState = SharedVideoPlayerController
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 @Composable
 fun rememberVideoPlayerState(
-    context: Context = LocalContext.current
-): VideoPlayerState {
+    controller: SharedVideoPlayerController
+): SharedVideoPlayerController {
+    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    var savedPage by rememberSaveable { mutableIntStateOf(-1) }
-    var savedUrl by rememberSaveable { mutableStateOf<String?>(null) }
-    var savedPositionMs by rememberSaveable { mutableLongStateOf(0L) }
-    var savedDurationMs by rememberSaveable { mutableLongStateOf(0L) }
-    var savedPlayWhenReady by rememberSaveable { mutableStateOf(true) }
-
-    val state = remember(context) {
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-            .build()
-
-        val mediaSourceFactory = DefaultMediaSourceFactory(
-            VideoCacheManager.getCacheDataSourceFactory(context)
-        )
-
-        val exoPlayer = ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .setAudioAttributes(audioAttributes, true)
-            .setHandleAudioBecomingNoisy(true)
-            .build()
-            .apply {
-                repeatMode = Player.REPEAT_MODE_ONE
-                volume = 1f
-            }
-
-        VideoPlayerState(
-            player = exoPlayer,
-            restoredPage = savedPage,
-            restoredUrl = savedUrl,
-            restoredPositionMs = savedPositionMs,
-            restoredDurationMs = savedDurationMs,
-            restoredPlayWhenReady = savedPlayWhenReady,
-            onPersistState = { page, url, positionMs, durationMs, playWhenReady ->
-                savedPage = page
-                savedUrl = url
-                savedPositionMs = positionMs
-                savedDurationMs = durationMs
-                savedPlayWhenReady = playWhenReady
-            }
-        )
-    }
-
-    DisposableEffect(state, lifecycleOwner) {
+    DisposableEffect(controller, lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) {
-                state.pause(persistUserChoice = false)
+                val activity = context.findActivity()
+                if (activity == null || !activity.isChangingConfigurations) {
+                    controller.pause(persistUserChoice = false)
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            state.release()
         }
     }
 
-    LaunchedEffect(state, state.isPlaying, state.activePage) {
-        while (state.activePage >= 0 && state.isPlaying) {
-            state.syncProgress()
+    LaunchedEffect(controller, controller.isPlaying, controller.activePage) {
+        while (controller.activePage >= 0 && controller.isPlaying) {
+            controller.syncProgress()
             delay(100L)
         }
     }
 
-    return state
+    return controller
 }

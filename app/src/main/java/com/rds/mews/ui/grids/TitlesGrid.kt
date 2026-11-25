@@ -1,11 +1,8 @@
 package com.rds.mews.ui.grids
 
-import com.rds.mews.ui.custom_elements.bottom_sheet.CustomErrorBottomSheet
-import com.rds.mews.ui.custom_elements.TimelineMarker
 import android.annotation.SuppressLint
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -26,9 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -48,27 +43,30 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -77,41 +75,41 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rds.mews.MainActivity
 import com.rds.mews.R
+import com.rds.mews.core.text.TextSanitizer
+import com.rds.mews.localcore.MediaWithSource
+import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.localcore.SummarizationResult
 import com.rds.mews.localcore.TimeDate
 import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.TitleCardStates
+import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.TitlesGroupState
+import com.rds.mews.localcore.UpdatingState
 import com.rds.mews.localcore.mapResultToUiResources
-import com.rds.mews.ui.custom_elements.ExpandableContainer
+import com.rds.mews.settings_manager.SummarizationErrorType
 import com.rds.mews.ui.custom_elements.CustomBottomFootnote
 import com.rds.mews.ui.custom_elements.CustomPullToRefreshIndicator
-import com.rds.mews.ui.custom_elements.titles_card.TitlesCard
+import com.rds.mews.ui.custom_elements.ExpandableContainer
+import com.rds.mews.ui.custom_elements.TimelineMarker
+import com.rds.mews.ui.custom_elements.bottom_sheet.CustomErrorBottomSheet
 import com.rds.mews.ui.custom_elements.customHeader
+import com.rds.mews.ui.custom_elements.image_viewer.FullScreenImageViewer
+import com.rds.mews.ui.custom_elements.image_viewer.RootViewOverlay
+import com.rds.mews.ui.custom_elements.image_viewer.SharedVideoPlayerController
+import com.rds.mews.ui.custom_elements.titles_card.BlitzCardSourceExpansionOverlay
+import com.rds.mews.ui.custom_elements.titles_card.BlitzCarouselRow
+import com.rds.mews.ui.custom_elements.titles_card.TitlesCard
+import com.rds.mews.ui.theme.Shapes
+import com.rds.mews.viewmodels.TitlesScrollEvent
 import com.rds.mews.viewmodels.TitlesViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.util.Locale.getDefault
 import kotlin.collections.component1
 import kotlin.collections.component2
 import kotlin.collections.iterator
-import com.rds.mews.ui.theme.Shapes
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource.Companion.UserInput
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.text.AnnotatedString
-import com.rds.mews.core.text.TextSanitizer
-import com.rds.mews.localcore.MediaWithSource
-import com.rds.mews.localcore.SourceMessages
-import com.rds.mews.localcore.TitleSorting
-import com.rds.mews.localcore.UpdatingState
-import com.rds.mews.settings_manager.SummarizationErrorType
-import com.rds.mews.ui.custom_elements.image_viewer.RootViewOverlay
-import com.rds.mews.ui.custom_elements.titles_card.BlitzCardSourceExpansionOverlay
-import com.rds.mews.ui.custom_elements.titles_card.BlitzCarouselRow
-import com.rds.mews.viewmodels.TitlesScrollEvent
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.time.Duration.Companion.milliseconds
 
 private data class ExpandedBlitzData(
@@ -179,7 +177,10 @@ fun TitlesScreen(
     val copyPlainText by viewModel.copyPlainText.collectAsStateWithLifecycle()
     val failedTitles by viewModel.failedTitles.collectAsStateWithLifecycle()
     val blitzCarouselPositions by viewModel.blitzCarouselPositions.collectAsStateWithLifecycle()
-    val blitzImagePages by viewModel.blitzImagePages.collectAsStateWithLifecycle()
+    val mediaPages by viewModel.mediaPages.collectAsStateWithLifecycle()
+    val fullscreenMediaState by viewModel.fullscreenMediaState.collectAsStateWithLifecycle()
+    val mediaItemBoundsMap by viewModel.mediaItemBounds.collectAsStateWithLifecycle()
+    val mediaContainerBoundsMap by viewModel.mediaContainerBounds.collectAsStateWithLifecycle()
 
     TitlesGrid(
         lazyGridState = lazyGridState,
@@ -196,7 +197,11 @@ fun TitlesScreen(
         errState = err,
         titlesCardStates = titlesCardStates,
         blitzCarouselPositions = blitzCarouselPositions,
-        blitzImagePages = blitzImagePages,
+        mediaPages = mediaPages,
+        fullscreenMediaState = fullscreenMediaState,
+        mediaItemBoundsMap = mediaItemBoundsMap,
+        mediaContainerBoundsMap = mediaContainerBoundsMap,
+        videoPlayerController = viewModel.videoPlayerController,
         rememberCardPage = viewModel::changeTitleCurrentPage,
         onRefresh = viewModel::refreshTitles,
         onIndicatorClick = viewModel::changeIndicatorCollapsed,
@@ -225,7 +230,12 @@ fun TitlesScreen(
         loadDynamicMediaUrls = viewModel::loadDynamicMediaUrls,
         setCurrentTitleImage = viewModel::setCurrentTitleImage,
         onSaveBlitzScroll = viewModel::saveBlitzCarouselScroll,
-        setFullscreenView = viewModel::setFullscreenImageForTitle,
+        onOpenFullscreenMedia = viewModel::openFullscreenMedia,
+        onUpdateFullscreenMediaPage = viewModel::updateFullscreenMediaPage,
+        onMarkFullscreenMediaOpened = viewModel::markFullscreenMediaOpened,
+        onCloseFullscreenMedia = viewModel::closeFullscreenMedia,
+        onUpdateMediaItemBounds = viewModel::updateMediaItemBounds,
+        onUpdateMediaContainerBounds = viewModel::updateMediaContainerBounds,
         stopTitlesUpdate = viewModel::stopTitlesUpdate,
         setShowMedia = viewModel::setShowMedia,
         onOverscrollDetected = onOverscrollDetected
@@ -233,7 +243,9 @@ fun TitlesScreen(
 }
 
 @SuppressLint("LocalContextGetResourceValueCall")
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class,
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalFoundationApi::class,
     ExperimentalLayoutApi::class
 )
 @Composable
@@ -251,8 +263,12 @@ fun TitlesGrid(
     toggleEmptyMess: (Boolean) -> Unit,
     errState: SummarizationResult.Failure?,
     titlesCardStates: Set<TitleCardStates>,
-    blitzCarouselPositions:  Map<String, Pair<Int, Int>>,
-    blitzImagePages:  Map<Long, Int>,
+    blitzCarouselPositions: Map<String, Pair<Int, Int>>,
+    mediaPages: Map<Long, Int>,
+    fullscreenMediaState: TitlesViewModel.FullscreenMediaState?,
+    mediaItemBoundsMap: Map<Pair<Long, Int>, Rect>,
+    mediaContainerBoundsMap: Map<Long, Rect>,
+    videoPlayerController: SharedVideoPlayerController,
     rememberCardPage: (Long, Int) -> Unit,
     onRefresh: () -> Unit,
     onIndicatorClick: () -> Unit,
@@ -281,7 +297,12 @@ fun TitlesGrid(
     loadDynamicMediaUrls: (Long) -> Unit,
     setCurrentTitleImage: (Long, Int) -> Unit,
     onSaveBlitzScroll: (String, Int, Int) -> Unit,
-    setFullscreenView: (Long, Boolean) -> Unit,
+    onOpenFullscreenMedia: (Long, Int) -> Unit,
+    onUpdateFullscreenMediaPage: (Int) -> Unit,
+    onMarkFullscreenMediaOpened: () -> Unit,
+    onCloseFullscreenMedia: () -> Unit,
+    onUpdateMediaItemBounds: (Long, Int, Rect) -> Unit,
+    onUpdateMediaContainerBounds: (Long, Rect) -> Unit,
     stopTitlesUpdate: (Context) -> Unit,
     setShowMedia: (Long, Boolean) -> Unit,
     onOverscrollDetected: () -> Unit = {}
@@ -489,105 +510,109 @@ fun TitlesGrid(
                         val isFirst = index == 0
                         val isLast = index == regularTitles.lastIndex
 
-                    val itemGlobalIndex = currentGroupStartIndex + index
+                        val itemGlobalIndex = currentGroupStartIndex + index
 
-                    val statesItem = titlesCardStates.find { it.id == item.id }
-                    val isExpanded = statesItem?.expanded ?: false
-                    val pagerState = rememberPagerState(
-                        initialPage = statesItem?.currentPage ?: 0,
-                        initialPageOffsetFraction = 0f,
-                        pageCount = { 2 }
-                    )
-                    val sources = statesItem?.sources
+                        val statesItem = titlesCardStates.find { it.id == item.id }
+                        val isExpanded = statesItem?.expanded ?: false
+                        val pagerState = rememberPagerState(
+                            initialPage = statesItem?.currentPage ?: 0,
+                            initialPageOffsetFraction = 0f,
+                            pageCount = { 2 }
+                        )
+                        val sources = statesItem?.sources
 
-                    val isPartiallyObscured by remember {
-                        derivedStateOf {
-                            val firstIndex = lazyGridState.firstVisibleItemIndex
-                            val firstOffset = lazyGridState.firstVisibleItemScrollOffset
-                            itemGlobalIndex == firstIndex && firstOffset > 0
-                        }
-                    }
-
-                    ExpandableContainer(
-                        visible = groupStates.find { it.group == date }?.expanded ?: true
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(IntrinsicSize.Min),
-                        ) {
-                            if (!innerTime) {
-                                TimelineMarker(
-                                    time = item.eventTime,
-                                    isFirst = isFirst,
-                                    isLast = isLast,
-                                    isRead = item.isRead,
-                                    isPinned = item.isPinned
-                                )
+                        val isPartiallyObscured by remember {
+                            derivedStateOf {
+                                val firstIndex = lazyGridState.firstVisibleItemIndex
+                                val firstOffset = lazyGridState.firstVisibleItemScrollOffset
+                                itemGlobalIndex == firstIndex && firstOffset > 0
                             }
+                        }
 
-                            Box(modifier = Modifier.weight(1f)) {
-                                val imagePagerState = rememberPagerState(
-                                    initialPage = statesItem?.currentImage ?: 0,
-                                    pageCount = { dynamicMediaUrls[item.id]?.size ?: 0 }
-                                )
-                                val scrollState = rememberScrollState()
-                                val clickedImageIndex = if (statesItem?.fullscreenImage == true) statesItem.currentImage else null
-
-                                TitlesCard(
-                                    title = item,
-                                    modifier = Modifier.padding(vertical = verticalArrangement),
-                                    isExpanded = isExpanded,
-                                    pagerState = pagerState,
-                                    onToggleExpanded = {
-                                        onToggleExpanded(item.id)
-                                        markTitleAsRead(item.id, true)
-                                    },
-                                    rememberPage = { page -> rememberCardPage(item.id, page) },
-                                    noTime = !innerTime,
-                                    showSnippet = showSnippets,
-                                    onBanTheme = onBanTheme,
-                                    sources = sources,
-                                    changeSourceState = changeSourceState,
-                                    backgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    expandable = lastTitlesUpdateExists(),
-                                    markAsUnread = {
-                                        onToggleExpanded(item.id)
-                                        markTitleAsRead(item.id, false)
-                                    },
-                                    markAsPinned = { isPinned ->
-                                        markTitleAsPinned(item.id, isPinned)
-                                    },
-                                    onSwitchStoryline = onSwitchStoryline,
-                                    onLoadMediaUrls = { loadDynamicMediaUrls(item.id) },
-                                    dynamicMediaUrls = dynamicMediaUrls[item.id],
-                                    onImageChanged = { setCurrentTitleImage(item.id, it) },
-                                    titleSorting = titleSorting,
-                                    sanitizeCopiedText = copyPlainText,
-                                    imagePagerState = imagePagerState,
-                                    scrollState = scrollState,
-                                    clickedImageIndex = clickedImageIndex,
-                                    onImageClicked = { flag ->
-                                        setFullscreenView(item.id, flag)
-                                    },
-                                    setShowMedia = setShowMedia
-                                )
-
-                                if (isPartiallyObscured) {
-                                    Box(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null,
-                                                onClick = { }
-                                            )
+                        ExpandableContainer(
+                            visible = groupStates.find { it.group == date }?.expanded ?: true
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min),
+                            ) {
+                                if (!innerTime) {
+                                    TimelineMarker(
+                                        time = item.eventTime,
+                                        isFirst = isFirst,
+                                        isLast = isLast,
+                                        isRead = item.isRead,
+                                        isPinned = item.isPinned
                                     )
+                                }
+
+                                Box(modifier = Modifier.weight(1f)) {
+                                    val scrollState = rememberScrollState()
+                                    val currentImg = mediaPages[item.id] ?: statesItem?.currentImage ?: 0
+                                    val clickedImageIndex = fullscreenMediaState
+                                        ?.takeIf { it.titleId == item.id }
+                                        ?.currentPage
+
+                                    TitlesCard(
+                                        title = item,
+                                        modifier = Modifier.padding(vertical = verticalArrangement),
+                                        isExpanded = isExpanded,
+                                        pagerState = pagerState,
+                                        onToggleExpanded = {
+                                            onToggleExpanded(item.id)
+                                            markTitleAsRead(item.id, true)
+                                        },
+                                        rememberPage = { page -> rememberCardPage(item.id, page) },
+                                        noTime = !innerTime,
+                                        showSnippet = showSnippets,
+                                        onBanTheme = onBanTheme,
+                                        sources = sources,
+                                        changeSourceState = changeSourceState,
+                                        backgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        expandable = lastTitlesUpdateExists(),
+                                        markAsUnread = {
+                                            onToggleExpanded(item.id)
+                                            markTitleAsRead(item.id, false)
+                                        },
+                                        markAsPinned = { isPinned ->
+                                            markTitleAsPinned(item.id, isPinned)
+                                        },
+                                        onSwitchStoryline = onSwitchStoryline,
+                                        onLoadMediaUrls = { loadDynamicMediaUrls(item.id) },
+                                        dynamicMediaUrls = dynamicMediaUrls[item.id],
+                                        currentImage = currentImg,
+                                        onImageChanged = { setCurrentTitleImage(item.id, it) },
+                                        titleSorting = titleSorting,
+                                        sanitizeCopiedText = copyPlainText,
+                                        scrollState = scrollState,
+                                        clickedImageIndex = clickedImageIndex,
+                                        onImageClicked = { page ->
+                                            onOpenFullscreenMedia(item.id, page)
+                                        },
+                                        onMediaItemBoundsChanged = { pageIndex, bounds ->
+                                            onUpdateMediaItemBounds(item.id, pageIndex, bounds)
+                                        },
+                                        onMediaContainerBoundsChanged = { bounds ->
+                                            onUpdateMediaContainerBounds(item.id, bounds)
+                                        }
+                                    )
+
+                                    if (isPartiallyObscured) {
+                                        Box(
+                                            modifier = Modifier
+                                                .matchParentSize()
+                                                .clickable(
+                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    indication = null,
+                                                    onClick = { }
+                                                )
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
                     globalIndex += regularTitles.size
 
@@ -628,7 +653,9 @@ fun TitlesGrid(
                                     titlesCardStates = titlesCardStates,
                                     dynamicMediaUrls = dynamicMediaUrls,
                                     carouselState = carouselState,
-                                    cardImagePages = blitzImagePages,
+                                    cardImagePages = mediaPages,
+                                    fullscreenTitleId = fullscreenMediaState?.titleId,
+                                    fullscreenPage = fullscreenMediaState?.currentPage,
                                     onToggleExpanded = { clickedTitle, bounds, dateStr ->
                                         expandedBlitzData = ExpandedBlitzData(
                                             title = clickedTitle,
@@ -639,9 +666,15 @@ fun TitlesGrid(
                                     onTogglePin = { id, isPinned -> markTitleAsPinned(id, isPinned) },
                                     onLoadMediaUrls = { id -> loadDynamicMediaUrls(id) },
                                     onImageChanged = { id, page -> setCurrentTitleImage(id, page) },
-                                    onImageClicked = { id, flag -> setFullscreenView(id, flag) },
-                                    setShowMedia = setShowMedia,
+                                    onImageClicked = { id, page -> onOpenFullscreenMedia(id, page) },
+                                    onMediaItemBoundsChanged = { id, pageIndex, bounds ->
+                                        onUpdateMediaItemBounds(id, pageIndex, bounds)
+                                    },
+                                    onMediaContainerBoundsChanged = { id, bounds ->
+                                        onUpdateMediaContainerBounds(id, bounds)
+                                    },
                                     markTitleAsRead = markTitleAsRead,
+                                    onBanTheme = onBanTheme,
                                     sanitizeCopiedText = copyPlainText
                                 )
                             }
@@ -674,7 +707,6 @@ fun TitlesGrid(
                 val titleId = title.id
                 val blitzTitle = groupedItems.values.flatten().find { it.id == titleId } ?: expandedBlitzData!!.title
                 val statesItem = titlesCardStates.find { it.id == titleId }
-                val mediaList = dynamicMediaUrls[titleId]?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() } ?: emptyList()
 
                 val clipboardManager = LocalClipboardManager.current
                 val haptics = LocalHapticFeedback.current
@@ -694,12 +726,10 @@ fun TitlesGrid(
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
 
-                val currentImg = blitzImagePages[titleId] ?: statesItem?.currentImage ?: 0
-                val overlayImagePagerState = rememberPagerState(
-                    initialPage = currentImg,
-                    pageCount = { mediaList.size }
-                )
-                val overlayClickedImageIndex = if (statesItem?.fullscreenImage == true) currentImg else null
+                val currentImg = mediaPages[titleId] ?: statesItem?.currentImage ?: 0
+                val overlayClickedImageIndex = fullscreenMediaState
+                    ?.takeIf { it.titleId == titleId }
+                    ?.currentPage
 
                 RootViewOverlay {
                     BlitzCardSourceExpansionOverlay(
@@ -713,14 +743,46 @@ fun TitlesGrid(
                         onLongClick = onCopyAction,
                         onTogglePin = { isPinned -> markTitleAsPinned(titleId, isPinned) },
                         dynamicMediaUrls = dynamicMediaUrls[titleId],
-                        imagePagerState = overlayImagePagerState,
+                        currentImage = currentImg,
                         clickedImageIndex = overlayClickedImageIndex,
                         onImageChanged = { setCurrentTitleImage(titleId, it) },
-                        onImageClicked = { setFullscreenView(titleId, it) },
-                        setShowMedia = setShowMedia,
+                        onImageClicked = { page -> onOpenFullscreenMedia(titleId, page) },
+                        onMediaItemBoundsChanged = { pageIndex, bounds ->
+                            onUpdateMediaItemBounds(titleId, pageIndex, bounds)
+                        },
+                        onMediaContainerBoundsChanged = { bounds ->
+                            onUpdateMediaContainerBounds(titleId, bounds)
+                        },
                         onBanTheme = onBanTheme
                     )
                 }
+            }
+
+            fullscreenMediaState?.let { activeFullscreen ->
+                val activeTitleMedia = remember(dynamicMediaUrls, activeFullscreen.titleId) {
+                    dynamicMediaUrls[activeFullscreen.titleId]
+                        ?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() }
+                        .orEmpty()
+                }
+                val activeImageBounds = remember(mediaItemBoundsMap, activeFullscreen.titleId) {
+                    mediaItemBoundsMap.entries
+                        .filter { it.key.first == activeFullscreen.titleId }
+                        .associate { it.key.second to it.value }
+                }
+
+                FullScreenImageViewer(
+                    activeTitleId = activeFullscreen.titleId,
+                    initialPage = activeFullscreen.currentPage,
+                    hasOpened = activeFullscreen.hasOpened,
+                    dynamicMediaUrls = activeTitleMedia,
+                    imageBoundsMap = activeImageBounds,
+                    videoPlayerController = videoPlayerController,
+                    onOpened = onMarkFullscreenMediaOpened,
+                    onClose = onCloseFullscreenMedia,
+                    onPageChanged = onUpdateFullscreenMediaPage,
+                    setShowImages = setShowMedia,
+                    fallbackBounds = mediaContainerBoundsMap[activeFullscreen.titleId]
+                )
             }
         }
     }

@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -56,12 +57,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -69,19 +70,25 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
@@ -89,14 +96,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
@@ -106,41 +116,31 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.rds.mews.R
 import com.rds.mews.core.text.SnippetExtractor
+import com.rds.mews.core.text.TextSanitizer
 import com.rds.mews.localcore.ArrowPosition
 import com.rds.mews.localcore.IconButtonInputs
+import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.localcore.TextButtonInputs
 import com.rds.mews.localcore.Title
 import com.rds.mews.localcore.TitleSorting
 import com.rds.mews.localcore.getFormattedTimeUnix
-import com.rds.mews.localcore.MediaWithSource
-import com.rds.mews.core.text.TextSanitizer
 import com.rds.mews.ui.custom_elements.AnimatedSegmentedControl
 import com.rds.mews.ui.custom_elements.CustomDropdown
 import com.rds.mews.ui.custom_elements.CustomIconButton
 import com.rds.mews.ui.custom_elements.CustomTextButton
 import com.rds.mews.ui.custom_elements.ExpandableContainer
 import com.rds.mews.ui.custom_elements.customHeader
-import com.rds.mews.ui.theme.Shapes
-import dev.jeziellago.compose.markdowntext.MarkdownText
-import kotlinx.coroutines.launch
-import kotlin.math.min
-import kotlin.math.roundToInt
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import com.rds.mews.ui.custom_elements.image_viewer.DynamicPagerIndicator
-import com.rds.mews.ui.custom_elements.image_viewer.FullScreenImageViewer
 import com.rds.mews.ui.custom_elements.image_viewer.RootViewOverlay
 import com.rds.mews.ui.custom_elements.image_viewer.VideoThumbnailFetcher
 import com.rds.mews.ui.custom_elements.image_viewer.isVideoUrl
+import com.rds.mews.ui.theme.Shapes
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
@@ -163,13 +163,14 @@ fun TitlesCard(
     markAsPinned: (Boolean) -> Unit,
     dynamicMediaUrls: List<MediaWithSource>? = null,
     onLoadMediaUrls: () -> Unit = {},
+    currentImage: Int = 0,
     onImageChanged: (Int) -> Unit,
     sanitizeCopiedText: Boolean = false,
-    imagePagerState: PagerState,
     scrollState: ScrollState,
     clickedImageIndex: Int?,
-    onImageClicked: (Boolean) -> Unit,
-    setShowMedia: (Long, Boolean) -> Unit,
+    onImageClicked: (Int) -> Unit,
+    onMediaItemBoundsChanged: (Int, Rect) -> Unit = { _, _ -> },
+    onMediaContainerBoundsChanged: (Rect) -> Unit = {},
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier
 ) {
     var collapsedBounds by remember { mutableStateOf<Rect?>(null) }
@@ -177,7 +178,9 @@ fun TitlesCard(
     val expansionAnim = remember { Animatable(if (isExpanded) 1f else 0f) }
     val isRead = title.isRead
 
-    val dynamicMediaUrls = dynamicMediaUrls?.filter { it.message?.source?.showMedia ?: false }
+    val filteredMediaUrls = remember(dynamicMediaUrls) {
+        dynamicMediaUrls?.filter { (it.message?.source?.showMedia ?: false) && it.mediaLink.isNotBlank() }
+    }
 
     LaunchedEffect(isExpanded, expansionAnim.value == 0f) {
         if (!isExpanded && expansionAnim.value == 0f) {
@@ -256,6 +259,7 @@ fun TitlesCard(
                 onBanTheme = onBanTheme,
                 onMarkAsUnread = markAsUnread,
                 onMarkAsPinned = markAsPinned,
+                currentImage = currentImage,
                 onImageChanged = onImageChanged,
                 pagerState = pagerState,
                 rememberPage = rememberPage,
@@ -263,14 +267,14 @@ fun TitlesCard(
                 showSnippet = showSnippet,
                 isRead = isRead,
                 backgroundColor = backgroundColor,
-                dynamicMediaUrls = dynamicMediaUrls,
+                dynamicMediaUrls = filteredMediaUrls,
                 onLoadMediaUrls = onLoadMediaUrls,
                 sanitizeCopiedText = sanitizeCopiedText,
-                imagePagerState = imagePagerState,
                 scrollState = scrollState,
                 clickedImageIndex = clickedImageIndex,
                 onImageClicked = onImageClicked,
-                setShowMedia = setShowMedia
+                onMediaItemBoundsChanged = onMediaItemBoundsChanged,
+                onMediaContainerBoundsChanged = onMediaContainerBoundsChanged
             )
         }
     }
@@ -327,13 +331,14 @@ private fun HeroExpansionContent(
     backgroundColor: Color,
     dynamicMediaUrls: List<MediaWithSource>?,
     onLoadMediaUrls: () -> Unit,
+    currentImage: Int,
     onImageChanged: (Int) -> Unit,
     sanitizeCopiedText: Boolean,
-    imagePagerState: PagerState,
     scrollState: ScrollState,
     clickedImageIndex: Int?,
-    setShowMedia: (Long, Boolean) -> Unit,
-    onImageClicked: (Boolean) -> Unit
+    onImageClicked: (Int) -> Unit,
+    onMediaItemBoundsChanged: (Int, Rect) -> Unit,
+    onMediaContainerBoundsChanged: (Rect) -> Unit
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -343,7 +348,7 @@ private fun HeroExpansionContent(
     val verticalMarginPx = with(density) { verticalMarginDp.toPx() }
     val clampedProgress = progress.coerceIn(0f, 1f)
 
-    BackHandler { onDismissRequest() }
+    BackHandler(enabled = clickedImageIndex == null) { onDismissRequest() }
 
     val displayMetrics = context.resources.displayMetrics
     val screenWidthPx = displayMetrics.widthPixels.toFloat()
@@ -464,13 +469,14 @@ private fun HeroExpansionContent(
                     dynamicMediaUrls = dynamicMediaUrls,
                     onLoadMediaUrls = onLoadMediaUrls,
                     sanitizeCopiedText = sanitizeCopiedText,
-                    imagePagerState = imagePagerState,
                     scrollState = scrollState,
+                    currentImage = currentImage,
                     onImageChanged = onImageChanged,
                     clickedImageIndex = clickedImageIndex,
                     onImageClicked = onImageClicked,
                     collapsedBounds = collapsedBounds,
-                    setShowMedia = setShowMedia
+                    onMediaItemBoundsChanged = onMediaItemBoundsChanged,
+                    onMediaContainerBoundsChanged = onMediaContainerBoundsChanged
                 )
             }
         }
@@ -639,14 +645,15 @@ private fun ExpandedCardContent(
     headerStartColor: Color,
     dynamicMediaUrls: List<MediaWithSource>?,
     onLoadMediaUrls: () -> Unit,
+    currentImage: Int,
     onImageChanged: (Int) -> Unit,
     sanitizeCopiedText: Boolean,
-    imagePagerState: PagerState,
     scrollState: ScrollState,
     collapsedBounds: Rect,
     clickedImageIndex: Int?,
-    setShowMedia: (Long, Boolean) -> Unit,
-    onImageClicked: (Boolean) -> Unit
+    onImageClicked: (Int) -> Unit,
+    onMediaItemBoundsChanged: (Int, Rect) -> Unit,
+    onMediaContainerBoundsChanged: (Rect) -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -655,9 +662,6 @@ private fun ExpandedCardContent(
     val config = LocalConfiguration.current
     val handler = LocalUriHandler.current
     val haptics = LocalHapticFeedback.current
-
-    val imageBoundsMap = remember { mutableStateMapOf<Int, Rect>() }
-    var mediaContainerBounds by remember { mutableStateOf<Rect?>(null) }
 
     val shouldAnimate = remember(isRead) { !isRead }
 
@@ -671,12 +675,50 @@ private fun ExpandedCardContent(
     var pullOffset by remember { mutableFloatStateOf(0f) }
     var hasTriggeredHaptic by remember { mutableStateOf(false) }
 
+    val mediaCount = dynamicMediaUrls?.size ?: 0
+    val targetImagePage = if (mediaCount > 0) currentImage.coerceIn(0, mediaCount - 1) else 0
+    val imagePagerState = rememberPagerState(
+        initialPage = targetImagePage,
+        pageCount = { mediaCount }
+    )
+    val latestTargetImagePage by rememberUpdatedState(targetImagePage)
+    var isProgrammaticImageScroll by remember(title.id) { mutableStateOf(false) }
+    var wasUserImageScrolling by remember(title.id) { mutableStateOf(false) }
+
     LaunchedEffect(title.id, sources) {
         onLoadMediaUrls()
     }
 
-    LaunchedEffect(imagePagerState.currentPage) {
-        onImageChanged(imagePagerState.currentPage)
+    LaunchedEffect(targetImagePage, mediaCount) {
+        if (mediaCount > 0 && !imagePagerState.isScrollInProgress && imagePagerState.currentPage != targetImagePage) {
+            isProgrammaticImageScroll = true
+            try {
+                imagePagerState.scrollToPage(targetImagePage)
+            } finally {
+                isProgrammaticImageScroll = false
+            }
+        }
+    }
+
+    LaunchedEffect(imagePagerState, mediaCount) {
+        if (mediaCount <= 0) {
+            wasUserImageScrolling = false
+            return@LaunchedEffect
+        }
+        snapshotFlow { imagePagerState.isScrollInProgress to imagePagerState.currentPage }
+            .collect { (scrolling, page) ->
+                if (scrolling && !isProgrammaticImageScroll) {
+                    wasUserImageScrolling = true
+                } else if (!scrolling && wasUserImageScrolling) {
+                    wasUserImageScrolling = false
+                    if (!isProgrammaticImageScroll) {
+                        val safePage = page.coerceIn(0, mediaCount - 1)
+                        if (safePage != latestTargetImagePage) {
+                            onImageChanged(safePage)
+                        }
+                    }
+                }
+            }
     }
 
     val pullThresholdPx = with(density) { 90.dp.toPx() }
@@ -787,7 +829,7 @@ private fun ExpandedCardContent(
     val nudgeOffset = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
-        if (shouldAnimate &&sources?.isNotEmpty() == true) {
+        if (shouldAnimate && sources?.isNotEmpty() == true) {
             delay(500.milliseconds)
             nudgeOffset.animateTo(
                 targetValue = if (pagerState.targetPage == 0) -36f else 36f,
@@ -909,7 +951,6 @@ private fun ExpandedCardContent(
                 state = pagerState,
                 userScrollEnabled = sources?.isNotEmpty() ?: false,
                 verticalAlignment = Alignment.Top,
-//                beyondViewportPageCount = 1,
                 modifier = Modifier
                     .requiredWidth(targetWidth)
                     .fillMaxHeight()
@@ -1027,7 +1068,7 @@ private fun ExpandedCardContent(
                                             .fillMaxWidth()
                                             .height(250.dp)
                                             .onGloballyPositioned { coordinates ->
-                                                mediaContainerBounds = coordinates.boundsInWindow()
+                                                onMediaContainerBoundsChanged(coordinates.boundsInWindow())
                                             }
                                             .clip(Shapes.large)
                                     ) {
@@ -1035,7 +1076,8 @@ private fun ExpandedCardContent(
                                             state = imagePagerState,
                                             modifier = Modifier.fillMaxSize(),
                                         ) { pageIndex ->
-                                            val mediaUrl = dynamicMediaUrls[pageIndex].mediaLink
+                                            val mediaItem = dynamicMediaUrls.getOrNull(pageIndex) ?: return@HorizontalPager
+                                            val mediaUrl = mediaItem.mediaLink
                                             val isVideo = remember(mediaUrl) { isVideoUrl(mediaUrl) }
                                             val isImageFullOpened = clickedImageIndex == pageIndex
                                             var retryCount by remember(mediaUrl) { mutableStateOf(0) }
@@ -1084,11 +1126,10 @@ private fun ExpandedCardContent(
                                                     .fillMaxSize()
                                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                                                     .onGloballyPositioned { coordinates ->
-                                                        imageBoundsMap[pageIndex] =
-                                                            coordinates.boundsInWindow()
+                                                        onMediaItemBoundsChanged(pageIndex, coordinates.boundsInWindow())
                                                     }
                                                     .clickable(enabled = !isImageFullOpened && (!isLoadError || isVideo)) {
-                                                        onImageClicked(true)
+                                                        onImageClicked(pageIndex)
                                                     },
                                                 contentAlignment = Alignment.Center
                                             ) {
@@ -1164,22 +1205,6 @@ private fun ExpandedCardContent(
                                             modifier = Modifier
                                                 .align(Alignment.BottomCenter)
                                                 .padding(bottom = 8.dp)
-                                        )
-                                    }
-
-                                    if (clickedImageIndex != null) {
-                                        FullScreenImageViewer(
-                                            initialPage = clickedImageIndex,
-                                            dynamicMediaUrls = dynamicMediaUrls,
-                                            imageBoundsMap = imageBoundsMap.toMap(),
-                                            onClose = { onImageClicked(false) },
-                                            onPageChanged = { page ->
-                                                coroutineScope.launch {
-                                                    imagePagerState.scrollToPage(page)
-                                                }
-                                            },
-                                            setShowImages = setShowMedia,
-                                            fallbackBounds = mediaContainerBounds
                                         )
                                     }
                                 }
