@@ -142,6 +142,9 @@ interface MessageDao {
         }
     }
 
+    @Query("UPDATE messages SET media_urls = :mediaUrls WHERE id = :id")
+    suspend fun updateMediaUrls(id: Long, mediaUrls: List<String>)
+
     @Update
     suspend fun updateAllInternal(messages: List<MessageEntity>)
 

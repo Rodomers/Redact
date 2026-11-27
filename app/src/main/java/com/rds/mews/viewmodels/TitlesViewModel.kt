@@ -21,7 +21,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.rds.mews.MainActivity
 import com.rds.mews.R
-import com.rds.mews.core.TelegramRssClient
+import com.rds.mews.core.parser.MediaUrlExtractor
 import com.rds.mews.localcore.MediaWithSource
 import com.rds.mews.localcore.SourceMessages
 import com.rds.mews.localcore.SummarizationResult
@@ -518,65 +518,49 @@ class TitlesViewModel(
         val targetState = _titleCardStates.value.find { it.id == titleId }
         val sources = targetState?.sources
         val allMessages = sources?.flatMap { it.messages } ?: emptyList()
-        val telegramLinks = allMessages.filter { it.link.contains("t.me") }
 
         val currentMedia = _dynamicMediaUrls.value[titleId]
         val alreadyLoaded = currentMedia != null && !_failedMediaTitleIds.value.contains(titleId)
 
-        if (!fromZero && alreadyLoaded) {
-            val hasScrapedTelegram = currentMedia.any { it.message?.link?.contains("t.me") == true }
-            if (telegramLinks.isEmpty() || hasScrapedTelegram) {
-                return
-            }
-        }
-
         val mediaObjects = targetTitle.mediaUrls
-
         val validOriginals = mediaObjects.map { media ->
             MediaWithSource(
-                mediaLink = media.mediaLink.substringBefore("?"),
+                mediaLink = MediaUrlExtractor.resolveMediaUrl(media.message?.link.orEmpty(), media.mediaLink),
                 message = media.message
             )
-        }.distinctBy { it.mediaLink }
+        }.filter { it.mediaLink.isNotBlank() }.distinctBy { it.mediaLink }
 
-        if (telegramLinks.isEmpty()) {
+        if (!fromZero && alreadyLoaded) {
+            return
+        }
+
+        val messagesNeedingScrape = allMessages.filter { msg ->
+            validOriginals.none { it.message?.id == msg.id }
+        }
+
+        if (messagesNeedingScrape.isEmpty()) {
             _dynamicMediaUrls.update { it + (titleId to validOriginals) }
             _failedMediaTitleIds.update { it - titleId }
             return
         }
 
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                val scraper = TelegramRssClient(repository.proxyEnabled.value)
-                var hasScrapeErrors = false
-
-                telegramLinks.forEach { message ->
-                    try {
-                        val scrapedUrls = scraper.scrapeEmbedMedia(message.link)
-                            .map { MediaWithSource(it, message) }
-
-                        if (scrapedUrls.isNotEmpty()) {
-                            _dynamicMediaUrls.update { currentMap ->
-                                val existingList = currentMap[titleId] ?: validOriginals
-                                val updatedList = (existingList + scrapedUrls).distinctBy { it.mediaLink }
-                                currentMap + (titleId to updatedList)
-                            }
-                        } else if (!_dynamicMediaUrls.value.containsKey(titleId)) {
-                            _dynamicMediaUrls.update { it + (titleId to validOriginals) }
-                        }
-                    } catch (_: Exception) {
-                        hasScrapeErrors = true
-                        if (!_dynamicMediaUrls.value.containsKey(titleId)) {
-                            _dynamicMediaUrls.update { it + (titleId to validOriginals) }
-                        }
+            try {
+                val scraped = repository.fetchAndCacheMediaForMessages(messagesNeedingScrape)
+                val combined = (validOriginals + scraped).distinctBy { it.mediaLink }
+                _dynamicMediaUrls.update { currentMap ->
+                    currentMap + (titleId to combined)
+                }
+                _failedMediaTitleIds.update { it - titleId }
+            } catch (_: Exception) {
+                _dynamicMediaUrls.update { currentMap ->
+                    if (!currentMap.containsKey(titleId)) {
+                        currentMap + (titleId to validOriginals)
+                    } else {
+                        currentMap
                     }
                 }
-
-                if (hasScrapeErrors) {
-                    _failedMediaTitleIds.update { it + titleId }
-                } else {
-                    _failedMediaTitleIds.update { it - titleId }
-                }
+                _failedMediaTitleIds.update { it + titleId }
             }
         }
     }

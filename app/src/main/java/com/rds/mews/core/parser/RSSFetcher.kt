@@ -78,18 +78,24 @@ class RssFetcher(
                         }
 
                         var text = entry.content.trim()
+                        val mediaUrls = LinkedHashSet<String>()
 
-                        if (text.length < 300) {
-                            val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), entry.url, httpClient)
-                            if (!fullText.isNullOrBlank()) text = "${entry.title}\n\n$fullText".trim()
+                        if (entry.content.isNotBlank()) {
+                            mediaUrls.addAll(MediaUrlExtractor.extractMediaFromHtml(entry.content, entry.url))
                         }
 
-                        val mediaUrls = mutableSetOf<String>()
-                        if (entry.content.isNotBlank()) {
-                            val htmlDoc = Jsoup.parse(entry.content)
-                            htmlDoc.select("img, video").forEach { el ->
-                                val src = el.attr("src")
-                                if (src.isNotBlank()) mediaUrls.add(src)
+                        val needFullText = text.length < 300
+                        val needMedia = mediaUrls.isEmpty()
+
+                        if (needFullText || needMedia) {
+                            val pageDetails = HtmlExtractorFallback.fetchPageDetails(MewsRepository.getAppContext(), entry.url, httpClient)
+                            if (pageDetails != null) {
+                                if (needFullText && pageDetails.text.isNotBlank()) {
+                                    text = "${entry.title}\n\n${pageDetails.text}".trim()
+                                }
+                                if (needMedia && pageDetails.mediaUrls.isNotEmpty()) {
+                                    mediaUrls.addAll(pageDetails.mediaUrls)
+                                }
                             }
                         }
 
@@ -126,7 +132,7 @@ class RssFetcher(
                     val response = httpClient.request("GET", fetchUrl, null, emptyMap())
                     if (response.status == 200 && response.body.isNotBlank()) {
                         val doc = Jsoup.parse(response.body, fetchUrl, Parser.xmlParser())
-                        val items = parseRssItems(doc)
+                        val items = parseRssItems(doc, fetchUrl)
 
                         for (item in items) {
                             val time = item.pubDateMillis ?: System.currentTimeMillis()
@@ -139,13 +145,24 @@ class RssFetcher(
                             }
 
                             var text = buildMessageText(item)
+                            val mediaUrls = item.mediaUrls.toMutableSet()
 
-                            if (text.length < 300) {
-                                val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), link, httpClient)
-                                if (!fullText.isNullOrBlank()) text = "${item.title ?: ""}\n\n$fullText".trim()
+                            val needFullText = text.length < 300
+                            val needMedia = mediaUrls.isEmpty()
+
+                            if (needFullText || needMedia) {
+                                val pageDetails = HtmlExtractorFallback.fetchPageDetails(MewsRepository.getAppContext(), link, httpClient)
+                                if (pageDetails != null) {
+                                    if (needFullText && pageDetails.text.isNotBlank()) {
+                                        text = "${item.title ?: ""}\n\n${pageDetails.text}".trim()
+                                    }
+                                    if (needMedia && pageDetails.mediaUrls.isNotEmpty()) {
+                                        mediaUrls.addAll(pageDetails.mediaUrls)
+                                    }
+                                }
                             }
 
-                            MewsRepository.addMessage(source.id, time, link, text, mediaUrls = item.mediaUrls)
+                            MewsRepository.addMessage(source.id, time, link, text, mediaUrls = mediaUrls.toList())
                             itemsAdded++
                         }
 
@@ -192,7 +209,7 @@ class RssFetcher(
                             val response = httpClient.request("GET", source.feedUrl, null, emptyMap())
                             if (response.status == 200 && response.body.isNotBlank()) {
                                 val doc = Jsoup.parse(response.body, source.feedUrl, Parser.xmlParser())
-                                val items = parseRssItems(doc)
+                                val items = parseRssItems(doc, source.feedUrl)
                                 for (item in items) {
                                     val time = item.pubDateMillis ?: System.currentTimeMillis()
                                     if (time > maxPubTime) maxPubTime = time
@@ -204,12 +221,24 @@ class RssFetcher(
                                     }
 
                                     var text = buildMessageText(item)
-                                    if (text.length < 300) {
-                                        val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), link, httpClient)
-                                        if (!fullText.isNullOrBlank()) text = "${item.title ?: ""}\n\n$fullText".trim()
+                                    val mediaUrls = item.mediaUrls.toMutableSet()
+
+                                    val needFullText = text.length < 300
+                                    val needMedia = mediaUrls.isEmpty()
+
+                                    if (needFullText || needMedia) {
+                                        val pageDetails = HtmlExtractorFallback.fetchPageDetails(MewsRepository.getAppContext(), link, httpClient)
+                                        if (pageDetails != null) {
+                                            if (needFullText && pageDetails.text.isNotBlank()) {
+                                                text = "${item.title ?: ""}\n\n${pageDetails.text}".trim()
+                                            }
+                                            if (needMedia && pageDetails.mediaUrls.isNotEmpty()) {
+                                                mediaUrls.addAll(pageDetails.mediaUrls)
+                                            }
+                                        }
                                     }
 
-                                    MewsRepository.addMessage(source.id, time, link, text, mediaUrls = item.mediaUrls)
+                                    MewsRepository.addMessage(source.id, time, link, text, mediaUrls = mediaUrls.toList())
                                     itemsAdded++
                                 }
 
@@ -271,7 +300,7 @@ class RssFetcher(
 
             if (doc.selectFirst("rss, feed, channel") == null) throw RuntimeException("Invalid feed format")
 
-            val rssItems = parseRssItems(doc)
+            val rssItems = parseRssItems(doc, fetchUrl)
 
             val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
@@ -285,9 +314,9 @@ class RssFetcher(
 
                 var text = buildMessageText(item)
                 if (text.length < 300) {
-                    val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), link, httpClient)
-                    if (!fullText.isNullOrBlank()) {
-                        text = "${item.title ?: ""}\n\n$fullText".trim()
+                    val pageDetails = HtmlExtractorFallback.fetchPageDetails(MewsRepository.getAppContext(), link, httpClient)
+                    if (pageDetails?.text?.isNotBlank() == true) {
+                        text = "${item.title ?: ""}\n\n${pageDetails.text}".trim()
                     }
                 }
 
@@ -327,37 +356,41 @@ class RssFetcher(
         val mediaUrls: List<String>
     )
 
-    private fun parseRssItems(doc: Document): List<RssItem> {
-        val nodeList = doc.select("item")
+    private fun parseRssItems(doc: Document, baseFeedUrl: String = ""): List<RssItem> {
+        val nodeList = doc.select("item, entry")
         val result = mutableListOf<RssItem>()
         for (node in nodeList) {
             val title = elementText(node, "title")
             val link = elementText(node, "link") ?: elementText(node, "guid")
-            val description = elementText(node, "description")
-            val pubDateStr = elementText(node, "pubDate")
+            val description = elementText(node, "description") ?: elementText(node, "content") ?: elementText(node, "summary")
+            val pubDateStr = elementText(node, "pubDate") ?: elementText(node, "published") ?: elementText(node, "updated")
             val pubDateMillis = tryParseDate(pubDateStr)
 
-            val mediaUrls = mutableSetOf<String>()
+            val itemLink = if (!link.isNullOrBlank()) link else baseFeedUrl
+            val mediaUrls = LinkedHashSet<String>()
 
             val enclosures = node.select("enclosure")
             for (enclosure in enclosures) {
                 val type = enclosure.attr("type")
-                if (type.startsWith("image/") || type.startsWith("video/")) {
-                    val url = enclosure.attr("url")
-                    if (url.isNotBlank()) mediaUrls.add(url)
+                val url = enclosure.attr("url")
+                if (MediaUrlExtractor.isMediaEnclosure(type, url)) {
+                    val resolved = MediaUrlExtractor.resolveMediaUrl(itemLink, url)
+                    if (resolved.isNotBlank()) mediaUrls.add(resolved)
                 }
             }
 
             val mediaContents = node.getElementsByTag("media:content")
             for (mc in mediaContents) {
-                val url = mc.attr("url")
-                if (url.isNotBlank()) mediaUrls.add(url)
+                val url = mc.attr("url").ifBlank { mc.attr("src") }
+                val resolved = MediaUrlExtractor.resolveMediaUrl(itemLink, url)
+                if (resolved.isNotBlank()) mediaUrls.add(resolved)
             }
 
             val mediaThumbnails = node.getElementsByTag("media:thumbnail")
             for (mt in mediaThumbnails) {
-                val url = mt.attr("url")
-                if (url.isNotBlank()) mediaUrls.add(url)
+                val url = mt.attr("url").ifBlank { mt.attr("src") }
+                val resolved = MediaUrlExtractor.resolveMediaUrl(itemLink, url)
+                if (resolved.isNotBlank()) mediaUrls.add(resolved)
             }
 
             var contentEncoded: String? = null
@@ -368,12 +401,8 @@ class RssFetcher(
 
             val htmlTexts = listOfNotNull(description, contentEncoded).joinToString(" ")
             if (htmlTexts.isNotBlank()) {
-                val htmlDoc = Jsoup.parse(htmlTexts)
-                val mediaElements = htmlDoc.select("img, video, source")
-                for (el in mediaElements) {
-                    val src = el.attr("src")
-                    if (src.isNotBlank()) mediaUrls.add(src)
-                }
+                val extracted = MediaUrlExtractor.extractMediaFromHtml(htmlTexts, itemLink)
+                mediaUrls.addAll(extracted)
             }
 
             result += RssItem(title, link, description, pubDateMillis, mediaUrls.toList())
@@ -385,6 +414,8 @@ class RssFetcher(
         val nList = parent.select(tagName)
         if (nList.isNotEmpty()) {
             val node = nList[nList.lastIndex]
+            val href = node?.attr("href")
+            if (!href.isNullOrBlank()) return href.trim()
             val text = node?.text()
             if (!text.isNullOrBlank()) return text.trim()
         }
@@ -393,6 +424,8 @@ class RssFetcher(
             val nList2 = parent.select(after)
             if (nList2.isNotEmpty()) {
                 val node = nList2[nList2.lastIndex]
+                val href = node?.attr("href")
+                if (!href.isNullOrBlank()) return href.trim()
                 val text = node?.text()
                 if (!text.isNullOrBlank()) return text.trim()
             }
@@ -451,15 +484,20 @@ class RssFetcher(
 object HtmlExtractorFallback {
     private val meteredMutex = Mutex()
 
-    suspend fun fetchFullText(
+    data class ExtractedPage(
+        val text: String,
+        val mediaUrls: List<String> = emptyList()
+    )
+
+    suspend fun fetchPageDetails(
         context: Context,
         url: String,
         httpClient: SharedHttpClient.JdkClient
-    ): String? {
+    ): ExtractedPage? {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val isMetered = cm.isActiveNetworkMetered
 
-        suspend fun doFetch(): String? {
+        suspend fun doFetch(): ExtractedPage? {
             if (isMetered) delay(2000L.milliseconds)
 
             val headers = mapOf(
@@ -472,7 +510,7 @@ object HtmlExtractorFallback {
                 return null
             }
 
-            return extractCleanArticle(response.body)
+            return extractPageDetails(response.body, url)
         }
 
         return if (isMetered) {
@@ -482,15 +520,30 @@ object HtmlExtractorFallback {
         }
     }
 
-    fun extractCleanArticle(rawHtml: String): String {
-        val doc = Jsoup.parse(rawHtml)
+    suspend fun fetchFullText(
+        context: Context,
+        url: String,
+        httpClient: SharedHttpClient.JdkClient
+    ): String? {
+        return fetchPageDetails(context, url, httpClient)?.text
+    }
+
+    fun extractPageDetails(rawHtml: String, baseUrl: String): ExtractedPage {
+        val doc = Jsoup.parse(rawHtml, baseUrl)
+        val mediaUrls = MediaUrlExtractor.extractMediaFromHtml(rawHtml, baseUrl)
+
         doc.select("script, style, nav, footer, header, aside, iframe, noscript").remove()
         val contentElement = doc.selectFirst("article")
             ?: doc.selectFirst("main")
             ?: doc.selectFirst(".content, .post, .article")
             ?: doc.body()
 
-        return contentElement?.text()?.trim() ?: ""
+        val text = contentElement?.text()?.trim() ?: ""
+        return ExtractedPage(text = text, mediaUrls = mediaUrls)
+    }
+
+    fun extractCleanArticle(rawHtml: String): String {
+        return extractPageDetails(rawHtml, "").text
     }
 }
 

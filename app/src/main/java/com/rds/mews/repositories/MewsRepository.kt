@@ -1181,6 +1181,40 @@ object MewsRepository {
         }
     }
 
+    suspend fun fetchAndCacheMediaForMessages(messages: List<Message>): List<MediaWithSource> = withContext(Dispatchers.IO) {
+        val result = mutableListOf<MediaWithSource>()
+        val telegramLinks = messages.filter { it.link.contains("t.me") }
+        val websiteLinks = messages.filter { !it.link.contains("t.me") }
+
+        if (telegramLinks.isNotEmpty()) {
+            val scraper = com.rds.mews.core.TelegramRssClient(proxyEnabled.value)
+            telegramLinks.forEach { message ->
+                try {
+                    val scraped = scraper.scrapeEmbedMedia(message.link)
+                    if (scraped.isNotEmpty()) {
+                        scraped.forEach { url -> result.add(MediaWithSource(url, message)) }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        if (websiteLinks.isNotEmpty()) {
+            com.rds.mews.core.SharedHttpClient.createInstance(HUB_ADDRESS, SERVER_KEY, enableProxy = proxyEnabled.value).use { httpClient ->
+                websiteLinks.forEach { message ->
+                    try {
+                        val pageDetails = com.rds.mews.core.parser.HtmlExtractorFallback.fetchPageDetails(getAppContext(), message.link, httpClient)
+                        if (pageDetails != null && pageDetails.mediaUrls.isNotEmpty()) {
+                            messageDao.updateMediaUrls(message.id, pageDetails.mediaUrls)
+                            pageDetails.mediaUrls.forEach { url -> result.add(MediaWithSource(url, message)) }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+
+        result
+    }
+
     private fun formatWebsiteUrl(url: String): String {
         return if (!url.startsWith("http://") && !url.startsWith("https://")) {
             "https://$url"
