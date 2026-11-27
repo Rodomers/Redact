@@ -63,7 +63,7 @@ class TitlesUpdater() {
             MewsRepository.setUpdatingProgress(0.1f)
 
             val lastRssTime = MewsRepository.lastRssUpdate.first()
-            if (System.currentTimeMillis() - lastRssTime > 30*3600*1000L) {
+            if (System.currentTimeMillis() - lastRssTime > 30*60*1000L) {
                 MewsRepository.setUpdatingState(UpdatingState.PARSING)
                 fetcher.fetchAndStoreAll()
                 MewsRepository.setLastRssUpdate(System.currentTimeMillis())

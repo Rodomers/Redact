@@ -33,6 +33,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
@@ -316,90 +317,74 @@ class NewsSummarizer(private val llm: LLMClient) {
                 stateManager.updateState { it.copy(updatingState = UpdatingState.FILTERING) }
 
                 val normalizedTopics = extractedTopics.map { it.copy(weight = it.weight) }
-                val blitzTopics = normalizedTopics.filter { it.isBlitz }
-                val nonBlitzTopics = normalizedTopics.filter { !it.isBlitz }
                 val filterTopics = MewsRepository.filterTopics.first()
 
-                Log.d(TAG, "[FILTERING] Non-blitz count: ${nonBlitzTopics.size}, Blitz count: ${blitzTopics.size}")
+                Log.d(TAG, "[FILTERING] Total raw extracted topics: ${normalizedTopics.size}, SmartMerge filter enabled: $filterTopics")
 
                 val allRawIds = normalizedTopics.flatMap { it.ids.orEmpty() }.distinct()
-                val messageTimeMap = try {
+                val rawMessagesMap = try {
                     if (allRawIds.isNotEmpty()) {
-                        MewsRepository.getMessages(ids = allRawIds)?.associate { it.id to it.time } ?: emptyMap()
+                        MewsRepository.getMessages(ids = allRawIds)?.associateBy { it.id } ?: emptyMap()
                     } else emptyMap()
                 } catch (_: Exception) { emptyMap() }
 
+                val messageTimeMap = rawMessagesMap.mapValues { it.value.time }
+
                 coroutineScope {
-                    val smartBlitz = filterTopics && blitzTopics.isNotEmpty() && blitzTopics.size > 200
-
-                    val blitzDeferred = async(Dispatchers.Default) {
-                        if (smartBlitz) {
-                            try {
-                                Log.d(TAG, "[FILTERING] Starting LLM smart merge on raw blitz topics...")
-                                var result: List<Topics> = smartMergeTopics(blitzTopics, currentLanguage, bannedWords, maxTopics)
-                                var attempts = 0
-                                while (attempts < MAX_SUMMARIZATION_ATTEMPTS && result.size > maxTopics * 2) {
-                                    attempts++
-                                    result = smartMergeTopics(result, currentLanguage, bannedWords, maxTopics)
-                                }
-                                Log.d(TAG, "[FILTERING] LLM smart merge finished. Result size: ${result.size}. Applying final time-window algorithmic merge.")
-                                result = result.map { it.copy(isBlitz = true) }
-                                val finalReg = mergeInTimeWindows(
-                                    topics = result,
-                                    messageTimeMap = messageTimeMap
-                                )
-                                Log.d(TAG, "[FILTERING] Final merged blitz topics size: ${finalReg.size}")
-                                finalReg
-                            } catch (e: Exception) {
-                                Log.w(TAG, "[FILTERING] Smart merge failed, falling back to time-window algorithmic merge", e)
-                                mergeInTimeWindows(blitzTopics, messageTimeMap)
+                    val mergedTopics: List<Topics> = if (filterTopics && normalizedTopics.isNotEmpty()) {
+                        try {
+                            Log.d(TAG, "[FILTERING] Starting unified LLM smart merge on raw topics (${normalizedTopics.size})...")
+                            var result: List<Topics> = smartMergeTopics(normalizedTopics, currentLanguage, bannedWords, maxTopics)
+                            var attempts = 0
+                            while (attempts < MAX_SUMMARIZATION_ATTEMPTS && result.size > maxTopics * 2) {
+                                attempts++
+                                result = smartMergeTopics(result, currentLanguage, bannedWords, maxTopics)
                             }
-                        } else {
-                            Log.d(TAG, "[FILTERING] Filter disabled or no blitz topics. Applying time-window algorithmic merge directly.")
-                            mergeInTimeWindows(blitzTopics, messageTimeMap)
+                            Log.d(TAG, "[FILTERING] LLM smart merge finished. Result size: ${result.size}. Applying final time-window algorithmic merge.")
+                            val finalReg = mergeInTimeWindows(
+                                topics = result,
+                                messageTimeMap = messageTimeMap,
+                                enableCrossWindowMerge = true
+                            )
+                            Log.d(TAG, "[FILTERING] Final merged topics size: ${finalReg.size}")
+                            finalReg
+                        } catch (e: Exception) {
+                            Log.w(TAG, "[FILTERING] Smart merge failed, falling back to time-window algorithmic merge", e)
+                            mergeInTimeWindows(normalizedTopics, messageTimeMap, enableCrossWindowMerge = true)
+                        }
+                    } else {
+                        Log.d(TAG, "[FILTERING] Filter disabled or no topics. Applying time-window algorithmic merge directly.")
+                        mergeInTimeWindows(normalizedTopics, messageTimeMap, enableCrossWindowMerge = true)
+                    }
+
+                    val scoredTopics = calculateCompositeScores(mergedTopics, rawMessagesMap)
+
+                    val primaryTopics = scoredTopics.take(maxTopics).map { it.copy(isBlitz = false) }
+                    val remainingTopics = scoredTopics.drop(maxTopics)
+
+                    val targetBlitzQuota = (maxTopics * 1.5).roundToInt()
+                    val targetReserveQuota = (maxTopics * 0.5).roundToInt()
+
+                    val blitzList = mutableListOf<Topics>()
+                    val reserveList = mutableListOf<Topics>()
+
+                    for (topic in remainingTopics) {
+                        val topicMessages = topic.ids?.mapNotNull { rawMessagesMap[it] } ?: emptyList()
+                        val totalCharCount = topicMessages.sumOf { it.cleanText.length }
+
+                        val isShortTopic = totalCharCount <= 600 || (topicMessages.size == 1 && totalCharCount <= 1000)
+
+                        if (isShortTopic && blitzList.size < targetBlitzQuota) {
+                            blitzList.add(topic.copy(isBlitz = true))
+                        } else if (reserveList.size < targetReserveQuota) {
+                            reserveList.add(topic.copy(isBlitz = false))
+                        } else if (blitzList.size < targetBlitzQuota) {
+                            blitzList.add(topic.copy(isBlitz = true))
                         }
                     }
 
-                    val mergedTopicsDeferred = async(Dispatchers.Default) {
-                        if (filterTopics && nonBlitzTopics.isNotEmpty()) {
-                            try {
-                                if (smartBlitz) blitzDeferred.join()
-                                Log.d(TAG, "[FILTERING] Starting LLM smart merge on raw non-blitz topics...")
-                                var result: List<Topics> = smartMergeTopics(nonBlitzTopics, currentLanguage, bannedWords, maxTopics)
-                                var attempts = 0
-                                while (attempts < MAX_SUMMARIZATION_ATTEMPTS && result.size > maxTopics * 2) {
-                                    attempts++
-                                    result = smartMergeTopics(result, currentLanguage, bannedWords, maxTopics)
-                                }
-                                Log.d(TAG, "[FILTERING] LLM smart merge finished. Result size: ${result.size}. Applying final time-window algorithmic merge.")
-                                val finalReg = mergeInTimeWindows(
-                                    topics = result,
-                                    messageTimeMap = messageTimeMap,
-                                    enableCrossWindowMerge = false
-                                )
-                                Log.d(TAG, "[FILTERING] Final merged non-blitz topics size: ${finalReg.size}")
-                                finalReg
-                            } catch (e: Exception) {
-                                Log.w(TAG, "[FILTERING] Smart merge failed, falling back to time-window algorithmic merge", e)
-                                mergeInTimeWindows(nonBlitzTopics, messageTimeMap)
-                            }
-                        } else {
-                            Log.d(TAG, "[FILTERING] Filter disabled or no non-blitz topics. Applying time-window algorithmic merge directly.")
-                            mergeInTimeWindows(nonBlitzTopics, messageTimeMap)
-                        }
-                    }
-
-                    val blitzMerged = blitzDeferred.await()
-                    Log.d(TAG, "[FILTERING] Blitz after algorithmic merge: ${blitzMerged.size}")
-
-                    val mergedTopics = mergedTopicsDeferred.await()
-
-                    val normalizedFinalTopics = calculateCompositeScores(mergedTopics)
-                    val normalizedBlitzMerged = calculateCompositeScores(blitzMerged)
-
-                    val primaryTopics = normalizedFinalTopics.take(maxTopics)
-                    val reserveTopics = normalizedFinalTopics.drop(maxTopics).take((maxTopics * 0.5).roundToInt())
-                    val blitzRaw = normalizedBlitzMerged.take(maxTopics)
+                    val blitzRaw = blitzList
+                    val reserveTopics = reserveList
 
                     val allSelectedTopics = primaryTopics + reserveTopics
                     Log.i(TAG, "[STAGE: SAVING DRAFTS] Selected ${primaryTopics.size} primary, ${reserveTopics.size} reserve and ${blitzRaw.size} blitz topics. Updating Knowledge Graph and saving to DB...")
@@ -1159,8 +1144,8 @@ class NewsSummarizer(private val llm: LLMClient) {
         messageTimeMap: Map<Long, Long>,
         windowMs: Long = 6 * 3600_000L,
         enableCrossWindowMerge: Boolean = true
-    ): List<Topics> {
-        if (topics.size <= 1) return topics
+    ): List<Topics> = coroutineScope {
+        if (topics.size <= 1) return@coroutineScope topics
 
         val partitioned = topics.groupBy { topic ->
             val earliestTime = topic.ids?.mapNotNull { messageTimeMap[it] }?.minOrNull() ?: 0L
@@ -1170,52 +1155,74 @@ class NewsSummarizer(private val llm: LLMClient) {
         if (partitioned.size <= 1) {
             val merged = mutableListOf<Topics>()
             mergeIntoGlobal(topics, merged)
-            return merged
+            return@coroutineScope merged
         }
 
-        val windowMerged = mutableListOf<Topics>()
-        for ((_, windowTopics) in partitioned) {
-            val localMerged = mutableListOf<Topics>()
-            mergeIntoGlobal(windowTopics, localMerged)
-            windowMerged.addAll(localMerged)
+        val windowDeferreds = partitioned.map { (_, windowTopics) ->
+            async(Dispatchers.Default) {
+                val localMerged = mutableListOf<Topics>()
+                mergeIntoGlobal(windowTopics, localMerged)
+                localMerged
+            }
         }
+
+        val windowMerged = windowDeferreds.awaitAll().flatten().toMutableList()
 
         if (!enableCrossWindowMerge) {
             Log.d(TAG, "[MERGE WINDOWS] Cross-window merge disabled. Retained ${windowMerged.size} topics across ${partitioned.size} time windows.")
-            return windowMerged
+            return@coroutineScope windowMerged
         }
 
         val finalMerged = mutableListOf<Topics>()
         mergeIntoGlobal(windowMerged, finalMerged)
-        return finalMerged
+        finalMerged
     }
 
-    private suspend fun calculateCompositeScores(topics: List<Topics>): List<Topics> {
-        if (topics.isEmpty()) return emptyList()
+    private suspend fun calculateCompositeScores(
+        topics: List<Topics>,
+        rawMessagesMap: Map<Long, Message> = emptyMap()
+    ): List<Topics> = coroutineScope {
+        if (topics.isEmpty()) return@coroutineScope emptyList()
         val burstClusters = try {
             KeywordStatsRepository.getBurstClusters()
         } catch (_: Exception) { emptyList() }
 
         val ln15 = kotlin.math.ln(15.0)
+        val ln50 = kotlin.math.ln(50.0)
 
-        return topics.map { topic ->
-            val wLlm = topic.weight.coerceIn(1, 10).toDouble()
-            val n = (topic.ids?.size ?: 1).coerceAtLeast(1).toDouble()
-            val sVol = kotlin.math.min(10.0, 1.0 + 9.0 * (kotlin.math.ln(n) / ln15).coerceAtLeast(0.0))
+        val scoredDeferreds = topics.map { topic ->
+            async(Dispatchers.Default) {
+                val wLlm = topic.weight.coerceIn(1, 10).toDouble()
+                val n = (topic.ids?.size ?: 1).coerceAtLeast(1).toDouble()
+                val sVol = kotlin.math.min(10.0, 1.0 + 9.0 * (kotlin.math.ln(n) / ln15).coerceAtLeast(0.0))
 
-            val peakZ = burstClusters
-                .filter { cluster ->
-                    cluster.keywords.any { ck ->
-                        topic.keywords.any { tk -> TextComparator.areSimilar(ck, tk, 0.8f) }
-                    }
+                val topicMessages = topic.ids?.mapNotNull { rawMessagesMap[it] } ?: emptyList()
+                val totalCharCount = if (topicMessages.isNotEmpty()) {
+                    topicMessages.sumOf { it.cleanText.length }
+                } else {
+                    (topic.ids?.size ?: 1) * 200
                 }
-                .maxOfOrNull { it.peakZScore } ?: 0.0
 
-            val sBurst = kotlin.math.min(10.0, kotlin.math.max(0.0, peakZ) * 2.0)
-            val finalScore = (wLlm * 0.25) + (sVol * 0.45) + (sBurst * 0.30)
-            val roundedWeight = finalScore.roundToInt().coerceIn(1, 10)
-            topic.copy(weight = roundedWeight) to finalScore
-        }.sortedByDescending { it.second }
+                val charRatio = (totalCharCount.toDouble() / 100.0).coerceAtLeast(1.0)
+                val sLength = kotlin.math.min(10.0, 1.0 + 9.0 * (kotlin.math.ln(charRatio) / ln50).coerceAtLeast(0.0))
+
+                val peakZ = burstClusters
+                    .filter { cluster ->
+                        cluster.keywords.any { ck ->
+                            topic.keywords.any { tk -> TextComparator.areSimilar(ck, tk, 0.8f) }
+                        }
+                    }
+                    .maxOfOrNull { it.peakZScore } ?: 0.0
+
+                val sBurst = kotlin.math.min(10.0, kotlin.math.max(0.0, peakZ) * 2.0)
+                val richnessScore = (sLength * 0.40) + (sVol * 0.35) + (wLlm * 0.25) + sBurst
+                val roundedWeight = richnessScore.roundToInt().coerceIn(1, 10)
+                topic.copy(weight = roundedWeight) to richnessScore
+            }
+        }
+
+        scoredDeferreds.awaitAll()
+            .sortedByDescending { it.second }
             .map { it.first }
     }
 
@@ -1223,8 +1230,6 @@ class NewsSummarizer(private val llm: LLMClient) {
         Log.d(TAG, "[GLOBAL MERGE] Merging ${newTopics.size} new topics into global cache (Current size: ${globalCache.size})")
         newTopics.forEach { candidate ->
             val existingIndex = globalCache.indexOfFirst { existing ->
-                if (existing.isBlitz != candidate.isBlitz) return@indexOfFirst false
-
                 compareTopics(
                     candidate.title, candidate.keywords, existing.title, existing.keywords
                 ) >= MATCH_RATE
@@ -1508,77 +1513,82 @@ class NewsSummarizer(private val llm: LLMClient) {
     }
 
     object ResponseParser {
-        suspend fun parseExtractionResponse(response: String, batch: List<Message>): List<Topics> {
+        suspend fun parseExtractionResponse(response: String, batch: List<Message>): List<Topics> = coroutineScope {
             val llmParser = LLMClient()
             val (jsonArray, _) = llmParser.safeParseJsonArray(response)
-            val topics = mutableListOf<Topics>()
+            val extractedEntities = Collections.synchronizedMap(mutableMapOf<String, MutableList<String>>())
+            val validWordCounts = ConcurrentHashMap<String, Double>()
 
-            val extractedEntities = mutableMapOf<String, MutableList<String>>()
-            val validWordCounts = mutableMapOf<String, Double>()
+            val parsedDeferreds = (0 until jsonArray.length()).map { i ->
+                async(Dispatchers.Default) {
+                    try {
+                        val obj = jsonArray.getJSONObject(i)
+                        val idsArr = obj.getJSONArray("id")
+                        val fullIdList = (0 until idsArr.length()).map { idsArr.getLong(it) }.toMutableList()
 
-            for (i in 0 until jsonArray.length()) {
-                try {
-                    val obj = jsonArray.getJSONObject(i)
-                    val idsArr = obj.getJSONArray("id")
-                    val fullIdList = (0 until idsArr.length()).map { idsArr.getLong(it) }.toMutableList()
+                        val w = obj.optInt("weight", 5)
+                        val title = obj.getString("title")
 
-                    val w = obj.optInt("weight", 5)
-                    val title = obj.getString("title")
-
-                    val keywordsList = mutableListOf<String>()
-                    val keywordsJson = obj.optJSONArray("keywords")
-                    if (keywordsJson != null) {
-                        for (k in 0 until keywordsJson.length()) {
-                            keywordsList.add(keywordsJson.getString(k))
+                        val keywordsList = mutableListOf<String>()
+                        val keywordsJson = obj.optJSONArray("keywords")
+                        if (keywordsJson != null) {
+                            for (k in 0 until keywordsJson.length()) {
+                                keywordsList.add(keywordsJson.getString(k))
+                            }
                         }
-                    }
 
-                    val fromBurst = obj.optBoolean("fromBurst", false)
+                        val fromBurst = obj.optBoolean("fromBurst", false)
 
-                    val mappedKeywords = keywordsList.map { it.lowercase() }
-                    val isBlitz = obj.optBoolean("isBlitz", false) || mappedKeywords.contains("другое") || mappedKeywords.contains("other") || mappedKeywords.contains("blitz")
+                        val mappedKeywords = keywordsList.map { it.lowercase() }
+                        val isBlitz = obj.optBoolean("isBlitz", false) || mappedKeywords.contains("другое") || mappedKeywords.contains("other") || mappedKeywords.contains("blitz")
 
-                    if (obj.has("entities")) {
-                        val entitiesObj = obj.getJSONObject("entities")
-                        val iterator = entitiesObj.keys()
+                        if (obj.has("entities")) {
+                            val entitiesObj = obj.getJSONObject("entities")
+                            val iterator = entitiesObj.keys()
 
-                        while (iterator.hasNext()) {
-                            val category = iterator.next()
-                            val entArray = entitiesObj.optJSONArray(category) ?: continue
-                            for (j in 0 until entArray.length()) {
-                                val entObj = entArray.optJSONObject(j) ?: continue
-                                val entityName = entObj.optString("entity").lowercase().trim()
-                                val contextStr = entObj.optString("context").lowercase().trim()
-                                if (entityName.isEmpty() || contextStr.isEmpty() || entityName.length > contextStr.length) continue
+                            while (iterator.hasNext()) {
+                                val category = iterator.next()
+                                val entArray = entitiesObj.optJSONArray(category) ?: continue
+                                for (j in 0 until entArray.length()) {
+                                    val entObj = entArray.optJSONObject(j) ?: continue
+                                    val entityName = entObj.optString("entity").lowercase().trim()
+                                    val contextStr = entObj.optString("context").lowercase().trim()
+                                    if (entityName.isEmpty() || contextStr.isEmpty() || entityName.length > contextStr.length) continue
 
-                                val contextTokens = TextComparator.tokenize(contextStr)
-                                val entityIsReasonable = contextStr.contains(entityName) || contextTokens.any { TextComparator.areSimilar(it, entityName, 0.8f) }
+                                    val contextTokens = TextComparator.tokenize(contextStr)
+                                    val entityIsReasonable = contextStr.contains(entityName) || contextTokens.any { TextComparator.areSimilar(it, entityName, 0.8f) }
 
-                                if (entityIsReasonable) {
-                                    val existsInOriginalText = batch.filter { it.id in fullIdList }.any {
-                                        it.cleanText.lowercase().contains(contextStr)
+                                    if (entityIsReasonable) {
+                                        val existsInOriginalText = batch.filter { it.id in fullIdList }.any {
+                                            it.cleanText.lowercase().contains(contextStr)
+                                        }
+                                        if (existsInOriginalText) {
+                                            synchronized(extractedEntities) {
+                                                extractedEntities.getOrPut(category) { mutableListOf() }.add(entityName)
+                                            }
+                                        }
                                     }
-                                    if (existsInOriginalText) {
-                                        extractedEntities.getOrPut(category) { mutableListOf() }.add(entityName)
-                                    }
+                                }
+                            }
+
+                            keywordsList.forEach { kw ->
+                                val existsInOriginalText = batch.filter { it.id in fullIdList }.any {
+                                    it.cleanText.lowercase().contains(kw.lowercase())
+                                }
+                                if (existsInOriginalText) {
+                                    validWordCounts.merge(kw, 1.0) { old, new -> old + new }
                                 }
                             }
                         }
 
-                        keywordsList.forEach { kw ->
-                            val existsInOriginalText = batch.filter { it.id in fullIdList }.any {
-                                it.cleanText.lowercase().contains(kw.lowercase())
-                            }
-                            if (existsInOriginalText) {
-                                validWordCounts[kw] = validWordCounts.getOrDefault(kw, 0.0) + 1.0
-                            }
-                        }
+                        Topics(title, fullIdList, w, keywords = keywordsList, isBlitz = isBlitz, fromBurst = fromBurst)
+                    } catch (_: Exception) {
+                        null
                     }
-
-                    topics.add(Topics(title, fullIdList, w,
-                        keywords = keywordsList, isBlitz = isBlitz, fromBurst = fromBurst))
-                } catch (_: Exception) {}
+                }
             }
+
+            val topics = parsedDeferreds.awaitAll().filterNotNull()
 
             Log.d("ResponseParser", "[PARSER EXTRACTION] Parsed ${topics.size} topics. Entities count: ${extractedEntities.values.sumOf { it.size }}")
 
@@ -1597,7 +1607,7 @@ class NewsSummarizer(private val llm: LLMClient) {
                 KeywordStatsRepository.updateEntities(extractedEntities)
             }
 
-            return topics
+            topics
         }
 
         suspend fun parseSummaryResponse(

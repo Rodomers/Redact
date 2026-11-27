@@ -1,5 +1,7 @@
 package com.rds.mews.ui.custom_elements
 
+import com.rds.mews.repositories.MewsRepository
+
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -73,7 +75,7 @@ fun SourcesCard(
 ) {
     var cardBounds by remember { mutableStateOf<Rect?>(null) }
     val primaryColor = MaterialTheme.colorScheme.secondaryContainer
-    val hasErrors = rss.errCount >= 3
+    val hasErrors = rss.errCount >= MewsRepository.MAX_SOURCE_ERRORS
     val menuColor = Color(0xFF2B2D30)
 
     Surface(
@@ -242,7 +244,7 @@ fun SourcesCardExpansionOverlay(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val hasErrors = rss.errCount >= 3
+    val hasErrors = rss.errCount >= MewsRepository.MAX_SOURCE_ERRORS
     val resetErrText = stringResource(R.string.source_reset_errors)
     val doNotTrackText = stringResource(R.string.source_do_not_track)
     val trackText = stringResource(R.string.source_track)

@@ -16,6 +16,7 @@
         <item quantity="few">Пристально разглядываю %d сообщения…</item>
         <item quantity="many">Пристально разглядываю %d сообщений…</item>
     </plurals>
+    <string name="tooltip_server_unavailable">Всё хорошо, вот только сервер недоступен…</string>
 
     <string name="source_type_telegram">Telegram</string>
     <string name="source_type_rss">Сайты и RSS-ленты</string>

@@ -160,6 +160,7 @@ object MewsRepository {
     const val BANNED_NEWS_SET = "banned_news_set"
     const val ENABLE_PROXY = "enable_proxy"
     const val PARSER_BATCH_SIZE = "parser_batch_size"
+    const val MAX_SOURCE_ERRORS = 10
 
     lateinit var sources: Flow<List<RSS>>
     lateinit var titles: Flow<List<Title>>
@@ -975,6 +976,20 @@ object MewsRepository {
         _tooltipChannel.trySend(value)
     }
 
+    suspend fun checkServersHealth(): Boolean {
+        val enableProxy = proxyEnabled.first()
+        val isHealthy = networkMonitor.checkServersHealth(
+            HUB_ADDRESS,
+            MINIFLUX_ADDRESS,
+            SERVER_KEY,
+            enableProxy
+        )
+        if (!isHealthy) {
+            setTooltipState(TooltipOptions.ServerUnavailable)
+        }
+        return isHealthy
+    }
+
     fun saveLastError(failure: SummarizationResult.Failure) {
         if (failure.type == SummarizationErrorType.JOB_CANCELLED && _stoppedManually.value) _stoppedManually.value = false
         else externalScope.launch { settingsManager.saveLastError(failure) }
@@ -1057,7 +1072,7 @@ object MewsRepository {
     suspend fun getSourcesQueue(): List<SourceEntity> = withContext(Dispatchers.IO) {
         val doNotBlock = doNotBlockSources.first()
         sourceDao.getAllSourcesFlow().first()
-            .filter { it.errCount < 3 || doNotBlock }
+            .filter { it.errCount < MAX_SOURCE_ERRORS || doNotBlock }
             .sortedBy { it.lastSyncTime }
     }
 
@@ -1071,6 +1086,10 @@ object MewsRepository {
 
     suspend fun updateSourceEtag(sourceId: Long, etag: String?) = withContext(Dispatchers.IO) {
         sourceDao.updateEtag(sourceId, etag)
+    }
+
+    suspend fun updateSourceLastSyncTime(sourceId: Long, syncTime: Long) = withContext(Dispatchers.IO) {
+        sourceDao.updateLastSyncTime(sourceId, syncTime)
     }
 
     suspend fun insertBatchAndUpdateSourceTime(

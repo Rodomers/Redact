@@ -94,9 +94,9 @@ class MinifluxClient(
         return@withContext creationResponse.feed_id
     }
 
-    suspend fun getEntries(feedId: Long, afterTimeMs: Long, limit: Int): List<MinifluxEntry> = withContext(Dispatchers.IO) {
+    suspend fun getEntries(feedId: Long, afterTimeMs: Long, limit: Int = 500): List<MinifluxEntry> = withContext(Dispatchers.IO) {
         val afterSeconds = afterTimeMs / 1000
-        val url = "$baseUrl/feeds/$feedId/entries?limit=$limit&published_after=$afterSeconds&_cb=${System.currentTimeMillis()}"
+        val url = "$baseUrl/feeds/$feedId/entries?limit=$limit&published_after=$afterSeconds&direction=asc&order=published_at&_cb=${System.currentTimeMillis()}"
 
         val headers = mapOf(
             "X-Auth-Token" to apiKey,

@@ -220,6 +220,9 @@ fun MyBottomBar(
                         additionalInt = option.count
                     )
                 )
+                TooltipOptions.ServerUnavailable -> tooltipChannel.send(
+                    TooltipMessage(R.string.tooltip_server_unavailable, option.duration)
+                )
                 TooltipOptions.Default -> Unit
             }
         }

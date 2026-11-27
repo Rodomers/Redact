@@ -29,6 +29,10 @@ class RssFetcher(
     private val minifluxClient = MinifluxClient(httpClient)
 
     suspend fun fetchAndStoreAll(messAliveTime: Long = 0L, maxTimeHours: Int = 168): FetchResult {
+        if (!MewsRepository.checkServersHealth()) {
+            return FetchResult(0, 0, 0, 0, listOf("Server unavailable"))
+        }
+
         val sourceList = try {
             MewsRepository.getAllSourceEntities()
         } catch (e: Exception) {
@@ -48,12 +52,13 @@ class RssFetcher(
         for (source in sourceList) {
             val isTelegram = SourceType.fromId(source.sourceType) == SourceType.TELEGRAM
             var processedSuccessfully = false
+            var maxPubTime = source.lastSyncTime
 
             try {
                 val feedId = minifluxClient.getFeedIdByUrl(source.feedUrl)
                     ?: throw RuntimeException("Feed ID not found in Miniflux")
 
-                val entries = minifluxClient.getEntries(feedId, source.lastSyncTime, 100)
+                val entries = minifluxClient.getEntries(feedId, source.lastSyncTime, 500)
 
                 if (entries.isEmpty()) {
                     feedsNotModified++
@@ -62,12 +67,14 @@ class RssFetcher(
                 }
 
                 for (entry in entries) {
+                    val pubTime = try { isoFormat.parse(entry.published_at)?.time ?: System.currentTimeMillis() } catch (_: Exception) { System.currentTimeMillis() }
+                    if (pubTime > maxPubTime) maxPubTime = pubTime
+
                     if (MewsRepository.getMessageByLink(entry.url) != null) {
                         itemsSkipped++
                         continue
                     }
 
-                    val pubTime = try { isoFormat.parse(entry.published_at)?.time ?: System.currentTimeMillis() } catch (_: Exception) { System.currentTimeMillis() }
                     var text = entry.content.trim()
 
                     if (text.length < 300) {
@@ -86,6 +93,10 @@ class RssFetcher(
 
                     MewsRepository.addMessage(source.id, pubTime, entry.url, text, mediaUrls = mediaUrls.toList())
                     itemsAdded++
+                }
+
+                if (maxPubTime > source.lastSyncTime) {
+                    MewsRepository.updateSourceLastSyncTime(source.id, maxPubTime)
                 }
 
                 feedsProcessed++
@@ -122,13 +133,15 @@ class RssFetcher(
                     val items = parseRssItems(doc)
 
                     for (item in items) {
+                        val time = item.pubDateMillis ?: System.currentTimeMillis()
+                        if (time > maxPubTime) maxPubTime = time
+
                         val link = item.link ?: continue
                         if (MewsRepository.getMessageByLink(link) != null) {
                             itemsSkipped++
                             continue
                         }
 
-                        val time = item.pubDateMillis ?: System.currentTimeMillis()
                         var text = buildMessageText(item)
 
                         if (text.length < 300) {
@@ -138,6 +151,10 @@ class RssFetcher(
 
                         MewsRepository.addMessage(source.id, time, link, text, mediaUrls = item.mediaUrls)
                         itemsAdded++
+                    }
+
+                    if (maxPubTime > source.lastSyncTime) {
+                        MewsRepository.updateSourceLastSyncTime(source.id, maxPubTime)
                     }
 
                     feedsProcessed++
@@ -415,5 +432,5 @@ object HtmlExtractorFallback {
 }
 
 fun buildTelegramRssUrl(username: String): String {
-    return "http://${MewsRepository.HUB_ADDRESS}/telegram/channel/${username.trim()}?limit=100&key=${MewsRepository.SERVER_KEY}"
+    return "http://${MewsRepository.HUB_ADDRESS}/telegram/channel/${username.trim()}?limit=500&key=${MewsRepository.SERVER_KEY}"
 }

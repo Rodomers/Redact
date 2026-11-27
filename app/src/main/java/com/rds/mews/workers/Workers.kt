@@ -71,6 +71,7 @@ class ParserWorker(
 
     override suspend fun doWork(): Result {
         if (!MewsRepository.isInitialized) return Result.retry()
+        if (!MewsRepository.checkServersHealth()) return Result.retry()
 
         return try {
             withContext(Dispatchers.IO) {
@@ -86,7 +87,7 @@ class ParserWorker(
                 val semaphore = Semaphore(4)
                 coroutineScope {
                     sourcesQueue
-                        .filter { it.errCount < 3 && System.currentTimeMillis() - it.lastSyncTime > 1_800_000 }
+                        .filter { it.errCount < MewsRepository.MAX_SOURCE_ERRORS && System.currentTimeMillis() - it.lastSyncTime > 1_800_000 }
                         .map { source ->
                             async(Dispatchers.IO) {
                                 semaphore.withPermit {
@@ -181,7 +182,7 @@ class ParserWorker(
         val windowMessages = MewsRepository.getMessagesInWindow(windowStart, windowEnd)
 
         val entitiesToInsert = mutableListOf<MessageEntity>()
-        val syncTimeMs = System.currentTimeMillis()
+        val syncTimeMs = if (pubTimes.isNotEmpty()) maxOf(source.lastSyncTime, maxTimeMs) else source.lastSyncTime
 
         val batchWordCounts = mutableMapOf<String, Double>()
         val wordToSourcesMap = mutableMapOf<String, MutableSet<Long>>()
@@ -247,9 +248,7 @@ class ParserWorker(
         val totalWindowWords = windowTokensCount + batchTokensCount
         var savedMessageIds = emptyList<Long>()
 
-        if (entitiesToInsert.isNotEmpty()) {
-            savedMessageIds = MewsRepository.insertBatchAndUpdateSourceTime(entitiesToInsert, source.id, syncTimeMs)
-        }
+        savedMessageIds = MewsRepository.insertBatchAndUpdateSourceTime(entitiesToInsert, source.id, syncTimeMs)
 
         if (totalWindowWords > 0 && savedMessageIds.isNotEmpty() && batchWordCounts.isNotEmpty()) {
             val messageTokensMap = savedMessageIds.indices.associate { idx ->
@@ -354,7 +353,7 @@ class ParserWorker(
     ): List<MinifluxEntry> {
         if (serverFeedId != null) {
             try {
-                return minifluxClient.getEntries(serverFeedId, cursorTimeMs, limit = 100)
+                return minifluxClient.getEntries(serverFeedId, cursorTimeMs, limit = 500)
             } catch (e: Exception) {
                 Log.w("ParserWorker", "Miniflux failed, falling back to RSS for ${source.id}", e)
             }

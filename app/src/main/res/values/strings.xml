@@ -17,6 +17,7 @@
         <item quantity="one">Looking closely at %d message…</item>
         <item quantity="other">Looking closely at %d messages…</item>
     </plurals>
+    <string name="tooltip_server_unavailable">Everything is fine, but server is unavailable…</string>
 
     <string name="source_type_telegram">Telegram</string>
     <string name="source_type_rss">Sites and RSS-feeds</string>

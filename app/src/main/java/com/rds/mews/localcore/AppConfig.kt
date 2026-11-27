@@ -242,4 +242,8 @@ sealed class TooltipOptions(val id: Int, val duration: Long) {
     data class MessageQuantity(
         val count: Int
     ) : TooltipOptions(6, 3000)
+
+    @Serializable
+    @SerialName("SERVER_UNAVAILABLE")
+    data object ServerUnavailable : TooltipOptions(7, 5000)
 }
