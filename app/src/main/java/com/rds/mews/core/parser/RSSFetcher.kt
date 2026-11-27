@@ -21,6 +21,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.time.Duration.Companion.milliseconds
 
 class RssFetcher(
     enableProxy: Boolean = false
@@ -29,9 +30,9 @@ class RssFetcher(
     private val minifluxClient = MinifluxClient(httpClient)
 
     suspend fun fetchAndStoreAll(messAliveTime: Long = 0L, maxTimeHours: Int = 168): FetchResult {
-        if (!MewsRepository.checkServersHealth()) {
-            return FetchResult(0, 0, 0, 0, listOf("Server unavailable"))
-        }
+        MewsRepository.checkServersHealth()
+        val isParserHealthy = MewsRepository.checkParserHealth()
+        val isHubHealthy = MewsRepository.checkHubHealth()
 
         val sourceList = try {
             MewsRepository.getAllSourceEntities()
@@ -54,59 +55,61 @@ class RssFetcher(
             var processedSuccessfully = false
             var maxPubTime = source.lastSyncTime
 
-            try {
-                val feedId = minifluxClient.getFeedIdByUrl(source.feedUrl)
-                    ?: throw RuntimeException("Feed ID not found in Miniflux")
+            if (isParserHealthy) {
+                try {
+                    val feedId = minifluxClient.getFeedIdByUrl(source.feedUrl)
+                        ?: throw RuntimeException("Feed ID not found in Miniflux")
 
-                val entries = minifluxClient.getEntries(feedId, source.lastSyncTime, 500)
+                    val entries = minifluxClient.getEntries(feedId, source.lastSyncTime, 500)
 
-                if (entries.isEmpty()) {
-                    feedsNotModified++
-                    feedsProcessed++
-                    continue
-                }
-
-                for (entry in entries) {
-                    val pubTime = try { isoFormat.parse(entry.published_at)?.time ?: System.currentTimeMillis() } catch (_: Exception) { System.currentTimeMillis() }
-                    if (pubTime > maxPubTime) maxPubTime = pubTime
-
-                    if (MewsRepository.getMessageByLink(entry.url) != null) {
-                        itemsSkipped++
+                    if (entries.isEmpty()) {
+                        feedsNotModified++
+                        feedsProcessed++
                         continue
                     }
 
-                    var text = entry.content.trim()
+                    for (entry in entries) {
+                        val pubTime = try { isoFormat.parse(entry.published_at)?.time ?: System.currentTimeMillis() } catch (_: Exception) { System.currentTimeMillis() }
+                        if (pubTime > maxPubTime) maxPubTime = pubTime
 
-                    if (text.length < 300) {
-                        val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), entry.url, httpClient)
-                        if (!fullText.isNullOrBlank()) text = "${entry.title}\n\n$fullText".trim()
-                    }
-
-                    val mediaUrls = mutableSetOf<String>()
-                    if (entry.content.isNotBlank()) {
-                        val htmlDoc = Jsoup.parse(entry.content)
-                        htmlDoc.select("img, video").forEach { el ->
-                            val src = el.attr("src")
-                            if (src.isNotBlank()) mediaUrls.add(src)
+                        if (MewsRepository.getMessageByLink(entry.url) != null) {
+                            itemsSkipped++
+                            continue
                         }
+
+                        var text = entry.content.trim()
+
+                        if (text.length < 300) {
+                            val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), entry.url, httpClient)
+                            if (!fullText.isNullOrBlank()) text = "${entry.title}\n\n$fullText".trim()
+                        }
+
+                        val mediaUrls = mutableSetOf<String>()
+                        if (entry.content.isNotBlank()) {
+                            val htmlDoc = Jsoup.parse(entry.content)
+                            htmlDoc.select("img, video").forEach { el ->
+                                val src = el.attr("src")
+                                if (src.isNotBlank()) mediaUrls.add(src)
+                            }
+                        }
+
+                        MewsRepository.addMessage(source.id, pubTime, entry.url, text, mediaUrls = mediaUrls.toList())
+                        itemsAdded++
                     }
 
-                    MewsRepository.addMessage(source.id, pubTime, entry.url, text, mediaUrls = mediaUrls.toList())
-                    itemsAdded++
+                    if (maxPubTime > source.lastSyncTime) {
+                        MewsRepository.updateSourceLastSyncTime(source.id, maxPubTime)
+                    }
+
+                    feedsProcessed++
+                    processedSuccessfully = true
+
+                } catch (minifluxException: Exception) {
+                    errors.add("Miniflux недоступен для источника ${source.id} (${minifluxException.message}). Запуск локального парсинга.")
                 }
-
-                if (maxPubTime > source.lastSyncTime) {
-                    MewsRepository.updateSourceLastSyncTime(source.id, maxPubTime)
-                }
-
-                feedsProcessed++
-                processedSuccessfully = true
-
-            } catch (minifluxException: Exception) {
-                errors.add("Miniflux недоступен для источника ${source.id} (${minifluxException.message}). Запуск локального парсинга.")
             }
 
-            if (!processedSuccessfully) {
+            if (!processedSuccessfully && isHubHealthy) {
                 try {
                     var fetchUrl = source.feedUrl
 
@@ -121,48 +124,108 @@ class RssFetcher(
                     }
 
                     val response = httpClient.request("GET", fetchUrl, null, emptyMap())
-                    if (response.status != 200) {
-                        errors.add("Локальный фолбек также отклонен: HTTP ${response.status} для ${source.feedUrl}")
-                        continue
-                    }
+                    if (response.status == 200 && response.body.isNotBlank()) {
+                        val doc = Jsoup.parse(response.body, fetchUrl, Parser.xmlParser())
+                        val items = parseRssItems(doc)
 
-                    val xmlContent = response.body
-                    if (xmlContent.isBlank()) continue
+                        for (item in items) {
+                            val time = item.pubDateMillis ?: System.currentTimeMillis()
+                            if (time > maxPubTime) maxPubTime = time
 
-                    val doc = Jsoup.parse(xmlContent, fetchUrl, Parser.xmlParser())
-                    val items = parseRssItems(doc)
+                            val link = item.link ?: continue
+                            if (MewsRepository.getMessageByLink(link) != null) {
+                                itemsSkipped++
+                                continue
+                            }
 
-                    for (item in items) {
-                        val time = item.pubDateMillis ?: System.currentTimeMillis()
-                        if (time > maxPubTime) maxPubTime = time
+                            var text = buildMessageText(item)
 
-                        val link = item.link ?: continue
-                        if (MewsRepository.getMessageByLink(link) != null) {
-                            itemsSkipped++
-                            continue
+                            if (text.length < 300) {
+                                val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), link, httpClient)
+                                if (!fullText.isNullOrBlank()) text = "${item.title ?: ""}\n\n$fullText".trim()
+                            }
+
+                            MewsRepository.addMessage(source.id, time, link, text, mediaUrls = item.mediaUrls)
+                            itemsAdded++
                         }
 
-                        var text = buildMessageText(item)
-
-                        if (text.length < 300) {
-                            val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), link, httpClient)
-                            if (!fullText.isNullOrBlank()) text = "${item.title ?: ""}\n\n$fullText".trim()
+                        if (maxPubTime > source.lastSyncTime) {
+                            MewsRepository.updateSourceLastSyncTime(source.id, maxPubTime)
                         }
 
-                        MewsRepository.addMessage(source.id, time, link, text, mediaUrls = item.mediaUrls)
-                        itemsAdded++
+                        feedsProcessed++
+                        processedSuccessfully = true
+                    } else {
+                        errors.add("RSSHub недоступен (HTTP ${response.status}) для ${source.feedUrl}. Запуск локального скрейпинга.")
                     }
+                } catch (hubException: Exception) {
+                    errors.add("Ошибка обращения к RSSHub для ${source.id}: ${hubException.message}. Запуск локального скрейпинга.")
+                }
 
-                    if (maxPubTime > source.lastSyncTime) {
-                        MewsRepository.updateSourceLastSyncTime(source.id, maxPubTime)
+
+                if (!processedSuccessfully) {
+                    try {
+                        if (isTelegram) {
+                            val fallbackEntries = TelegramRssClient().buildRss(source.feedUrl, source.id, source.lastSyncTime)
+                            if (fallbackEntries.isNotEmpty()) {
+                                for (entry in fallbackEntries) {
+                                    val pubTime = try { isoFormat.parse(entry.published_at)?.time ?: System.currentTimeMillis() } catch (_: Exception) { System.currentTimeMillis() }
+                                    if (pubTime > maxPubTime) maxPubTime = pubTime
+
+                                    if (MewsRepository.getMessageByLink(entry.url) != null) {
+                                        itemsSkipped++
+                                        continue
+                                    }
+
+                                    MewsRepository.addMessage(source.id, pubTime, entry.url, entry.content, mediaUrls = emptyList())
+                                    itemsAdded++
+                                }
+
+                                if (maxPubTime > source.lastSyncTime) {
+                                    MewsRepository.updateSourceLastSyncTime(source.id, maxPubTime)
+                                }
+
+                                feedsProcessed++
+                                processedSuccessfully = true
+                            }
+                        } else {
+                            val response = httpClient.request("GET", source.feedUrl, null, emptyMap())
+                            if (response.status == 200 && response.body.isNotBlank()) {
+                                val doc = Jsoup.parse(response.body, source.feedUrl, Parser.xmlParser())
+                                val items = parseRssItems(doc)
+                                for (item in items) {
+                                    val time = item.pubDateMillis ?: System.currentTimeMillis()
+                                    if (time > maxPubTime) maxPubTime = time
+
+                                    val link = item.link ?: continue
+                                    if (MewsRepository.getMessageByLink(link) != null) {
+                                        itemsSkipped++
+                                        continue
+                                    }
+
+                                    var text = buildMessageText(item)
+                                    if (text.length < 300) {
+                                        val fullText = HtmlExtractorFallback.fetchFullText(MewsRepository.getAppContext(), link, httpClient)
+                                        if (!fullText.isNullOrBlank()) text = "${item.title ?: ""}\n\n$fullText".trim()
+                                    }
+
+                                    MewsRepository.addMessage(source.id, time, link, text, mediaUrls = item.mediaUrls)
+                                    itemsAdded++
+                                }
+
+                                if (maxPubTime > source.lastSyncTime) {
+                                    MewsRepository.updateSourceLastSyncTime(source.id, maxPubTime)
+                                }
+
+                                feedsProcessed++
+                                processedSuccessfully = true
+                            }
+                        }
+                    } catch (fallbackException: Exception) {
+                        errors.add("Критический сбой всех 3 уровней парсинга для источника ${source.id}: ${fallbackException.message}")
+                    } finally {
+                        MewsRepository.messageTimeKill(864000)
                     }
-
-                    feedsProcessed++
-
-                } catch (fallbackException: Exception) {
-                    errors.add("Критический сбой всех уровней парсинга для источника ${source.id}: ${fallbackException.message}")
-                } finally {
-                    MewsRepository.messageTimeKill(864000)
                 }
             }
         }
@@ -240,7 +303,7 @@ class RssFetcher(
 
         } catch (e: Exception) {
             if (SourceType.fromId(source.sourceType) == SourceType.TELEGRAM) {
-                val fallbackEntries = TelegramRssClient().buildRss(source.feedUrl, source.id)
+                val fallbackEntries = TelegramRssClient().buildRss(source.feedUrl, source.id, source.lastSyncTime)
                 return fallbackEntries.filter { entry ->
                     try {
                         val zdt = ZonedDateTime.parse(entry.published_at, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
@@ -397,7 +460,7 @@ object HtmlExtractorFallback {
         val isMetered = cm.isActiveNetworkMetered
 
         suspend fun doFetch(): String? {
-            if (isMetered) delay(2000L)
+            if (isMetered) delay(2000L.milliseconds)
 
             val headers = mapOf(
                 "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",

@@ -976,6 +976,24 @@ object MewsRepository {
         _tooltipChannel.trySend(value)
     }
 
+    suspend fun checkHubHealth(): Boolean {
+        val enableProxy = proxyEnabled.first()
+        return networkMonitor.checkHubHealth(
+            HUB_ADDRESS,
+            SERVER_KEY,
+            enableProxy
+        )
+    }
+
+    suspend fun checkParserHealth(): Boolean {
+        val enableProxy = proxyEnabled.first()
+        return networkMonitor.checkParserHealth(
+            MINIFLUX_ADDRESS,
+            SERVER_KEY,
+            enableProxy
+        )
+    }
+
     suspend fun checkServersHealth(): Boolean {
         val enableProxy = proxyEnabled.first()
         val isHealthy = networkMonitor.checkServersHealth(

@@ -71,7 +71,7 @@ class ParserWorker(
 
     override suspend fun doWork(): Result {
         if (!MewsRepository.isInitialized) return Result.retry()
-        if (!MewsRepository.checkServersHealth()) return Result.retry()
+        MewsRepository.checkServersHealth()
 
         return try {
             withContext(Dispatchers.IO) {
